@@ -2646,7 +2646,7 @@ function gerarQRCondomino(fracaoId) {
   if (!f) return;
   // URL da página pública — após deploy no Netlify
   const baseUrl = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost' || window.location.protocol === 'file:'
-    ? 'https://condos2059.netlify.app'
+    ? 'https://funny-cajeta-00a573.netlify.app'
     : window.location.origin;
   const url = baseUrl + '/ficha.html?condo=' + encodeURIComponent(currentCondo.id) + '&fracao=' + encodeURIComponent(f.id) + '&codigo=' + encodeURIComponent(f.codigo||'') + '&bloco=' + encodeURIComponent(f.bloco||'');
   _qrLinkActual = url;
