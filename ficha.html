@@ -24,6 +24,8 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .card{background:var(--s1);border:1px solid var(--b1);border-radius:12px;margin:14px;padding:18px;}
 .card-title{font-size:10px;font-weight:700;color:var(--cyan);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--b1);}
 .lei-banner{background:linear-gradient(135deg,rgba(124,58,237,.1),rgba(0,212,255,.06));border:1px solid rgba(124,58,237,.25);border-radius:8px;padding:12px;margin-bottom:14px;font-size:11px;color:var(--t2);line-height:1.7;}
+.info-banner{background:rgba(0,212,255,.05);border:1px solid rgba(0,212,255,.2);border-radius:8px;padding:12px;margin-bottom:14px;font-size:11px;color:var(--t2);line-height:1.7;}
+.info-banner strong{color:var(--cyan);}
 .fl{margin-bottom:14px;}
 .fl label{display:block;font-size:10px;color:var(--t2);margin-bottom:5px;letter-spacing:.5px;font-weight:600;}
 .req{color:var(--red);}
@@ -33,6 +35,27 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 select.fi option{background:var(--s2);}
 .row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
 .obrig{font-size:10px;color:var(--t3);margin-bottom:14px;}
+.field-hint{font-size:10px;color:var(--t3);margin-top:4px;line-height:1.5;}
+.field-hint.important{color:var(--amber);}
+
+
+/* SEGURO */
+.seguro-toggle{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;}
+.seg-opt{background:var(--s2);border:2px solid var(--b1);border-radius:8px;padding:14px;text-align:center;cursor:pointer;transition:all .2s;position:relative;}
+.seg-opt.sel-sim{border-color:var(--green);background:var(--gdim);}
+.seg-opt.sel-nao{border-color:var(--amber);background:var(--adim);}
+.seg-opt .ico{font-size:26px;margin-bottom:6px;}
+.seg-opt .lbl{font-size:12px;font-weight:700;color:var(--t2);}
+.seg-opt.sel-sim .lbl{color:var(--green);}
+.seg-opt.sel-nao .lbl{color:var(--amber);}
+.seg-campos{display:none;margin-top:14px;}
+.seg-campos.visible{display:block;}
+.seg-aviso-nao{display:none;background:var(--adim);border:1px solid rgba(255,179,0,.3);border-radius:8px;padding:12px;margin-top:10px;font-size:11px;color:var(--amber);line-height:1.7;}
+.seg-aviso-nao.visible{display:block;}
+
+/* NIB BANNER */
+.nib-banner{background:linear-gradient(135deg,rgba(255,179,0,.08),rgba(0,212,255,.04));border:1px solid rgba(255,179,0,.3);border-radius:8px;padding:12px;margin-top:6px;font-size:11px;color:var(--amber);line-height:1.7;}
+.nib-banner strong{color:var(--amber);}
 
 /* NOTIF MULTI-SELECT */
 .notif-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px;}
@@ -70,6 +93,10 @@ select.fi option{background:var(--s2);}
 .msg.err{background:var(--rdim);border:1px solid rgba(255,68,68,.3);color:var(--red);}
 .spin{width:18px;height:18px;border:2px solid rgba(0,0,0,.3);border-top-color:#000;border-radius:50%;animation:spin .8s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg)}}
+
+/* CARGO SECTION */
+.cargo-divider{height:1px;background:var(--b1);margin:14px 0;}
+.cargo-badge{display:inline-block;font-size:9px;padding:2px 7px;border-radius:4px;margin-left:6px;background:rgba(124,58,237,.15);color:var(--violet);font-weight:600;letter-spacing:.5px;}
 </style>
 </head>
 <body>
@@ -102,6 +129,55 @@ select.fi option{background:var(--s2);}
     </div>
     <div class="fl"><label>Email <span class="req">*</span></label><input class="fi" id="f-email" type="email" placeholder="o@seu.email" autocomplete="email"></div>
     <div class="fl"><label>Morada (se diferente da fracção)</label><input class="fi" id="f-morada" placeholder="Deixe em branco se igual ao imóvel"></div>
+  </div>
+
+  <!-- PAPEL NO CONDOMÍNIO -->
+  <div class="card">
+    <div class="card-title">🏛️ Papel no Condomínio</div>
+
+    <div class="fl">
+      <label>Papel Legal <span class="req">*</span> <span class="cargo-badge">DL 268/94</span></label>
+      <select class="fi" id="f-papel-legal">
+        <option value="">— Seleccione o seu papel legal —</option>
+        <option value="proprietario">Proprietário</option>
+        <option value="arrendatario">Arrendatário (Inquilino)</option>
+        <option value="representante">Representante de Proprietário</option>
+        <option value="administrador">Administrador do Condomínio</option>
+        <option value="vice_administrador">Vice-Administrador</option>
+        <option value="coadjuvante">Coadjuvante do Administrador</option>
+      </select>
+      <div class="field-hint">O papel legal é o que consta ou foi deliberado em assembleia de condóminos.</div>
+    </div>
+
+    <div class="cargo-divider"></div>
+
+    <div class="fl">
+      <label>Função Operacional <span style="color:var(--t3);font-weight:400;">(opcional)</span></label>
+      <select class="fi" id="f-funcao-operacional">
+        <option value="">— Nenhuma função especial —</option>
+        <option value="manutencao">Responsável de Manutenção</option>
+        <option value="limpeza">Responsável de Limpeza</option>
+        <option value="jardim">Responsável de Jardim / Espaços Comuns</option>
+        <option value="outro">Outra função (a definir com a administração)</option>
+      </select>
+      <div class="field-hint">Se exerce uma função remunerada ou com créditos aprovados em assembleia, indique aqui. Permite ao programa gerir pagamentos e créditos associados ao seu cargo.</div>
+    </div>
+  </div>
+
+  <!-- NIB / DADOS BANCÁRIOS -->
+  <div class="card">
+    <div class="card-title">🏦 Dados Bancários</div>
+
+    <div class="fl">
+      <label>NIB / IBAN <span style="color:var(--t3);font-weight:400;">(opcional mas muito recomendado)</span></label>
+      <input class="fi" id="f-nib" placeholder="PT50 XXXX XXXX XXXX XXXX XXXX X" autocomplete="off">
+      <div class="nib-banner" style="margin-top:10px;">
+        ⚠️ <strong>Importante:</strong> O seu NIB/IBAN é utilizado para dois fins essenciais:<br><br>
+        <strong>1. Cruzamento automático de pagamentos</strong> — o programa identifica automaticamente os seus pagamentos de quota por transferência bancária, sem necessidade de contacto com a administração.<br><br>
+        <strong>2. Pagamentos a seu favor</strong> — caso tenha direito a créditos, reembolsos ou remuneração por funções exercidas no condomínio, os pagamentos são processados directamente para este IBAN.<br><br>
+        <strong style="color:var(--red);">Sem NIB/IBAN registado, pagamentos e reembolsos podem atrasar-se significativamente.</strong>
+      </div>
+    </div>
   </div>
 
   <!-- NOTIFICAÇÕES -->
@@ -197,11 +273,63 @@ select.fi option{background:var(--s2);}
     <div class="pag-aviso" id="pag-aviso">
       ⚠️ <strong>Informação importante:</strong> Os métodos MBWay, Referência Multibanco e Cheque podem implicar comissões bancárias. Estes custos, quando existam, serão suportados pelo condomínio e repartidos por todos os condóminos. A <strong>Transferência Bancária</strong> é o método mais económico para o condomínio — recomendamos a sua utilização sempre que possível.
     </div>
+  </div>
 
-    <div class="fl" style="margin-top:14px;">
-      <label>IBAN para pagamento por Transferência (opcional)</label>
-      <input class="fi" id="f-iban" placeholder="PT50 XXXX XXXX XXXX XXXX XXXX X">
-      <div style="font-size:10px;color:var(--t3);margin-top:4px;">O IBAN do condomínio para onde deve efectuar a transferência será comunicado pela administração.</div>
+
+  <!-- SEGURO -->
+  <div class="card">
+    <div class="card-title">🛡️ Seguro do Imóvel</div>
+    <div class="lei-banner">
+      ⚖️ <strong style="color:var(--violet)">Art. 1429-A Código Civil</strong> — O condomínio é <strong style="color:var(--text)">legalmente obrigado</strong> a manter seguro multirriscos das partes comuns. Se o seu seguro individual já cobrir as partes comuns, pode ser deduzido — mas terá de apresentar comprovativo em assembleia.
+    </div>
+
+    <div class="fl">
+      <label>O seu seguro de habitação inclui partes comuns do edifício? <span class="req">*</span></label>
+      <div class="seguro-toggle">
+        <div class="seg-opt" id="seg-sim" onclick="toggleSeguro('sim')">
+          <div class="ico">✅</div>
+          <div class="lbl">Sim, inclui partes comuns</div>
+        </div>
+        <div class="seg-opt" id="seg-nao" onclick="toggleSeguro('nao')">
+          <div class="ico">❌</div>
+          <div class="lbl">Não inclui / Não tenho seguro</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Se SIM: campos da apólice -->
+    <div class="seg-campos" id="seg-campos-sim">
+      <div style="background:var(--gdim);border:1px solid rgba(0,230,118,.3);border-radius:8px;padding:12px;margin-bottom:14px;font-size:11px;color:var(--green);line-height:1.7;">
+        ✅ <strong>Ótimo!</strong> Ao declarar que o seu seguro cobre as partes comuns, ficará isento da quota-parte do seguro colectivo do condomínio.<br>
+        <strong style="color:var(--text);">⚠️ Atenção:</strong> É obrigatório apresentar comprovativo válido em assembleia. Sem comprovativo, será incluído no seguro colectivo.
+      </div>
+      <div class="row">
+        <div class="fl">
+          <label>Seguradora</label>
+          <input class="fi" id="seg-seguradora" placeholder="Ex: Fidelidade, Allianz...">
+        </div>
+        <div class="fl">
+          <label>Nº de Apólice</label>
+          <input class="fi" id="seg-apolice" placeholder="XXXXXXXXXX">
+        </div>
+      </div>
+      <div class="row">
+        <div class="fl">
+          <label>Validade da Apólice</label>
+          <input class="fi" id="seg-validade" type="date">
+        </div>
+        <div class="fl">
+          <label>Capital Seguro Partes Comuns (€)</label>
+          <input class="fi" id="seg-capital" type="number" placeholder="Ex: 50000" inputmode="numeric">
+        </div>
+      </div>
+      <div class="field-hint important">⚠️ Deverá apresentar cópia da apólice na próxima assembleia de condóminos para validação pela administração.</div>
+    </div>
+
+    <!-- Se NÃO: aviso de custo -->
+    <div class="seg-aviso-nao" id="seg-aviso-nao">
+      ⚠️ <strong>Informação:</strong> Como não dispõe de seguro que cubra as partes comuns, será incluído no seguro colectivo do condomínio.<br><br>
+      O custo do seguro colectivo será repartido por todos os condóminos que não tenham seguro próprio válido, <strong>na proporção da sua permilagem</strong>, e incluído no orçamento anual do condomínio.
     </div>
   </div>
 
@@ -245,13 +373,21 @@ if (condoId) {
   });
 }
 
+var seguroOpcao = ''; // 'sim' ou 'nao'
+function toggleSeguro(opcao) {
+  seguroOpcao = opcao;
+  document.getElementById('seg-sim').className = 'seg-opt' + (opcao==='sim' ? ' sel-sim' : '');
+  document.getElementById('seg-nao').className = 'seg-opt' + (opcao==='nao' ? ' sel-nao' : '');
+  document.getElementById('seg-campos-sim').className = 'seg-campos' + (opcao==='sim' ? ' visible' : '');
+  document.getElementById('seg-aviso-nao').className = 'seg-aviso-nao' + (opcao==='nao' ? ' visible' : '');
+}
+
 // NOTIFICAÇÕES — multi-select
 var notifSel = new Set();
 function toggleNotif(tipo) {
   var el = document.getElementById('n-'+tipo);
   if (notifSel.has(tipo)) { notifSel.delete(tipo); el.classList.remove('sel'); }
   else { notifSel.add(tipo); el.classList.add('sel'); }
-  // Aviso se escolheu carta
   var temCarta = ['carta_simples','carta_registada','carta_ar'].some(function(t){ return notifSel.has(t); });
   document.getElementById('notif-aviso').style.display = temCarta ? 'block' : 'none';
 }
@@ -262,7 +398,6 @@ function togglePag(tipo) {
   var el = document.getElementById('p-'+tipo);
   if (pagSel.has(tipo)) { pagSel.delete(tipo); el.classList.remove('sel'); }
   else { pagSel.add(tipo); el.classList.add('sel'); }
-  // Aviso se tem método com custo
   var temCusto = ['mbway','multibanco','cheque'].some(function(t){ return pagSel.has(t); });
   document.getElementById('pag-aviso').style.display = temCusto ? 'block' : 'none';
 }
@@ -272,13 +407,16 @@ async function submeter() {
   var nif = document.getElementById('f-nif').value.trim();
   var tel = document.getElementById('f-tel').value.trim();
   var email = document.getElementById('f-email').value.trim();
+  var papelLegal = document.getElementById('f-papel-legal').value;
 
   if (!nome) { alert('Por favor preencha o nome completo.'); return; }
   if (!nif || nif.length < 9) { alert('Por favor preencha o NIF (9 dígitos).'); return; }
   if (!tel) { alert('Por favor preencha o telefone.'); return; }
   if (!email || !email.includes('@')) { alert('Por favor preencha o email.'); return; }
+  if (!papelLegal) { alert('Por favor seleccione o seu papel legal no condomínio.'); return; }
   if (notifSel.size === 0) { alert('Por favor escolha pelo menos um método de contacto.'); return; }
   if (pagSel.size === 0) { alert('Por favor escolha pelo menos um método de pagamento.'); return; }
+  if (!seguroOpcao) { alert('Por favor indique se o seu seguro cobre as partes comuns do edifício.'); return; }
 
   document.getElementById('btn-submit').disabled = true;
   document.getElementById('btn-txt').style.display = 'none';
@@ -290,11 +428,18 @@ async function submeter() {
     proprietario_tel: tel,
     proprietario_email: email,
     proprietario_morada: document.getElementById('f-morada').value.trim() || null,
+    papel_legal: papelLegal,
+    funcao_operacional: document.getElementById('f-funcao-operacional').value || null,
+    nib_proprio: document.getElementById('f-nib').value.trim() || null,
     metodo_notificacao: Array.from(notifSel).join(','),
     notificacao_digital_aceite: document.getElementById('f-aceite').checked,
     notificacao_digital_data: document.getElementById('f-data').value || null,
     metodo_pagamento: Array.from(pagSel).join(','),
-    iban_proprio: document.getElementById('f-iban').value.trim() || null
+    seguro_cobre_partes_comuns: seguroOpcao === 'sim',
+    seguro_seguradora: seguroOpcao === 'sim' ? (document.getElementById('seg-seguradora').value.trim() || null) : null,
+    seguro_apolice: seguroOpcao === 'sim' ? (document.getElementById('seg-apolice').value.trim() || null) : null,
+    seguro_validade: seguroOpcao === 'sim' ? (document.getElementById('seg-validade').value || null) : null,
+    seguro_capital: seguroOpcao === 'sim' ? (parseFloat(document.getElementById('seg-capital').value) || null) : null
   }).eq('id', fracaoId);
 
   document.getElementById('btn-submit').disabled = false;

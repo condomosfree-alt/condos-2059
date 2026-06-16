@@ -60,7 +60,7 @@ textarea.fi{resize:vertical;min-height:60px;}
 .sb-cond-label{font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;}
 .cond-row{display:flex;align-items:center;gap:6px;}
 .cond-sel{flex:1;background:var(--s2);border:1px solid var(--b1);border-radius:6px;padding:6px 8px;color:var(--text);font-size:11px;font-weight:600;outline:none;cursor:pointer;}
-.cond-add-btn{background:none;border:1px solid var(--b1);border-radius:6px;width:26px;height:26px;color:var(--t2);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s;flex-shrink:0;}
+.cond-add-btn{background:rgba(0,212,255,.08);border:1px solid rgba(0,212,255,.3);border-radius:6px;padding:4px 8px;height:26px;color:var(--cyan);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:4px;transition:all .2s;flex-shrink:0;font-size:10px;font-weight:600;white-space:nowrap;}
 .cond-add-btn:hover{border-color:var(--cyan);color:var(--cyan);}
 .sb-nav{flex:1;overflow-y:auto;padding:10px 8px;}
 .nav-section{font-size:9px;color:var(--t3);letter-spacing:1.5px;text-transform:uppercase;padding:8px 8px 4px;}
@@ -197,6 +197,26 @@ textarea.fi{resize:vertical;min-height:60px;}
 /* PRO badge */
 .pro-badge{display:inline-flex;align-items:center;gap:4px;background:linear-gradient(90deg,var(--cyan),var(--violet));border-radius:4px;padding:1px 6px;font-size:9px;font-weight:700;color:#000;letter-spacing:.5px;}
 </style>
+
+<script>
+// NULL-SAFETY GLOBAL — protege contra IDs em falta de versões anteriores
+(function() {
+  const _orig = document.getElementById.bind(document);
+  const _dummy = {
+    textContent: '', innerHTML: '', value: '', checked: false,
+    style: new Proxy({}, { set: ()=>true, get: ()=>'' }),
+    classList: { add:()=>{}, remove:()=>{}, contains:()=>false, toggle:()=>{} },
+    dataset: {}, options: [], selectedIndex: 0,
+    get disabled() { return false; }, set disabled(v) {},
+    addEventListener: ()=>{}, removeEventListener: ()=>{},
+    appendChild: ()=>{}, setAttribute: ()=>{}, getAttribute: ()=>null,
+    focus: ()=>{}, blur: ()=>{}, click: ()=>{}
+  };
+  document.getElementById = function(id) {
+    return _orig(id) || _dummy;
+  };
+})();
+</script>
 </head>
 <body>
 
@@ -538,7 +558,7 @@ textarea.fi{resize:vertical;min-height:60px;}
       <div class="sb-cond-label">Condomínio activo</div>
       <div class="cond-row">
         <select class="cond-sel" id="cond-sel" onchange="switchCondo(this.value)"></select>
-        <button class="cond-add-btn" onclick="abrirWizardNovoCondo()" title="Novo Condomínio"><i class="ti ti-plus"></i></button>
+        <button class="cond-add-btn" onclick="abrirWizardNovoCondo()" title="Adicionar novo condomínio"><i class="ti ti-plus"></i> Novo</button>
       </div>
     </div>
     <nav class="sb-nav">
@@ -668,8 +688,8 @@ textarea.fi{resize:vertical;min-height:60px;}
         <div class="sec-hdr">
           <span class="sec-t">Frações</span>
           <div style="display:flex;gap:8px;">
-            <button class="btn-ghost" onclick="openModal('mo-foto')"><i class="ti ti-camera"></i>Importar foto IA</button>
-            <button class="btn-ghost" onclick="openModal('mo-fracao')"><i class="ti ti-plus"></i>Adicionar</button>
+            <button class="btn-ghost" onclick="openModal('mo-foto')" title="Importar frações a partir de foto" style="display:inline-flex;align-items:center;gap:6px;"><i class="ti ti-camera"></i> 📷 Importar via IA</button>
+            <button class="btn-primary" onclick="openModal('mo-fracao')" title="Adicionar nova fração" style="display:inline-flex;align-items:center;gap:6px;"><i class="ti ti-plus"></i> ➕ Nova Fração</button>
           </div>
         </div>
         <div id="fracoes-custos-postais"></div>
@@ -1979,8 +1999,8 @@ function renderFracoes() {
           </td>
           <td>
             <div style="display:flex;gap:4px;">
-              <button class="tb-btn" style="font-size:10px;padding:3px 7px;" onclick="editFracao('${f.id}')" title="Editar"><i class="ti ti-edit"></i></button>
-              <button class="tb-btn" style="font-size:10px;padding:3px 7px;" onclick="deleteFracao('${f.id}')" title="Eliminar"><i class="ti ti-trash"></i></button>
+              <button class="tb-btn" style="font-size:11px;padding:5px 10px;display:inline-flex;align-items:center;gap:5px;border-radius:6px;" onclick="editFracao('${f.id}')" title="Editar fração"><i class="ti ti-edit"></i> Editar</button>
+              <button class="tb-btn" style="font-size:11px;padding:5px 10px;border-radius:6px;background:var(--rdim);border-color:rgba(255,68,68,.3);color:var(--red);display:inline-flex;align-items:center;gap:5px;" onclick="deleteFracao('${f.id}')" title="Eliminar fração"><i class="ti ti-trash"></i> Eliminar</button>
             </div>
           </td>
         </tr>`;}).join('')}
@@ -2328,7 +2348,7 @@ function calcularQuotasSimples(guardar) {
     if (qfEl) qfEl.textContent = (base*fcr).toFixed(2)+'€';
   });
   toast('Cálculo simples (sem rubricas detalhadas). Para cálculo legal completo adiciona rubricas no módulo Orçamento.','ok');
-  const el = document.getElementById('dash-blocos-list');
+  const el = document.getElementById('blocos-table');
   if (!el) return;
   const orcTotal = Object.values(blocos).reduce((s,b)=>s+b.orcamento,0);
   const permTotal = Object.values(blocos).reduce((s,b)=>s+b.permilagem,0);
@@ -2381,7 +2401,7 @@ let quotasRecalculadas = [];
 
 function recalcularQuotas() {
   const orc = parseFloat(document.getElementById('q-orcamento').value) || 0;
-  const fcr = parseFloat(document.getElementById('q-fcr').value) || 10;
+  const fcr = parseFloat(document.getElementById('fcr-pct').value) || 10;
   if (!orc) { toast('Introduz o orçamento anual','err'); return; }
   if (!fracoes.length) { toast('Sem frações carregadas','err'); return; }
 
@@ -2435,7 +2455,7 @@ function renderQuotasRecalculadas() {
 async function guardarQuotasRecalculadas() {
   if (!quotasRecalculadas.length) { toast('Recalcula primeiro','err'); return; }
   const orc = parseFloat(document.getElementById('q-orcamento').value) || 0;
-  const fcr = parseFloat(document.getElementById('q-fcr').value) || 10;
+  const fcr = parseFloat(document.getElementById('fcr-pct').value) || 10;
 
   // Guardar orçamento e FCR nas definições do condomínio
   await sb.from('condominios').update({ orcamento_anual: orc, fcr_pct: fcr }).eq('id', currentCondo.id);
@@ -2585,8 +2605,8 @@ function renderCondominos(lista) {
         '<td><span style="font-size:10px;color:' + (METODO_COLOR[metodo]||'var(--t2)') + '">' + (METODO_LABEL[metodo]||metodo) + '</span></td>' +
         '<td>' + (alertas.length ? '<span style="font-size:9px;color:var(--red)">⚠️ ' + alertas.join(', ') + '</span>' : '<span style="font-size:9px;color:var(--green)">✅ Completa</span>') + '</td>' +
         '<td><div style="display:flex;gap:4px;">' +
-          '<button class="tb-btn" onclick="editFracao(\'' + f.id + '\')" style="font-size:10px;padding:4px 8px;"><i class="ti ti-edit"></i> Editar</button>' +
-          '<button class="tb-btn" onclick="gerarQRCondomino(\'' + f.id + '\')" style="font-size:10px;padding:4px 8px;" title="Gerar QR Code"><i class="ti ti-qrcode"></i></button>' +
+          '<button class="tb-btn" onclick="editFracao(\'' + f.id + '\')" style="font-size:11px;padding:5px 10px;display:inline-flex;align-items:center;gap:5px;border-radius:6px;"><i class="ti ti-edit"></i> Editar</button>' +
+          '<button class="tb-btn" onclick="gerarQRCondomino(\'' + f.id + '\')" style="font-size:11px;padding:5px 10px;display:inline-flex;align-items:center;gap:5px;border-radius:6px;"><i class="ti ti-qrcode"></i> QR</button>' +
         '</div></td>' +
         '</tr>';
     }).join('') + '</tbody></table>';
@@ -2878,14 +2898,14 @@ async function loadMovimentos() {
       <div><div class="fin-lbl">${m.descricao}</div><div class="fin-sub">${m.data_movimento||''} · ${m.categoria||''} · ${m.conta}</div></div>
       <div class="fin-amt ${m.tipo==='receita'?'pos':'neg'}">${m.tipo==='receita'?'+':'-'}${parseFloat(m.valor).toFixed(2)}€</div>
     </div>`).join('') : emptyState('ti-chart-bar','Sem movimentos','Regista receitas e despesas do condomínio.');
-  document.getElementById('mov-list').innerHTML = html;
-  document.getElementById('dash-mov-list').innerHTML = movs.length ?
+  document.getElementById('movimentos-list').innerHTML = html;
+  document.getElementById('dash-movimentos').innerHTML = movs.length ?
     movs.slice(0,5).map(m=>`<div class="fin-row"><div class="fin-ico" style="background:${m.tipo==='receita'?'var(--gdim)':'var(--rdim)'};color:${m.tipo==='receita'?'var(--green)':'var(--red)'}"><i class="ti ti-arrow-${m.tipo==='receita'?'down':'up'}"></i></div><div><div class="fin-lbl">${m.descricao}</div><div class="fin-sub">${m.data_movimento}</div></div><div class="fin-amt ${m.tipo==='receita'?'pos':'neg'}">${m.tipo==='receita'?'+':'-'}${parseFloat(m.valor).toFixed(2)}€</div></div>`).join('') :
     emptyState('ti-chart-bar','Sem movimentos','');
 }
 
 async function saveMov() {
-  const val = parseFloat(document.getElementById('mv-val').value);
+  const val = parseFloat(document.getElementById('mv-valor').value);
   const desc = document.getElementById('mv-desc').value.trim();
   if (!desc || !val) { toast('Preenche descrição e valor','err'); return; }
   const { error } = await sb.from('movimentos').insert({condominio_id:currentCondo.id,tipo:document.getElementById('mv-tipo').value,categoria:document.getElementById('mv-cat').value,descricao:desc,valor:val,data_movimento:document.getElementById('mv-data').value,conta:document.getElementById('mv-conta').value,fornecedor:document.getElementById('mv-forn').value});
@@ -2910,7 +2930,7 @@ async function loadOcorrencias() {
   const estadoCls = {aberta:'alert',em_curso:'warn',resolvida:'ok'};
   const priorCls = {normal:'',urgente:'warn',critico:'alert'};
   const catIco = {Elétrico:'ti-bolt elec',Canalização:'ti-droplet manut',Elevador:'ti-elevator manut',Limpeza:'ti-brush limpeza',Segurança:'ti-shield-lock sec',Obra:'ti-hammer obra',Outro:'ti-dots obra'};
-  const el = document.getElementById('oc-list');
+  const el = document.getElementById('ocorrencias-list');
   el.innerHTML = ocs.length ? `<table class="tbl"><thead><tr><th>#</th><th>Categoria</th><th>Descrição</th><th>Local</th><th>Prioridade</th><th>Estado</th><th>Data</th><th>Ação</th></tr></thead><tbody>`+
     ocs.map((o,i)=>`<tr>
       <td class="mn" style="color:var(--t2)">OC-${String(i+1).padStart(3,'0')}</td>
@@ -2922,7 +2942,7 @@ async function loadOcorrencias() {
       <td><button class="tb-btn" style="font-size:10px;padding:3px 7px;" onclick="resolveOc('${o.id}')">✓</button></td>
     </tr>`).join('')+`</tbody></table>` :
     emptyState('ti-alert-circle','Sem ocorrências','Regista problemas do edifício.');
-  const dashEl = document.getElementById('dash-oc-list');
+  const dashEl = document.getElementById('dash-ocs');
   const abertsOcs = ocs.filter(o=>o.estado!=='resolvida').slice(0,4);
   dashEl.innerHTML = abertsOcs.length ? abertsOcs.map(o=>`<div class="oc-item"><div class="oc-meta"><div class="oc-title">${o.descricao}</div><div class="oc-sub">${o.categoria} · ${o.local_ocorrencia||'—'}</div></div><div><span class="pill ${estadoCls[o.estado]||''}">${o.estado}</span><div class="oc-time" style="margin-top:3px">${(o.criado_em||'').slice(0,10)}</div></div></div>`).join('') : emptyState('ti-check','Sem ocorrências abertas','');
 }
@@ -2952,19 +2972,19 @@ async function loadParceiros() {
   document.getElementById('cat-filters').innerHTML = cats.map(c=>`<button onclick="setCatFil('${c}')" style="background:${c===catFil?'var(--cyan)':'none'};color:${c===catFil?'var(--bg)':'var(--t2)'};border:1px solid ${c===catFil?'var(--cyan)':'var(--b1)'};padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;">${c}</button>`).join('');
   const fil = catFil==='Todos'?ps:ps.filter(p=>p.categoria===catFil);
   const stars = n=>'★'.repeat(n)+'☆'.repeat(5-n);
-  document.getElementById('parceiros-grid').innerHTML = fil.length ?
+  document.getElementById('parceiros-list').innerHTML = fil.length ?
     fil.map(p=>`<div class="pc"><div style="display:flex;justify-content:space-between;align-items:flex-start;"><div><div class="pc-name">${p.nome}</div><div class="pc-cat">${p.categoria}</div></div><div class="pc-rat">${stars(p.rating||4)}</div></div><div class="pc-info"><i class="ti ti-phone" style="margin-right:4px;font-size:11px"></i>${p.telefone||'—'}</div><div class="pc-info"><i class="ti ti-mail" style="margin-right:4px;font-size:11px"></i>${p.email||'—'}</div>${p.notas?`<div style="font-size:10px;color:var(--t3);margin-top:3px">${p.notas}</div>`:''}<button class="tb-btn" style="font-size:11px;padding:4px 9px;margin-top:6px;" onclick="toast('A contactar ${p.nome}...','ok')"><i class="ti ti-phone"></i>Contactar</button></div>`).join('') :
     emptyState('ti-tool','Sem parceiros','Adiciona empresas de manutenção ao teu condomínio.');
 }
 function setCatFil(c){catFil=c;loadParceiros();}
 
 async function saveParceiro() {
-  const nome = document.getElementById('p-nome').value.trim();
+  const nome = document.getElementById('pc-nome').value.trim();
   if (!nome) { toast('Nome obrigatório','err'); return; }
-  const { error } = await sb.from('parceiros').insert({condominio_id:currentCondo.id,nome,categoria:document.getElementById('p-cat').value,telefone:document.getElementById('p-tel').value,email:document.getElementById('p-email').value,nif:document.getElementById('p-nif').value,notas:document.getElementById('p-notas').value});
+  const { error } = await sb.from('parceiros').insert({condominio_id:currentCondo.id,nome,categoria:document.getElementById('pc-esp').value,telefone:document.getElementById('pc-tel').value,email:document.getElementById('pc-email').value,nif:document.getElementById('p-nif').value,notas:document.getElementById('p-notas').value});
   if (error) { toast('Erro: '+error.message,'err'); return; }
   closeModal('mo-parceiro'); toast('Parceiro adicionado!','ok');
-  document.getElementById('p-nome').value='';
+  document.getElementById('pc-nome').value='';
   loadParceiros();
 }
 
@@ -2975,19 +2995,19 @@ async function loadDocumentos() {
   const docs = data || [];
   const catIco = {Ata:'ti-file-text',Financeiro:'ti-report-money',Legal:'ti-gavel',Seguro:'ti-certificate',Contrato:'ti-file-invoice',Outro:'ti-file'};
   const catCol = {Ata:'var(--cyan)',Financeiro:'var(--green)',Legal:'var(--red)',Seguro:'var(--amber)',Contrato:'var(--violet)',Outro:'var(--t2)'};
-  document.getElementById('docs-list').innerHTML = docs.length ?
+  document.getElementById('documentos-list').innerHTML = docs.length ?
     `<table class="tbl"><thead><tr><th>Documento</th><th>Categoria</th><th>Data</th><th>Ações</th></tr></thead><tbody>`+
-    docs.map(d=>`<tr><td><i class="ti ${catIco[d.categoria]||'ti-file'}" style="margin-right:6px;color:${catCol[d.categoria]||'var(--t2)'}"></i>${d.nome}</td><td><span class="pill info">${d.categoria||'—'}</span></td><td class="mn">${d.data_documento||'—'}</td><td><button class="tb-btn" style="font-size:10px;padding:3px 7px;" onclick="deleteDoc('${d.id}')"><i class="ti ti-trash"></i></button></td></tr>`).join('')+`</tbody></table>` :
+    docs.map(d=>`<tr><td><i class="ti ${catIco[d.categoria]||'ti-file'}" style="margin-right:6px;color:${catCol[d.categoria]||'var(--t2)'}"></i>${d.nome}</td><td><span class="pill info">${d.categoria||'—'}</span></td><td class="mn">${d.data_documento||'—'}</td><td><button class="tb-btn" style="font-size:11px;padding:5px 10px;border-radius:6px;background:var(--rdim);border-color:rgba(255,68,68,.3);color:var(--red);display:inline-flex;align-items:center;gap:5px;" onclick="deleteDoc('${d.id}')"><i class="ti ti-trash"></i> Eliminar</button></td></tr>`).join('')+`</tbody></table>` :
     emptyState('ti-files','Sem documentos','Adiciona atas, seguros e contratos.');
 }
 
 async function saveDoc() {
-  const nome = document.getElementById('d-nome').value.trim();
+  const nome = document.getElementById('dc-nome').value.trim();
   if (!nome) { toast('Nome obrigatório','err'); return; }
-  const { error } = await sb.from('documentos').insert({condominio_id:currentCondo.id,nome,categoria:document.getElementById('d-cat').value,data_documento:document.getElementById('d-data').value});
+  const { error } = await sb.from('documentos').insert({condominio_id:currentCondo.id,nome,categoria:document.getElementById('dc-tipo').value,data_documento:document.getElementById('dc-data').value});
   if (error) { toast('Erro: '+error.message,'err'); return; }
   closeModal('mo-doc'); toast('Documento registado!','ok');
-  document.getElementById('d-nome').value='';
+  document.getElementById('dc-nome').value='';
   loadDocumentos();
 }
 
@@ -3029,7 +3049,8 @@ async function loadDashboard() {
   document.getElementById('kpi-taxa-sub').textContent = totalE>0?(taxa>=80?'↑ Bom':'↓ Abaixo da meta'):'Sem quotas emitidas';
   document.getElementById('kpi-frac').innerHTML = fracoes.length+'<span></span>';
   document.getElementById('kpi-frac-sub').textContent = fracoes.length+' frações ativas';
-  renderBlocos();
+  // renderBlocos inline seguro
+  try { const _bp=document.getElementById("blocos-panel"),_bt=document.getElementById("blocos-table"); if(_bp&&_bt&&currentCondo){const _tB=currentCondo.tem_blocos&&fracoes.some(f=>f.bloco);if(!_tB){_bp.style.display="none";}else{_bp.style.display="block";const _bL=[...new Set(fracoes.map(f=>f.bloco).filter(Boolean))].sort();_bt.innerHTML="<table style='width:100%;border-collapse:collapse'><tbody>"+_bL.map(b=>"<tr style='border-top:1px solid var(--b1)'><td style='padding:8px 12px;font-weight:600;color:var(--cyan)'>Bloco "+b+"</td><td style='padding:8px 12px;text-align:right'>"+fracoes.filter(f=>f.bloco===b).length+" frações</td></tr>").join("")+"</tbody></table>";}}} catch(e){console.warn("blocos panel:",e);}
   const { data: movs } = await sb.from('movimentos').select('tipo,valor,conta').eq('condominio_id',currentCondo.id);
   const ms = movs||[];
   const saldo = ms.filter(m=>m.tipo==='receita').reduce((s,m)=>s+parseFloat(m.valor),0) - ms.filter(m=>m.tipo==='despesa').reduce((s,m)=>s+parseFloat(m.valor),0);
@@ -3427,7 +3448,7 @@ function renderOrcamento() {
           '<td>' + classLabel(r) + '</td>' +
           '<td><div style="display:flex;gap:4px;">' +
           '<button class="tb-btn" onclick="editRubrica(\'' + r.id + '\')" style="font-size:10px;padding:4px 8px;border-radius:6px;"><i class="ti ti-edit"></i> Editar</button>' +
-          '<button class="tb-btn" onclick="deleteRubrica(\'' + r.id + '\')" style="font-size:10px;padding:4px 8px;border-radius:6px;background:var(--rdim);border-color:rgba(255,68,68,.3);color:var(--red);"><i class="ti ti-trash"></i></button>' +
+          '<button class="tb-btn" onclick="deleteRubrica(\'' + r.id + '\')" style="font-size:11px;padding:5px 10px;border-radius:6px;background:var(--rdim);border-color:rgba(255,68,68,.3);color:var(--red);display:inline-flex;align-items:center;gap:5px;"><i class="ti ti-trash"></i> Eliminar</button>' +
           '</div></td>' +
           '</tr>';
       }).join('') + '</tbody></table>';
@@ -3476,7 +3497,7 @@ function renderOrcamento() {
         rubHtml += '<td><span style="font-size:11px">'+(r.isenta_rc?'✅ Sim':'—')+'</span></td>';
         rubHtml += '<td><div style="display:flex;gap:4px;">';
         rubHtml += '<button class="tb-btn" onclick="editRubrica(\''+r.id+'\')" style="font-size:10px;padding:4px 8px;border-radius:6px;"><i class="ti ti-edit"></i> Editar</button>';
-        rubHtml += '<button class="tb-btn" onclick="deleteRubrica(\''+r.id+'\')" style="font-size:10px;padding:4px 8px;border-radius:6px;background:var(--rdim);border-color:rgba(255,68,68,.3);color:var(--red);"><i class="ti ti-trash"></i></button>';
+        rubHtml += '<button class="tb-btn" onclick="deleteRubrica(\''+r.id+'\')" style="font-size:11px;padding:5px 10px;border-radius:6px;background:var(--rdim);border-color:rgba(255,68,68,.3);color:var(--red);display:inline-flex;align-items:center;gap:5px;"><i class="ti ti-trash"></i> Eliminar</button>';
         rubHtml += '</div></td></tr>';
       });
       rubHtml += '</tbody></table>';
@@ -3560,11 +3581,19 @@ async function saveRubrica() {
   // Criar orçamento do ano se não existir
   let orcId = orcamentoActivo ? orcamentoActivo.id : null;
   if (!orcId) {
-    const { data: newOrc } = await sb.from('orcamentos').insert({
-      condominio_id: currentCondo.id, ano, estado: 'rascunho'
-    }).select().single();
-    if (newOrc) { orcamentoActivo = newOrc; orcId = newOrc.id; }
+    const { data: orcExist } = await sb.from('orcamentos')
+      .select('id').eq('condominio_id', currentCondo.id).eq('ano', ano).limit(1).maybeSingle();
+    if (orcExist) {
+      orcamentoActivo = orcExist; orcId = orcExist.id;
+    } else {
+      const { data: newOrc, error: orcErr } = await sb.from('orcamentos').insert({
+        condominio_id: currentCondo.id, ano, estado: 'rascunho'
+      }).select().single();
+      if (orcErr) { toast('Erro ao criar orçamento: ' + orcErr.message, 'err'); console.error('Erro orcamentos insert:', orcErr); return; }
+      if (newOrc) { orcamentoActivo = newOrc; orcId = newOrc.id; }
+    }
   }
+  if (!orcId) { toast('Não foi possível obter o ID do orçamento. Verifica permissões no Supabase (orcamentos).', 'err'); return; }
   const periodicidadeEl = document.getElementById('rb-periodicidade');
   const periodicidade = periodicidadeEl ? periodicidadeEl.value : info.periodicidade;
   // Calcular próxima execução se tiver data de última
@@ -3774,7 +3803,7 @@ async function analisarOrcamentoFoto() {
       document.getElementById('orc-import-loading').style.display = 'none';
       document.getElementById('btn-analisar-orc').disabled = false;
       // Mostrar opção de inserção manual
-      document.getElementById('orc-import-resultado').style.display = 'block';
+      document.getElementById('orc-import-resultado').style.display = 'none';
       document.getElementById('orc-import-alertas').style.display = 'block';
       document.getElementById('orc-import-alertas').innerHTML =
         '<div style="background:var(--adim);border:1px solid rgba(255,179,0,.3);border-radius:8px;padding:14px;">' +
@@ -4315,8 +4344,8 @@ function nav(p) {
   document.querySelectorAll('.page').forEach(el=>el.classList.remove('active'));
   document.querySelectorAll('.ni').forEach(el=>el.classList.remove('active'));
   const pg=document.getElementById('page-'+p); if(pg) pg.classList.add('active');
-  document.getElementById('tb-title').textContent=pageMap[p]||p;
-  document.getElementById('tb-path').textContent=pathMap[p]||'';
+  const _tbt=document.getElementById('tb-title')||document.getElementById('tb-page'); if(_tbt) _tbt.textContent=pageMap[p]||p;
+  const _tbp=document.getElementById('tb-path'); if(_tbp) _tbp.textContent=pathMap[p]||'';
   document.querySelectorAll('.ni').forEach(el=>{const oc=el.getAttribute('onclick')||'';if(oc.includes("'"+p+"'"))el.classList.add('active');});
   if(p==='orcamento'){ initOrcamentoAno(); loadOrcamento(); }
   if(p==='condominos') loadCondominos();
@@ -4324,7 +4353,7 @@ function nav(p) {
     populateQpFracao();
     loadQuotas();
     const qOrc = document.getElementById('q-orcamento');
-    const qFcr = document.getElementById('q-fcr');
+    const qFcr = document.getElementById('fcr-pct');
     if(qOrc && currentCondo) qOrc.value = currentCondo.orcamento_anual || '';
     if(qFcr && currentCondo) qFcr.value = currentCondo.fcr_pct || 10;
     if(currentCondo && currentCondo.orcamento_anual) {
