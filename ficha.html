@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>COND.OS — Ficha do Condómino</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{
+  --bg:#080d14;--s1:#0d1520;--s2:#111b2a;--b1:#1e2d3d;--b2:#2a3d52;
+  --text:#e8f0f8;--t2:#8899aa;--t3:#445566;
+  --cyan:#00d4ff;--violet:#7c3aed;--green:#00e676;--amber:#ffb300;--red:#ff4444;
+  --cdim:rgba(0,212,255,.06);--gdim:rgba(0,230,118,.06);--adim:rgba(255,179,0,.06);--rdim:rgba(255,68,68,.06);
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:14px;min-height:100vh;padding-bottom:30px;}
+.header{background:var(--s1);border-bottom:1px solid var(--b1);padding:20px;text-align:center;}
+.header-brand{font-size:24px;font-weight:900;color:var(--cyan);letter-spacing:-1px;font-family:monospace;}
+.header-sub{font-size:10px;color:var(--t3);letter-spacing:2px;text-transform:uppercase;margin-top:2px;}
+.header-fracao{margin-top:12px;background:var(--cdim);border:1px solid rgba(0,212,255,.2);border-radius:8px;padding:8px 16px;display:inline-block;}
+.header-fracao-label{font-size:9px;color:var(--t3);letter-spacing:1.5px;text-transform:uppercase;}
+.header-fracao-val{font-size:16px;font-weight:700;color:var(--cyan);margin-top:2px;}
+.header-condo{font-size:11px;color:var(--t2);margin-top:3px;}
+.card{background:var(--s1);border:1px solid var(--b1);border-radius:12px;margin:14px;padding:18px;}
+.card-title{font-size:10px;font-weight:700;color:var(--cyan);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--b1);}
+.lei-banner{background:linear-gradient(135deg,rgba(124,58,237,.1),rgba(0,212,255,.06));border:1px solid rgba(124,58,237,.25);border-radius:8px;padding:12px;margin-bottom:14px;font-size:11px;color:var(--t2);line-height:1.7;}
+.fl{margin-bottom:14px;}
+.fl label{display:block;font-size:10px;color:var(--t2);margin-bottom:5px;letter-spacing:.5px;font-weight:600;}
+.req{color:var(--red);}
+.fi{width:100%;background:var(--s2);border:1.5px solid var(--b1);border-radius:8px;padding:12px;font-size:14px;color:var(--text);outline:none;transition:border-color .2s;-webkit-appearance:none;}
+.fi:focus{border-color:var(--cyan);}
+.fi::placeholder{color:var(--t3);}
+select.fi option{background:var(--s2);}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.obrig{font-size:10px;color:var(--t3);margin-bottom:14px;}
+
+/* NOTIF MULTI-SELECT */
+.notif-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px;}
+.notif-opt{background:var(--s2);border:2px solid var(--b1);border-radius:8px;padding:12px 8px;text-align:center;cursor:pointer;transition:all .2s;position:relative;}
+.notif-opt.sel{border-color:var(--cyan);background:var(--cdim);}
+.notif-opt .ico{font-size:22px;margin-bottom:4px;}
+.notif-opt .lbl{font-size:11px;font-weight:600;color:var(--t2);}
+.notif-opt.sel .lbl{color:var(--cyan);}
+.notif-opt .preco{font-size:9px;color:var(--green);margin-top:2px;}
+.notif-opt .preco.custo{color:var(--amber);}
+.notif-opt .check-badge{position:absolute;top:6px;right:6px;width:16px;height:16px;border-radius:50%;background:var(--cyan);color:#000;font-size:9px;font-weight:700;display:none;align-items:center;justify-content:center;}
+.notif-opt.sel .check-badge{display:flex;}
+.notif-full{grid-column:1/-1;}
+.notif-aviso{display:none;background:var(--adim);border:1px solid rgba(255,179,0,.3);border-radius:8px;padding:10px 12px;margin-top:8px;font-size:10px;color:var(--amber);line-height:1.6;}
+
+/* PAGAMENTO */
+.pag-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px;}
+.pag-opt{background:var(--s2);border:2px solid var(--b1);border-radius:8px;padding:12px 8px;text-align:center;cursor:pointer;transition:all .2s;position:relative;}
+.pag-opt.sel{border-color:var(--cyan);background:var(--cdim);}
+.pag-opt .ico{font-size:22px;margin-bottom:4px;}
+.pag-opt .lbl{font-size:11px;font-weight:600;color:var(--t2);}
+.pag-opt.sel .lbl{color:var(--cyan);}
+.pag-opt .custo-tag{font-size:9px;margin-top:3px;padding:1px 6px;border-radius:4px;display:inline-block;}
+.pag-opt .check-badge{position:absolute;top:6px;right:6px;width:16px;height:16px;border-radius:50%;background:var(--cyan);color:#000;font-size:9px;font-weight:700;display:none;align-items:center;justify-content:center;}
+.pag-opt.sel .check-badge{display:flex;}
+.pag-aviso{display:none;background:var(--adim);border:1px solid rgba(255,179,0,.3);border-radius:8px;padding:10px 12px;margin-top:8px;font-size:10px;color:var(--amber);line-height:1.6;}
+
+.check-row{display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:11px;color:var(--t2);line-height:1.5;margin-top:10px;}
+.check-row input{width:16px;height:16px;accent-color:var(--cyan);flex-shrink:0;margin-top:1px;}
+
+.btn-submit{width:100%;background:linear-gradient(135deg,var(--cyan),var(--violet));color:#000;border:none;border-radius:10px;padding:16px;font-size:15px;font-weight:800;cursor:pointer;margin-top:8px;display:flex;align-items:center;justify-content:center;gap:10px;}
+.btn-submit:disabled{opacity:.5;cursor:not-allowed;}
+.msg{margin:16px;border-radius:12px;padding:24px;text-align:center;}
+.msg.ok{background:var(--gdim);border:1px solid rgba(0,230,118,.3);color:var(--green);}
+.msg.err{background:var(--rdim);border:1px solid rgba(255,68,68,.3);color:var(--red);}
+.spin{width:18px;height:18px;border:2px solid rgba(0,0,0,.3);border-top-color:#000;border-radius:50%;animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-brand">COND.OS</div>
+  <div class="header-sub">Gestão de Condomínios</div>
+  <div style="margin-top:12px;">
+    <div class="header-fracao">
+      <div class="header-fracao-label">Ficha para preenchimento</div>
+      <div class="header-fracao-val" id="h-fracao">A carregar...</div>
+      <div class="header-condo" id="h-condo"></div>
+    </div>
+  </div>
+</div>
+
+<div id="app">
+
+  <!-- DADOS PESSOAIS -->
+  <div class="card">
+    <div class="lei-banner">
+      ⚖️ <strong style="color:var(--violet)">Lei 8/2022</strong> — Os condóminos são <strong style="color:var(--text)">legalmente obrigados</strong> a fornecer ao administrador: NIF, morada, telefone e email. Os dados são usados exclusivamente para gestão do condomínio.
+    </div>
+    <div class="obrig">Campos com <span class="req">*</span> são obrigatórios por lei.</div>
+    <div class="card-title">👤 Dados Pessoais</div>
+    <div class="fl"><label>Nome Completo <span class="req">*</span></label><input class="fi" id="f-nome" placeholder="O seu nome completo" autocomplete="name"></div>
+    <div class="row">
+      <div class="fl"><label>NIF <span class="req">*</span></label><input class="fi" id="f-nif" placeholder="XXXXXXXXX" inputmode="numeric" maxlength="9"></div>
+      <div class="fl"><label>Telefone <span class="req">*</span></label><input class="fi" id="f-tel" placeholder="9XX XXX XXX" inputmode="tel" autocomplete="tel"></div>
+    </div>
+    <div class="fl"><label>Email <span class="req">*</span></label><input class="fi" id="f-email" type="email" placeholder="o@seu.email" autocomplete="email"></div>
+    <div class="fl"><label>Morada (se diferente da fracção)</label><input class="fi" id="f-morada" placeholder="Deixe em branco se igual ao imóvel"></div>
+  </div>
+
+  <!-- NOTIFICAÇÕES -->
+  <div class="card">
+    <div class="card-title">📮 Como prefere ser contactado?</div>
+    <p style="font-size:11px;color:var(--t2);margin-bottom:4px;line-height:1.6;">Para convocatórias, atas e comunicações. <strong style="color:var(--cyan)">Pode escolher mais do que uma opção.</strong></p>
+    <p style="font-size:10px;color:var(--t3);margin-bottom:10px;">Se não escolher método digital, as comunicações serão enviadas por carta registada, cujos custos são repartidos por todos os condóminos.</p>
+
+    <div class="notif-grid">
+      <div class="notif-opt" id="n-email" onclick="toggleNotif('email')">
+        <div class="check-badge">✓</div>
+        <div class="ico">📧</div>
+        <div class="lbl">Email</div>
+        <div class="preco">Grátis</div>
+      </div>
+      <div class="notif-opt" id="n-whatsapp" onclick="toggleNotif('whatsapp')">
+        <div class="check-badge">✓</div>
+        <div class="ico">💬</div>
+        <div class="lbl">WhatsApp</div>
+        <div class="preco">Grátis</div>
+      </div>
+      <div class="notif-opt" id="n-carta_simples" onclick="toggleNotif('carta_simples')">
+        <div class="check-badge">✓</div>
+        <div class="ico">✉️</div>
+        <div class="lbl">Carta Simples</div>
+        <div class="preco custo">~0,73€/carta (Correio Normal)</div>
+      </div>
+      <div class="notif-opt" id="n-carta_registada" onclick="toggleNotif('carta_registada')">
+        <div class="check-badge">✓</div>
+        <div class="ico">📬</div>
+        <div class="lbl">Carta Registada</div>
+        <div class="preco custo">~3,75€/carta</div>
+      </div>
+      <div class="notif-opt notif-full" id="n-carta_ar" onclick="toggleNotif('carta_ar')">
+        <div class="check-badge">✓</div>
+        <div class="ico">📮</div>
+        <div class="lbl">Carta Registada + AR
+          <span style="font-size:9px;background:var(--gdim);color:var(--green);padding:1px 6px;border-radius:4px;margin-left:4px;">Recomendado para atas</span>
+        </div>
+        <div class="preco custo">~4,20€/carta — prova legal de entrega</div>
+      </div>
+    </div>
+
+    <div class="notif-aviso" id="notif-aviso">
+      ⚠️ <strong>Atenção:</strong> Ao escolher carta como método de notificação, os custos de envio (por carta registada ou carta registada com aviso de recepção) serão incluídos no orçamento anual do condomínio e repartidos por todos os condóminos na proporção da sua permilagem. Considere optar por email ou WhatsApp para reduzir estes custos para todos.
+    </div>
+
+    <label class="check-row">
+      <input type="checkbox" id="f-aceite" checked>
+      Aceito receber comunicações do condomínio pelos métodos escolhidos acima.
+    </label>
+  </div>
+
+  <!-- PAGAMENTO DE QUOTAS -->
+  <div class="card">
+    <div class="card-title">💳 Pagamento de Quotas</div>
+    <p style="font-size:11px;color:var(--t2);margin-bottom:4px;line-height:1.6;">Como prefere pagar a quota mensal do condomínio? <strong style="color:var(--cyan)">Pode escolher mais do que uma opção.</strong></p>
+    <p style="font-size:10px;color:var(--t3);margin-bottom:10px;">Alguns métodos têm custos de processamento que podem ser repartidos pelo condomínio.</p>
+
+    <div class="pag-grid">
+      <div class="pag-opt" id="p-transferencia" onclick="togglePag('transferencia')">
+        <div class="check-badge">✓</div>
+        <div class="ico">🏦</div>
+        <div class="lbl">Transferência Bancária</div>
+        <div><span class="custo-tag" style="background:var(--gdim);color:var(--green);">Grátis</span></div>
+      </div>
+      <div class="pag-opt" id="p-debito_direto" onclick="togglePag('debito_direto')">
+        <div class="check-badge">✓</div>
+        <div class="ico">🔄</div>
+        <div class="lbl">Débito Directo</div>
+        <div><span class="custo-tag" style="background:var(--gdim);color:var(--green);">Grátis</span></div>
+      </div>
+      <div class="pag-opt" id="p-mbway" onclick="togglePag('mbway')">
+        <div class="check-badge">✓</div>
+        <div class="ico">📱</div>
+        <div class="lbl">MBWay</div>
+        <div><span class="custo-tag" style="background:var(--adim);color:var(--amber);">Pode ter custo</span></div>
+      </div>
+      <div class="pag-opt" id="p-multibanco" onclick="togglePag('multibanco')">
+        <div class="check-badge">✓</div>
+        <div class="ico">🏧</div>
+        <div class="lbl">Referência Multibanco</div>
+        <div><span class="custo-tag" style="background:var(--adim);color:var(--amber);">Pode ter custo</span></div>
+      </div>
+      <div class="pag-opt notif-full" id="p-cheque" onclick="togglePag('cheque')">
+        <div class="check-badge">✓</div>
+        <div class="ico">📄</div>
+        <div class="lbl">Cheque</div>
+        <div><span class="custo-tag" style="background:var(--adim);color:var(--amber);">Custos bancários aplicáveis</span></div>
+      </div>
+    </div>
+
+    <div class="pag-aviso" id="pag-aviso">
+      ⚠️ <strong>Informação importante:</strong> Os métodos MBWay, Referência Multibanco e Cheque podem implicar comissões bancárias. Estes custos, quando existam, serão suportados pelo condomínio e repartidos por todos os condóminos. A <strong>Transferência Bancária</strong> é o método mais económico para o condomínio — recomendamos a sua utilização sempre que possível.
+    </div>
+
+    <div class="fl" style="margin-top:14px;">
+      <label>IBAN para pagamento por Transferência (opcional)</label>
+      <input class="fi" id="f-iban" placeholder="PT50 XXXX XXXX XXXX XXXX XXXX X">
+      <div style="font-size:10px;color:var(--t3);margin-top:4px;">O IBAN do condomínio para onde deve efectuar a transferência será comunicado pela administração.</div>
+    </div>
+  </div>
+
+  <!-- CONFIRMAÇÃO -->
+  <div class="card">
+    <div class="card-title">✍️ Confirmação</div>
+    <div class="fl"><label>Data</label><input class="fi" id="f-data" type="date"></div>
+    <p style="font-size:11px;color:var(--t2);margin-bottom:14px;line-height:1.6;">Ao submeter confirmo que os dados fornecidos são correctos e autorizo a administração do condomínio a utilizá-los exclusivamente para fins de gestão condominial, nos termos da Lei 8/2022.</p>
+    <button class="btn-submit" id="btn-submit" onclick="submeter()">
+      <span id="btn-txt">✅ Submeter Ficha</span>
+      <div class="spin" id="btn-spin" style="display:none;"></div>
+    </button>
+  </div>
+</div>
+
+<div id="msg-ok" class="msg ok" style="display:none;">
+  <div style="font-size:40px;margin-bottom:12px;">🎉</div>
+  <div style="font-size:18px;font-weight:700;margin-bottom:8px;">Obrigado!</div>
+  <div style="font-size:13px;line-height:1.7;">Os seus dados foram recebidos com sucesso.<br>A administração irá confirmar a sua ficha em breve.</div>
+</div>
+
+<div id="msg-err" class="msg err" style="display:none;"></div>
+
+<script>
+const SB_URL = 'https://iopkxoabszhzjimjltir.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlvcGt4b2Fic3poemppbWpsdGlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEyNzc5MjQsImV4cCI6MjA5Njg1MzkyNH0.PwopXnx0v7kSXUeua1Y3fI3xPDIS8S62SzGBfwPwLSA';
+const sb = supabase.createClient(SB_URL, SB_KEY);
+
+const params = new URLSearchParams(window.location.search);
+const condoId = params.get('condo');
+const fracaoId = params.get('fracao');
+const codigo = params.get('codigo') || '—';
+const bloco = params.get('bloco') || '';
+
+document.getElementById('h-fracao').textContent = 'Fração ' + codigo + (bloco ? ' — Bloco ' + bloco : '');
+document.getElementById('f-data').value = new Date().toISOString().split('T')[0];
+
+if (condoId) {
+  sb.from('condominios').select('nome').eq('id', condoId).limit(1).then(function(res) {
+    if (res.data && res.data[0]) document.getElementById('h-condo').textContent = res.data[0].nome;
+  });
+}
+
+// NOTIFICAÇÕES — multi-select
+var notifSel = new Set();
+function toggleNotif(tipo) {
+  var el = document.getElementById('n-'+tipo);
+  if (notifSel.has(tipo)) { notifSel.delete(tipo); el.classList.remove('sel'); }
+  else { notifSel.add(tipo); el.classList.add('sel'); }
+  // Aviso se escolheu carta
+  var temCarta = ['carta_simples','carta_registada','carta_ar'].some(function(t){ return notifSel.has(t); });
+  document.getElementById('notif-aviso').style.display = temCarta ? 'block' : 'none';
+}
+
+// PAGAMENTO — multi-select
+var pagSel = new Set();
+function togglePag(tipo) {
+  var el = document.getElementById('p-'+tipo);
+  if (pagSel.has(tipo)) { pagSel.delete(tipo); el.classList.remove('sel'); }
+  else { pagSel.add(tipo); el.classList.add('sel'); }
+  // Aviso se tem método com custo
+  var temCusto = ['mbway','multibanco','cheque'].some(function(t){ return pagSel.has(t); });
+  document.getElementById('pag-aviso').style.display = temCusto ? 'block' : 'none';
+}
+
+async function submeter() {
+  var nome = document.getElementById('f-nome').value.trim();
+  var nif = document.getElementById('f-nif').value.trim();
+  var tel = document.getElementById('f-tel').value.trim();
+  var email = document.getElementById('f-email').value.trim();
+
+  if (!nome) { alert('Por favor preencha o nome completo.'); return; }
+  if (!nif || nif.length < 9) { alert('Por favor preencha o NIF (9 dígitos).'); return; }
+  if (!tel) { alert('Por favor preencha o telefone.'); return; }
+  if (!email || !email.includes('@')) { alert('Por favor preencha o email.'); return; }
+  if (notifSel.size === 0) { alert('Por favor escolha pelo menos um método de contacto.'); return; }
+  if (pagSel.size === 0) { alert('Por favor escolha pelo menos um método de pagamento.'); return; }
+
+  document.getElementById('btn-submit').disabled = true;
+  document.getElementById('btn-txt').style.display = 'none';
+  document.getElementById('btn-spin').style.display = 'block';
+
+  var res = await sb.from('fracoes').update({
+    proprietario_nome: nome,
+    proprietario_nif: nif,
+    proprietario_tel: tel,
+    proprietario_email: email,
+    proprietario_morada: document.getElementById('f-morada').value.trim() || null,
+    metodo_notificacao: Array.from(notifSel).join(','),
+    notificacao_digital_aceite: document.getElementById('f-aceite').checked,
+    notificacao_digital_data: document.getElementById('f-data').value || null,
+    metodo_pagamento: Array.from(pagSel).join(','),
+    iban_proprio: document.getElementById('f-iban').value.trim() || null
+  }).eq('id', fracaoId);
+
+  document.getElementById('btn-submit').disabled = false;
+  document.getElementById('btn-txt').style.display = 'block';
+  document.getElementById('btn-spin').style.display = 'none';
+
+  if (res.error) {
+    document.getElementById('msg-err').style.display = 'block';
+    document.getElementById('msg-err').textContent = 'Erro: ' + res.error.message + '. Por favor tente de novo ou contacte a administração.';
+  } else {
+    document.getElementById('app').style.display = 'none';
+    document.getElementById('msg-ok').style.display = 'block';
+  }
+}
+</script>
+</body>
+</html>
