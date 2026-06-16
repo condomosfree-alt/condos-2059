@@ -6,7 +6,7 @@
 <title>Cond.OS 2059</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.x/tabler-icons.min.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
 :root{
   --bg:#080d14;--s1:#0d1520;--s2:#111b2a;--b1:#1e2d3d;--b2:#2a3d52;
@@ -2673,16 +2673,20 @@ function gerarQRCondomino(fracaoId) {
   _qrLinkActual = url;
   document.getElementById('qr-fracao-info').textContent = 'Fração ' + (f.codigo||'—') + (f.bloco ? ' — Bloco ' + f.bloco : '');
   document.getElementById('qr-link').textContent = url;
-  // Gerar QR como imagem base64
-  QRCode.toDataURL(url, { width: 200, margin: 2, color: { dark: '#000000', light: '#ffffff' } }, function(err, dataUrl) {
-    var qrContainer = document.getElementById('qr-code-img');
-    if (err) {
-      qrContainer.innerHTML = '<div style="color:red;font-size:11px;">Erro ao gerar QR: ' + err.message + '</div>';
-    } else {
-      qrContainer.innerHTML = '<img src="' + dataUrl + '" width="200" height="200" style="border-radius:8px;">';
-    }
-    openModal('mo-qr');
-  });
+  // Gerar QR com qrcodejs
+  var qrContainer = document.getElementById('qr-code-img');
+  qrContainer.innerHTML = '';
+  openModal('mo-qr');
+  setTimeout(function() {
+    new QRCode(qrContainer, {
+      text: url,
+      width: 200,
+      height: 200,
+      colorDark: '#000000',
+      colorLight: '#ffffff',
+      correctLevel: QRCode.CorrectLevel.H
+    });
+  }, 150);
 }
 
 function copiarLinkQR() {
@@ -2693,10 +2697,10 @@ function copiarLinkQR() {
 
 function imprimirQR() {
   const f_info = document.getElementById('qr-fracao-info').textContent;
-  // Gerar QR como dataURL para impressão
-  QRCode.toDataURL(_qrLinkActual, { width: 300, margin: 2,
-    color: { dark: '#000000', light: '#ffffff' }
-  }, function(err, qrDataUrl) {
+  // Extrair imagem do QR já gerado no modal
+  var qrImg = document.querySelector('#qr-code-img img');
+  var qrDataUrl = qrImg ? qrImg.src : '';
+  (function() {
     var win = window.open('','_blank');
     win.document.write('<html><head><title>QR Code — ' + f_info + '</title>' +
       '<style>' +
@@ -2719,7 +2723,7 @@ function imprimirQR() {
       '</body></html>');
     win.document.close();
     setTimeout(function(){ win.print(); }, 300);
-  });
+  })();
 }
 
 function selectNotif(tipo) {
