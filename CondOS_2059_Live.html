@@ -1004,6 +1004,62 @@ textarea.fi{resize:vertical;min-height:60px;}
       <div class="fl"><label>Email</label><input class="fi" id="f-aemail" type="email" placeholder="email@exemplo.pt"></div>
     </div>
 
+    <!-- PAPEL LEGAL + FUNÇÃO OPERACIONAL -->
+    <div style="font-size:10px;color:var(--cyan);letter-spacing:1.5px;text-transform:uppercase;margin:16px 0 10px;font-weight:700;border-top:1px solid var(--b1);padding-top:14px;">🏛️ Papel Legal e Função</div>
+    <div class="form-row">
+      <div class="fl">
+        <label>Papel Legal <span style="font-size:9px;color:var(--t3)">(DL 268/94)</span></label>
+        <select class="fi" id="f-papel-legal">
+          <option value="">— Seleccionar —</option>
+          <option value="proprietario">Proprietário</option>
+          <option value="arrendatario">Arrendatário</option>
+          <option value="representante">Representante de Proprietário</option>
+          <option value="administrador">Administrador</option>
+          <option value="vice_administrador">Vice-Administrador</option>
+          <option value="coadjuvante">Coadjuvante do Administrador</option>
+        </select>
+      </div>
+      <div class="fl">
+        <label>Função Operacional <span style="font-size:9px;color:var(--t3)">(opcional)</span></label>
+        <select class="fi" id="f-funcao-operacional">
+          <option value="">— Nenhuma —</option>
+          <option value="manutencao">Responsável de Manutenção</option>
+          <option value="limpeza">Responsável de Limpeza</option>
+          <option value="jardim">Responsável de Jardim</option>
+          <option value="outro">Outra função</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- NIB / IBAN -->
+    <div style="font-size:10px;color:var(--cyan);letter-spacing:1.5px;text-transform:uppercase;margin:16px 0 10px;font-weight:700;border-top:1px solid var(--b1);padding-top:14px;">🏦 Dados Bancários</div>
+    <div class="fl">
+      <label>NIB / IBAN <span style="font-size:9px;color:var(--t3)">(opcional — para pagamentos e cruzamento de cotas)</span></label>
+      <input class="fi" id="f-nib-proprio" placeholder="PT50 XXXX XXXX XXXX XXXX XXXX X">
+      <div style="font-size:10px;color:var(--amber);margin-top:4px;">⚠️ Sem NIB registado, pagamentos e reembolsos podem atrasar-se.</div>
+    </div>
+
+    <!-- SEGURO -->
+    <div style="font-size:10px;color:var(--cyan);letter-spacing:1.5px;text-transform:uppercase;margin:16px 0 10px;font-weight:700;border-top:1px solid var(--b1);padding-top:14px;">🛡️ Seguro (Art. 1429-A CC)</div>
+    <div class="fl">
+      <label>Seguro cobre partes comuns?</label>
+      <select class="fi" id="f-seguro-cobre">
+        <option value="">— Não indicado —</option>
+        <option value="true">Sim — cobre partes comuns</option>
+        <option value="false">Não cobre / Sem seguro próprio</option>
+      </select>
+    </div>
+    <div id="f-seguro-campos" style="display:none;">
+      <div class="form-row" style="margin-top:8px;">
+        <div class="fl"><label>Seguradora</label><input class="fi" id="f-seguro-seguradora" placeholder="Ex: Fidelidade"></div>
+        <div class="fl"><label>Nº Apólice</label><input class="fi" id="f-seguro-apolice" placeholder="XXXXXXXXXX"></div>
+      </div>
+      <div class="form-row">
+        <div class="fl"><label>Validade</label><input class="fi" id="f-seguro-validade" type="date"></div>
+        <div class="fl"><label>Capital Partes Comuns (€)</label><input class="fi" id="f-seguro-capital" type="number" placeholder="50000"></div>
+      </div>
+    </div>
+
     <!-- PIN PORTAL -->
     <div class="fl" style="border-top:1px solid var(--b1);padding-top:14px;margin-top:4px;">
       <label>PIN Portal do Condómino <span style="font-size:10px;color:var(--t3)">(acesso à app do condómino)</span></label>
@@ -2560,6 +2616,28 @@ function editFracao(id) {
     if (dataEl) dataEl.value = f.notificacao_digital_data;
   }
   // Título dinâmico com info da fração
+  // Campos novos
+  var papelEl = document.getElementById('f-papel-legal');
+  if (papelEl) papelEl.value = f.papel_legal || '';
+  var funcaoEl = document.getElementById('f-funcao-operacional');
+  if (funcaoEl) funcaoEl.value = f.funcao_operacional || '';
+  var nibEl = document.getElementById('f-nib-proprio');
+  if (nibEl) nibEl.value = f.nib_proprio || '';
+  var seguroEl = document.getElementById('f-seguro-cobre');
+  if (seguroEl) {
+    seguroEl.value = f.seguro_cobre_partes_comuns === true ? 'true' : f.seguro_cobre_partes_comuns === false ? 'false' : '';
+    var campos = document.getElementById('f-seguro-campos');
+    if (campos) campos.style.display = f.seguro_cobre_partes_comuns === true ? 'block' : 'none';
+  }
+  var segSegEl = document.getElementById('f-seguro-seguradora');
+  if (segSegEl) segSegEl.value = f.seguro_seguradora || '';
+  var segApolEl = document.getElementById('f-seguro-apolice');
+  if (segApolEl) segApolEl.value = f.seguro_apolice || '';
+  var segValEl = document.getElementById('f-seguro-validade');
+  if (segValEl) segValEl.value = f.seguro_validade || '';
+  var segCapEl = document.getElementById('f-seguro-capital');
+  if (segCapEl) segCapEl.value = f.seguro_capital || '';
+
   document.getElementById('mo-fracao-title').childNodes[0].textContent = 'Fração ' + f.codigo + (f.bloco ? ' — Bloco ' + f.bloco : '') + ' ';
   document.getElementById('mo-fracao').dataset.editId = id;
   openModal('mo-fracao');
@@ -2569,7 +2647,7 @@ function abrirNovoCondomino() {
   document.getElementById('mo-fracao').dataset.editId = '';
   document.getElementById('mo-fracao-title').childNodes[0].textContent = 'Nova Fração / Condómino ';
   // Limpar campos
-  ['f-cod','f-letra','f-bloco','f-pnome','f-nif','f-ptel','f-pemail','f-pmorada','f-anome','f-aemail'].forEach(function(id){
+  ['f-cod','f-letra','f-bloco','f-pnome','f-nif','f-ptel','f-pemail','f-pmorada','f-anome','f-aemail','f-nib-proprio','f-seguro-seguradora','f-seguro-apolice','f-seguro-capital'].forEach(function(id){
     var el = document.getElementById(id); if(el) el.value='';
   });
   document.getElementById('f-pin').value='1234';
@@ -2934,6 +3012,13 @@ function imprimirQR() {
   })();
 }
 
+document.addEventListener('change', function(e) {
+  if (e.target && e.target.id === 'f-seguro-cobre') {
+    var campos = document.getElementById('f-seguro-campos');
+    if (campos) campos.style.display = e.target.value === 'true' ? 'block' : 'none';
+  }
+});
+
 function selectNotif(tipo) {
   document.getElementById('f-notif').value = tipo;
   ['email','whatsapp','carta_simples','carta_registada','carta_ar'].forEach(function(t) {
@@ -2968,7 +3053,15 @@ async function saveFracao() {
     notificacao_digital_data: document.getElementById('f-notif-data') ? document.getElementById('f-notif-data').value : null,
     arrendatario_nome: document.getElementById('f-anome').value,
     arrendatario_email: document.getElementById('f-aemail').value,
-    portal_pin: document.getElementById('f-pin').value||'1234'
+    portal_pin: document.getElementById('f-pin').value||'1234',
+    papel_legal: document.getElementById('f-papel-legal') ? document.getElementById('f-papel-legal').value || null : null,
+    funcao_operacional: document.getElementById('f-funcao-operacional') ? document.getElementById('f-funcao-operacional').value || null : null,
+    nib_proprio: document.getElementById('f-nib-proprio') ? document.getElementById('f-nib-proprio').value.trim() || null : null,
+    seguro_cobre_partes_comuns: document.getElementById('f-seguro-cobre') && document.getElementById('f-seguro-cobre').value !== '' ? document.getElementById('f-seguro-cobre').value === 'true' : null,
+    seguro_seguradora: document.getElementById('f-seguro-seguradora') ? document.getElementById('f-seguro-seguradora').value.trim() || null : null,
+    seguro_apolice: document.getElementById('f-seguro-apolice') ? document.getElementById('f-seguro-apolice').value.trim() || null : null,
+    seguro_validade: document.getElementById('f-seguro-validade') ? document.getElementById('f-seguro-validade').value || null : null,
+    seguro_capital: document.getElementById('f-seguro-capital') ? parseFloat(document.getElementById('f-seguro-capital').value) || null : null
   };
   let error;
   if (editId) {
