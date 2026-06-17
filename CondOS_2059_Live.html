@@ -7,6 +7,8 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.x/tabler-icons.min.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <style>
 :root{
   --bg:#080d14;--s1:#0d1520;--s2:#111b2a;--b1:#1e2d3d;--b2:#2a3d52;
@@ -202,19 +204,16 @@ textarea.fi{resize:vertical;min-height:60px;}
 <script>
 // NULL-SAFETY GLOBAL — protege contra IDs em falta de versões anteriores
 (function() {
-  const _orig = document.getElementById.bind(document);
-  const _dummy = {
-    textContent: '', innerHTML: '', value: '', checked: false,
-    style: new Proxy({}, { set: ()=>true, get: ()=>'' }),
-    classList: { add:()=>{}, remove:()=>{}, contains:()=>false, toggle:()=>{} },
-    dataset: {}, options: [], selectedIndex: 0,
-    get disabled() { return false; }, set disabled(v) {},
-    addEventListener: ()=>{}, removeEventListener: ()=>{},
-    appendChild: ()=>{}, setAttribute: ()=>{}, getAttribute: ()=>null,
-    focus: ()=>{}, blur: ()=>{}, click: ()=>{}
-  };
+  var _orig = document.getElementById.bind(document);
   document.getElementById = function(id) {
-    return _orig(id) || _dummy;
+    return _orig(id) || {
+      textContent: '', innerHTML: '', value: '', checked: false,
+      style: {}, classList: { add:function(){}, remove:function(){}, contains:function(){return false;}, toggle:function(){} },
+      dataset: {}, options: [], selectedIndex: 0, disabled: false,
+      addEventListener: function(){}, removeEventListener: function(){},
+      appendChild: function(){}, setAttribute: function(){}, getAttribute: function(){return null;},
+      focus: function(){}, blur: function(){}, click: function(){}
+    };
   };
 })();
 </script>
@@ -666,7 +665,8 @@ textarea.fi{resize:vertical;min-height:60px;}
         <div class="sec-hdr">
           <span class="sec-t">Condóminos</span>
           <div style="display:flex;gap:8px;">
-            <button class="btn-ghost" onclick="exportarCondominos()"><i class="ti ti-download"></i>Exportar lista</button>
+            <button class="btn-ghost" onclick="exportarCondominosPDF()" style="display:inline-flex;align-items:center;gap:6px;" title="Exportar lista em PDF profissional"><i class="ti ti-file-type-pdf"></i>Exportar PDF</button>
+            <button class="btn-ghost" style="display:inline-flex;align-items:center;gap:6px;background:rgba(0,212,255,.06);border-color:rgba(0,212,255,.3);color:var(--cyan);" onclick="notificarTodos()"><i class="ti ti-send"></i>Notificar Todos</button>
             <button class="btn-primary" onclick="abrirNovoCondomino()"><i class="ti ti-plus"></i>Adicionar</button>
           </div>
         </div>
@@ -985,7 +985,7 @@ textarea.fi{resize:vertical;min-height:60px;}
       <div onclick="selectNotif('carta_ar')" id="notif-carta_ar" style="background:var(--s2);border:2px solid var(--b1);border-radius:8px;padding:10px;cursor:pointer;text-align:center;grid-column:1/-1;">
         <div style="font-size:18px;margin-bottom:3px;">📮</div>
         <div style="font-size:12px;font-weight:600;color:var(--t2);">Carta Registada + AR <span style="font-size:9px;color:var(--green);background:rgba(0,230,118,.1);padding:1px 6px;border-radius:4px;margin-left:4px;">Recomendado para atas</span></div>
-        <div style="font-size:9px;color:var(--amber);margin-top:2px;">~4,20€/carta — prova legal de entrega</div>
+        <div style="font-size:9px;color:var(--amber);margin-top:2px;">~5,54€/carta (3,75€ + AR 1,79€) — prova legal de entrega</div>
       </div>
     </div>
     <input type="hidden" id="f-notif" value="email">
@@ -1253,10 +1253,13 @@ textarea.fi{resize:vertical;min-height:60px;}
       <div id="qr-code-img"></div>
     </div>
     <div id="qr-link" style="font-size:10px;color:var(--t3);margin-bottom:14px;word-break:break-all;"></div>
-    <div style="display:flex;gap:8px;justify-content:center;">
-      <button class="btn-ghost" onclick="imprimirQR()"><i class="ti ti-printer"></i>Imprimir</button>
-      <button class="btn-primary" onclick="copiarLinkQR()"><i class="ti ti-copy"></i>Copiar link</button>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+      <button class="btn-ghost" style="display:inline-flex;align-items:center;justify-content:center;gap:6px;background:rgba(37,211,102,.08);border-color:rgba(37,211,102,.3);color:#25d366;" onclick="enviarQRWhatsApp()"><i class="ti ti-brand-whatsapp"></i>WhatsApp</button>
+      <button class="btn-ghost" style="display:inline-flex;align-items:center;justify-content:center;gap:6px;" onclick="enviarQREmail()"><i class="ti ti-mail"></i>Email</button>
+      <button class="btn-ghost" style="display:inline-flex;align-items:center;justify-content:center;gap:6px;" onclick="imprimirQR()"><i class="ti ti-printer"></i>Imprimir</button>
+      <button class="btn-ghost" style="display:inline-flex;align-items:center;justify-content:center;gap:6px;" onclick="copiarLinkQR()"><i class="ti ti-copy"></i>Copiar link</button>
     </div>
+    <button class="btn-ghost" style="width:100%;margin-top:4px;" onclick="closeModal('mo-qr')"><i class="ti ti-x"></i> Fechar</button>
   </div>
 </div>
 
@@ -2486,7 +2489,7 @@ function gerarCodigo() {
 
 function calcularCustosPostais() {
   if (!fracoes.length) return;
-  var TARIFAS = { email:0, whatsapp:0, carta_simples:0.73, carta_registada:3.75, carta_ar:4.20 };
+  var TARIFAS = { email:0, whatsapp:0, carta_simples:0.73, carta_registada:3.75, carta_ar:5.54 };
   var LABELS = { email:'Email', whatsapp:'WhatsApp', carta_simples:'Carta Simples', carta_registada:'Carta Registada', carta_ar:'Carta Reg. + AR' };
   var grupos = {};
   fracoes.forEach(function(f) {
@@ -2585,7 +2588,7 @@ function renderCondominos(lista) {
   var METODO_LABEL = { email:'📧 Email', whatsapp:'💬 WhatsApp', carta_simples:'✉️ Carta Simples', carta_registada:'📬 Carta Reg.', carta_ar:'📮 Carta Reg.+AR' };
   var METODO_COLOR = { email:'var(--green)', whatsapp:'var(--green)', carta_simples:'var(--amber)', carta_registada:'var(--amber)', carta_ar:'var(--orange)' };
   el.innerHTML = '<table class="tbl"><thead><tr>' +
-    '<th>Fração</th><th>Bloco</th><th>Proprietário</th><th>NIF</th><th>Contacto</th><th>Notificação</th><th>Ficha</th><th>Ações</th>' +
+    '<th>Fração</th><th>Bloco</th><th>Proprietário</th><th>NIF</th><th>Contacto</th><th>Notificação</th><th>Ficha</th><th>Atualização</th><th>Ações</th>' +
     '</tr></thead><tbody>' +
     lista.map(function(f) {
       var metodo = f.metodo_notificacao || 'carta_registada';
@@ -2595,7 +2598,28 @@ function renderCondominos(lista) {
       if (semNif) alertas.push('Sem NIF');
       if (semEmail && metodo === 'email') alertas.push('Email em falta');
       if (!f.proprietario_tel) alertas.push('Sem telefone');
-      return '<tr>' +
+
+      // Alerta de data de atualização
+      var dataAtual = new Date();
+      var dataFicha = f.notificacao_digital_data ? new Date(f.notificacao_digital_data) : null;
+      var mesesSemAtualizar = dataFicha ? Math.floor((dataAtual - dataFicha) / (1000*60*60*24*30)) : 999;
+      var alertaData = '';
+      var trBorder = '';
+      if (!dataFicha) {
+        alertaData = '<span style="font-size:9px;color:var(--t3)">Nunca preenchida</span>';
+        trBorder = 'border-left:3px solid var(--t3);';
+      } else if (mesesSemAtualizar >= 24) {
+        alertaData = '<span style="font-size:9px;color:var(--red);font-weight:700">🔴 ' + mesesSemAtualizar + ' meses</span><br><span style="font-size:8px;color:var(--t3)">' + dataFicha.toLocaleDateString("pt-PT") + '</span>';
+        trBorder = 'border-left:3px solid var(--red);';
+      } else if (mesesSemAtualizar >= 12) {
+        alertaData = '<span style="font-size:9px;color:var(--amber);font-weight:700">🟡 ' + mesesSemAtualizar + ' meses</span><br><span style="font-size:8px;color:var(--t3)">' + dataFicha.toLocaleDateString("pt-PT") + '</span>';
+        trBorder = 'border-left:3px solid var(--amber);';
+      } else {
+        alertaData = '<span style="font-size:9px;color:var(--green)">✅ ' + dataFicha.toLocaleDateString("pt-PT") + '</span>';
+        trBorder = '';
+      }
+
+      return '<tr style="' + trBorder + '">' +
         '<td><span class="apt">' + (f.codigo||'—') + '</span></td>' +
         '<td><span class="pill info">' + (f.bloco||'—') + '</span></td>' +
         '<td><div style="font-weight:500">' + (f.proprietario_nome||'<span style="color:var(--t3)">Sem nome</span>') + '</div>' +
@@ -2605,6 +2629,7 @@ function renderCondominos(lista) {
           '<div style="font-size:10px;color:var(--t3)">' + (f.proprietario_email||'—') + '</div></td>' +
         '<td><span style="font-size:10px;color:' + (METODO_COLOR[metodo]||'var(--t2)') + '">' + (METODO_LABEL[metodo]||metodo) + '</span></td>' +
         '<td>' + (alertas.length ? '<span style="font-size:9px;color:var(--red)">⚠️ ' + alertas.join(', ') + '</span>' : '<span style="font-size:9px;color:var(--green)">✅ Completa</span>') + '</td>' +
+        '<td>' + alertaData + '</td>' +
         '<td><div style="display:flex;gap:4px;">' +
           '<button class="tb-btn" onclick="editFracao(\'' + f.id + '\')" style="font-size:11px;padding:5px 10px;display:inline-flex;align-items:center;gap:5px;border-radius:6px;"><i class="ti ti-edit"></i> Editar</button>' +
           '<button class="tb-btn" onclick="gerarQRCondomino(\'' + f.id + '\')" style="font-size:11px;padding:5px 10px;display:inline-flex;align-items:center;gap:5px;border-radius:6px;"><i class="ti ti-qrcode"></i> QR</button>' +
@@ -2626,6 +2651,23 @@ function renderCondominos(lista) {
           '<span style="color:'+cor+';font-weight:700">'+porMetodo[m]+'</span> <span style="color:var(--t2)">'+label+'</span></div>';
       }).join('') +
       (incompletas > 0 ? '<div style="background:var(--rdim);border:1px solid rgba(255,68,68,.2);border-radius:8px;padding:8px 14px;font-size:11px;color:var(--red);">⚠️ '+incompletas+' ficha(s) incompleta(s)</div>' : '') +
+      (function() {
+        var agora = new Date();
+        var desatualizadas = lista.filter(function(f) {
+          if (!f.notificacao_digital_data) return true;
+          var d = new Date(f.notificacao_digital_data);
+          return Math.floor((agora - d) / (1000*60*60*24*30)) >= 12;
+        }).length;
+        var criticas = lista.filter(function(f) {
+          if (!f.notificacao_digital_data) return false;
+          var d = new Date(f.notificacao_digital_data);
+          return Math.floor((agora - d) / (1000*60*60*24*30)) >= 24;
+        }).length;
+        var html = '';
+        if (criticas > 0) html += '<div style="background:var(--rdim);border:1px solid rgba(255,68,68,.3);border-radius:8px;padding:8px 14px;font-size:11px;color:var(--red);">🔴 '+criticas+' ficha(s) com +24 meses sem atualizar</div>';
+        if (desatualizadas > criticas) html += '<div style="background:var(--adim);border:1px solid rgba(255,179,0,.3);border-radius:8px;padding:8px 14px;font-size:11px;color:var(--amber);">🟡 '+(desatualizadas-criticas)+' ficha(s) com +12 meses sem atualizar</div>';
+        return html;
+      })() +
       '</div>';
   }
   calcularCustosPostais();
@@ -2648,20 +2690,185 @@ function loadCondominos() {
   renderCondominos(fracoes);
 }
 
-function exportarCondominos() {
-  var rows = [['Fração','Bloco','Proprietário','NIF','Telefone','Email','Morada','Método Notif.','Arrendatário']];
-  fracoes.forEach(function(f) {
-    rows.push([f.codigo,f.bloco,f.proprietario_nome,f.proprietario_nif,f.proprietario_tel,f.proprietario_email,f.proprietario_morada,f.metodo_notificacao,f.arrendatario_nome]);
-  });
-  var csv = rows.map(function(r){return r.map(function(c){return '"'+(c||'')+'"';}).join(',');}).join('\n');
-  var a = document.createElement('a');
-  a.href = 'data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv);
-  a.download = 'condominos_'+currentCondo.nome+'_'+new Date().getFullYear()+'.csv';
-  a.click();
-  toast('Lista exportada!','ok');
+function exportarCondominosPDF() {
+  try {
+    var { jsPDF } = window.jspdf;
+    var doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    var ano = new Date().getFullYear();
+    var dataHoje = new Date().toLocaleDateString('pt-PT');
+    var W = doc.internal.pageSize.getWidth();
+
+    // --- CABEÇALHO ---
+    // Fundo escuro topo
+    doc.setFillColor(8, 13, 20);
+    doc.rect(0, 0, W, 22, 'F');
+
+    // Linha cyan
+    doc.setDrawColor(0, 212, 255);
+    doc.setLineWidth(0.8);
+    doc.line(0, 22, W, 22);
+
+    // Logo texto COND.OS
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(16);
+    doc.setTextColor(0, 212, 255);
+    doc.text('COND.OS', 10, 14);
+
+    // Subtítulo
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    doc.setTextColor(68, 85, 102);
+    doc.text('2059 PRO', 10, 19);
+
+    // Nome do condomínio (centro)
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(13);
+    doc.setTextColor(232, 240, 248);
+    doc.text((currentCondo.nome || 'Condomínio').toUpperCase(), W / 2, 11, { align: 'center' });
+
+    // Subtítulo documento
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(136, 153, 170);
+    doc.text('BASE DE DADOS DE CONDÓMINOS — ' + ano, W / 2, 17, { align: 'center' });
+
+    // Data lado direito
+    doc.setFontSize(7);
+    doc.text('Emitido em: ' + dataHoje, W - 10, 10, { align: 'right' });
+    doc.setTextColor(0, 212, 255);
+    doc.text(fracoes.length + ' frações', W - 10, 16, { align: 'right' });
+
+    // --- RESUMO ESTATÍSTICO ---
+    var comDados = fracoes.filter(function(f){ return f.proprietario_nome && f.proprietario_nome !== '— clica para editar'; }).length;
+    var semDados = fracoes.length - comDados;
+    var comEmail = fracoes.filter(function(f){ return f.proprietario_email; }).length;
+    var comTel = fracoes.filter(function(f){ return f.proprietario_tel; }).length;
+
+    doc.setFillColor(13, 21, 32);
+    doc.roundedRect(10, 25, 60, 12, 2, 2, 'F');
+    doc.roundedRect(75, 25, 60, 12, 2, 2, 'F');
+    doc.roundedRect(140, 25, 60, 12, 2, 2, 'F');
+    doc.roundedRect(205, 25, 60, 12, 2, 2, 'F');
+
+    function kpi(x, label, val, cor) {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(14);
+      doc.setTextColor(cor[0], cor[1], cor[2]);
+      doc.text(String(val), x + 30, 33, { align: 'center' });
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(6.5);
+      doc.setTextColor(136, 153, 170);
+      doc.text(label, x + 30, 35.5, { align: 'center' });
+    }
+
+    kpi(10, 'TOTAL FRAÇÕES', fracoes.length, [0, 212, 255]);
+    kpi(75, 'COM DADOS', comDados, [0, 230, 118]);
+    kpi(140, 'COM EMAIL', comEmail, [0, 212, 255]);
+    kpi(205, 'COM TELEFONE', comTel, [0, 230, 118]);
+
+    // --- TABELA ---
+    var metodoLabel = {
+      email: 'Email', whatsapp: 'WhatsApp',
+      carta_simples: 'Carta', carta_registada: 'Reg.',
+      carta_ar: 'Reg.+AR'
+    };
+
+    var rows = fracoes.map(function(f) {
+      var metodos = (f.metodo_notificacao || '').split(',').map(function(m) {
+        return metodoLabel[m.trim()] || m.trim();
+      }).filter(Boolean).join(', ');
+      var papel = {
+        proprietario: 'Proprietário', arrendatario: 'Arrendatário',
+        administrador: 'Administrador', vice_administrador: 'Vice-Admin.',
+        coadjuvante: 'Coadjuvante', representante: 'Representante'
+      }[f.papel_legal] || '—';
+      return [
+        (f.codigo || '—') + (f.bloco ? ' Bloco ' + f.bloco : ''),
+        f.proprietario_nome || '—',
+        f.proprietario_nif || '—',
+        f.proprietario_tel || '—',
+        f.proprietario_email || '—',
+        papel,
+        metodos || 'Carta Reg.',
+        (f.permilagem || '—') + (f.permilagem ? '‰' : '')
+      ];
+    });
+
+    doc.autoTable({
+      startY: 40,
+      head: [['FRAÇÃO', 'PROPRIETÁRIO', 'NIF', 'TELEFONE', 'EMAIL', 'PAPEL', 'NOTIF.', 'PERMIL.']],
+      body: rows,
+      theme: 'grid',
+      styles: {
+        font: 'helvetica',
+        fontSize: 7.5,
+        cellPadding: 2.5,
+        textColor: [40, 55, 70],
+        lineColor: [220, 230, 240],
+        lineWidth: 0.2,
+        overflow: 'linebreak',
+        valign: 'middle'
+      },
+      headStyles: {
+        fillColor: [8, 13, 20],
+        textColor: [0, 212, 255],
+        fontStyle: 'bold',
+        fontSize: 7,
+        cellPadding: 3,
+        halign: 'center'
+      },
+      alternateRowStyles: {
+        fillColor: [245, 248, 252]
+      },
+      columnStyles: {
+        0: { cellWidth: 22, halign: 'center', fontStyle: 'bold' },
+        1: { cellWidth: 48 },
+        2: { cellWidth: 22, halign: 'center' },
+        3: { cellWidth: 24, halign: 'center' },
+        4: { cellWidth: 52 },
+        5: { cellWidth: 24, halign: 'center' },
+        6: { cellWidth: 28, halign: 'center' },
+        7: { cellWidth: 16, halign: 'center' }
+      },
+      didParseCell: function(data) {
+        // Destacar linhas sem dados
+        if (data.section === 'body') {
+          var nome = rows[data.row.index] ? rows[data.row.index][1] : '';
+          if (nome === '—') {
+            data.cell.styles.textColor = [180, 100, 100];
+          }
+        }
+      },
+      margin: { top: 40, left: 10, right: 10 },
+      // Rodapé em cada página
+      didDrawPage: function(data) {
+        var pageH = doc.internal.pageSize.getHeight();
+        doc.setDrawColor(0, 212, 255);
+        doc.setLineWidth(0.3);
+        doc.line(10, pageH - 8, W - 10, pageH - 8);
+        doc.setFontSize(6.5);
+        doc.setTextColor(136, 153, 170);
+        doc.setFont('helvetica', 'normal');
+        doc.text('COND.OS 2059 Pro — ' + (currentCondo.nome || '') + ' — Gerado em ' + dataHoje, 10, pageH - 4);
+        doc.text('Página ' + doc.internal.getCurrentPageInfo().pageNumber, W - 10, pageH - 4, { align: 'right' });
+        doc.setTextColor(0, 212, 255);
+        doc.text('CONFIDENCIAL — Uso interno', W / 2, pageH - 4, { align: 'center' });
+      }
+    });
+
+    // Guardar PDF
+    var filename = 'condominos_' + (currentCondo.nome || 'condo').replace(/\s+/g, '_') + '_' + ano + '.pdf';
+    doc.save(filename);
+    toast('PDF exportado com sucesso!', 'ok');
+
+  } catch(e) {
+    console.error('Erro PDF:', e);
+    toast('Erro ao gerar PDF: ' + e.message, 'err');
+  }
 }
 
 var _qrLinkActual = '';
+var _qrFracaoId = '';
 function gerarQRCondomino(fracaoId) {
   const f = fracoes.find(x=>x.id===fracaoId);
   if (!f) return;
@@ -2671,6 +2878,7 @@ function gerarQRCondomino(fracaoId) {
     : window.location.origin;
   const url = baseUrl + '/ficha.html?condo=' + encodeURIComponent(currentCondo.id) + '&fracao=' + encodeURIComponent(f.id) + '&codigo=' + encodeURIComponent(f.codigo||'') + '&bloco=' + encodeURIComponent(f.bloco||'');
   _qrLinkActual = url;
+  _qrFracaoId = fracaoId;
   document.getElementById('qr-fracao-info').textContent = 'Fração ' + (f.codigo||'—') + (f.bloco ? ' — Bloco ' + f.bloco : '');
   document.getElementById('qr-link').textContent = url;
   // Gerar QR com qrcodejs
@@ -3058,6 +3266,99 @@ async function saveAssembleia() {
   if (error) { toast('Erro: '+error.message,'err'); return; }
   closeModal('mo-assembleia'); toast('Assembleia convocada!','ok');
   loadAssembleias();
+}
+
+
+// ===== QR — ENVIO WHATSAPP / EMAIL =====
+function enviarQRWhatsApp() {
+  var f = fracoes.find(x => x.id === _qrFracaoId);
+  if (!f) { toast('Sem fração seleccionada','err'); return; }
+  var tel = f.proprietario_tel || '';
+  if (!tel) { toast('Esta fração não tem telefone registado','err'); return; }
+  tel = tel.replace(/\D/g,'');
+  if (!tel.startsWith('351')) tel = '351' + tel;
+  var msg = encodeURIComponent(
+    '🏢 ' + (currentCondo.nome||'Condomínio') + '\n' +
+    'Fração ' + (f.codigo||'') + (f.bloco ? ' — Bloco ' + f.bloco : '') + '\n\n' +
+    'Por favor actualize os seus dados de condómino através do link:\n' +
+    _qrLinkActual + '\n\n' +
+    'É rápido e seguro. Obrigado!'
+  );
+  window.open('https://wa.me/' + tel + '?text=' + msg, '_blank');
+}
+
+function enviarQREmail() {
+  var f = fracoes.find(x => x.id === _qrFracaoId);
+  if (!f) { toast('Sem fração seleccionada','err'); return; }
+  var email = f.proprietario_email || '';
+  if (!email) { toast('Esta fração não tem email registado','err'); return; }
+  var subject = encodeURIComponent('Actualização de dados — ' + (currentCondo.nome||'Condomínio'));
+  var body = encodeURIComponent(
+    'Exmo(a) Sr(a) ' + (f.proprietario_nome||'Condómino') + ',\n\n' +
+    'Solicitamos a actualização dos seus dados de condómino relativos à fração ' +
+    (f.codigo||'') + (f.bloco ? ' (Bloco ' + f.bloco + ')' : '') + '.\n\n' +
+    'Por favor aceda ao seguinte link para preencher ou actualizar os seus dados:\n' +
+    _qrLinkActual + '\n\n' +
+    'A sua colaboração é fundamental para uma boa gestão do condomínio.\n\n' +
+    'Com os melhores cumprimentos,\nAdministração do Condomínio'
+  );
+  window.location.href = 'mailto:' + email + '?subject=' + subject + '&body=' + body;
+}
+
+// ===== NOTIFICAR TODOS =====
+async function notificarTodos() {
+  var temContacto = fracoes.filter(f => f.proprietario_tel || f.proprietario_email);
+  var semContacto = fracoes.filter(f => !f.proprietario_tel && !f.proprietario_email);
+
+  var msg = '📋 Resumo da notificação:\n\n';
+  msg += '✅ ' + temContacto.length + ' frações com contacto (WhatsApp/Email)\n';
+  msg += '🖨️ ' + semContacto.length + ' frações sem contacto (necessitam QR impresso)\n\n';
+  msg += 'Pretende enviar notificação a todas as frações com contacto?';
+
+  if (!confirm(msg)) return;
+
+  var enviados = 0;
+  var falhas = 0;
+
+  for (var i = 0; i < temContacto.length; i++) {
+    var f = temContacto[i];
+    var baseUrl = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost' || window.location.protocol === 'file:'
+      ? 'https://funny-cajeta-00a573.netlify.app'
+      : window.location.origin;
+    var url = baseUrl + '/ficha.html?condo=' + encodeURIComponent(currentCondo.id) +
+      '&fracao=' + encodeURIComponent(f.id) +
+      '&codigo=' + encodeURIComponent(f.codigo||'') +
+      '&bloco=' + encodeURIComponent(f.bloco||'');
+
+    // Preferência: WhatsApp se tem telefone, Email se não
+    if (f.proprietario_tel) {
+      var tel = f.proprietario_tel.replace(/\D/g,'');
+      if (!tel.startsWith('351')) tel = '351' + tel;
+      var wamsg = encodeURIComponent(
+        '🏢 ' + (currentCondo.nome||'Condomínio') + '\n' +
+        'Fração ' + (f.codigo||'') + (f.bloco ? ' — Bloco ' + f.bloco : '') + '\n\n' +
+        'Por favor actualize os seus dados:\n' + url
+      );
+      window.open('https://wa.me/' + tel + '?text=' + wamsg, '_blank');
+      enviados++;
+      // Pausa entre aberturas para não bloquear o browser
+      await new Promise(r => setTimeout(r, 800));
+    } else if (f.proprietario_email) {
+      var subject = encodeURIComponent('Actualização de dados — ' + (currentCondo.nome||'Condomínio'));
+      var body = encodeURIComponent('Por favor actualize os seus dados:\n' + url);
+      window.open('mailto:' + f.proprietario_email + '?subject=' + subject + '&body=' + body, '_blank');
+      enviados++;
+      await new Promise(r => setTimeout(r, 800));
+    } else {
+      falhas++;
+    }
+  }
+
+  if (semContacto.length > 0) {
+    toast('✅ ' + enviados + ' notificações enviadas. ' + semContacto.length + ' frações sem contacto — imprimir QR manualmente.', 'ok');
+  } else {
+    toast('✅ ' + enviados + ' notificações enviadas com sucesso!', 'ok');
+  }
 }
 
 // ===== DASHBOARD =====
