@@ -3424,7 +3424,7 @@ async function enviarQREmail() {
     '<p>Por favor clique no botão abaixo para preencher ou actualizar os seus dados:</p>' +
     '<div style="text-align:center;margin:24px 0;">' +
     '<a href="' + _qrLinkActual + '" style="background:#00d4ff;color:#000;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:700;font-size:15px;">Actualizar os meus dados</a></div>' +
-    '<p style="font-size:12px;color:#888;">Ou copie este link: ' + _qrLinkActual + '</p>' +
+    '<p style="font-size:11px;color:#aaa;text-align:center;">Se o botão não funcionar, copie e cole este link no seu browser.</p>' +
     '<hr style="border:none;border-top:1px solid #eee;margin:20px 0;">' +
     '<p style="font-size:11px;color:#aaa;">A sua colaboração é fundamental para uma boa gestão do condomínio — <strong>' + (currentCondo.nome||'') + '</strong></p>' +
     '</div></div>';
@@ -3608,9 +3608,14 @@ async function enviarEmailGmail(para, assunto, corpoHtml) {
   }
   try {
     var fromName = localStorage.getItem('condos_gmail_from_name') || 'Administração';
-    var raw = 'From: ' + fromName + ' <' + _gmailEmail + '>\r\n' +
+    // Encoding RFC 2047 para suporte a caracteres especiais no assunto e remetente
+    var encAssunto = '=?UTF-8?B?' + btoa(unescape(encodeURIComponent(assunto))) + '?=';
+    var encFromName = /[^\x00-\x7F]/.test(fromName)
+      ? '=?UTF-8?B?' + btoa(unescape(encodeURIComponent(fromName))) + '?='
+      : fromName;
+    var raw = 'From: ' + encFromName + ' <' + _gmailEmail + '>\r\n' +
               'To: ' + para + '\r\n' +
-              'Subject: ' + assunto + '\r\n' +
+              'Subject: ' + encAssunto + '\r\n' +
               'MIME-Version: 1.0\r\n' +
               'Content-Type: text/html; charset=UTF-8\r\n\r\n' +
               corpoHtml;
