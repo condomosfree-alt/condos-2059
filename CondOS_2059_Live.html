@@ -3499,7 +3499,7 @@ async function notificarTodos() {
 
 // ===== GMAIL OAUTH =====
 const GOOGLE_CLIENT_ID = '890943447712-l50vkrlhtgk45i4qij5rlf1mq5nhlol5.apps.googleusercontent.com';
-const GMAIL_SCOPES = 'https://www.googleapis.com/auth/gmail.send';
+const GMAIL_SCOPES = 'https://www.googleapis.com/auth/gmail.send email profile openid';
 var _gmailToken = null;
 var _gmailEmail = null;
 var _tokenClient = null;
@@ -3514,13 +3514,27 @@ function initGmailClient() {
         if (response.error) { toast('Erro ao ligar Gmail: ' + response.error, 'err'); return; }
         _gmailToken = response.access_token;
         // Buscar email do utilizador
-        fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+        fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
           headers: { 'Authorization': 'Bearer ' + _gmailToken }
         }).then(function(r) { return r.json(); }).then(function(info) {
-          _gmailEmail = info.email;
-          salvarGmailToken(info.email);
+          _gmailEmail = info.email || info.name || 'utilizador';
+          salvarGmailToken(_gmailEmail);
           atualizarStatusGmail();
-          toast('Gmail ligado: ' + info.email, 'ok');
+          toast('Gmail ligado: ' + _gmailEmail, 'ok');
+        }).catch(function(e) {
+          // Fallback: usar token decode
+          try {
+            var parts = _gmailToken.split('.');
+            if (parts.length > 1) {
+              var payload = JSON.parse(atob(parts[1]));
+              _gmailEmail = payload.email || 'Gmail ligado';
+            } else {
+              _gmailEmail = 'Gmail ligado';
+            }
+          } catch(ex) { _gmailEmail = 'Gmail ligado'; }
+          salvarGmailToken(_gmailEmail);
+          atualizarStatusGmail();
+          toast('Gmail ligado: ' + _gmailEmail, 'ok');
         });
       }
     });
