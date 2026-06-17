@@ -261,7 +261,7 @@ textarea.fi{resize:vertical;min-height:60px;}
     </div>
     <div style="width:100%;max-width:680px;margin-bottom:20px;">
       <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
-        <span style="font-size:11px;color:var(--t2);" id="wiz-step-label">Passo 1 de 7 — Identificação</span>
+        <span style="font-size:11px;color:var(--t2);" id="wiz-step-label">Passo 1 de 5 — Identificação</span>
         <span style="font-size:11px;color:var(--cyan);font-family:var(--mono);" id="wiz-pct">0%</span>
       </div>
       <div style="height:4px;background:rgba(255,255,255,.07);border-radius:2px;">
@@ -270,31 +270,23 @@ textarea.fi{resize:vertical;min-height:60px;}
       <div id="wiz-indicators" style="display:flex;justify-content:space-between;margin-top:10px;">
         <div id="wiz-ind-0" onclick="wiz.goTo(0)" style="display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;opacity:1;">
           <div id="wiz-ind-circle-0" style="width:32px;height:32px;border-radius:50%;background:var(--s2);border:2px solid var(--cyan);display:flex;align-items:center;justify-content:center;font-size:14px;">🏢</div>
-          <span style="font-size:9px;color:var(--t3)">Edifício</span>
+          <span style="font-size:9px;color:var(--t2)">Edifício</span>
         </div>
         <div id="wiz-ind-1" onclick="wiz.goTo(1)" style="display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;opacity:0.4;">
           <div id="wiz-ind-circle-1" style="width:32px;height:32px;border-radius:50%;background:var(--s2);border:2px solid var(--b1);display:flex;align-items:center;justify-content:center;font-size:14px;">🏗️</div>
-          <span style="font-size:9px;color:var(--t3)">Estrutura</span>
+          <span style="font-size:9px;color:var(--t2)">Estrutura</span>
         </div>
         <div id="wiz-ind-2" onclick="wiz.goTo(2)" style="display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;opacity:0.4;">
-          <div id="wiz-ind-circle-2" style="width:32px;height:32px;border-radius:50%;background:var(--s2);border:2px solid var(--b1);display:flex;align-items:center;justify-content:center;font-size:14px;">📄</div>
-          <span style="font-size:9px;color:var(--t3)">Título</span>
+          <div id="wiz-ind-circle-2" style="width:32px;height:32px;border-radius:50%;background:var(--s2);border:2px solid var(--b1);display:flex;align-items:center;justify-content:center;font-size:14px;">👤</div>
+          <span style="font-size:9px;color:var(--t2)">Gestão</span>
         </div>
         <div id="wiz-ind-3" onclick="wiz.goTo(3)" style="display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;opacity:0.4;">
-          <div id="wiz-ind-circle-3" style="width:32px;height:32px;border-radius:50%;background:var(--s2);border:2px solid var(--b1);display:flex;align-items:center;justify-content:center;font-size:14px;">👤</div>
-          <span style="font-size:9px;color:var(--t3)">Gestão</span>
+          <div id="wiz-ind-circle-3" style="width:32px;height:32px;border-radius:50%;background:var(--s2);border:2px solid var(--b1);display:flex;align-items:center;justify-content:center;font-size:14px;">💰</div>
+          <span style="font-size:9px;color:var(--t2)">Finanças</span>
         </div>
         <div id="wiz-ind-4" onclick="wiz.goTo(4)" style="display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;opacity:0.4;">
-          <div id="wiz-ind-circle-4" style="width:32px;height:32px;border-radius:50%;background:var(--s2);border:2px solid var(--b1);display:flex;align-items:center;justify-content:center;font-size:14px;">🔧</div>
-          <span style="font-size:9px;color:var(--t3)">Equip.</span>
-        </div>
-        <div id="wiz-ind-5" onclick="wiz.goTo(5)" style="display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;opacity:0.4;">
-          <div id="wiz-ind-circle-5" style="width:32px;height:32px;border-radius:50%;background:var(--s2);border:2px solid var(--b1);display:flex;align-items:center;justify-content:center;font-size:14px;">💰</div>
-          <span style="font-size:9px;color:var(--t3)">Finanças</span>
-        </div>
-        <div id="wiz-ind-6" onclick="wiz.goTo(6)" style="display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;opacity:0.4;">
-          <div id="wiz-ind-circle-6" style="width:32px;height:32px;border-radius:50%;background:var(--s2);border:2px solid var(--b1);display:flex;align-items:center;justify-content:center;font-size:14px;">✅</div>
-          <span style="font-size:9px;color:var(--t3)">Revisão</span>
+          <div id="wiz-ind-circle-4" style="width:32px;height:32px;border-radius:50%;background:var(--s2);border:2px solid var(--b1);display:flex;align-items:center;justify-content:center;font-size:14px;">✅</div>
+          <span style="font-size:9px;color:var(--t2)">Revisão</span>
         </div>
       </div>
     </div>
@@ -569,6 +561,8 @@ textarea.fi{resize:vertical;min-height:60px;}
       <div class="ni" onclick="nav('quotas')"><i class="ti ti-receipt"></i><span>Quotas</span><span class="nb" id="nb-quotas"></span></div>
       <div class="ni" onclick="nav('financeiro')"><i class="ti ti-cash"></i><span>Financeiro</span></div>
       <div class="ni" onclick="nav('orcamento')"><i class="ti ti-calculator"></i><span>Orçamento</span></div>
+      <div class="nav-section">Edifício</div>
+      <div class="ni" onclick="nav('edificio')"><i class="ti ti-home-2"></i><span>Perfil do Edifício</span></div>
       <div class="nav-section">Gestão</div>
       <div class="ni" onclick="nav('condominos')"><i class="ti ti-users"></i><span>Condóminos</span><span class="nb" id="nb-cond"></span></div>
       <div class="ni" onclick="nav('ocorrencias')"><i class="ti ti-alert-triangle"></i><span>Ocorrências</span><span class="nb" id="nb-oc"></span></div>
@@ -650,6 +644,230 @@ textarea.fi{resize:vertical;min-height:60px;}
       </div>
 
       <!-- CONDÓMINOS -->
+      <!-- EDIFÍCIO -->
+      <div class="page" id="page-edificio">
+        <div class="sec-hdr">
+          <span class="sec-t">🏢 Perfil do Edifício</span>
+          <button class="btn-primary" onclick="saveEdificio()"><i class="ti ti-check"></i>Guardar</button>
+        </div>
+
+        <!-- TABS -->
+        <div style="display:flex;gap:4px;margin-bottom:16px;background:var(--s2);border:1px solid var(--b1);border-radius:10px;padding:4px;">
+          <button id="etab-geral" onclick="switchEdificioTab('geral')" style="flex:1;padding:8px;border:none;border-radius:8px;background:var(--cyan);color:#000;font-size:12px;font-weight:700;cursor:pointer;">🏢 Geral</button>
+          <button id="etab-contadores" onclick="switchEdificioTab('contadores')" style="flex:1;padding:8px;border:none;border-radius:8px;background:transparent;color:var(--t2);font-size:12px;cursor:pointer;">💧⚡ Contadores</button>
+          <button id="etab-manutencao" onclick="switchEdificioTab('manutencao')" style="flex:1;padding:8px;border:none;border-radius:8px;background:transparent;color:var(--t2);font-size:12px;cursor:pointer;">🔧 Manutenções</button>
+          <button id="etab-seguranca" onclick="switchEdificioTab('seguranca')" style="flex:1;padding:8px;border:none;border-radius:8px;background:transparent;color:var(--t2);font-size:12px;cursor:pointer;">🛡️ Segurança</button>
+          <button id="etab-fornecedores" onclick="switchEdificioTab('fornecedores')" style="flex:1;padding:8px;border:none;border-radius:8px;background:transparent;color:var(--t2);font-size:12px;cursor:pointer;">🤝 Fornecedores</button>
+        </div>
+
+        <!-- TAB: GERAL -->
+        <div id="etab-content-geral">
+          <div class="panel">
+            <div class="ph"><span class="pt">Identificação Legal</span></div>
+            <div style="padding:16px;">
+              <div class="form-row">
+                <div class="fl"><label>Nome do Edifício</label><input class="fi" id="ed-nome" disabled style="color:var(--t2)"></div>
+                <div class="fl"><label>NIF do Condomínio</label><input class="fi" id="ed-nif" placeholder="5XXXXXXXX"></div>
+              </div>
+              <div class="fl"><label>Morada Completa</label><input class="fi" id="ed-morada" disabled style="color:var(--t2)"></div>
+              <div class="form-row">
+                <div class="fl"><label>Ano de Construção</label><input class="fi" id="ed-ano" type="number" placeholder="Ex: 1995"></div>
+                <div class="fl"><label>Nº de Pisos</label><input class="fi" id="ed-pisos" type="number" placeholder="Ex: 4"></div>
+              </div>
+              <div class="form-row">
+                <div class="fl"><label>Nº de Elevadores</label><input class="fi" id="ed-elevadores" type="number" placeholder="0"></div>
+                <div class="fl"><label>Conservação Geral</label>
+                  <select class="fi" id="ed-conservacao">
+                    <option value="">— Seleccionar —</option>
+                    <option value="excelente">Excelente</option>
+                    <option value="boa">Boa</option>
+                    <option value="razoavel">Razoável</option>
+                    <option value="degradada">Degradada</option>
+                    <option value="critica">Crítica</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="panel" style="margin-top:12px;">
+            <div class="ph"><span class="pt">Gestão e Administração</span></div>
+            <div style="padding:16px;">
+              <div class="form-row">
+                <div class="fl"><label>Nome do Gestor/Administrador</label><input class="fi" id="ed-gestor-nome" placeholder="Ex: João Silva"></div>
+                <div class="fl"><label>Email do Gestor</label><input class="fi" id="ed-gestor-email" placeholder="gestor@email.com"></div>
+              </div>
+              <div class="form-row">
+                <div class="fl"><label>Telefone</label><input class="fi" id="ed-gestor-tel" placeholder="9XX XXX XXX"></div>
+                <div class="fl"><label>Tipo de Gestão</label>
+                  <select class="fi" id="ed-tipo-gestao">
+                    <option value="propria">Gestão Própria</option>
+                    <option value="empresa">Empresa Gestora</option>
+                  </select>
+                </div>
+              </div>
+              <div id="ed-empresa-row" style="display:none;">
+                <div class="form-row">
+                  <div class="fl"><label>Empresa Gestora</label><input class="fi" id="ed-empresa-nome" placeholder="Nome da empresa"></div>
+                  <div class="fl"><label>NIF Empresa</label><input class="fi" id="ed-empresa-nif" placeholder="5XXXXXXXX"></div>
+                </div>
+              </div>
+              <div style="margin-top:12px;font-size:10px;color:var(--cyan);font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Alertas Automáticos por Email</div>
+              <div style="display:flex;gap:12px;flex-wrap:wrap;">
+                <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--t2);cursor:pointer;"><input type="checkbox" id="ed-alerta-dia1" style="accent-color:var(--cyan);"> 📅 Dia 1 — lembrete extrato</label>
+                <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--t2);cursor:pointer;"><input type="checkbox" id="ed-alerta-dia5" style="accent-color:var(--cyan);"> ⚠️ Dia 5 — cotas em falta</label>
+                <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--t2);cursor:pointer;"><input type="checkbox" id="ed-alerta-dia8" checked style="accent-color:var(--cyan);"> 🔴 Dia 8 — devedores</label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB: CONTADORES -->
+        <div id="etab-content-contadores" style="display:none;">
+          <div class="panel">
+            <div class="ph"><span class="pt">💧 Água</span></div>
+            <div style="padding:16px;">
+              <div class="form-row">
+                <div class="fl"><label>Fornecedor</label><input class="fi" id="ed-agua-forn" placeholder="Ex: Águas de Santa Maria da Feira"></div>
+                <div class="fl"><label>Nº Cliente</label><input class="fi" id="ed-agua-ref" placeholder="Ex: 123456789"></div>
+              </div>
+              <div class="form-row">
+                <div class="fl"><label>Tipo de contador</label>
+                  <select class="fi" id="ed-agua-tipo" onchange="updateContadorAlerta('agua')">
+                    <option value="geral">1 contador único — geral</option>
+                    <option value="por_bloco">Contador por bloco</option>
+                    <option value="por_fracao">Contador por fração</option>
+                  </select>
+                </div>
+                <div class="fl"><label>Nº de contadores</label><input class="fi" id="ed-agua-num" type="number" min="1" value="1" onchange="updateContadorAlerta('agua')"></div>
+              </div>
+              <div id="ed-agua-alerta" style="display:none;margin-top:8px;"></div>
+              <div id="ed-agua-contadores-lista" style="margin-top:12px;"></div>
+            </div>
+          </div>
+          <div class="panel" style="margin-top:12px;">
+            <div class="ph"><span class="pt">⚡ Electricidade</span></div>
+            <div style="padding:16px;">
+              <div class="form-row">
+                <div class="fl"><label>Fornecedor</label><input class="fi" id="ed-luz-forn" placeholder="Ex: EDP, Endesa, Galp..."></div>
+                <div class="fl"><label>Nº Cliente</label><input class="fi" id="ed-luz-ref" placeholder="Ex: 987654321"></div>
+              </div>
+              <div class="form-row">
+                <div class="fl"><label>Tipo de contador</label>
+                  <select class="fi" id="ed-luz-tipo" onchange="updateContadorAlerta('luz')">
+                    <option value="geral">1 contador — zonas comuns</option>
+                    <option value="por_bloco">Contador por bloco</option>
+                    <option value="misto">Misto (comuns + por bloco)</option>
+                  </select>
+                </div>
+                <div class="fl"><label>Nº de contadores</label><input class="fi" id="ed-luz-num" type="number" min="1" value="1" onchange="updateContadorAlerta('luz')"></div>
+              </div>
+              <div id="ed-luz-alerta" style="display:none;margin-top:8px;"></div>
+            </div>
+          </div>
+          <div class="panel" style="margin-top:12px;">
+            <div class="ph"><span class="pt">🔥 Gás <span style="font-size:10px;color:var(--t3);font-weight:400;">(se aplicável)</span></span></div>
+            <div style="padding:16px;">
+              <div class="form-row">
+                <div class="fl"><label>Fornecedor</label><input class="fi" id="ed-gas-forn" placeholder="Ex: Galp, EDP Gás..."></div>
+                <div class="fl"><label>Nº Cliente</label><input class="fi" id="ed-gas-ref" placeholder="Deixe em branco se não aplicável"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB: MANUTENÇÕES -->
+        <div id="etab-content-manutencao" style="display:none;">
+          <div class="panel">
+            <div class="ph"><span class="pt">🔧 Histórico e Prazos</span></div>
+            <div style="padding:16px;">
+              <div style="font-size:11px;color:var(--t2);margin-bottom:14px;line-height:1.7;background:var(--cdim);border:1px solid rgba(0,212,255,.15);border-radius:8px;padding:10px 12px;">
+                💡 O programa usa estas datas para alertar sobre manutenções a vencer e incluir automaticamente no orçamento anual.
+              </div>
+              <div style="font-size:10px;color:var(--cyan);font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">Fachada e Estrutura</div>
+              <div class="form-row">
+                <div class="fl"><label>Última pintura/obra fachada</label><input class="fi" id="ed-fachada-ano" type="number" placeholder="Ex: 2018"></div>
+                <div class="fl"><label>Última impermeabilização</label><input class="fi" id="ed-imper-ano" type="number" placeholder="Ex: 2015"></div>
+              </div>
+              <div style="font-size:10px;color:var(--cyan);font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:14px 0 10px;border-top:1px solid var(--b1);padding-top:12px;">Elevadores</div>
+              <div class="form-row">
+                <div class="fl"><label>Última inspecção (data)</label><input class="fi" id="ed-elev-insp" type="date"></div>
+                <div class="fl"><label>Próxima inspecção obrigatória</label><input class="fi" id="ed-elev-prox" type="date"></div>
+              </div>
+              <div class="form-row">
+                <div class="fl"><label>Empresa de manutenção</label><input class="fi" id="ed-elev-empresa" placeholder="Ex: OTIS, KONE, Schindler..."></div>
+                <div class="fl"><label>Contrato válido até</label><input class="fi" id="ed-elev-contrato" type="date"></div>
+              </div>
+              <div style="font-size:10px;color:var(--cyan);font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:14px 0 10px;border-top:1px solid var(--b1);padding-top:12px;">Outros</div>
+              <div class="form-row">
+                <div class="fl"><label>Última dedetização/pragas</label><input class="fi" id="ed-pragas-data" type="date"></div>
+                <div class="fl"><label>Última limpeza cisternas</label><input class="fi" id="ed-cisternas-data" type="date"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB: SEGURANÇA -->
+        <div id="etab-content-seguranca" style="display:none;">
+          <div class="panel">
+            <div class="ph"><span class="pt">🛡️ Plano de Segurança</span></div>
+            <div style="padding:16px;">
+              <div style="font-size:10px;color:var(--cyan);font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">Extintores</div>
+              <div class="form-row">
+                <div class="fl"><label>Nº de extintores</label><input class="fi" id="ed-ext-num" type="number" placeholder="Ex: 6" min="0"></div>
+                <div class="fl"><label>Última manutenção</label><input class="fi" id="ed-ext-data" type="date"></div>
+              </div>
+              <div class="fl"><label>Empresa de manutenção extintores</label><input class="fi" id="ed-ext-empresa" placeholder="Ex: Prosegur, Securitas..."></div>
+              <div style="font-size:10px;color:var(--cyan);font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:14px 0 10px;border-top:1px solid var(--b1);padding-top:12px;">Mangueiras e Rede de Incêndio</div>
+              <div class="form-row">
+                <div class="fl"><label>Tem rede de incêndio?</label>
+                  <select class="fi" id="ed-incendio-tem">
+                    <option value="nao">Não</option>
+                    <option value="sim">Sim</option>
+                  </select>
+                </div>
+                <div class="fl"><label>Última inspecção rede</label><input class="fi" id="ed-incendio-data" type="date"></div>
+              </div>
+              <div style="font-size:10px;color:var(--cyan);font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:14px 0 10px;border-top:1px solid var(--b1);padding-top:12px;">Seguro do Condomínio</div>
+              <div class="form-row">
+                <div class="fl"><label>Seguradora</label><input class="fi" id="ed-seg-seguradora" placeholder="Ex: Fidelidade, Allianz..."></div>
+                <div class="fl"><label>Nº Apólice</label><input class="fi" id="ed-seg-apolice" placeholder="XXXXXXXXXX"></div>
+              </div>
+              <div class="form-row">
+                <div class="fl"><label>Validade da Apólice</label><input class="fi" id="ed-seg-validade" type="date"></div>
+                <div class="fl"><label>Capital Seguro (€)</label><input class="fi" id="ed-seg-capital" type="number" placeholder="Ex: 500000"></div>
+              </div>
+              <div style="font-size:10px;color:var(--cyan);font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:14px 0 10px;border-top:1px solid var(--b1);padding-top:12px;">Videovigilância / Segurança</div>
+              <div class="form-row">
+                <div class="fl"><label>Sistema de videovigilância</label>
+                  <select class="fi" id="ed-cctv">
+                    <option value="nao">Não</option>
+                    <option value="sim">Sim</option>
+                  </select>
+                </div>
+                <div class="fl"><label>Empresa de segurança</label><input class="fi" id="ed-seg-empresa" placeholder="Opcional"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB: FORNECEDORES -->
+        <div id="etab-content-fornecedores" style="display:none;">
+          <div class="panel">
+            <div class="ph"><span class="pt">🤝 Fornecedores e Parceiros</span></div>
+            <div style="padding:16px;">
+              <div style="font-size:11px;color:var(--t2);margin-bottom:14px;line-height:1.7;background:var(--s2);border:1px solid var(--b1);border-radius:8px;padding:10px 12px;">
+                Registe os fornecedores com a <strong style="color:var(--text);">referência exacta que aparece no extrato bancário</strong>. A IA usa esta informação para cruzar automaticamente os débitos com as rubricas correctas.
+              </div>
+              <div id="ed-fornecedores-lista" style="margin-bottom:12px;"></div>
+              <button class="btn-ghost" onclick="adicionarFornecedorEdificio()" style="display:inline-flex;align-items:center;gap:6px;">
+                <i class="ti ti-plus"></i> Adicionar Fornecedor
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /page-edificio -->
+
       <div class="page" id="page-condominos">
         <!-- BANNER LEGAL -->
         <div style="background:linear-gradient(135deg,rgba(124,58,237,.1),rgba(0,212,255,.08));border:1px solid rgba(124,58,237,.3);border-radius:10px;padding:14px 18px;margin-bottom:20px;display:flex;gap:14px;align-items:flex-start;">
@@ -1395,20 +1613,20 @@ function wizCancelar() {
 
 const wiz = {
   step: 0,
-  total: 7,
-  labels: ['Identificação','Estrutura','Título Constitutivo','Administração','Equipamentos','Finanças','Revisão'],
+  total: 5,
+  labels: ['Identificação','Estrutura','Gestão','Finanças','Revisão'],
 
+  pageIds: ['wiz-p1','wiz-p2','wiz-p4','wiz-p6','wiz-p7'],
   goTo(n) {
     if (n < 0 || n >= this.total) return;
     // Esconder passo actual
-    document.getElementById('wiz-p'+(this.step+1)).style.display = 'none';
+    document.getElementById(this.pageIds[this.step]).style.display = 'none';
     // Mostrar novo
     this.step = n;
-    document.getElementById('wiz-p'+(this.step+1)).style.display = 'block';
+    document.getElementById(this.pageIds[this.step]).style.display = 'block';
     this.updateUI();
-    if (this.step === 4) wizGerarEquipamentos();
-    if (this.step === 5) wizSugestaoFCR();
-    if (this.step === 6) wizGerarResumo();
+    if (this.step === 3) wizSugestaoFCR();
+    if (this.step === 4) wizGerarResumo();
   },
 
   next() { this.goTo(this.step + 1); },
@@ -3497,6 +3715,250 @@ async function notificarTodos() {
 }
 
 
+
+// ===== MÓDULO EDIFÍCIO =====
+function switchEdificioTab(tab) {
+  var tabs = ['geral','contadores','manutencao','seguranca','fornecedores'];
+  tabs.forEach(function(t) {
+    var btn = document.getElementById('etab-' + t);
+    var content = document.getElementById('etab-content-' + t);
+    if (btn) btn.style.background = t === tab ? 'var(--cyan)' : 'transparent';
+    if (btn) btn.style.color = t === tab ? '#000' : 'var(--t2)';
+    if (btn) btn.style.fontWeight = t === tab ? '700' : '400';
+    if (content) content.style.display = t === tab ? 'block' : 'none';
+  });
+}
+
+function updateContadorAlerta(tipo) {
+  var tipoEl = document.getElementById('ed-' + tipo + '-tipo');
+  var numEl = document.getElementById('ed-' + tipo + '-num');
+  var alertaEl = document.getElementById('ed-' + tipo + '-alerta');
+  if (!tipoEl || !numEl || !alertaEl) return;
+  var tipoVal = tipoEl.value;
+  var num = parseInt(numEl.value) || 1;
+  var blocos = currentCondo && currentCondo.tem_blocos ? [...new Set(fracoes.map(function(f){return f.bloco;}).filter(Boolean))].length : 1;
+  var html = '';
+  if (tipoVal === 'geral' && blocos > 1) {
+    html = '<div style="background:var(--adim);border:1px solid rgba(255,179,0,.3);border-radius:8px;padding:10px 12px;font-size:11px;color:var(--amber);line-height:1.7;">⚠️ <strong>Atenção:</strong> O edifício tem ' + blocos + ' blocos mas está configurado com contador único. Segundo o Art. 1424º CC, se existirem contadores por bloco, os custos devem ser distribuídos exclusivamente pelo respectivo bloco. Considere alterar para "Contador por bloco".</div>';
+  } else if (tipoVal === 'por_bloco' && num !== blocos) {
+    html = '<div style="background:var(--cdim);border:1px solid rgba(0,212,255,.2);border-radius:8px;padding:10px 12px;font-size:11px;color:var(--cyan);line-height:1.7;">💡 O edifício tem ' + blocos + ' blocos. Recomendamos registar ' + blocos + ' contadores (um por bloco).</div>';
+  } else if (tipoVal === 'por_bloco' && num === blocos) {
+    html = '<div style="background:var(--gdim);border:1px solid rgba(0,230,118,.3);border-radius:8px;padding:10px 12px;font-size:11px;color:var(--green);">✅ Correcto — ' + num + ' contadores para ' + blocos + ' blocos. A IA distribuirá os custos por bloco automaticamente.</div>';
+  }
+  alertaEl.style.display = html ? 'block' : 'none';
+  alertaEl.innerHTML = html;
+}
+
+function adicionarFornecedorEdificio() {
+  var lista = document.getElementById('ed-fornecedores-lista');
+  var idx = lista.children.length;
+  var div = document.createElement('div');
+  div.style.cssText = 'display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;margin-bottom:8px;align-items:end;';
+  div.innerHTML =
+    '<div class="fl" style="margin:0"><label style="font-size:10px;">Serviço</label><select class="fi" id="edforn-serv-'+idx+'"><option value="limpeza">🧹 Limpeza</option><option value="jardim">🌿 Jardim</option><option value="elevador">🛗 Elevador</option><option value="extintores">🔴 Extintores</option><option value="seguranca">🔒 Segurança</option><option value="administracao">🏢 Administração</option><option value="outro">Outro</option></select></div>' +
+    '<div class="fl" style="margin:0"><label style="font-size:10px;">Empresa</label><input class="fi" id="edforn-nome-'+idx+'" placeholder="Nome da empresa"></div>' +
+    '<div class="fl" style="margin:0"><label style="font-size:10px;">Ref. no extrato bancário</label><input class="fi" id="edforn-ref-'+idx+'" placeholder="Ex: MULTICLEAN LDA"></div>' +
+    '<button class="tb-btn" style="color:var(--red);border-color:rgba(255,68,68,.3);background:var(--rdim);padding:8px;margin-bottom:14px;" onclick="this.parentElement.remove()"><i class="ti ti-trash"></i></button>';
+  lista.appendChild(div);
+}
+
+function getEdFornecedores() {
+  var result = [];
+  document.querySelectorAll('[id^="edforn-serv-"]').forEach(function(el) {
+    var idx = el.id.split('-')[2];
+    var nome = document.getElementById('edforn-nome-' + idx);
+    var ref = document.getElementById('edforn-ref-' + idx);
+    if (nome && nome.value.trim()) {
+      result.push({ servico: el.value, nome: nome.value.trim(), ref: (ref ? ref.value.trim() : '') });
+    }
+  });
+  return result;
+}
+
+function loadEdificio() {
+  if (!currentCondo) return;
+  var c = currentCondo;
+  var setVal = function(id, val) { var el = document.getElementById(id); if (el) el.value = val || ''; };
+  var setChk = function(id, val) { var el = document.getElementById(id); if (el) el.checked = !!val; };
+  setVal('ed-nome', c.nome);
+  setVal('ed-nif', c.nif);
+  setVal('ed-morada', c.morada);
+  setVal('ed-ano', c.ano_construcao);
+  setVal('ed-pisos', c.num_pisos);
+  setVal('ed-elevadores', c.num_elevadores);
+  setVal('ed-conservacao', c.conservacao);
+  setVal('ed-gestor-nome', c.gestor_nome);
+  setVal('ed-gestor-email', c.gestor_email);
+  setVal('ed-gestor-tel', c.gestor_tel);
+  setVal('ed-tipo-gestao', c.tipo_gestao || 'propria');
+  setVal('ed-empresa-nome', c.empresa_nome);
+  setVal('ed-empresa-nif', c.empresa_nif);
+  setChk('ed-alerta-dia1', c.alerta_dia1);
+  setChk('ed-alerta-dia5', c.alerta_dia5);
+  setChk('ed-alerta-dia8', c.alerta_dia8 !== false);
+  // Contadores
+  setVal('ed-agua-forn', c.agua_fornecedor);
+  setVal('ed-agua-ref', c.agua_ref);
+  setVal('ed-agua-tipo', c.agua_tipo || 'geral');
+  setVal('ed-agua-num', c.agua_num || 1);
+  setVal('ed-luz-forn', c.luz_fornecedor);
+  setVal('ed-luz-ref', c.luz_ref);
+  setVal('ed-luz-tipo', c.luz_tipo || 'geral');
+  setVal('ed-luz-num', c.luz_num || 1);
+  setVal('ed-gas-forn', c.gas_fornecedor);
+  setVal('ed-gas-ref', c.gas_ref);
+  // Manutenções
+  setVal('ed-fachada-ano', c.fachada_ano);
+  setVal('ed-imper-ano', c.imper_ano);
+  setVal('ed-elev-insp', c.elev_insp);
+  setVal('ed-elev-prox', c.elev_prox);
+  setVal('ed-elev-empresa', c.elev_empresa);
+  setVal('ed-elev-contrato', c.elev_contrato);
+  setVal('ed-pragas-data', c.pragas_data);
+  setVal('ed-cisternas-data', c.cisternas_data);
+  // Segurança
+  setVal('ed-ext-num', c.ext_num);
+  setVal('ed-ext-data', c.ext_data);
+  setVal('ed-ext-empresa', c.ext_empresa);
+  setVal('ed-incendio-tem', c.incendio_tem || 'nao');
+  setVal('ed-incendio-data', c.incendio_data);
+  setVal('ed-seg-seguradora', c.seg_seguradora);
+  setVal('ed-seg-apolice', c.seg_apolice);
+  setVal('ed-seg-validade', c.seg_validade);
+  setVal('ed-seg-capital', c.seg_capital);
+  setVal('ed-cctv', c.cctv || 'nao');
+  setVal('ed-seg-empresa', c.seg_empresa);
+  // Fornecedores
+  if (c.fornecedores_extras) {
+    try {
+      var lista = JSON.parse(c.fornecedores_extras);
+      var el = document.getElementById('ed-fornecedores-lista');
+      if (el) el.innerHTML = '';
+      lista.forEach(function(f) {
+        adicionarFornecedorEdificio();
+        var idx = document.querySelectorAll('[id^="edforn-serv-"]').length - 1;
+        setTimeout(function() {
+          var s = document.getElementById('edforn-serv-'+idx);
+          var n = document.getElementById('edforn-nome-'+idx);
+          var r = document.getElementById('edforn-ref-'+idx);
+          if (s) s.value = f.servico || '';
+          if (n) n.value = f.nome || '';
+          if (r) r.value = f.ref || '';
+        }, 50);
+      });
+    } catch(e) {}
+  }
+  // Empresa row
+  var empresaRow = document.getElementById('ed-empresa-row');
+  if (empresaRow) empresaRow.style.display = (c.tipo_gestao === 'empresa') ? 'block' : 'none';
+  // Alertas de contador
+  setTimeout(function() {
+    updateContadorAlerta('agua');
+    updateContadorAlerta('luz');
+  }, 200);
+}
+
+async function saveEdificio() {
+  if (!currentCondo) return;
+  var g = function(id) { var el = document.getElementById(id); return el ? el.value : null; };
+  var gc = function(id) { var el = document.getElementById(id); return el ? el.checked : false; };
+  var payload = {
+    nif: g('ed-nif'),
+    num_pisos: parseInt(g('ed-pisos')) || null,
+    conservacao: g('ed-conservacao'),
+    gestor_nome: g('ed-gestor-nome'),
+    gestor_email: g('ed-gestor-email'),
+    gestor_tel: g('ed-gestor-tel'),
+    tipo_gestao: g('ed-tipo-gestao'),
+    empresa_nome: g('ed-empresa-nome'),
+    empresa_nif: g('ed-empresa-nif'),
+    alerta_dia1: gc('ed-alerta-dia1'),
+    alerta_dia5: gc('ed-alerta-dia5'),
+    alerta_dia8: gc('ed-alerta-dia8'),
+    agua_fornecedor: g('ed-agua-forn'),
+    agua_ref: g('ed-agua-ref'),
+    agua_tipo: g('ed-agua-tipo'),
+    agua_num: parseInt(g('ed-agua-num')) || 1,
+    luz_fornecedor: g('ed-luz-forn'),
+    luz_ref: g('ed-luz-ref'),
+    luz_tipo: g('ed-luz-tipo'),
+    luz_num: parseInt(g('ed-luz-num')) || 1,
+    gas_fornecedor: g('ed-gas-forn'),
+    gas_ref: g('ed-gas-ref'),
+    fachada_ano: parseInt(g('ed-fachada-ano')) || null,
+    imper_ano: parseInt(g('ed-imper-ano')) || null,
+    elev_insp: g('ed-elev-insp'),
+    elev_prox: g('ed-elev-prox'),
+    elev_empresa: g('ed-elev-empresa'),
+    elev_contrato: g('ed-elev-contrato'),
+    pragas_data: g('ed-pragas-data'),
+    cisternas_data: g('ed-cisternas-data'),
+    ext_num: parseInt(g('ed-ext-num')) || null,
+    ext_data: g('ed-ext-data'),
+    ext_empresa: g('ed-ext-empresa'),
+    incendio_tem: g('ed-incendio-tem'),
+    incendio_data: g('ed-incendio-data'),
+    seg_seguradora: g('ed-seg-seguradora'),
+    seg_apolice: g('ed-seg-apolice'),
+    seg_validade: g('ed-seg-validade'),
+    seg_capital: parseFloat(g('ed-seg-capital')) || null,
+    cctv: g('ed-cctv'),
+    seg_empresa: g('ed-seg-empresa'),
+    fornecedores_extras: JSON.stringify(getEdFornecedores())
+  };
+  var { error } = await sb.from('condominios').update(payload).eq('id', currentCondo.id);
+  if (error) { toast('Erro ao guardar: ' + error.message, 'err'); return; }
+  Object.assign(currentCondo, payload);
+  toast('Edifício guardado!', 'ok');
+}
+
+// ===== CONTADORES E FORNECEDORES =====
+var _fornecedoresExtras = [];
+
+function adicionarFornecedor() {
+  var div = document.createElement('div');
+  div.className = 'form-row';
+  div.style.marginBottom = '8px';
+  var idx = _fornecedoresExtras.length;
+  div.innerHTML = '<div class="fl"><label>Serviço</label><select class="fi" id="forn-serv-' + idx + '"><option value="limpeza">Limpeza</option><option value="jardim">Jardim</option><option value="elevador">Elevador</option><option value="seguranca">Segurança</option><option value="administracao">Administração</option><option value="outro">Outro</option></select></div>' +
+    '<div class="fl"><label>Empresa</label><input class="fi" id="forn-nome-' + idx + '" placeholder="Nome da empresa"></div>' +
+    '<div class="fl"><label>Ref. Bancária / Desc. extrato</label><input class="fi" id="forn-ref-' + idx + '" placeholder="Ex: MULTICLEAN LDA"></div>' +
+    '<div style="display:flex;align-items:flex-end;padding-bottom:14px;"><button class="tb-btn" style="color:var(--red);border-color:rgba(255,68,68,.3);background:var(--rdim);padding:8px;" onclick="this.parentElement.parentElement.remove()"><i class="ti ti-trash"></i></button></div>';
+  document.getElementById('def-fornecedores-lista').appendChild(div);
+  _fornecedoresExtras.push(idx);
+}
+
+function getFornecedoresExtras() {
+  var result = [];
+  document.querySelectorAll('[id^="forn-serv-"]').forEach(function(el) {
+    var idx = el.id.split('-')[2];
+    var nome = document.getElementById('forn-nome-' + idx);
+    var ref = document.getElementById('forn-ref-' + idx);
+    if (nome && nome.value.trim()) {
+      result.push({ servico: el.value, nome: nome.value.trim(), ref: (ref ? ref.value.trim() : '') });
+    }
+  });
+  return result;
+}
+
+function loadFornecedoresExtras(lista) {
+  if (!lista || !lista.length) return;
+  document.getElementById('def-fornecedores-lista').innerHTML = '';
+  _fornecedoresExtras = [];
+  lista.forEach(function(f) {
+    adicionarFornecedor();
+    var idx = _fornecedoresExtras[_fornecedoresExtras.length - 1];
+    setTimeout(function() {
+      var servEl = document.getElementById('forn-serv-' + idx);
+      var nomeEl = document.getElementById('forn-nome-' + idx);
+      var refEl = document.getElementById('forn-ref-' + idx);
+      if (servEl) servEl.value = f.servico || '';
+      if (nomeEl) nomeEl.value = f.nome || '';
+      if (refEl) refEl.value = f.ref || '';
+    }, 50);
+  });
+}
+
 // ===== GMAIL OAUTH =====
 const GOOGLE_CLIENT_ID = '890943447712-l50vkrlhtgk45i4qij5rlf1mq5nhlol5.apps.googleusercontent.com';
 const GMAIL_SCOPES = 'https://www.googleapis.com/auth/gmail.send email profile openid';
@@ -3699,6 +4161,24 @@ function loadDefForm() {
   document.getElementById('def-orcamento').value = currentCondo.orcamento_anual||'';
   document.getElementById('def-fcr').value = currentCondo.fcr_pct||10;
   document.getElementById('def-email-show').textContent = currentUser?currentUser.email:'—';
+  // Contadores e fornecedores
+  var c = currentCondo;
+  if (document.getElementById('def-agua-fornecedor')) document.getElementById('def-agua-fornecedor').value = c.agua_fornecedor||'';
+  if (document.getElementById('def-agua-ref')) document.getElementById('def-agua-ref').value = c.agua_ref||'';
+  if (document.getElementById('def-agua-tipo')) document.getElementById('def-agua-tipo').value = c.agua_tipo||'geral';
+  if (document.getElementById('def-agua-iban')) document.getElementById('def-agua-iban').value = c.agua_iban||'';
+  if (document.getElementById('def-luz-fornecedor')) document.getElementById('def-luz-fornecedor').value = c.luz_fornecedor||'';
+  if (document.getElementById('def-luz-ref')) document.getElementById('def-luz-ref').value = c.luz_ref||'';
+  if (document.getElementById('def-luz-tipo')) document.getElementById('def-luz-tipo').value = c.luz_tipo||'geral';
+  if (document.getElementById('def-luz-iban')) document.getElementById('def-luz-iban').value = c.luz_iban||'';
+  if (document.getElementById('def-gas-fornecedor')) document.getElementById('def-gas-fornecedor').value = c.gas_fornecedor||'';
+  if (document.getElementById('def-gas-ref')) document.getElementById('def-gas-ref').value = c.gas_ref||'';
+  if (document.getElementById('def-gestor-nome')) document.getElementById('def-gestor-nome').value = c.gestor_nome||'';
+  if (document.getElementById('def-gestor-email')) document.getElementById('def-gestor-email').value = c.gestor_email||'';
+  if (document.getElementById('def-alerta-dia1')) document.getElementById('def-alerta-dia1').checked = c.alerta_dia1||false;
+  if (document.getElementById('def-alerta-dia5')) document.getElementById('def-alerta-dia5').checked = c.alerta_dia5||false;
+  if (document.getElementById('def-alerta-dia8')) document.getElementById('def-alerta-dia8').checked = c.alerta_dia8!==false;
+  try { if (c.fornecedores_extras) loadFornecedoresExtras(JSON.parse(c.fornecedores_extras)); } catch(e) {}
   // Atualizar status Gmail
   setTimeout(function() { atualizarStatusGmail(); }, 200);
 }
@@ -3713,6 +4193,22 @@ async function saveCondDef() {
     dia_vencimento: parseInt(document.getElementById('def-dia').value),
     iban_operacional: document.getElementById('def-iban-op').value,
     iban_reserva: document.getElementById('def-iban-res').value,
+    agua_fornecedor: document.getElementById('def-agua-fornecedor') ? document.getElementById('def-agua-fornecedor').value.trim()||null : null,
+    agua_ref: document.getElementById('def-agua-ref') ? document.getElementById('def-agua-ref').value.trim()||null : null,
+    agua_tipo: document.getElementById('def-agua-tipo') ? document.getElementById('def-agua-tipo').value||'geral' : 'geral',
+    agua_iban: document.getElementById('def-agua-iban') ? document.getElementById('def-agua-iban').value.trim()||null : null,
+    luz_fornecedor: document.getElementById('def-luz-fornecedor') ? document.getElementById('def-luz-fornecedor').value.trim()||null : null,
+    luz_ref: document.getElementById('def-luz-ref') ? document.getElementById('def-luz-ref').value.trim()||null : null,
+    luz_tipo: document.getElementById('def-luz-tipo') ? document.getElementById('def-luz-tipo').value||'geral' : 'geral',
+    luz_iban: document.getElementById('def-luz-iban') ? document.getElementById('def-luz-iban').value.trim()||null : null,
+    gas_fornecedor: document.getElementById('def-gas-fornecedor') ? document.getElementById('def-gas-fornecedor').value.trim()||null : null,
+    gas_ref: document.getElementById('def-gas-ref') ? document.getElementById('def-gas-ref').value.trim()||null : null,
+    gestor_nome: document.getElementById('def-gestor-nome') ? document.getElementById('def-gestor-nome').value.trim()||null : null,
+    gestor_email: document.getElementById('def-gestor-email') ? document.getElementById('def-gestor-email').value.trim()||null : null,
+    alerta_dia1: document.getElementById('def-alerta-dia1') ? document.getElementById('def-alerta-dia1').checked : false,
+    alerta_dia5: document.getElementById('def-alerta-dia5') ? document.getElementById('def-alerta-dia5').checked : false,
+    alerta_dia8: document.getElementById('def-alerta-dia8') ? document.getElementById('def-alerta-dia8').checked : true,
+    fornecedores_extras: JSON.stringify(getFornecedoresExtras()),
     orcamento_anual: parseFloat(document.getElementById('def-orcamento').value)||0,
     fcr_pct: parseFloat(document.getElementById('def-fcr').value)||10
   }).eq('id', currentCondo.id);
@@ -4952,7 +5448,7 @@ async function importarFracoesIA() {
 }
 
 // ===== NAVIGATION =====
-const pageMap={dashboard:'Dashboard',fracoes:'Frações',quotas:'Quotas',financeiro:'Financeiro',ocorrencias:'Ocorrências',parceiros:'Parceiros',documentos:'Documentos',assembleias:'Assembleias',ia:'Assistente IA',definicoes:'Definições'};
+const pageMap={dashboard:'Dashboard',edificio:'Edifício',fracoes:'Frações',quotas:'Quotas',financeiro:'Financeiro',ocorrencias:'Ocorrências',parceiros:'Parceiros',documentos:'Documentos',assembleias:'Assembleias',ia:'Assistente IA',definicoes:'Definições'};
 const pathMap={dashboard:'Visão Geral',fracoes:'Moradores & Frações',quotas:'Gestão de Quotas',financeiro:'Contas & Movimentos',ocorrencias:'Gestão de Problemas',parceiros:'Base de Manutenção',documentos:'Arquivo Digital',assembleias:'Reuniões',ia:'IA Gratuita · Gemini',definicoes:'Configuração'};
 
 function nav(p) {
@@ -4978,6 +5474,7 @@ function nav(p) {
     }
   }
   if(p==='fracoes')renderFracoes();
+  if(p==='edificio'){ loadEdificio(); }
   if(p==='definicoes')loadDefForm();
 }
 
