@@ -3680,6 +3680,8 @@ function loadDefForm() {
   document.getElementById('def-orcamento').value = currentCondo.orcamento_anual||'';
   document.getElementById('def-fcr').value = currentCondo.fcr_pct||10;
   document.getElementById('def-email-show').textContent = currentUser?currentUser.email:'—';
+  // Atualizar status Gmail
+  setTimeout(function() { atualizarStatusGmail(); }, 200);
 }
 
 async function saveCondDef() {
