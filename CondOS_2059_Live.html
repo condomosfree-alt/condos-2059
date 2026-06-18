@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.x/tabler-icons.min.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
@@ -690,6 +691,12 @@ textarea.fi{resize:vertical;min-height:60px;}
           <div class="panel" style="margin-top:12px;">
             <div class="ph"><span class="pt">Estrutura Física</span><span style="font-size:10px;color:var(--t3);margin-left:8px;">Usado para cálculo de cotas por andar e orçamento</span></div>
             <div style="padding:16px;">
+              <!-- Info blocos do wizard -->
+              <div id="ed-blocos-info" style="background:var(--cdim);border:1px solid rgba(0,212,255,.2);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:11px;color:var(--t2);line-height:1.7;display:none;">
+                <strong style="color:var(--cyan)">Estrutura registada no wizard:</strong>
+                <span id="ed-blocos-info-texto"></span>
+                <span style="font-size:10px;color:var(--t3);display:block;margin-top:3px;">Para alterar a estrutura de blocos, edite as frações individualmente ou use o módulo Frações.</span>
+              </div>
               <div style="font-size:10px;color:var(--cyan);font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">Pisos e Altura</div>
               <div class="form-row">
                 <div class="fl"><label>Nº de pisos <strong>acima do solo</strong></label><input class="fi" id="ed-pisos-acima" type="number" min="1" placeholder="Ex: 4" oninput="calcularAlturaEdificio()"></div>
@@ -1833,6 +1840,39 @@ function wizGerarResumo() {
     '<div style="width:'+score+'%;height:6px;background:'+scoreColor+';border-radius:3px;transition:width .5s;"></div></div>';
 }
 
+
+// ===== PDF → IMAGEM (para IA) =====
+async function pdfParaImagemBase64(file, numPaginas) {
+  numPaginas = numPaginas || 2;
+  return new Promise(function(resolve, reject) {
+    var reader = new FileReader();
+    reader.onload = async function(e) {
+      try {
+        var pdfData = new Uint8Array(e.target.result);
+        // Configurar worker
+        if (window.pdfjsLib) {
+          pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        }
+        var pdf = await pdfjsLib.getDocument({ data: pdfData }).promise;
+        var totalPags = Math.min(pdf.numPages, numPaginas);
+        var canvas = document.createElement('canvas');
+        var ctx = canvas.getContext('2d');
+        var imagens = [];
+        for (var i = 1; i <= totalPags; i++) {
+          var page = await pdf.getPage(i);
+          var viewport = page.getViewport({ scale: 1.5 });
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+          imagens.push(canvas.toDataURL('image/jpeg', 0.85).split(',')[1]);
+        }
+        resolve(imagens);
+      } catch(err) { reject(err); }
+    };
+    reader.readAsArrayBuffer(file);
+  });
+}
+
 async function wizImportDoc(input, passo) {
   const file = input.files[0];
   if (!file) return;
@@ -1881,7 +1921,43 @@ async function wizImportDoc(input, passo) {
     } catch(e) { toast('Erro a analisar documento: '+e.message,'err'); }
   };
   if (file.type === 'application/pdf') {
-    toast('PDF detectado — a IA vai analisar o conteúdo','ok');
+    toast('PDF detectado — a IA vai analisar...','ok');
+    try {
+      var imagens = await pdfParaImagemBase64(file, 2);
+      // Enviar primeira página ao Gemini
+      const base64 = imagens[0];
+      const prompt = prompts[passo] || prompts.p1;
+      const res = await fetch(PROXY_URL, {
+        method:'POST', headers:PROXY_HEADERS,
+        body: JSON.stringify({ prompt, foto: base64, tipo: 'documento_import' })
+      });
+      const data = await res.json();
+      const text = data.text || '';
+      const start = text.indexOf('{'); const end = text.lastIndexOf('}');
+      if (start === -1) { toast('Não consegui extrair dados. Preenche manualmente.','warn'); return; }
+      const json = JSON.parse(text.slice(start, end+1));
+      if (passo === 'p1') {
+        if (json.nome) document.getElementById('wiz-nome').value = json.nome;
+        if (json.morada) document.getElementById('wiz-morada').value = json.morada;
+        if (json.cp) document.getElementById('wiz-cp').value = json.cp;
+        if (json.cidade) document.getElementById('wiz-cidade').value = json.cidade;
+        if (json.nif) document.getElementById('wiz-nif').value = json.nif;
+      } else if (passo === 'p2') {
+        if (json.num_elevadores) document.getElementById('wiz-elevadores').value = json.num_elevadores;
+        if (json.num_fracoes) document.getElementById('wiz-fracoes').value = json.num_fracoes;
+        if (json.num_pisos) document.getElementById('wiz-pisos').value = json.num_pisos;
+      } else if (passo === 'p4') {
+        if (json.adm_nome) document.getElementById('wiz-adm-nome').value = json.adm_nome;
+        if (json.adm_email) document.getElementById('wiz-adm-email').value = json.adm_email;
+        if (json.adm_inicio) document.getElementById('wiz-adm-inicio').value = json.adm_inicio;
+        if (json.cf_presidente) document.getElementById('wiz-cf-pres').value = json.cf_presidente;
+      } else if (passo === 'p6') {
+        if (json.iban) document.getElementById('wiz-iban-op').value = json.iban;
+      }
+      toast('✅ Dados extraídos do PDF! Confirma e corrige se necessário.','ok');
+    } catch(err) {
+      toast('Erro ao ler PDF: ' + err.message,'err');
+    }
     return;
   }
   reader.readAsDataURL(file);
@@ -1925,8 +2001,57 @@ async function wizImportTitulo(input) {
       document.getElementById('wiz-titulo-resultado').innerHTML = '<div style="color:var(--orange)">Não consegui extrair dados. Preenche manualmente.</div>';
     }
   };
-  if (file.type !== 'application/pdf') reader.readAsDataURL(file);
-  else document.getElementById('wiz-titulo-resultado').innerHTML = '<div style="color:var(--t2)">PDF carregado. A análise de PDFs estará disponível em breve. Preenche manualmente por agora.</div>';
+  if (file.type === 'application/pdf') {
+    document.getElementById('wiz-titulo-resultado').innerHTML = '<div class="loading"><div class="spin"></div>A IA está a analisar o PDF...</div>';
+    try {
+      var imagens = await pdfParaImagemBase64(file, 3);
+      // Combinar análise das primeiras páginas
+      var resultados = [];
+      for (var pi = 0; pi < imagens.length; pi++) {
+        const res = await fetch(PROXY_URL, {
+          method:'POST', headers:PROXY_HEADERS,
+          body: JSON.stringify({
+            prompt: 'Analisa esta página do título constitutivo de propriedade horizontal. Extrai: nome do edifício, morada completa, NIF do condomínio, número de frações, se tem blocos (sim/não), número de blocos, permilagem total, lista de frações com código, bloco e permilagem. Devolve APENAS JSON: {"nome":"","morada":"","nif":"","num_fracoes":0,"tem_blocos":false,"num_blocos":1,"fracoes":[{"codigo":"","bloco":"","descricao":"","permilagem":0}]}',
+            foto: imagens[pi], tipo: 'titulo_import'
+          })
+        });
+        const data = await res.json();
+        resultados.push(data.text || '');
+      }
+      // Usar o resultado mais completo
+      var melhor = resultados.reduce(function(a, b) { return a.length > b.length ? a : b; });
+      const start = melhor.indexOf('{'); const end = melhor.lastIndexOf('}');
+      if (start === -1) throw new Error('Não encontrei dados');
+      const json = JSON.parse(melhor.slice(start, end+1));
+      // Preencher campos
+      if (json.nome) document.getElementById('wiz-nome').value = json.nome;
+      if (json.morada) document.getElementById('wiz-morada').value = json.morada;
+      if (json.nif) document.getElementById('wiz-nif').value = json.nif;
+      if (json.num_fracoes) document.getElementById('wiz-fracoes').value = json.num_fracoes;
+      if (json.tem_blocos) { wizSelectEstrutura('blocos'); if (json.num_blocos) document.getElementById('wiz-num-blocos').value = json.num_blocos; wizRenderBlocos(); }
+      // Mostrar resultado
+      var fracStr = '';
+      if (json.fracoes && json.fracoes.length) {
+        fracStr = '<div style="margin-top:8px;font-size:10px;color:var(--t3)">Frações detectadas: ' +
+          json.fracoes.slice(0,5).map(function(f){ return f.codigo + (f.bloco?' Bl.'+f.bloco:'') + ' ('+f.permilagem+'‰)'; }).join(', ') +
+          (json.fracoes.length > 5 ? '... +' + (json.fracoes.length-5) + ' mais' : '') + '</div>';
+      }
+      document.getElementById('wiz-titulo-resultado').innerHTML =
+        '<div style="color:var(--green);font-weight:600;margin-bottom:8px;">✅ Título Constitutivo analisado!</div>' +
+        '<div style="font-size:11px;color:var(--t2);line-height:1.8;">' +
+        (json.nome ? '📛 <strong>' + json.nome + '</strong><br>' : '') +
+        (json.num_fracoes ? '🏠 ' + json.num_fracoes + ' frações<br>' : '') +
+        (json.tem_blocos ? '🏘️ ' + json.num_blocos + ' blocos (gestão por bloco detectada)<br>' : '🏢 Edifício simples<br>') +
+        (json.nif ? '🔢 NIF: ' + json.nif + '<br>' : '') +
+        '</div>' + fracStr +
+        '<div style="font-size:11px;color:var(--t3);margin-top:6px;">Confirma os dados nos passos seguintes.</div>';
+    } catch(err) {
+      document.getElementById('wiz-titulo-resultado').innerHTML =
+        '<div style="color:var(--amber)">⚠️ Não consegui extrair dados do PDF. Preenche manualmente.<br><small>' + err.message + '</small></div>';
+    }
+    return;
+  }
+  reader.readAsDataURL(file);
 }
 
 function wizAutoLocalidade(cp) {
@@ -3819,9 +3944,23 @@ function calcularAlturaEdificio() {
 }
 
 function getBlocosOptions(incluirComum) {
-  var blocos = currentCondo && currentCondo.tem_blocos
-    ? [...new Set(fracoes.map(function(f){return f.bloco;}).filter(Boolean))].sort()
-    : [];
+  // 1. Tentar buscar blocos das fracoes
+  var blocos = [...new Set(fracoes.map(function(f){return f.bloco;}).filter(Boolean))].sort();
+  // 2. Fallback: usar blocos_nomes do condomínio (guardados pelo wizard)
+  if (!blocos.length && currentCondo && currentCondo.tem_blocos) {
+    try {
+      var bNomes = currentCondo.blocos_nomes ? JSON.parse(currentCondo.blocos_nomes) : null;
+      if (bNomes && bNomes.length) {
+        blocos = bNomes.sort();
+      } else if (currentCondo.num_blocos) {
+        // Gerar A, B, C... conforme o número de blocos
+        var letras = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        for (var i = 0; i < parseInt(currentCondo.num_blocos); i++) {
+          blocos.push(letras[i] || (i+1).toString());
+        }
+      }
+    } catch(e) {}
+  }
   var opts = '';
   if (incluirComum !== false) opts += '<option value="comum">Comum (todos os blocos)</option>';
   blocos.forEach(function(b) { opts += '<option value="' + b + '">Bloco ' + b + '</option>'; });
@@ -4100,6 +4239,20 @@ function loadEdificio() {
   set('ed-seg-seguradora', c.seg_seguradora); set('ed-seg-apolice', c.seg_apolice);
   set('ed-seg-validade', c.seg_validade); set('ed-seg-capital', c.seg_capital);
   set('ed-seg-premio', c.seg_premio); set('ed-cctv', c.cctv || 'nao');
+  // Mostrar info de blocos
+  var infoEl = document.getElementById('ed-blocos-info');
+  var infoTxt = document.getElementById('ed-blocos-info-texto');
+  if (infoEl && infoTxt) {
+    var blocos = [...new Set(fracoes.map(function(f){return f.bloco;}).filter(Boolean))].sort();
+    if (currentCondo && currentCondo.tem_blocos) {
+      var nBlocos = blocos.length || (currentCondo.num_blocos ? parseInt(currentCondo.num_blocos) : 0);
+      var nomesBlocos = blocos.length ? blocos.map(function(b){return 'Bloco '+b;}).join(', ') : (nBlocos + ' blocos');
+      infoTxt.innerHTML = ' ' + nomesBlocos + ' (' + (fracoes.length || '?') + ' frações no total)';
+      infoEl.style.display = 'block';
+    } else {
+      infoEl.style.display = 'none';
+    }
+  }
   // Contadores dinâmicos
   setTimeout(function() {
     try { if(c.contadores_agua) loadContadores('agua', JSON.parse(c.contadores_agua)); } catch(e){}
