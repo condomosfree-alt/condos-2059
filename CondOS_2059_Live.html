@@ -1975,7 +1975,7 @@ async function wizImportDoc(input, passo) {
   // Prompts no scope global da função — acessíveis em todos os branches
   const prompts = {
     p1: 'Analisa este documento e extrai: nome do condomínio, morada completa (só rua e número), código postal (formato XXXX-XXX), cidade, NIF do condomínio (9 dígitos). Devolve APENAS JSON sem texto adicional: {"nome":"","morada":"","cp":"","cidade":"","nif":""}',
-    p2: 'Analisa este documento e extrai: número de blocos/entradas, número de pisos, número de elevadores, número de frações. Devolve JSON: {"num_blocos":0,"num_pisos":0,"num_elevadores":0,"num_fracoes":0}',
+    p2: 'Analisa este documento de um edifício em propriedade horizontal português. IMPORTANTE: se menciona Bloco A/B/C, blocos independentes ou entradas próprias, tem_blocos=true. Extrai tudo o que conseguires: tem_blocos (true/false), num_blocos, num_pisos, num_elevadores, num_fracoes, e infraestruturas presentes (garagem, piscina, jardim, ginasio, sala_comum) como true/false. Devolve APENAS JSON: {"tem_blocos":false,"num_blocos":1,"num_pisos":0,"num_elevadores":0,"num_fracoes":0,"garagem":false,"piscina":false,"jardim":false,"ginasio":false,"sala_comum":false}',
     p4: 'Analisa esta ata de assembleia de condóminos portuguesa. Procura especificamente: 1) O nome do administrador ELEITO (procura frases como "foi eleito", "eleicao de", "administrador"). 2) O NIF/numero de identificacao fiscal do administrador (9 digitos). 3) A data da assembleia ou inicio do mandato - converte SEMPRE para formato YYYY-MM-DD (ex: Janeiro 2022 = 2022-01-01, 28 de Janeiro de 2022 = 2022-01-28). 4) Presidente do Conselho Fiscal. 5) Vogais do Conselho Fiscal (Vogal 1 e Vogal 2). Devolve APENAS JSON sem texto adicional: {"adm_nome":"","adm_nif":"","adm_email":"","adm_tel":"","adm_inicio":"","cf_presidente":"","cf_vogal1":"","cf_vogal2":""}',
     p5: 'Analisa este documento e extrai dados de elevadores: marca, modelo, ano instalação, data última inspecção. Devolve JSON: {"marca":"","modelo":"","ano_instalacao":0,"ultima_inspeccao":""}',
     p6: 'Analisa este documento e extrai o IBAN da conta bancária. Devolve JSON: {"iban":""}'
@@ -2005,6 +2005,20 @@ async function wizImportDoc(input, passo) {
       } else if (passo === 'p2') {
         if (json.num_elevadores) document.getElementById('wiz-elevadores').value = json.num_elevadores;
         if (json.num_fracoes) document.getElementById('wiz-fracoes').value = json.num_fracoes;
+        if (json.tem_blocos || (json.num_blocos && json.num_blocos > 1)) {
+          wizSelectEstrutura('blocos');
+          if (json.num_blocos) document.getElementById('wiz-num-blocos').value = json.num_blocos;
+          wizRenderBlocos();
+        }
+        if (json.num_pisos) { var pisosEl = document.getElementById('wiz-pisos'); if(pisosEl) pisosEl.value = json.num_pisos; }
+        // Infraestruturas
+        var setChk = function(id, val) { var el = document.getElementById(id); if(el) el.checked = !!val; };
+        setChk('wiz-tem-garagem', json.garagem);
+        setChk('wiz-tem-piscina', json.piscina);
+        setChk('wiz-tem-jardim', json.jardim);
+        setChk('wiz-tem-ginasio', json.ginasio);
+        setChk('wiz-tem-sala', json.sala_comum);
+        toast('✅ Estrutura detectada! Confirma os dados.', 'ok');
         if (json.num_pisos) document.getElementById('wiz-pisos').value = json.num_pisos;
       } else if (passo === 'p4') {
         var setIfVal = function(id, val) { if (val) { var el = document.getElementById(id); if(el) el.value = val; } };
@@ -2048,6 +2062,20 @@ async function wizImportDoc(input, passo) {
       } else if (passo === 'p2') {
         if (json.num_elevadores) document.getElementById('wiz-elevadores').value = json.num_elevadores;
         if (json.num_fracoes) document.getElementById('wiz-fracoes').value = json.num_fracoes;
+        if (json.tem_blocos || (json.num_blocos && json.num_blocos > 1)) {
+          wizSelectEstrutura('blocos');
+          if (json.num_blocos) document.getElementById('wiz-num-blocos').value = json.num_blocos;
+          wizRenderBlocos();
+        }
+        if (json.num_pisos) { var pisosEl = document.getElementById('wiz-pisos'); if(pisosEl) pisosEl.value = json.num_pisos; }
+        // Infraestruturas
+        var setChk = function(id, val) { var el = document.getElementById(id); if(el) el.checked = !!val; };
+        setChk('wiz-tem-garagem', json.garagem);
+        setChk('wiz-tem-piscina', json.piscina);
+        setChk('wiz-tem-jardim', json.jardim);
+        setChk('wiz-tem-ginasio', json.ginasio);
+        setChk('wiz-tem-sala', json.sala_comum);
+        toast('✅ Estrutura detectada! Confirma os dados.', 'ok');
         if (json.num_pisos) document.getElementById('wiz-pisos').value = json.num_pisos;
       } else if (passo === 'p4') {
         var setIfVal = function(id, val) { if (val) { var el = document.getElementById(id); if(el) el.value = val; } };
@@ -2084,7 +2112,7 @@ async function wizImportTitulo(input) {
       const res = await fetch(PROXY_URL, {
         method:'POST', headers:PROXY_HEADERS,
         body: JSON.stringify({
-          prompt: 'Analisa este título constitutivo de propriedade horizontal. Extrai: nome do edifício, morada, NIF, número de frações, se tem blocos. Devolve JSON: {"nome":"","morada":"","nif":"","num_fracoes":0,"tem_blocos":false,"num_blocos":1}',
+          prompt: 'Analisa este título constitutivo de propriedade horizontal português. IMPORTANTE: se o documento menciona "blocos", "bloco A", "bloco B", "entradas", "escadas próprias" ou qualquer separação física do edifício, tem_blocos=true. Conta o número de blocos mencionados. Extrai: nome do edifício, morada completa, NIF (9 dígitos), número total de frações, se tem blocos (true/false), número de blocos. Devolve APENAS JSON: {"nome":"","morada":"","nif":"","num_fracoes":0,"tem_blocos":false,"num_blocos":1}',
           foto: base64, tipo: 'titulo_import'
         })
       });
@@ -2104,7 +2132,7 @@ async function wizImportTitulo(input) {
           (json.num_fracoes?'🏠 Frações: <strong>'+json.num_fracoes+'</strong><br>':'')+
           (json.tem_blocos?'🏘️ Estrutura: <strong>Por blocos ('+json.num_blocos+')</strong><br>':'🏢 Estrutura: <strong>Edifício simples</strong><br>')+
           '</div><div style="font-size:11px;color:var(--t3);margin-top:6px;">Confirma os dados nos passos seguintes.</div>';
-        if (json.tem_blocos) { wizSelectEstrutura('blocos'); if (json.num_blocos) document.getElementById('wiz-num-blocos').value = json.num_blocos; wizRenderBlocos(); }
+        if (json.tem_blocos || (json.num_blocos && json.num_blocos > 1)) { wizSelectEstrutura('blocos'); if (json.num_blocos) document.getElementById('wiz-num-blocos').value = json.num_blocos; wizRenderBlocos(); }
       }
     } catch(e) {
       document.getElementById('wiz-titulo-resultado').innerHTML = '<div style="color:var(--orange)">Não consegui extrair dados. Preenche manualmente.</div>';
@@ -2120,7 +2148,7 @@ async function wizImportTitulo(input) {
         const res = await fetch(PROXY_URL, {
           method:'POST', headers:PROXY_HEADERS,
           body: JSON.stringify({
-            prompt: 'Analisa esta página do título constitutivo de propriedade horizontal. Extrai: nome do edifício, morada completa, NIF do condomínio, número de frações, se tem blocos (sim/não), número de blocos, permilagem total, lista de frações com código, bloco e permilagem. Devolve APENAS JSON: {"nome":"","morada":"","nif":"","num_fracoes":0,"tem_blocos":false,"num_blocos":1,"fracoes":[{"codigo":"","bloco":"","descricao":"","permilagem":0}]}',
+            prompt: 'Analisa esta página do título constitutivo de propriedade horizontal português. IMPORTANTE: se o documento menciona "blocos", "bloco A", "bloco B", "bloco C", "entradas próprias", "escadas próprias", gestao por bloco, ou qualquer separação física, tem_blocos=true e conta o número de blocos. Extrai: nome do edifício, morada completa, NIF (9 dígitos sem pontos), número total de frações, tem_blocos (true/false), número de blocos, lista de frações com código, bloco e permilagem em ‰. Devolve APENAS JSON sem texto: {"nome":"","morada":"","nif":"","num_fracoes":0,"tem_blocos":false,"num_blocos":1,"fracoes":[{"codigo":"","bloco":"","descricao":"","permilagem":0}]}',
             foto: imagens[pi], tipo: 'titulo_import'
           })
         });
