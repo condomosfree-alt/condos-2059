@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.x/tabler-icons.min.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
@@ -214,7 +214,9 @@ textarea.fi{resize:vertical;min-height:60px;}
       dataset: {}, options: [], selectedIndex: 0, disabled: false,
       addEventListener: function(){}, removeEventListener: function(){},
       appendChild: function(){}, setAttribute: function(){}, getAttribute: function(){return null;},
-      focus: function(){}, blur: function(){}, click: function(){}
+      focus: function(){}, blur: function(){}, click: function(){},
+      remove: function(){}, removeChild: function(){}, insertBefore: function(){return null;},
+      replaceChild: function(){}, contains: function(){return false;}, cloneNode: function(){return this;}
     };
   };
 })();
@@ -1850,8 +1852,9 @@ async function pdfParaImagemBase64(file, numPaginas) {
       try {
         var pdfData = new Uint8Array(e.target.result);
         // Configurar worker
+        if (!window.pdfjsLib) { reject(new Error('PDF.js não carregou. Tenta recarregar a página.')); return; }
         if (window.pdfjsLib) {
-          pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+          pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
         }
         var pdf = await pdfjsLib.getDocument({ data: pdfData }).promise;
         var totalPags = Math.min(pdf.numPages, numPaginas);
