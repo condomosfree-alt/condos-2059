@@ -372,6 +372,7 @@ textarea.fi{resize:vertical;min-height:60px;}
             <label style="display:flex;align-items:center;gap:6px;cursor:pointer;background:var(--s2);padding:8px 12px;border-radius:8px;border:1px solid var(--b1);font-size:12px;"><input type="checkbox" id="wiz-tem-sala" style="accent-color:var(--cyan);"> 🏛️ Sala Comum</label>
           </div>
         </div>
+        <div id="wiz-sugestao-modo" style="display:none;margin-top:16px;"></div>
         <div style="margin-top:16px;">
           <label style="font-size:12px;color:var(--t2);display:block;margin-bottom:8px;">Modo de Cálculo de Quotas</label>
           <div style="display:flex;flex-direction:column;gap:8px;">
@@ -1755,6 +1756,32 @@ function wizRenderBlocos() {
     ).join('');
 }
 
+function wizSugerirModo(temBlocos, fonte) {
+  var div = document.getElementById('wiz-sugestao-modo');
+  if (!div) return;
+  if (temBlocos) {
+    div.style.display = 'block';
+    div.innerHTML =
+      '<div style="background:linear-gradient(135deg,rgba(0,230,118,.08),rgba(0,212,255,.06));border:1px solid rgba(0,230,118,.3);border-radius:10px;padding:12px 16px;margin-bottom:4px;">' +
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">' +
+      '<span style="font-size:16px;">🤖</span>' +
+      '<span style="font-size:12px;font-weight:700;color:var(--green);">IA recomenda: Legal — Separação por bloco</span></div>' +
+      '<div style="font-size:11px;color:var(--t2);line-height:1.7;">' +
+      'O ' + (fonte||'documento') + ' indica que o edifício tem <strong>blocos independentes</strong>. ' +
+      'Segundo o <strong>Art. 1424º do Código Civil</strong>, as despesas específicas de cada bloco ' +
+      '(elevador, luz, água) devem ser suportadas exclusivamente pelos condóminos desse bloco.<br>' +
+      '<span style="color:var(--amber);">⚠️ Escolher "Simples" pode ser inválido legalmente sem aprovação unânime em assembleia.</span>' +
+      '</div></div>';
+    // Sugerir visualmente o modo legal
+    wizSelectModo('legal');
+  } else {
+    div.style.display = 'none';
+  }
+}
+
+// Alerta quando gestor muda para simples tendo blocos detectados
+var _temBlocosDetectado = false;
+
 function wizSelectModo(modo) {
   document.getElementById('wiz-modo-calculo').value = modo;
   ['simples','legal','custom'].forEach(m => {
@@ -2009,6 +2036,8 @@ async function wizImportDoc(input, passo) {
           wizSelectEstrutura('blocos');
           if (json.num_blocos) document.getElementById('wiz-num-blocos').value = json.num_blocos;
           wizRenderBlocos();
+          _temBlocosDetectado = true;
+          wizSugerirModo(true, 'documento carregado');
         }
         if (json.num_pisos) { var pisosEl = document.getElementById('wiz-pisos'); if(pisosEl) pisosEl.value = json.num_pisos; }
         // Infraestruturas
@@ -2077,6 +2106,8 @@ async function wizImportDoc(input, passo) {
           wizSelectEstrutura('blocos');
           if (json.num_blocos) document.getElementById('wiz-num-blocos').value = json.num_blocos;
           wizRenderBlocos();
+          _temBlocosDetectado = true;
+          wizSugerirModo(true, 'documento carregado');
         }
         if (json.num_pisos) { var pisosEl = document.getElementById('wiz-pisos'); if(pisosEl) pisosEl.value = json.num_pisos; }
         // Infraestruturas
@@ -2143,7 +2174,7 @@ async function wizImportTitulo(input) {
           (json.num_fracoes?'🏠 Frações: <strong>'+json.num_fracoes+'</strong><br>':'')+
           (json.tem_blocos?'🏘️ Estrutura: <strong>Por blocos ('+json.num_blocos+')</strong><br>':'🏢 Estrutura: <strong>Edifício simples</strong><br>')+
           '</div><div style="font-size:11px;color:var(--t3);margin-top:6px;">Confirma os dados nos passos seguintes.</div>';
-        if (json.tem_blocos || (json.num_blocos && json.num_blocos > 1)) { wizSelectEstrutura('blocos'); if (json.num_blocos) document.getElementById('wiz-num-blocos').value = json.num_blocos; wizRenderBlocos(); }
+        if (json.tem_blocos || (json.num_blocos && json.num_blocos > 1)) { wizSelectEstrutura('blocos'); if (json.num_blocos) document.getElementById('wiz-num-blocos').value = json.num_blocos; wizRenderBlocos(); _temBlocosDetectado = true; wizSugerirModo(true, 'título constitutivo'); }
       }
     } catch(e) {
       document.getElementById('wiz-titulo-resultado').innerHTML = '<div style="color:var(--orange)">Não consegui extrair dados. Preenche manualmente.</div>';
