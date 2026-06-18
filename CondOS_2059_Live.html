@@ -1874,6 +1874,25 @@ function wizGerarResumo() {
 }
 
 
+// ===== NORMALIZAR DATA =====
+function normalizarData(dataStr) {
+  if (!dataStr) return '';
+  // Já está em YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dataStr)) return dataStr;
+  // DD-MM-YYYY ou DD/MM/YYYY
+  var m = dataStr.match(/^(\d{2})[-\/](\d{2})[-\/](\d{4})$/);
+  if (m) return m[3] + '-' + m[2] + '-' + m[1];
+  // DD de Mês de YYYY ou Mês YYYY
+  var meses = {janeiro:'01',fevereiro:'02',marco:'03','março':'03',abril:'04',maio:'05',junho:'06',
+    julho:'07',agosto:'08',setembro:'09',outubro:'10',novembro:'11',dezembro:'12'};
+  var m2 = dataStr.toLowerCase().match(/(\d{1,2})?\s*(?:de\s+)?(\w+)\s+(?:de\s+)?(\d{4})/);
+  if (m2) {
+    var mes = meses[m2[2].replace(/[^a-z]/g,'')];
+    if (mes) return m2[3] + '-' + mes + '-' + (m2[1] ? m2[1].padStart(2,'0') : '01');
+  }
+  return '';
+}
+
 // ===== CADERNETA PREDIAL =====
 async function wizImportCaderneta(input) {
   const file = input.files[0];
@@ -1993,7 +2012,7 @@ async function wizImportDoc(input, passo) {
         setIfVal('wiz-adm-nif', json.adm_nif);
         setIfVal('wiz-adm-email', json.adm_email);
         setIfVal('wiz-adm-tel', json.adm_tel);
-        setIfVal('wiz-adm-inicio', json.adm_inicio);
+        setIfVal('wiz-adm-inicio', normalizarData(json.adm_inicio));
         setIfVal('wiz-cf-pres', json.cf_presidente);
         setIfVal('wiz-cf-vogal1', json.cf_vogal1);
         setIfVal('wiz-cf-vogal2', json.cf_vogal2);
@@ -2036,7 +2055,7 @@ async function wizImportDoc(input, passo) {
         setIfVal('wiz-adm-nif', json.adm_nif);
         setIfVal('wiz-adm-email', json.adm_email);
         setIfVal('wiz-adm-tel', json.adm_tel);
-        setIfVal('wiz-adm-inicio', json.adm_inicio);
+        setIfVal('wiz-adm-inicio', normalizarData(json.adm_inicio));
         setIfVal('wiz-cf-pres', json.cf_presidente);
         setIfVal('wiz-cf-vogal1', json.cf_vogal1);
         setIfVal('wiz-cf-vogal2', json.cf_vogal2);
