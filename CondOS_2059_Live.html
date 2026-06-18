@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.x/tabler-icons.min.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
@@ -1947,7 +1947,7 @@ async function pdfParaImagemBase64(file, numPaginas) {
         // Configurar worker
         if (!window.pdfjsLib) { reject(new Error('PDF.js não carregou. Tenta recarregar a página.')); return; }
         if (window.pdfjsLib) {
-          pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+          pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
         }
         var pdf = await pdfjsLib.getDocument({ data: pdfData }).promise;
         var totalPags = Math.min(pdf.numPages, numPaginas);
@@ -2040,7 +2040,18 @@ async function wizImportDoc(input, passo) {
   if (file.type === 'application/pdf') {
     toast('PDF detectado — a IA vai analisar...','ok');
     try {
-      var imagens = await pdfParaImagemBase64(file, 2);
+      var imagens;
+      try {
+        imagens = await pdfParaImagemBase64(file, 2);
+      } catch(pdfErr2) {
+        console.warn('PDF.js falhou em wizImportDoc, a usar base64:', pdfErr2.message);
+        imagens = await new Promise(function(res, rej) {
+          var r2 = new FileReader();
+          r2.onload = function(e) { res([e.target.result.split(',')[1]]); };
+          r2.onerror = rej;
+          r2.readAsDataURL(file);
+        });
+      }
       // Enviar primeira página ao Gemini
       const base64 = imagens[0];
       const prompt = prompts[passo] || prompts.p1;
@@ -2140,8 +2151,21 @@ async function wizImportTitulo(input) {
   };
   if (file.type === 'application/pdf') {
     document.getElementById('wiz-titulo-resultado').innerHTML = '<div class="loading"><div class="spin"></div>A IA está a analisar o PDF...</div>';
+    toast('A IA está a ler o documento...', 'ok');
     try {
-      var imagens = await pdfParaImagemBase64(file, 3);
+      var imagens;
+      try {
+        imagens = await pdfParaImagemBase64(file, 3);
+      } catch(pdfErr) {
+        // Fallback: ler PDF como base64 directo
+        console.warn('PDF.js falhou, a usar base64 directo:', pdfErr.message);
+        imagens = await new Promise(function(res, rej) {
+          var r = new FileReader();
+          r.onload = function(e) { res([e.target.result.split(',')[1]]); };
+          r.onerror = rej;
+          r.readAsDataURL(file);
+        });
+      }
       // Combinar análise das primeiras páginas
       var resultados = [];
       for (var pi = 0; pi < imagens.length; pi++) {
