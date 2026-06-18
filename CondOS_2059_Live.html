@@ -1879,18 +1879,19 @@ async function pdfParaImagemBase64(file, numPaginas) {
 async function wizImportDoc(input, passo) {
   const file = input.files[0];
   if (!file) return;
+  // Prompts no scope global da função — acessíveis em todos os branches
+  const prompts = {
+    p1: 'Analisa este documento e extrai: nome do condomínio, morada completa, código postal, cidade, NIF do condomínio. Devolve JSON: {"nome":"","morada":"","cp":"","cidade":"","nif":""}',
+    p2: 'Analisa este documento e extrai: número de blocos/entradas, número de pisos, número de elevadores, número de frações. Devolve JSON: {"num_blocos":0,"num_pisos":0,"num_elevadores":0,"num_fracoes":0}',
+    p4: 'Analisa esta ata e extrai: nome do administrador eleito, email se visível, data do início do mandato, nome do presidente do conselho fiscal. Devolve JSON: {"adm_nome":"","adm_email":"","adm_inicio":"","cf_presidente":""}',
+    p5: 'Analisa este documento e extrai dados de elevadores: marca, modelo, ano instalação, data última inspecção. Devolve JSON: {"marca":"","modelo":"","ano_instalacao":0,"ultima_inspeccao":""}',
+    p6: 'Analisa este documento e extrai o IBAN da conta bancária. Devolve JSON: {"iban":""}'
+  };
   const reader = new FileReader();
   reader.onload = async e => {
     const base64 = e.target.result.split(',')[1];
     toast('A IA está a analisar o documento...','ok');
     try {
-      const prompts = {
-        p1: 'Analisa este documento e extrai: nome do condomínio, morada completa, código postal, cidade, NIF do condomínio. Devolve JSON: {"nome":"","morada":"","cp":"","cidade":"","nif":""}',
-        p2: 'Analisa este documento e extrai: número de blocos/entradas, número de pisos, número de elevadores, número de frações. Devolve JSON: {"num_blocos":0,"num_pisos":0,"num_elevadores":0,"num_fracoes":0}',
-        p4: 'Analisa esta ata e extrai: nome do administrador eleito, email se visível, data do início do mandato, nome do presidente do conselho fiscal. Devolve JSON: {"adm_nome":"","adm_email":"","adm_inicio":"","cf_presidente":""}',
-        p5: 'Analisa este documento e extrai dados de elevadores: marca, modelo, ano instalação, data última inspecção. Devolve JSON: {"marca":"","modelo":"","ano_instalacao":0,"ultima_inspeccao":""}',
-        p6: 'Analisa este documento e extrai o IBAN da conta bancária. Devolve JSON: {"iban":""}'
-      };
       const prompt = prompts[passo] || prompts.p1;
       const res = await fetch(PROXY_URL, {
         method:'POST', headers:PROXY_HEADERS,
