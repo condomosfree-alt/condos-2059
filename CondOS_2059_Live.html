@@ -1957,7 +1957,7 @@ async function wizImportDoc(input, passo) {
   const prompts = {
     p1: 'Analisa este documento e extrai: nome do condomínio, morada completa (só rua e número), código postal (formato XXXX-XXX), cidade, NIF do condomínio (9 dígitos). Devolve APENAS JSON sem texto adicional: {"nome":"","morada":"","cp":"","cidade":"","nif":""}',
     p2: 'Analisa este documento e extrai: número de blocos/entradas, número de pisos, número de elevadores, número de frações. Devolve JSON: {"num_blocos":0,"num_pisos":0,"num_elevadores":0,"num_fracoes":0}',
-    p4: 'Analisa esta ata e extrai: nome do administrador eleito, email se visível, data do início do mandato, nome do presidente do conselho fiscal. Devolve JSON: {"adm_nome":"","adm_email":"","adm_inicio":"","cf_presidente":""}',
+    p4: 'Analisa esta ata de assembleia de condóminos portuguesa. Procura especificamente: 1) O nome do administrador ELEITO (procura frases como "foi eleito", "eleicao de", "administrador"). 2) O NIF/numero de identificacao fiscal do administrador (9 digitos). 3) A data da assembleia ou inicio do mandato - converte SEMPRE para formato YYYY-MM-DD (ex: Janeiro 2022 = 2022-01-01, 28 de Janeiro de 2022 = 2022-01-28). 4) Presidente do Conselho Fiscal. 5) Vogais do Conselho Fiscal (Vogal 1 e Vogal 2). Devolve APENAS JSON sem texto adicional: {"adm_nome":"","adm_nif":"","adm_email":"","adm_tel":"","adm_inicio":"","cf_presidente":"","cf_vogal1":"","cf_vogal2":""}',
     p5: 'Analisa este documento e extrai dados de elevadores: marca, modelo, ano instalação, data última inspecção. Devolve JSON: {"marca":"","modelo":"","ano_instalacao":0,"ultima_inspeccao":""}',
     p6: 'Analisa este documento e extrai o IBAN da conta bancária. Devolve JSON: {"iban":""}'
   };
@@ -1988,10 +1988,16 @@ async function wizImportDoc(input, passo) {
         if (json.num_fracoes) document.getElementById('wiz-fracoes').value = json.num_fracoes;
         if (json.num_pisos) document.getElementById('wiz-pisos').value = json.num_pisos;
       } else if (passo === 'p4') {
-        if (json.adm_nome) document.getElementById('wiz-adm-nome').value = json.adm_nome;
-        if (json.adm_email) document.getElementById('wiz-adm-email').value = json.adm_email;
-        if (json.adm_inicio) document.getElementById('wiz-adm-inicio').value = json.adm_inicio;
-        if (json.cf_presidente) document.getElementById('wiz-cf-pres').value = json.cf_presidente;
+        var setIfVal = function(id, val) { if (val) { var el = document.getElementById(id); if(el) el.value = val; } };
+        setIfVal('wiz-adm-nome', json.adm_nome);
+        setIfVal('wiz-adm-nif', json.adm_nif);
+        setIfVal('wiz-adm-email', json.adm_email);
+        setIfVal('wiz-adm-tel', json.adm_tel);
+        setIfVal('wiz-adm-inicio', json.adm_inicio);
+        setIfVal('wiz-cf-pres', json.cf_presidente);
+        setIfVal('wiz-cf-vogal1', json.cf_vogal1);
+        setIfVal('wiz-cf-vogal2', json.cf_vogal2);
+        toast('✅ Dados da administração extraídos! Confirma e corrige se necessário.', 'ok');
       } else if (passo === 'p6') {
         if (json.iban) { document.getElementById('wiz-iban-op').value = json.iban; }
       }
@@ -2025,10 +2031,16 @@ async function wizImportDoc(input, passo) {
         if (json.num_fracoes) document.getElementById('wiz-fracoes').value = json.num_fracoes;
         if (json.num_pisos) document.getElementById('wiz-pisos').value = json.num_pisos;
       } else if (passo === 'p4') {
-        if (json.adm_nome) document.getElementById('wiz-adm-nome').value = json.adm_nome;
-        if (json.adm_email) document.getElementById('wiz-adm-email').value = json.adm_email;
-        if (json.adm_inicio) document.getElementById('wiz-adm-inicio').value = json.adm_inicio;
-        if (json.cf_presidente) document.getElementById('wiz-cf-pres').value = json.cf_presidente;
+        var setIfVal = function(id, val) { if (val) { var el = document.getElementById(id); if(el) el.value = val; } };
+        setIfVal('wiz-adm-nome', json.adm_nome);
+        setIfVal('wiz-adm-nif', json.adm_nif);
+        setIfVal('wiz-adm-email', json.adm_email);
+        setIfVal('wiz-adm-tel', json.adm_tel);
+        setIfVal('wiz-adm-inicio', json.adm_inicio);
+        setIfVal('wiz-cf-pres', json.cf_presidente);
+        setIfVal('wiz-cf-vogal1', json.cf_vogal1);
+        setIfVal('wiz-cf-vogal2', json.cf_vogal2);
+        toast('✅ Dados da administração extraídos! Confirma e corrige se necessário.', 'ok');
       } else if (passo === 'p6') {
         if (json.iban) document.getElementById('wiz-iban-op').value = json.iban;
       }
@@ -3432,10 +3444,14 @@ var _qrFracaoId = '';
 function gerarQRCondomino(fracaoId) {
   const f = fracoes.find(x=>x.id===fracaoId);
   if (!f) return;
-  // URL da página pública — após deploy no Netlify
-  const baseUrl = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost' || window.location.protocol === 'file:'
-    ? 'https://funny-cajeta-00a573.netlify.app'
-    : window.location.origin;
+  // URL da página pública — detecta automaticamente o ambiente
+  const isLocal = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost' || window.location.protocol === 'file:';
+  const isGithubPages = window.location.hostname.includes('github.io');
+  const baseUrl = isLocal
+    ? 'https://condomosfree-alt.github.io/condos-2059'
+    : isGithubPages
+      ? window.location.origin + '/condos-2059'
+      : window.location.origin;
   const url = baseUrl + '/ficha.html?condo=' + encodeURIComponent(currentCondo.id) + '&fracao=' + encodeURIComponent(f.id) + '&codigo=' + encodeURIComponent(f.codigo||'') + '&bloco=' + encodeURIComponent(f.bloco||'');
   _qrLinkActual = url;
   _qrFracaoId = fracaoId;
@@ -3912,9 +3928,11 @@ async function notificarTodos() {
 
   for (var i = 0; i < temContacto.length; i++) {
     var f = temContacto[i];
-    var baseUrl = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost' || window.location.protocol === 'file:'
-      ? 'https://funny-cajeta-00a573.netlify.app'
-      : window.location.origin;
+    var isLocal2 = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost' || window.location.protocol === 'file:';
+    var isGithub2 = window.location.hostname.includes('github.io');
+    var baseUrl = isLocal2
+      ? 'https://condomosfree-alt.github.io/condos-2059'
+      : isGithub2 ? window.location.origin + '/condos-2059' : window.location.origin;
     var url = baseUrl + '/ficha.html?condo=' + encodeURIComponent(currentCondo.id) +
       '&fracao=' + encodeURIComponent(f.id) +
       '&codigo=' + encodeURIComponent(f.codigo||'') +
