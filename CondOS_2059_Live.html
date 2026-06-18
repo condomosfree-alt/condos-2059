@@ -315,8 +315,9 @@ textarea.fi{resize:vertical;min-height:60px;}
         </div>
         <div class="fg-row">
           <div class="fg"><label>NIF do Condomínio</label><input class="fi" id="wiz-nif" placeholder="5XXXXXXXX"></div>
-          <div class="fg"><label>Ano de Construção</label><input class="fi" id="wiz-ano" type="number" placeholder="Ex: 1995"></div>
         </div>
+        <!-- Campo oculto para manter compatibilidade -->
+        <input type="hidden" id="wiz-ano" value="">
       </div>
 
       <!-- PASSO 2 -->
@@ -738,6 +739,36 @@ textarea.fi{resize:vertical;min-height:60px;}
 
               <div id="ed-info-pisos" style="margin-top:12px;background:var(--cdim);border:1px solid rgba(0,212,255,.15);border-radius:8px;padding:10px 12px;font-size:11px;color:var(--t2);line-height:1.7;display:none;">
               </div>
+            </div>
+          </div>
+
+          <!-- PAINEL CADERNETA PREDIAL -->
+          <div class="panel" style="margin-top:12px;">
+            <div class="ph" style="display:flex;justify-content:space-between;align-items:center;">
+              <span class="pt">📋 Caderneta Predial <span style="font-size:10px;color:var(--t3);font-weight:400;">(AT — Autoridade Tributária)</span></span>
+              <label style="cursor:pointer;">
+                <input type="file" accept=".pdf,image/*" style="display:none;" onchange="wizImportCaderneta(this)">
+                <span class="btn-ghost" style="display:inline-flex;align-items:center;gap:6px;font-size:11px;padding:5px 10px;cursor:pointer;">
+                  <i class="ti ti-robot"></i> Carregar com IA
+                </span>
+              </label>
+            </div>
+            <div style="padding:16px;">
+              <div id="ed-caderneta-resultado" style="display:none;margin-bottom:12px;"></div>
+              <div class="form-row">
+                <div class="fl"><label>Ano de Construção</label><input class="fi" id="ed-ano" type="number" placeholder="Ex: 1998" oninput="calcularAlturaEdificio()"></div>
+                <div class="fl"><label>Ano de Inscrição na Matriz</label><input class="fi" id="ed-ano-inscricao" type="number" placeholder="Ex: 2001"></div>
+              </div>
+              <div class="form-row">
+                <div class="fl"><label>Artigo Matricial</label><input class="fi" id="ed-artigo-matricial" placeholder="Ex: 4521"></div>
+                <div class="fl"><label>Valor Patrimonial Total (€)</label><input class="fi" id="ed-vpt" type="number" step="0.01" placeholder="Ex: 1190600"></div>
+              </div>
+              <div class="form-row">
+                <div class="fl"><label>Área Bruta Total (m²)</label><input class="fi" id="ed-area-total" type="number" step="0.01" placeholder="Ex: 1560"></div>
+                <div class="fl"><label>Área Privativa Total (m²)</label><input class="fi" id="ed-area-privativa" type="number" step="0.01" placeholder="Ex: 1182"></div>
+              </div>
+              <div class="fl"><label>IMI Anual Total (€)</label><input class="fi" id="ed-imi-anual" type="number" step="0.01" placeholder="Ex: 3433.30"></div>
+              <div style="font-size:10px;color:var(--t3);margin-top:8px;">💡 Estes dados são usados para cálculo de valor patrimonial por fração e estimativa de custos no orçamento anual.</div>
             </div>
           </div>
 
@@ -1843,6 +1874,49 @@ function wizGerarResumo() {
 }
 
 
+// ===== CADERNETA PREDIAL =====
+async function wizImportCaderneta(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const resultEl = document.getElementById('ed-caderneta-resultado');
+  if (resultEl) {
+    resultEl.style.display = 'block';
+    resultEl.innerHTML = '<div class="loading"><div class="spin"></div>A IA está a analisar a caderneta predial...</div>';
+  }
+  try {
+    var imagens = await pdfParaImagemBase64(file, 2);
+    var base64 = imagens[0];
+    var prompt = 'Analisa esta caderneta predial urbana portuguesa (AT). Extrai: ano de construção, ano de inscrição na matriz, artigo matricial, valor patrimonial tributário total, área bruta total em m2, área privativa total em m2, IMI anual total. Devolve APENAS JSON: {"ano_construcao":0,"ano_inscricao":0,"artigo_matricial":"","vpt":0,"area_total":0,"area_privativa":0,"imi_anual":0}';
+    var res = await fetch(PROXY_URL, {
+      method:'POST', headers:PROXY_HEADERS,
+      body: JSON.stringify({ prompt, foto: base64, tipo: 'caderneta_import' })
+    });
+    var data = await res.json();
+    var text = data.text || '';
+    var start = text.indexOf('{'); var end = text.lastIndexOf('}');
+    if (start === -1) throw new Error('Não encontrei dados na caderneta');
+    var json = JSON.parse(text.slice(start, end+1));
+    var set = function(id, val) { var el = document.getElementById(id); if(el && val) el.value = val; };
+    set('ed-ano', json.ano_construcao);
+    set('ed-ano-inscricao', json.ano_inscricao);
+    set('ed-artigo-matricial', json.artigo_matricial);
+    set('ed-vpt', json.vpt);
+    set('ed-area-total', json.area_total);
+    set('ed-area-privativa', json.area_privativa);
+    set('ed-imi-anual', json.imi_anual);
+    if (json.ano_construcao) calcularAlturaEdificio();
+    if (resultEl) resultEl.innerHTML =
+      '<div style="background:var(--gdim);border:1px solid rgba(0,230,118,.3);border-radius:8px;padding:10px 12px;font-size:11px;color:var(--green);">' +
+      '✅ Caderneta analisada! Ano: <strong>' + (json.ano_construcao||'—') + '</strong> · ' +
+      'VPT: <strong>' + (json.vpt ? json.vpt.toLocaleString('pt-PT') + ' €' : '—') + '</strong> · ' +
+      'Área: <strong>' + (json.area_total ? json.area_total + ' m²' : '—') + '</strong>' +
+      '<br><span style="font-size:10px;color:var(--t3);">Confirma os valores antes de guardar.</span></div>';
+  } catch(err) {
+    if (resultEl) resultEl.innerHTML =
+      '<div style="background:var(--rdim);border:1px solid rgba(255,68,68,.3);border-radius:8px;padding:10px 12px;font-size:11px;color:var(--red);">⚠️ ' + err.message + '</div>';
+  }
+}
+
 // ===== PDF → IMAGEM (para IA) =====
 async function pdfParaImagemBase64(file, numPaginas) {
   numPaginas = numPaginas || 2;
@@ -1881,7 +1955,7 @@ async function wizImportDoc(input, passo) {
   if (!file) return;
   // Prompts no scope global da função — acessíveis em todos os branches
   const prompts = {
-    p1: 'Analisa este documento e extrai: nome do condomínio, morada completa, código postal, cidade, NIF do condomínio. Devolve JSON: {"nome":"","morada":"","cp":"","cidade":"","nif":""}',
+    p1: 'Analisa este documento e extrai: nome do condomínio, morada completa (só rua e número), código postal (formato XXXX-XXX), cidade, NIF do condomínio (9 dígitos). Devolve APENAS JSON sem texto adicional: {"nome":"","morada":"","cp":"","cidade":"","nif":""}',
     p2: 'Analisa este documento e extrai: número de blocos/entradas, número de pisos, número de elevadores, número de frações. Devolve JSON: {"num_blocos":0,"num_pisos":0,"num_elevadores":0,"num_fracoes":0}',
     p4: 'Analisa esta ata e extrai: nome do administrador eleito, email se visível, data do início do mandato, nome do presidente do conselho fiscal. Devolve JSON: {"adm_nome":"","adm_email":"","adm_inicio":"","cf_presidente":""}',
     p5: 'Analisa este documento e extrai dados de elevadores: marca, modelo, ano instalação, data última inspecção. Devolve JSON: {"marca":"","modelo":"","ano_instalacao":0,"ultima_inspeccao":""}',
@@ -4213,7 +4287,10 @@ function loadEdificio() {
 
   // Geral
   set('ed-nome', c.nome); set('ed-nif', c.nif); set('ed-morada', c.morada);
-  set('ed-ano', c.ano_construcao); set('ed-conservacao', c.conservacao);
+  set('ed-ano', c.ano_construcao); set('ed-ano-inscricao', c.ano_inscricao);
+  set('ed-artigo-matricial', c.artigo_matricial); set('ed-vpt', c.vpt);
+  set('ed-area-total', c.area_total); set('ed-area-privativa', c.area_privativa);
+  set('ed-imi-anual', c.imi_anual); set('ed-conservacao', c.conservacao);
   set('ed-pisos-acima', c.num_pisos); set('ed-pisos-sub', c.num_pisos_sub || 0);
   set('ed-tem-rc', c.tem_rc || 'sim'); set('ed-frentes', c.num_frentes);
   set('ed-entradas-bloco', c.entradas_por_bloco); set('ed-entradas-garagem', c.entradas_garagem || 0);
@@ -4277,6 +4354,9 @@ async function saveEdificio() {
 
   var payload = {
     nif: g('ed-nif'), conservacao: g('ed-conservacao'),
+    ano_inscricao: gi('ed-ano-inscricao'), artigo_matricial: g('ed-artigo-matricial'),
+    vpt: gn('ed-vpt'), area_total: gn('ed-area-total'),
+    area_privativa: gn('ed-area-privativa'), imi_anual: gn('ed-imi-anual'),
     num_pisos: gi('ed-pisos-acima'), num_pisos_sub: gi('ed-pisos-sub'),
     tem_rc: g('ed-tem-rc'), num_frentes: gi('ed-frentes'),
     entradas_por_bloco: gi('ed-entradas-bloco'),
