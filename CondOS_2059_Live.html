@@ -1996,15 +1996,19 @@ async function importarFracoesPDF(input) {
       var f = todasFracoes[fi];
       var payload = {
         condominio_id: currentCondo.id,
-        codigo: f.codigo,
+        codigo: f.codigo.trim(),
         bloco: f.bloco || null,
         descricao: f.descricao || null,
-        permilagem: parseFloat(f.permilagem) || null,
-        tipo: 'habitacao',
+        permilagem: parseFloat(f.permilagem) || 0,
+        tipo: f.tipo || 'Habitação',
+        proprietario_nome: '',
+        quota_mensal: 0,
+        portal_pin: '1234',
         ativa: true
       };
       var r = await sb.from('fracoes').insert(payload);
-      if (!r.error) inseridas++;
+      if (!r.error) { inseridas++; }
+      else { console.error('Erro fração ' + f.codigo + ':', r.error.message); }
     }
     toast('✅ ' + inseridas + ' frações importadas com sucesso!', 'ok');
     loadFracoes();
