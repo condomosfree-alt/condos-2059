@@ -999,22 +999,49 @@ textarea.fi{resize:vertical;min-height:60px;}
 
       <!-- QUOTAS -->
       <div class="page" id="page-quotas">
-        <div class="sec-hdr"><span class="sec-t">Quotas</span></div>
-        <div class="panel" style="margin-bottom:16px;">
-          <div class="ph"><span class="pt">Configuração</span></div>
-          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
-            <div class="fg"><label>Orçamento Anual (€)</label><input class="fi" id="q-orcamento" type="number" placeholder="17920" oninput="recalcularQuotasLive()"></div>
-            <div class="fg"><label>FCR % (mín. 10%)</label><input class="fi" id="fcr-pct" type="number" value="10" min="10" max="100" step="0.5" oninput="recalcularQuotasLive()"></div>
-            <div class="fg"><label>Ano</label><input class="fi" id="q-ano" type="number" value="2026"></div>
-          </div>
-          <div style="display:flex;gap:8px;margin-top:8px;">
-            <button class="btn-ghost" onclick="calcularQuotas()"><i class="ti ti-calculator"></i>Calcular por Rubricas</button>
-            <button class="btn-primary" onclick="guardarTodasQuotas()"><i class="ti ti-check"></i>Guardar Quotas</button>
+        <div class="sec-hdr">
+          <span class="sec-t">Quotas e Pagamentos</span>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <select class="fi" id="q-mes-sel" style="width:160px;" onchange="loadQuotas()"></select>
+            <button class="btn-ghost" onclick="openModal('mo-emitir')" style="display:inline-flex;align-items:center;gap:6px;"><i class="ti ti-send"></i>Emitir Mês</button>
+            <button class="btn-primary" onclick="openModal('mo-quota')" style="display:inline-flex;align-items:center;gap:6px;"><i class="ti ti-plus"></i>Registar Pagamento</button>
           </div>
         </div>
+
+        <!-- KPIs -->
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;">
+          <div class="kpi" style="border-top:2px solid var(--cyan);">
+            <div class="kpi-label">Emitido</div>
+            <div class="kpi-val" id="q-emitido">0<span>€</span></div>
+            <div style="font-size:10px;color:var(--t3);margin-top:2px;" id="q-mes-label">—</div>
+          </div>
+          <div class="kpi" style="border-top:2px solid var(--green);">
+            <div class="kpi-label">Cobrado</div>
+            <div class="kpi-val" id="q-cobrado">0<span>€</span></div>
+            <div style="font-size:10px;color:var(--t3);margin-top:2px;">Recebido</div>
+          </div>
+          <div class="kpi" style="border-top:2px solid var(--red);">
+            <div class="kpi-label">Em Dívida</div>
+            <div class="kpi-val" id="q-divida">0<span>€</span></div>
+            <div style="font-size:10px;color:var(--t3);margin-top:2px;">Por cobrar</div>
+          </div>
+          <div class="kpi" style="border-top:2px solid var(--amber);">
+            <div class="kpi-label">Taxa Cobrança</div>
+            <div class="kpi-val" id="q-taxa">0<span>%</span></div>
+            <div style="font-size:10px;color:var(--t3);margin-top:2px;">Este mês</div>
+          </div>
+        </div>
+
+        <!-- Lista -->
         <div class="panel">
-          <div class="ph"><span class="pt">Lista de Quotas</span><span class="pm" id="q-total-anual">—</span></div>
-          <div id="quotas-list"><div class="loading"><div class="spin"></div></div></div>
+          <div class="ph">
+            <span class="pt">Quotas — <span id="q-mes-label2" style="color:var(--cyan);">selecciona um mês</span></span>
+            <div style="display:flex;gap:6px;">
+              <button class="btn-ghost" onclick="notificarDevedores()" style="font-size:11px;padding:5px 10px;display:inline-flex;align-items:center;gap:4px;"><i class="ti ti-bell"></i>Alertar Devedores</button>
+              <button class="btn-ghost" onclick="exportarQuotasPDF()" style="font-size:11px;padding:5px 10px;display:inline-flex;align-items:center;gap:4px;"><i class="ti ti-file-text"></i>Exportar PDF</button>
+            </div>
+          </div>
+          <div id="quotas-list" style="padding:8px 0;"><div class="empty-state"><i class="ti ti-receipt-2" style="font-size:32px;color:var(--t3);"></i><div style="margin-top:8px;color:var(--t3);">Selecciona um mês ou emite as quotas</div></div></div>
         </div>
       </div>
 
@@ -3843,12 +3870,34 @@ function populateQpFracao() {
   sel.innerHTML = fracoes.map(f=>`<option value="${f.id}">${f.codigo} — ${f.proprietario_nome||'?'}</option>`).join('');
 }
 
+function initQuotasMesSel() {
+  var sel = document.getElementById('q-mes-sel');
+  if (!sel || sel.options.length > 1) return;
+  var meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  var hoje = new Date();
+  sel.innerHTML = '<option value="">— Seleccionar mês —</option>';
+  for (var y = hoje.getFullYear(); y >= hoje.getFullYear()-1; y--) {
+    for (var m = 12; m >= 1; m--) {
+      if (y === hoje.getFullYear() && m > hoje.getMonth()+2) continue;
+      var val = m + '-' + y;
+      var opt = document.createElement('option');
+      opt.value = val;
+      opt.textContent = meses[m-1] + ' ' + y;
+      if (m === hoje.getMonth()+1 && y === hoje.getFullYear()) opt.selected = true;
+      sel.appendChild(opt);
+    }
+  }
+}
+
 async function loadQuotas() {
   if (!currentCondo) return;
+  initQuotasMesSel();
   const val = document.getElementById('q-mes-sel').value;
   if (!val) return;
   const [mes, ano] = val.split('-').map(Number);
-  document.getElementById('q-mes-label').textContent = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'][mes-1]+' '+ano;
+  var mesNome = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'][mes-1]+' '+ano;
+  document.getElementById('q-mes-label').textContent = mesNome;
+  var l2 = document.getElementById('q-mes-label2'); if(l2) l2.textContent = mesNome;
   const { data: qs } = await sb.from('quotas').select('*, fracoes(codigo,proprietario_nome)').eq('condominio_id',currentCondo.id).eq('mes',mes).eq('ano',ano);
   const quotas = qs || [];
   const totalEmitido = quotas.reduce((s,q)=>s+parseFloat(q.valor_emitido||0),0);
@@ -3896,6 +3945,50 @@ async function saveQuota() {
   closeModal('mo-quota');
   toast('Pagamento registado!','ok');
   loadQuotas(); loadDashboard(); loadMovimentos(); updateBadges();
+}
+
+async function notificarDevedores() {
+  if (!currentCondo) return;
+  var val = document.getElementById('q-mes-sel') ? document.getElementById('q-mes-sel').value : '';
+  if (!val) { toast('Selecciona um mês primeiro', 'err'); return; }
+  var parts = val.split('-'); var mes = parseInt(parts[0]); var ano = parseInt(parts[1]);
+  var { data: qs } = await sb.from('quotas').select('*, fracoes(codigo,proprietario_nome,proprietario_email,proprietario_tel)').eq('condominio_id',currentCondo.id).eq('mes',mes).eq('ano',ano).in('estado',['pendente','atraso','parcial']);
+  if (!qs || !qs.length) { toast('Sem devedores este mês! ✅', 'ok'); return; }
+  var enviados = 0;
+  var mesesNomes = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  for (var i = 0; i < qs.length; i++) {
+    var q = qs[i];
+    var f = q.fracoes;
+    if (!f) continue;
+    var em = f.proprietario_email;
+    var saldo = parseFloat(q.valor_emitido) - parseFloat(q.valor_pago||0);
+    if (em && _gmailToken) {
+      var assunto = 'Quota em atraso — ' + mesesNomes[mes-1] + '/' + ano + ' — ' + (currentCondo.nome||'Condomínio');
+      var corpo = '<div style="font-family:Arial,sans-serif;max-width:600px;">' +
+        '<div style="background:#080d14;padding:20px;border-radius:8px 8px 0 0;"><h2 style="color:#00d4ff;margin:0;font-family:monospace;">COND.OS 2059</h2></div>' +
+        '<div style="background:#fff;padding:24px;border:1px solid #eee;border-radius:0 0 8px 8px;">' +
+        '<p>Exmo(a) Sr(a) <strong>' + (f.proprietario_nome||'Condómino') + '</strong>,</p>' +
+        '<p>A quota referente a <strong>' + mesesNomes[mes-1] + ' de ' + ano + '</strong> da fração <strong>' + f.codigo + '</strong> do ' + (currentCondo.nome||'condomínio') + ' encontra-se por liquidar.</p>' +
+        '<div style="background:#fff5f5;border:1px solid #ffcccc;border-radius:8px;padding:16px;margin:16px 0;">' +
+        '<div style="font-size:14px;color:#cc0000;font-weight:700;">Valor em dívida: ' + saldo.toFixed(2) + ' €</div>' +
+        '<div style="font-size:12px;color:#888;margin-top:4px;">Vencimento: dia ' + (currentCondo.dia_vencimento||8) + ' de cada mês</div></div>' +
+        '<p>Solicita-se a regularização da situação o mais breve possível.</p>' +
+        '<p>IBAN: <strong>' + (currentCondo.iban_operacional||'— consulte o administrador —') + '</strong></p>' +
+        '<hr style="border:none;border-top:1px solid #eee;margin:20px 0;">' +
+        '<p style="font-size:11px;color:#aaa;">Administração — ' + (currentCondo.nome||'') + '</p></div></div>';
+      var ok = await enviarEmailGmail(em, assunto, corpo);
+      if (ok) enviados++;
+    } else if (f.proprietario_tel) {
+      var msg = 'Quota ' + mesesNomes[mes-1] + '/' + ano + ' (Fr.' + f.codigo + ') — ' + saldo.toFixed(2) + '€ por pagar. Regularize brevemente. ' + (currentCondo.nome||'');
+      window.open('https://wa.me/351' + f.proprietario_tel.replace(/\D/g,'') + '?text=' + encodeURIComponent(msg));
+      enviados++;
+    }
+  }
+  toast(enviados > 0 ? '📨 ' + enviados + ' devedores notificados!' : 'Sem contactos registados nos devedores', enviados > 0 ? 'ok' : 'warn');
+}
+
+async function exportarQuotasPDF() {
+  toast('A gerar PDF... (em breve)', 'ok');
 }
 
 async function markPago(qid, val) {
@@ -6210,6 +6303,7 @@ function nav(p) {
   }
   if(p==='fracoes')renderFracoes();
   if(p==='edificio'){ loadEdificio(); }
+  if(p==='quotas'){ initQuotasMesSel(); loadQuotas(); }
   if(p==='definicoes')loadDefForm();
 }
 
