@@ -2052,7 +2052,7 @@ async function wizImportDoc(input, passo) {
       } else if (passo === 'p4') {
         var setIfVal = function(id, val) { if (val) { var el = document.getElementById(id); if(el) el.value = val; } };
         setIfVal('wiz-adm-nome', json.adm_nome);
-        setIfVal('wiz-adm-nif', json.adm_nif);
+        setIfVal('wiz-adm-nif', json.adm_nif); if (json.adm_nif) wizDetectarTipoGestao(json.adm_nif);
         setIfVal('wiz-adm-email', json.adm_email);
         setIfVal('wiz-adm-tel', json.adm_tel);
         setIfVal('wiz-adm-inicio', normalizarData(json.adm_inicio));
@@ -2122,7 +2122,7 @@ async function wizImportDoc(input, passo) {
       } else if (passo === 'p4') {
         var setIfVal = function(id, val) { if (val) { var el = document.getElementById(id); if(el) el.value = val; } };
         setIfVal('wiz-adm-nome', json.adm_nome);
-        setIfVal('wiz-adm-nif', json.adm_nif);
+        setIfVal('wiz-adm-nif', json.adm_nif); if (json.adm_nif) wizDetectarTipoGestao(json.adm_nif);
         setIfVal('wiz-adm-email', json.adm_email);
         setIfVal('wiz-adm-tel', json.adm_tel);
         setIfVal('wiz-adm-inicio', normalizarData(json.adm_inicio));
