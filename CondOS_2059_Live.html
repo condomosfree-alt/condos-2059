@@ -2859,6 +2859,34 @@ function calcularQuotasLive(input, fracId) {
   if (qfEl) qfEl.textContent = quotaFCR.toFixed(2)+'€';
 }
 
+async function sincronizarOrcamentoDeRubricas() {
+  // Se não tem orcamento_anual definido, vai buscar às rubricas
+  if (!currentCondo || parseFloat(currentCondo.orcamento_anual||0) > 0) return;
+  var ano = new Date().getFullYear();
+  var { data: rubricas } = await sb.from('orcamentos').select('valor_total,bloco').eq('condominio_id', currentCondo.id).eq('ano', ano);
+  if (!rubricas || !rubricas.length) return;
+  var totalGeral = 0;
+  var totalA = 0, totalB = 0, totalC = 0;
+  rubricas.forEach(function(r) {
+    var val = parseFloat(r.valor_total||0);
+    totalGeral += val;
+    if (r.bloco === 'A') totalA += val;
+    else if (r.bloco === 'B') totalB += val;
+    else if (r.bloco === 'C') totalC += val;
+  });
+  // Actualizar currentCondo com os totais calculados
+  if (totalGeral > 0) {
+    currentCondo.orcamento_anual = totalGeral;
+    if (totalA > 0) currentCondo.orcamento_bloco_a = totalA;
+    if (totalB > 0) currentCondo.orcamento_bloco_b = totalB;
+    if (totalC > 0) currentCondo.orcamento_bloco_c = totalC;
+    // Actualizar campo visual se existir
+    var el = document.getElementById('orcamento-anual');
+    if (el && !el.value) el.value = totalGeral;
+    console.log('Orçamento sincronizado das rubricas:', totalGeral);
+  }
+}
+
 async function calcularQuotas() {
   const fcr = parseFloat(document.getElementById('fcr-pct') ? document.getElementById('fcr-pct').value : 10) || 10;
   const orcManual = parseFloat(document.getElementById('orcamento-anual') ? document.getElementById('orcamento-anual').value : 0) || 0;
