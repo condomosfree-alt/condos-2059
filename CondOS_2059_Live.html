@@ -1742,8 +1742,9 @@ function validarNIF(nif) {
 
 function wizDetectarTipoGestao(nif) {
   var alertaEl = document.getElementById('wiz-nif-gestao-alerta');
-  if (!alertaEl) return;
-  var nifLimpo = (nif || '').replace(/[.\s\-]/g, '');
+  if (!alertaEl) { console.warn('wiz-nif-gestao-alerta nao encontrado!'); return; }
+  var nifLimpo = (nif || '').replace(/[\.\s\-]/g, '');
+  console.log('wizDetectarTipoGestao chamado:', nifLimpo);
   if (!nifLimpo || nifLimpo.length < 9) { alertaEl.style.display = 'none'; return; }
   var primeiro = nifLimpo[0];
   var tipoEl = document.getElementById('wiz-tipo-gestao');
@@ -1831,6 +1832,8 @@ function wizSelectModo(modo) {
 
 function wizSelectGestao(tipo) {
   document.getElementById('wiz-tipo-gestao').value = tipo;
+  var nifActual = document.getElementById('wiz-adm-nif') ? document.getElementById('wiz-adm-nif').value : '';
+  if (nifActual) wizDetectarTipoGestao(nifActual);
   const p = document.getElementById('wiz-gestao-propria');
   const e = document.getElementById('wiz-gestao-empresa');
   const er = document.getElementById('wiz-empresa-row');
