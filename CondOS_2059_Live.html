@@ -1729,6 +1729,42 @@ const wiz = {
   }
 };
 
+function validarNIF(nif) {
+  var n = (nif || '').replace(/[.\s\-]/g, '');
+  if (!/^\d{9}$/.test(n)) return false;
+  var soma = 0;
+  for (var i = 0; i < 8; i++) soma += parseInt(n[i]) * (9 - i);
+  var resto = soma % 11;
+  var controlo = resto < 2 ? 0 : 11 - resto;
+  return controlo === parseInt(n[8]);
+}
+
+function wizDetectarTipoGestao(nif) {
+  var alertaEl = document.getElementById('wiz-nif-gestao-alerta');
+  if (!alertaEl) return;
+  var nifLimpo = (nif || '').replace(/[.\s\-]/g, '');
+  if (!nifLimpo || nifLimpo.length < 9) { alertaEl.style.display = 'none'; return; }
+  var primeiro = nifLimpo[0];
+  var tipoEl = document.getElementById('wiz-tipo-gestao');
+  var tipoActual = tipoEl ? tipoEl.value : 'propria';
+  var isPessoal = ['1','2','3'].indexOf(primeiro) > -1;
+  var isEmpresa = ['5','6','7','8','9'].indexOf(primeiro) > -1;
+  if (!validarNIF(nifLimpo)) {
+    alertaEl.style.display = 'block';
+    alertaEl.innerHTML = '<div style="background:var(--rdim);border:1px solid rgba(255,68,68,.3);border-radius:8px;padding:10px 14px;font-size:11px;color:var(--red);line-height:1.7;">❌ <strong>NIF inválido</strong> — ' + nifLimpo + ' não passa na validação do dígito de controlo português. Verifica se o NIF está correcto.</div>';
+    return;
+  }
+  if (isPessoal && tipoActual === 'empresa') {
+    alertaEl.style.display = 'block';
+    alertaEl.innerHTML = '<div style="background:var(--adim);border:1px solid rgba(255,179,0,.3);border-radius:8px;padding:10px 14px;font-size:11px;color:var(--amber);line-height:1.7;">⚠️ O NIF <strong>' + nifLimpo + '</strong> é de uma <strong>pessoa singular</strong> (começa por ' + primeiro + '). Tens "Empresa Gestora" seleccionado — confirmas?<br><button onclick="wizSelectGestao(\'propria\');document.getElementById(\'wiz-nif-gestao-alerta\').style.display=\'none\';" style="margin-top:6px;padding:4px 10px;border:1px solid var(--amber);border-radius:6px;background:transparent;color:var(--amber);cursor:pointer;font-size:10px;">✓ Mudar para Gestão Própria</button></div>';
+  } else if (isEmpresa && tipoActual === 'propria') {
+    alertaEl.style.display = 'block';
+    alertaEl.innerHTML = '<div style="background:var(--adim);border:1px solid rgba(255,179,0,.3);border-radius:8px;padding:10px 14px;font-size:11px;color:var(--amber);line-height:1.7;">⚠️ O NIF <strong>' + nifLimpo + '</strong> é de uma <strong>empresa</strong> (começa por ' + primeiro + '). Tens "Gestão Própria" seleccionado — confirmas?<br><button onclick="wizSelectGestao(\'empresa\');document.getElementById(\'wiz-nif-gestao-alerta\').style.display=\'none\';" style="margin-top:6px;padding:4px 10px;border:1px solid var(--amber);border-radius:6px;background:transparent;color:var(--amber);cursor:pointer;font-size:10px;">✓ Mudar para Empresa Gestora</button></div>';
+  } else {
+    alertaEl.style.display = 'none';
+  }
+}
+
 function wizSelectEstrutura(tipo) {
   document.getElementById('wiz-estrutura').value = tipo;
   const s = document.getElementById('wiz-est-simples');
