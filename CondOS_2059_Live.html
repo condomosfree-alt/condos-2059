@@ -3937,6 +3937,22 @@ async function loadQuotas() {
   initQuotasMesSel();
   const val = document.getElementById('q-mes-sel').value;
   if (!val) return;
+  // Verificar se o mês actual já foi emitido
+  const hoje = new Date();
+  const mesActual = (hoje.getMonth()+1)+'-'+hoje.getFullYear();
+  if (val === mesActual) {
+    const { data: check } = await sb.from('quotas').select('id').eq('condominio_id',currentCondo.id).eq('mes',hoje.getMonth()+1).eq('ano',hoje.getFullYear()).limit(1);
+    if (!check || !check.length) {
+      const alertEl = document.getElementById('quotas-list');
+      if (alertEl) alertEl.innerHTML = '<div style="background:var(--adim);border:1px solid rgba(255,179,0,.3);border-radius:10px;padding:20px;text-align:center;margin:16px;">' +
+        '<div style="font-size:24px;margin-bottom:8px;">📋</div>' +
+        '<div style="font-weight:700;color:var(--amber);margin-bottom:6px;">Quotas de ' + ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'][hoje.getMonth()] + ' ainda não foram emitidas!</div>' +
+        '<div style="font-size:12px;color:var(--t2);margin-bottom:14px;">Clica em <strong>"Emitir Mês"</strong> para gerar as quotas de todas as frações e enviar emails automáticos.</div>' +
+        '<button class="btn-primary" onclick="openModal(&quot;mo-emitir&quot;)" style="display:inline-flex;align-items:center;gap:6px;"><i class="ti ti-send"></i>Emitir ' + ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][hoje.getMonth()] + ' ' + hoje.getFullYear() + '</button>' +
+        '</div>';
+      return;
+    }
+  }
   const [mes, ano] = val.split('-').map(Number);
   var mesNome = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'][mes-1]+' '+ano;
   document.getElementById('q-mes-label').textContent = mesNome;
