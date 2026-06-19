@@ -984,7 +984,11 @@ textarea.fi{resize:vertical;min-height:60px;}
         <div class="sec-hdr">
           <span class="sec-t">Frações</span>
           <div style="display:flex;gap:8px;">
-            <button class="btn-ghost" onclick="openModal('mo-foto')" title="Importar frações a partir de foto" style="display:inline-flex;align-items:center;gap:6px;"><i class="ti ti-camera"></i> 📷 Importar via IA</button>
+            <button class="btn-ghost" onclick="openModal('mo-foto')" title="Importar frações a partir de foto" style="display:inline-flex;align-items:center;gap:6px;"><i class="ti ti-camera"></i> 📷 Foto/Imagem</button>
+            <label style="cursor:pointer;">
+              <input type="file" accept=".pdf" style="display:none;" onchange="importarFracoesPDF(this)">
+              <span class="btn-ghost" style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;"><i class="ti ti-file-text"></i> 📄 Título Constitutivo</span>
+            </label>
             <button class="btn-primary" onclick="openModal('mo-fracao')" title="Adicionar nova fração" style="display:inline-flex;align-items:center;gap:6px;"><i class="ti ti-plus"></i> ➕ Nova Fração</button>
           </div>
         </div>
@@ -1940,6 +1944,75 @@ function wizGerarResumo() {
     '<div style="width:'+score+'%;height:6px;background:'+scoreColor+';border-radius:3px;transition:width .5s;"></div></div>';
 }
 
+
+// ===== IMPORTAR FRAÇÕES VIA PDF =====
+async function importarFracoesPDF(input) {
+  var file = input.files[0];
+  if (!file) return;
+  toast('A IA está a ler o título constitutivo...', 'ok');
+  try {
+    var imagens;
+    try {
+      imagens = await pdfParaImagemBase64(file, 4);
+    } catch(e) {
+      imagens = await new Promise(function(res, rej) {
+        var r = new FileReader();
+        r.onload = function(e2) { res([e2.target.result.split(',')[1]]); };
+        r.onerror = rej;
+        r.readAsDataURL(file);
+      });
+    }
+    var todasFracoes = [];
+    for (var pi = 0; pi < imagens.length; pi++) {
+      var prompt = 'Analisa esta página do título constitutivo de propriedade horizontal português. Extrai TODAS as frações com: codigo (letra da fração, ex: "A","B","C"), bloco (se existir, ex: "A","B"), descricao (ex: "R/c Esquerdo", "1.º Direito"), permilagem (número decimal, ex: 58.0). Devolve APENAS JSON: {"fracoes":[{"codigo":"","bloco":"","descricao":"","permilagem":0}]}';
+      var res = await fetch(PROXY_URL, {
+        method:'POST', headers:PROXY_HEADERS,
+        body: JSON.stringify({ prompt, foto: imagens[pi], tipo: 'titulo_fracoes' })
+      });
+      var data = await res.json();
+      var text = (data.text||'').replace(/^`{3}json\s*/,'').replace(/\s*`{3}$/,'').trim();
+      var start = text.indexOf('{'); var end = text.lastIndexOf('}');
+      if (start > -1 && end > start) {
+        try {
+          var json = JSON.parse(text.slice(start,end+1));
+          if (json.fracoes && json.fracoes.length) {
+            json.fracoes.forEach(function(f) {
+              if (f.codigo && !todasFracoes.find(function(x){return x.codigo===f.codigo && x.bloco===f.bloco;})) {
+                todasFracoes.push(f);
+              }
+            });
+          }
+        } catch(e) {}
+      }
+    }
+    if (!todasFracoes.length) { toast('Não consegui extrair frações. Tenta com a câmara.', 'warn'); return; }
+    // Mostrar preview e confirmar
+    var preview = todasFracoes.slice(0,5).map(function(f){ return f.codigo + (f.bloco?' Bl.'+f.bloco:'') + ' ('+f.permilagem+'‰)'; }).join(', ');
+    var msg = '\u2705 ' + todasFracoes.length + ' fra\u00e7\u00f5es detectadas!\n\n' + preview + (todasFracoes.length>5?'...':'')+'\n\nDeseja importar todas?';
+    if (!confirm(msg)) return;
+    // Inserir no Supabase
+    var inseridas = 0;
+    for (var fi = 0; fi < todasFracoes.length; fi++) {
+      var f = todasFracoes[fi];
+      var payload = {
+        condominio_id: currentCondo.id,
+        codigo: f.codigo,
+        bloco: f.bloco || null,
+        descricao: f.descricao || null,
+        permilagem: parseFloat(f.permilagem) || null,
+        tipo: 'habitacao',
+        ativa: true
+      };
+      var r = await sb.from('fracoes').insert(payload);
+      if (!r.error) inseridas++;
+    }
+    toast('✅ ' + inseridas + ' frações importadas com sucesso!', 'ok');
+    loadFracoes();
+  } catch(err) {
+    toast('Erro ao importar: ' + err.message, 'err');
+  }
+  input.value = '';
+}
 
 // ===== NORMALIZAR DATA =====
 function normalizarData(dataStr) {
