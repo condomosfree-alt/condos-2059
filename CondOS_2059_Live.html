@@ -2544,12 +2544,21 @@ function populateCondSel() {
   const sel = document.getElementById('cond-sel');
   sel.innerHTML = condominios.map(c => `<option value="${c.id}">${c.nome}</option>`).join('');
   if (currentCondo) sel.value = currentCondo.id;
-  document.getElementById('sb-cond-name').textContent = currentCondo ? currentCondo.nome : '—';
+  document.getElementById('sb-cond-name').textContent = currentCondo ? displayNomeCondo(currentCondo.nome) : '—';
+}
+
+function displayNomeCondo(nome) {
+  if (!nome) return '—';
+  // Remove prefixos redundantes num programa de gestão de condomínios
+  return nome
+    .replace(/^Condom[ií]nio\s+/i, '')
+    .replace(/^Cond\.?\s+/i, '')
+    .trim();
 }
 
 function switchCondo(id) {
   currentCondo = condominios.find(c => c.id === id);
-  document.getElementById('sb-cond-name').textContent = currentCondo ? currentCondo.nome : '—';
+  document.getElementById('sb-cond-name').textContent = currentCondo ? displayNomeCondo(currentCondo.nome) : '—';
   loadCondData();
   loadDefForm();
 }
