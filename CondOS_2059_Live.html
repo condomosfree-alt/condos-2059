@@ -459,9 +459,10 @@ textarea.fi{resize:vertical;min-height:60px;}
             <div class="fg"><label>Telefone</label><input class="fi" id="wiz-adm-tel" placeholder="9XX XXX XXX"></div>
           </div>
           <div class="fg-row">
-            <div class="fg"><label>NIF</label><input class="fi" id="wiz-adm-nif" placeholder="XXXXXXXXX"></div>
+            <div class="fg"><label>NIF</label><input class="fi" id="wiz-adm-nif" placeholder="XXXXXXXXX" oninput="wizDetectarTipoGestao(this.value)"></div>
             <div class="fg"><label>Início do Mandato</label><input class="fi" id="wiz-adm-inicio" type="date"></div>
           </div>
+          <div id="wiz-nif-gestao-alerta" style="display:none;margin-top:8px;"></div>
         </div>
         <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--b1);">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
