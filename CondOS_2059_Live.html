@@ -5007,7 +5007,12 @@ const RUBRICAS_LEGAL = {
   'elevador': { classificacao: 'bloco_obrigatorio', metodo: 'coeficiente_piso', alerta: false, lei: 'DL 320/2002 — Manutenção mensal + inspecção bianual obrigatórias. Exclusivo do bloco. R/C tipicamente isento por critério de uso (Art. 1424º CC).', periodicidade: 'mensal', isenta_rc: true },
   'energia eléctrica': { classificacao: 'bloco_obrigatorio', metodo: 'permilagem', alerta: false, lei: 'Art. 1424º CC — Energia das escadas é exclusiva do bloco.', periodicidade: 'mensal' },
   'energia electrica': { classificacao: 'bloco_obrigatorio', metodo: 'permilagem', alerta: false, lei: 'Art. 1424º CC — Energia das escadas é exclusiva do bloco.', periodicidade: 'mensal' },
+  'energia eletrica': { classificacao: 'bloco_obrigatorio', metodo: 'permilagem', alerta: false, lei: 'Art. 1424º CC — Energia das escadas é exclusiva do bloco.', periodicidade: 'mensal' },
+  'energia elétrica': { classificacao: 'bloco_obrigatorio', metodo: 'permilagem', alerta: false, lei: 'Art. 1424º CC — Energia das escadas é exclusiva do bloco.', periodicidade: 'mensal' },
   'energia escadas': { classificacao: 'bloco_obrigatorio', metodo: 'permilagem', alerta: false, lei: 'Art. 1424º CC — Energia das escadas é exclusiva do bloco.', periodicidade: 'mensal' },
+  'luz escadas': { classificacao: 'bloco_obrigatorio', metodo: 'permilagem', alerta: false, lei: 'Art. 1424º CC — Energia das escadas é exclusiva do bloco.', periodicidade: 'mensal' },
+  'electricidade': { classificacao: 'bloco_obrigatorio', metodo: 'permilagem', alerta: false, lei: 'Art. 1424º CC — Energia das escadas é exclusiva do bloco.', periodicidade: 'mensal' },
+  'eletricidade': { classificacao: 'bloco_obrigatorio', metodo: 'permilagem', alerta: false, lei: 'Art. 1424º CC — Energia das escadas é exclusiva do bloco.', periodicidade: 'mensal' },
   'energia garagem': { classificacao: 'comum', metodo: 'permilagem', alerta: false, lei: 'Art. 1424º CC — Energia da garagem é comum a todos os condóminos.', periodicidade: 'mensal' },
   'energia': { classificacao: 'bloco_obrigatorio', metodo: 'permilagem', alerta: true, lei: 'Art. 1424º CC — Verificar se é energia das escadas (bloco) ou da garagem (comum).', periodicidade: 'mensal' },
   'água': { classificacao: 'bloco_recomendado', metodo: 'permilagem', alerta: true, lei: 'Art. 1424º CC — Se contador único: comum a todos. Se contador por bloco: exclusivo do bloco. Verifique o título constitutivo.', periodicidade: 'mensal' },
@@ -5031,7 +5036,9 @@ const RUBRICAS_LEGAL = {
   'material': { classificacao: 'comum', metodo: 'permilagem', alerta: false, lei: 'Art. 1424º CC — Material de uso comum do edifício.', periodicidade: 'anual' },
   'serviços diversos': { classificacao: 'comum', metodo: 'permilagem', alerta: true, lei: 'Art. 1424º CC — Verificar se os serviços são comuns ou específicos de bloco.', periodicidade: 'anual' },
   'serviços': { classificacao: 'comum', metodo: 'permilagem', alerta: true, lei: 'Art. 1424º CC — Verificar natureza dos serviços para classificação correcta.', periodicidade: 'anual' },
-  'seguro': { classificacao: 'comum', metodo: 'permilagem', alerta: true, lei: 'Art. 1429º CC — Seguro contra incêndio OBRIGATÓRIO. Condómino com seguro individual próprio pode requerer isenção.', periodicidade: 'anual' },
+  'seguro': { classificacao: 'comum', metodo: 'permilagem', alerta: true, lei: 'Art. 1429º CC — Seguro contra incêndio OBRIGATÓRIO. Confirma que a apólice cobre o valor mínimo exigido.', periodicidade: 'anual' },
+  'seguro multiriscos': { classificacao: 'comum', metodo: 'permilagem', alerta: false, lei: 'Art. 1429º CC — Seguro multiriscos reconhecido como seguro de incêndio válido.', periodicidade: 'anual' },
+  'seguro multirisco': { classificacao: 'comum', metodo: 'permilagem', alerta: false, lei: 'Art. 1429º CC — Seguro multirisco reconhecido como seguro de incêndio válido.', periodicidade: 'anual' },
   'jardineiro': { classificacao: 'comum', metodo: 'permilagem', alerta: false, lei: 'Art. 1424º CC — Jardins exteriores são partes comuns do edifício.', periodicidade: 'mensal' },
   'jardim': { classificacao: 'comum', metodo: 'permilagem', alerta: false, lei: 'Art. 1424º CC — Jardins exteriores são partes comuns do edifício.', periodicidade: 'mensal' },
   'dedetização': { classificacao: 'comum', metodo: 'permilagem', alerta: false, lei: 'Art. 1424º CC — Controlo de pragas nas áreas comuns.', periodicidade: 'semestral' },
@@ -5096,7 +5103,12 @@ function sugerirClassificacao(nome) {
   const metEl = document.getElementById('rb-metodo');
   if (metEl) metEl.value = metodo;
   const rcEl = document.getElementById('rb-isenta-rc');
-  if (rcEl) rcEl.checked = info.isenta_rc || false;
+  if (rcEl) {
+    rcEl.checked = info.isenta_rc || false;
+    // Mostrar/esconder o campo conforme o tipo de rubrica
+    var rcRow = rcEl.closest ? rcEl.closest('.fl') || rcEl.parentElement : rcEl.parentElement;
+    if (rcRow) rcRow.style.display = info.isenta_rc ? 'block' : 'none';
+  }
   document.getElementById('rb-alerta-divergencia').style.display = 'none';
 }
 
