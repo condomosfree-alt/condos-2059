@@ -64,7 +64,7 @@ textarea.fi{resize:vertical;min-height:60px;}
 .sb-cond{padding:10px 16px;border-bottom:1px solid var(--b1);}
 .sb-cond-label{font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;}
 .cond-row{display:flex;align-items:center;gap:6px;}
-.cond-sel{flex:1;background:var(--s2);border:1px solid var(--b1);border-radius:6px;padding:6px 8px;color:var(--text);font-size:11px;font-weight:600;outline:none;cursor:pointer;}
+.cond-sel{flex:1;min-width:0;max-width:130px;background:var(--s2);border:1px solid var(--b1);border-radius:6px;padding:6px 8px;color:var(--text);font-size:11px;font-weight:600;outline:none;cursor:pointer;overflow:hidden;text-overflow:ellipsis;}
 .cond-add-btn{background:rgba(0,212,255,.08);border:1px solid rgba(0,212,255,.3);border-radius:6px;padding:4px 8px;height:26px;color:var(--cyan);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:4px;transition:all .2s;flex-shrink:0;font-size:10px;font-weight:600;white-space:nowrap;}
 .cond-add-btn:hover{border-color:var(--cyan);color:var(--cyan);}
 .sb-nav{flex:1;overflow-y:auto;padding:10px 8px;}
@@ -592,7 +592,7 @@ textarea.fi{resize:vertical;min-height:60px;}
       </div>
       <div style="margin-top:8px;display:flex;gap:4px;align-items:center;">
         <span class="pro-badge">PRO</span>
-        <span style="font-size:9px;color:var(--t3);">FREE</span>
+        <span id="plano-badge" style="font-size:9px;color:var(--t3);display:none;">FREE</span>
       </div>
     </div>
   </div>
