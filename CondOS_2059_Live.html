@@ -1965,10 +1965,10 @@ async function importarFracoesPDF(input) {
     }
     var todasFracoes = [];
     for (var pi = 0; pi < imagens.length; pi++) {
-      var prompt = 'Analisa esta página do título constitutivo de propriedade horizontal português. Extrai TODAS as frações com: codigo (letra da fração, ex: "A","B","C"), bloco (se existir, ex: "A","B"), descricao (ex: "R/c Esquerdo", "1.º Direito"), permilagem (número decimal, ex: 58.0). Devolve APENAS JSON: {"fracoes":[{"codigo":"","bloco":"","descricao":"","permilagem":0}]}';
+      var prompt = 'Analisa esta imagem de um documento de propriedade horizontal. Procura uma TABELA com colunas de frações. Para cada linha da tabela extrai: codigo (letra, ex: A, B, C, I, J, K, L), bloco (se houver coluna Bloco, ex: A ou B), descricao (ex: R/c Esquerdo, 1. Direito), permilagem (numero com decimais, ex: 58.0, 115.0). Ignora linhas de totais. Devolve APENAS JSON valido: {"fracoes":[{"codigo":"A","bloco":"A","descricao":"R/c Esquerdo","permilagem":58.0}]}';
       var res = await fetch(PROXY_URL, {
         method:'POST', headers:PROXY_HEADERS,
-        body: JSON.stringify({ prompt, foto: imagens[pi], tipo: 'titulo_fracoes' })
+        body: JSON.stringify({ prompt, foto: imagens[pi], tipo: 'fracao_import' })
       });
       var data = await res.json();
       var text = (data.text||'').replace(/^`{3}json\s*/,'').replace(/\s*`{3}$/,'').trim();
