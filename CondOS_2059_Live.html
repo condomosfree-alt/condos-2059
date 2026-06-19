@@ -8,6 +8,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
@@ -2090,9 +2091,8 @@ async function pdfParaImagemBase64(file, numPaginas) {
         var pdfData = new Uint8Array(e.target.result);
         // Configurar worker
         if (!window.pdfjsLib) { reject(new Error('PDF.js não carregou. Tenta recarregar a página.')); return; }
-        if (window.pdfjsLib) {
-          pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
-        }
+        // Usar workerSrc vazio para processar inline sem worker separado
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
         var pdf = await pdfjsLib.getDocument({ data: pdfData }).promise;
         var totalPags = Math.min(pdf.numPages, numPaginas);
         var canvas = document.createElement('canvas');
@@ -2190,13 +2190,8 @@ async function wizImportDoc(input, passo) {
       try {
         imagens = await pdfParaImagemBase64(file, 2);
       } catch(pdfErr2) {
-        console.warn('PDF.js falhou em wizImportDoc, a usar base64:', pdfErr2.message);
-        imagens = await new Promise(function(res, rej) {
-          var r2 = new FileReader();
-          r2.onload = function(e) { res([e.target.result.split(',')[1]]); };
-          r2.onerror = rej;
-          r2.readAsDataURL(file);
-        });
+        console.warn('PDF.js falhou:', pdfErr2.message);
+        throw new Error('Não foi possível ler o PDF. Tenta tirar uma foto do documento.');
       }
       // Enviar primeira página ao Gemini
       const base64 = imagens[0];
@@ -2305,14 +2300,8 @@ async function wizImportTitulo(input) {
       try {
         imagens = await pdfParaImagemBase64(file, 3);
       } catch(pdfErr) {
-        // Fallback: ler PDF como base64 directo
-        console.warn('PDF.js falhou, a usar base64 directo:', pdfErr.message);
-        imagens = await new Promise(function(res, rej) {
-          var r = new FileReader();
-          r.onload = function(e) { res([e.target.result.split(',')[1]]); };
-          r.onerror = rej;
-          r.readAsDataURL(file);
-        });
+        console.warn('PDF.js falhou:', pdfErr.message);
+        throw new Error('Não foi possível ler o PDF. Tenta tirar uma foto do documento e usar "Foto/Imagem".');
       }
       // Combinar análise das primeiras páginas
       var resultados = [];
