@@ -6177,6 +6177,7 @@ async function importarFracoesIA() {
   document.getElementById('foto-resultado').style.display = 'none';
   document.getElementById('btn-analisar').style.display = 'none';
   toast(count + ' frações importadas!' + (skip > 0 ? ' (' + skip + ' duplicados ignorados)' : ''), 'ok');
+  closeModal('mo-foto');
   await loadFracoes();
   loadDashboard();
 }
