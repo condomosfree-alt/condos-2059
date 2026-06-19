@@ -1968,9 +1968,10 @@ async function importarFracoesPDF(input) {
       var prompt = 'Analisa esta imagem de um documento de propriedade horizontal. Procura uma TABELA com colunas de frações. Para cada linha da tabela extrai: codigo (letra, ex: A, B, C, I, J, K, L), bloco (se houver coluna Bloco, ex: A ou B), descricao (ex: R/c Esquerdo, 1. Direito), permilagem (numero com decimais, ex: 58.0, 115.0). Ignora linhas de totais. Devolve APENAS JSON valido: {"fracoes":[{"codigo":"A","bloco":"A","descricao":"R/c Esquerdo","permilagem":58.0}]}';
       var res = await fetch(PROXY_URL, {
         method:'POST', headers:PROXY_HEADERS,
-        body: JSON.stringify({ prompt, foto: imagens[pi], tipo: 'fracao_import' })
+        body: JSON.stringify({ prompt, foto: imagens[pi], tipo: 'documento_import' })
       });
       var data = await res.json();
+      console.log('Resposta IA página', pi, ':', (data.text||'').slice(0,200));
       var text = (data.text||'').replace(/^`{3}json\s*/,'').replace(/\s*`{3}$/,'').trim();
       var start = text.indexOf('{'); var end = text.lastIndexOf('}');
       if (start > -1 && end > start) {
