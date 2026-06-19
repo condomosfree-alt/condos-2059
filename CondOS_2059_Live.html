@@ -1004,6 +1004,10 @@ textarea.fi{resize:vertical;min-height:60px;}
           <div style="display:flex;gap:8px;align-items:center;">
             <select class="fi" id="q-mes-sel" style="width:160px;" onchange="loadQuotas()"></select>
             <button class="btn-ghost" onclick="openModal('mo-emitir')" style="display:inline-flex;align-items:center;gap:6px;"><i class="ti ti-send"></i>Emitir Mês</button>
+            <label style="cursor:pointer;">
+              <input type="file" accept=".pdf,image/*" style="display:none;" onchange="importarExtratoBancario(this)">
+              <span class="btn-ghost" style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;background:rgba(0,230,118,.08);border-color:rgba(0,230,118,.3);color:var(--green);"><i class="ti ti-upload"></i>Extrato Bancário</span>
+            </label>
             <button class="btn-primary" onclick="openModal('mo-quota')" style="display:inline-flex;align-items:center;gap:6px;"><i class="ti ti-plus"></i>Registar Pagamento</button>
           </div>
         </div>
@@ -1042,6 +1046,17 @@ textarea.fi{resize:vertical;min-height:60px;}
             </div>
           </div>
           <div id="quotas-list" style="padding:8px 0;"><div class="empty-state"><i class="ti ti-receipt-2" style="font-size:32px;color:var(--t3);"></i><div style="margin-top:8px;color:var(--t3);">Selecciona um mês ou emite as quotas</div></div></div>
+        </div>
+
+        <!-- Painel resultado extrato -->
+        <div id="extrato-resultado-panel" style="display:none;margin-top:16px;">
+          <div class="panel">
+            <div class="ph">
+              <span class="pt">📊 Resultado do Extrato Bancário</span>
+              <button class="btn-ghost" onclick="document.getElementById('extrato-resultado-panel').style.display='none'" style="font-size:11px;padding:4px 8px;">Fechar</button>
+            </div>
+            <div id="extrato-resultado" style="padding:16px;"></div>
+          </div>
         </div>
       </div>
 
@@ -3871,7 +3886,7 @@ function fillMesSel() {
   const meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
   const now = new Date();
   sel.innerHTML = '';
-  for (let y = 2059; y >= 2058; y--) {
+  for (let y = now.getFullYear()+1; y >= now.getFullYear()-1; y--) {
     for (let m = 12; m >= 1; m--) {
       const o = document.createElement('option');
       o.value = m+'-'+y;
@@ -3879,13 +3894,13 @@ function fillMesSel() {
       sel.appendChild(o);
     }
   }
-  sel.value = (now.getMonth()+1)+'-2059';
+  sel.value = (now.getMonth()+1)+'-'+now.getFullYear();
   const em = document.getElementById('em-mes');
   if (em) em.value = String(now.getMonth()+1);
   const qpm = document.getElementById('qp-mes');
   if (qpm) qpm.value = String(now.getMonth()+1);
-  document.getElementById('em-ano').value = 2059;
-  document.getElementById('qp-ano').value = 2059;
+  document.getElementById('em-ano').value = new Date().getFullYear();
+  document.getElementById('qp-ano').value = new Date().getFullYear();
   const dpEl = document.getElementById('qp-data');
   if(dpEl) dpEl.value = new Date().toISOString().split('T')[0];
   const mvEl = document.getElementById('mv-data');
@@ -3973,6 +3988,167 @@ async function saveQuota() {
   closeModal('mo-quota');
   toast('Pagamento registado!','ok');
   loadQuotas(); loadDashboard(); loadMovimentos(); updateBadges();
+}
+
+async function importarExtratoBancario(input) {
+  var file = input.files[0];
+  if (!file) return;
+  var val = document.getElementById('q-mes-sel') ? document.getElementById('q-mes-sel').value : '';
+  if (!val) { toast('Selecciona um mês primeiro', 'err'); input.value=''; return; }
+  var parts = val.split('-'); var mes = parseInt(parts[0]); var ano = parseInt(parts[1]);
+  var mesesNomes = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+  toast('A IA está a analisar o extrato bancário...', 'ok');
+
+  try {
+    // Ler PDF/imagem
+    var imagens;
+    try { imagens = await pdfParaImagemBase64(file, 4); }
+    catch(e) {
+      imagens = await new Promise(function(res,rej){
+        var r = new FileReader();
+        r.onload = function(ev){ res([ev.target.result.split(',')[1]]); };
+        r.onerror = rej;
+        r.readAsDataURL(file);
+      });
+    }
+
+    // Extrair transacções com IA
+    var todasTransacoes = [];
+    for (var pi = 0; pi < Math.min(imagens.length, 4); pi++) {
+      var prompt = 'Analisa este extracto bancário português. Extrai TODAS as transferências recebidas (créditos/entradas). Para cada uma extrai: data (YYYY-MM-DD), descricao (nome do ordenante/descrição), valor (número decimal, ex: 95.50), referencia (referência bancária se existir). Ignora débitos/saídas. Devolve APENAS JSON: {"transacoes":[{"data":"","descricao":"","valor":0,"referencia":""}]}';
+      var res = await fetch(PROXY_URL, {
+        method:'POST', headers:PROXY_HEADERS,
+        body: JSON.stringify({ prompt, foto: imagens[pi], tipo: 'documento_import' })
+      });
+      var data = await res.json();
+      var text = (data.text||'').trim();
+      var start = text.indexOf('{'); var end = text.lastIndexOf('}');
+      if (start > -1) {
+        try {
+          var json = JSON.parse(text.slice(start, end+1));
+          if (json.transacoes) todasTransacoes = todasTransacoes.concat(json.transacoes);
+        } catch(e) {}
+      }
+    }
+
+    if (!todasTransacoes.length) {
+      toast('Não consegui extrair transacções do extrato', 'warn');
+      input.value=''; return;
+    }
+
+    // Ir buscar quotas pendentes do mês
+    var { data: quotasPendentes } = await sb.from('quotas')
+      .select('*, fracoes(codigo,proprietario_nome,permilagem)')
+      .eq('condominio_id', currentCondo.id)
+      .eq('mes', mes).eq('ano', ano)
+      .in('estado', ['pendente','atraso','parcial']);
+
+    var quotasPend = quotasPendentes || [];
+
+    // Cruzar transacções com quotas
+    var marcadas = [];
+    var naoCruzadas = [];
+    var jaProcessados = {};
+
+    for (var ti = 0; ti < todasTransacoes.length; ti++) {
+      var tr = todasTransacoes[ti];
+      if (!tr.valor || parseFloat(tr.valor) <= 0) continue;
+      var valor = parseFloat(tr.valor);
+      var desc = (tr.descricao||'').toLowerCase();
+      var matched = null;
+
+      // Tentar match por nome do proprietário
+      for (var qi = 0; qi < quotasPend.length; qi++) {
+        var q = quotasPend[qi];
+        if (jaProcessados[q.id]) continue;
+        var nomeP = (q.fracoes ? q.fracoes.proprietario_nome || '' : '').toLowerCase();
+        var codFrac = (q.fracoes ? q.fracoes.codigo || '' : '').toLowerCase();
+        var valorQ = parseFloat(q.valor_emitido);
+        // Match por nome OU por código de fração na descrição OU por valor exacto
+        var nomePartes = nomeP.split(' ');
+        var nomeMatch = nomePartes.length > 1 && desc.includes(nomePartes[0]) && desc.includes(nomePartes[nomePartes.length-1]);
+        var codMatch = codFrac && desc.includes('fr' + codFrac) || desc.includes('fração ' + codFrac) || desc.includes('fracao ' + codFrac);
+        var valorMatch = Math.abs(valor - valorQ) < 0.10;
+        if (nomeMatch || codMatch || (valorMatch && !matched)) {
+          matched = q;
+          if (nomeMatch || codMatch) break; // match forte — para aqui
+        }
+      }
+
+      if (matched) {
+        jaProcessados[matched.id] = true;
+        // Marcar como pago no Supabase
+        var dataP = tr.data || new Date().toISOString().split('T')[0];
+        await sb.from('quotas').update({
+          valor_pago: parseFloat(matched.valor_emitido),
+          estado: 'pago',
+          metodo_pagamento: 'Transferência Bancária',
+          data_pagamento: dataP,
+          notas: 'Auto-importado do extrato: ' + (tr.descricao||'')
+        }).eq('id', matched.id);
+        // Registar movimento
+        await sb.from('movimentos').insert({
+          condominio_id: currentCondo.id,
+          tipo: 'receita',
+          categoria: 'Quota',
+          descricao: 'Quota ' + mesesNomes[mes-1] + '/' + ano + ' — ' + (matched.fracoes ? matched.fracoes.codigo : '') + ' (extrato)',
+          valor: parseFloat(matched.valor_emitido),
+          data_movimento: dataP,
+          conta: 'operacional',
+          fracao_id: matched.fracao_id
+        });
+        marcadas.push({ tr, quota: matched });
+      } else {
+        naoCruzadas.push(tr);
+      }
+    }
+
+    // Mostrar resultado
+    var painel = document.getElementById('extrato-resultado-panel');
+    var resultado = document.getElementById('extrato-resultado');
+    if (painel) painel.style.display = 'block';
+    if (resultado) {
+      var html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">';
+      html += '<div style="background:var(--gdim);border:1px solid rgba(0,230,118,.2);border-radius:8px;padding:12px;text-align:center;">';
+      html += '<div style="font-size:24px;font-weight:700;color:var(--green);">✅ ' + marcadas.length + '</div>';
+      html += '<div style="font-size:11px;color:var(--t2);">Quotas marcadas como pagas</div></div>';
+      html += '<div style="background:var(--adim);border:1px solid rgba(255,179,0,.2);border-radius:8px;padding:12px;text-align:center;">';
+      html += '<div style="font-size:24px;font-weight:700;color:var(--amber);">⚠️ ' + naoCruzadas.length + '</div>';
+      html += '<div style="font-size:11px;color:var(--t2);">Transacções não identificadas</div></div></div>';
+
+      if (marcadas.length) {
+        html += '<div style="font-size:11px;font-weight:700;color:var(--green);margin-bottom:8px;">QUOTAS PAGAS AUTOMATICAMENTE:</div>';
+        html += '<table class="tbl" style="margin-bottom:16px;"><thead><tr><th>Fração</th><th>Proprietário</th><th>Valor</th><th>Data</th><th>Descrição Banco</th></tr></thead><tbody>';
+        marcadas.forEach(function(m) {
+          html += '<tr><td class="apt">' + (m.quota.fracoes ? m.quota.fracoes.codigo : '—') + '</td>';
+          html += '<td>' + (m.quota.fracoes ? m.quota.fracoes.proprietario_nome||'—' : '—') + '</td>';
+          html += '<td class="mn" style="color:var(--green)">' + parseFloat(m.quota.valor_emitido).toFixed(2) + '€</td>';
+          html += '<td>' + (m.tr.data||'—') + '</td>';
+          html += '<td style="font-size:10px;color:var(--t3)">' + (m.tr.descricao||'—').slice(0,40) + '</td></tr>';
+        });
+        html += '</tbody></table>';
+      }
+
+      if (naoCruzadas.length) {
+        html += '<div style="font-size:11px;font-weight:700;color:var(--amber);margin-bottom:8px;">TRANSACÇÕES NÃO IDENTIFICADAS (verifica manualmente):</div>';
+        html += '<table class="tbl"><thead><tr><th>Data</th><th>Descrição</th><th>Valor</th></tr></thead><tbody>';
+        naoCruzadas.forEach(function(tr) {
+          html += '<tr><td>' + (tr.data||'—') + '</td><td>' + (tr.descricao||'—') + '</td><td class="mn">' + parseFloat(tr.valor||0).toFixed(2) + '€</td></tr>';
+        });
+        html += '</tbody></table>';
+      }
+      resultado.innerHTML = html;
+    }
+
+    toast('✅ ' + marcadas.length + ' quotas marcadas pagas! ' + (naoCruzadas.length ? naoCruzadas.length + ' não identificadas.' : ''), 'ok');
+    await loadQuotas();
+    loadDashboard();
+
+  } catch(err) {
+    toast('Erro ao processar extrato: ' + err.message, 'err');
+  }
+  input.value = '';
 }
 
 async function notificarDevedores() {
