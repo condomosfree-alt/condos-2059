@@ -1047,7 +1047,6 @@ textarea.fi{resize:vertical;min-height:60px;}
             <span class="pt">Quotas — <span id="q-mes-label2" style="color:var(--cyan);">selecciona um mês</span></span>
             <div style="display:flex;gap:6px;">
               <button class="btn-ghost" onclick="notificarDevedores()" style="font-size:11px;padding:5px 10px;display:inline-flex;align-items:center;gap:4px;"><i class="ti ti-bell"></i>Alertar Devedores</button>
-              <button class="btn-ghost" onclick="notificarDevedores()" style="font-size:11px;padding:5px 10px;display:inline-flex;align-items:center;gap:4px;"><i class="ti ti-bell"></i>Alertar Devedores</button>
               <button class="btn-ghost" onclick="enviarMapaAnualTodos()" style="font-size:11px;padding:5px 10px;display:inline-flex;align-items:center;gap:4px;background:rgba(0,212,255,.08);border-color:rgba(0,212,255,.3);color:var(--cyan);"><i class="ti ti-mail"></i>Notificar Todos</button>
               <button class="btn-ghost" onclick="exportarQuotasPDF()" style="font-size:11px;padding:5px 10px;display:inline-flex;align-items:center;gap:4px;"><i class="ti ti-file-text"></i>Exportar PDF</button>
             </div>
@@ -4474,7 +4473,76 @@ async function enviarMapaAnualTodos() {
 }
 
 async function exportarQuotasPDF() {
-  toast('A gerar PDF... (em breve)', 'ok');
+  if (!_mesSel || !_mesSel.mes) { toast('Selecciona um mês primeiro','err'); return; }
+  var mes = _mesSel.mes; var ano = _mesSel.ano;
+  var mesNome = (_mesesNomesNav||['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'])[mes-1]+' '+ano;
+  var { data: qs } = await sb.from('quotas')
+    .select('*, fracoes(codigo,bloco,descricao,proprietario_nome,permilagem)')
+    .eq('condominio_id',currentCondo.id).eq('mes',mes).eq('ano',ano);
+  if (!qs||!qs.length) { toast('Sem quotas para exportar','warn'); return; }
+  var { jsPDF } = window.jspdf;
+  var doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+  // Cabeçalho
+  doc.setFillColor(0,51,102); doc.rect(0,0,210,28,'F');
+  doc.setTextColor(255,255,255);
+  doc.setFontSize(14); doc.setFont('helvetica','bold');
+  doc.text('COND.OS 2059 PRO', 14, 11);
+  doc.setFontSize(10); doc.setFont('helvetica','normal');
+  doc.text('Mapa de Quotas — '+mesNome, 14, 19);
+  doc.text(displayNomeCondo(currentCondo.nome||''), 196, 11, {align:'right'});
+  doc.text('Emitido em '+new Date().toLocaleDateString('pt-PT'), 196, 19, {align:'right'});
+  // KPIs
+  doc.setTextColor(0,0,0);
+  var tE=qs.reduce(function(a,q){return a+parseFloat(q.valor_emitido||0);},0);
+  var tP=qs.reduce(function(a,q){return a+parseFloat(q.valor_pago||0);},0);
+  var tD=tE-tP; var tx=tE>0?Math.round(tP/tE*100):0;
+  var kpis=[[tE.toFixed(2)+'€','EMITIDO'],[tP.toFixed(2)+'€','COBRADO'],[tD.toFixed(2)+'€','EM DÍVIDA'],[tx+'%','TAXA']];
+  kpis.forEach(function(k,i){
+    var x=14+i*49;
+    doc.setFillColor(i===2?255:i===1?240:240, i===2?240:i===1?255:248, i===2?240:i===1?240:255);
+    doc.rect(x,32,45,16,'F');
+    doc.setFontSize(7); doc.setTextColor(120,120,120);
+    doc.text(k[1], x+22.5, 37, {align:'center'});
+    doc.setFontSize(11); doc.setFont('helvetica','bold');
+    doc.setTextColor(i===2?180:i===1?0:0, i===2?0:i===1?120:51, i===2?0:i===1?0:102);
+    doc.text(k[0], x+22.5, 44, {align:'center'});
+  });
+  // Tabela
+  doc.setFont('helvetica','normal');
+  var rows=qs.map(function(q){
+    var f=q.fracoes||{};
+    return [
+      (f.codigo||'?')+(f.bloco?' Bl.'+f.bloco:''),
+      f.descricao||'—',
+      f.proprietario_nome||'—',
+      parseFloat(f.permilagem||0).toFixed(1)+'‰',
+      parseFloat(q.valor_emitido||0).toFixed(2)+'€',
+      parseFloat(q.valor_pago||0).toFixed(2)+'€',
+      q.estado==='pago'?'✓ Pago':q.estado==='atraso'?'! Atraso':'Pendente',
+      q.data_pagamento?new Date(q.data_pagamento).toLocaleDateString('pt-PT'):'—'
+    ];
+  });
+  doc.autoTable({
+    head:[['Fração','Descrição','Proprietário','‰','Emitido','Pago','Estado','Data Pag.']],
+    body:rows, startY:52,
+    styles:{fontSize:8,cellPadding:2},
+    headStyles:{fillColor:[0,51,102],textColor:255,fontStyle:'bold'},
+    alternateRowStyles:{fillColor:[248,250,255]},
+    columnStyles:{0:{cellWidth:18},1:{cellWidth:28},2:{cellWidth:45},3:{cellWidth:12},4:{cellWidth:18},5:{cellWidth:18},6:{cellWidth:20},7:{cellWidth:20}},
+    didParseCell:function(d){
+      if(d.column.index===6&&d.section==='body'){
+        if(d.cell.raw&&d.cell.raw.includes('Pago'))d.cell.styles.textColor=[0,120,0];
+        else if(d.cell.raw&&d.cell.raw.includes('Atraso'))d.cell.styles.textColor=[180,0,0];
+        else d.cell.styles.textColor=[150,100,0];
+      }
+    }
+  });
+  var y=doc.lastAutoTable.finalY+6;
+  doc.setFontSize(7); doc.setTextColor(150,150,150);
+  doc.text('Administrador: '+(currentCondo.administrador_nome||'—')+' | IBAN: '+(currentCondo.iban_operacional||'—'), 14, y);
+  doc.text('COND.OS 2059 Pro', 196, y, {align:'right'});
+  doc.save('Quotas_'+mesNome.replace(' ','_')+'_'+displayNomeCondo(currentCondo.nome||'').replace(/\s/g,'_')+'.pdf');
+  toast('✅ PDF exportado!','ok');
 }
 
 async function markPago(qid, val) {
