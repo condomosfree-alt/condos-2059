@@ -5227,6 +5227,8 @@ function initGmailClient() {
       callback: function(response) {
         if (response.error) { toast('Erro ao ligar Gmail: ' + response.error, 'err'); return; }
         _gmailToken = response.access_token;
+        localStorage.setItem('condos_gmail_token', response.access_token);
+        localStorage.setItem('condos_gmail_expiry', Date.now() + (response.expires_in||3600)*1000);
         // Buscar email do utilizador
         fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
           headers: { 'Authorization': 'Bearer ' + _gmailToken }
@@ -5254,7 +5256,9 @@ function initGmailClient() {
     });
     // Verificar token guardado
     var saved = localStorage.getItem('condos_gmail_email');
-    var savedToken = sessionStorage.getItem('condos_gmail_token');
+    var savedToken = localStorage.getItem('condos_gmail_token');
+    var savedExpiry = parseInt(localStorage.getItem('condos_gmail_expiry')||'0');
+    if (savedExpiry && Date.now() > savedExpiry) { savedToken = null; localStorage.removeItem('condos_gmail_token'); }
     if (saved && savedToken) {
       _gmailEmail = saved;
       _gmailToken = savedToken;
@@ -5276,7 +5280,7 @@ function desligarGmail() {
   _gmailToken = null;
   _gmailEmail = null;
   localStorage.removeItem('condos_gmail_email');
-  sessionStorage.removeItem('condos_gmail_token');
+  localStorage.removeItem('condos_gmail_token');
   atualizarStatusGmail();
   toast('Gmail desligado.', '');
 }
@@ -5344,7 +5348,7 @@ async function enviarEmailGmail(para, assunto, corpoHtml) {
     // Token expirado — pedir novo
     if (err.error && err.error.code === 401) {
       _gmailToken = null;
-      sessionStorage.removeItem('condos_gmail_token');
+      localStorage.removeItem('condos_gmail_token');
       toast('Sessão Gmail expirada — a reconectar...', '');
       ligarGmail();
       return false;
