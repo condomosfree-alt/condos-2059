@@ -4130,7 +4130,7 @@ async function importarExtratoBancario(input) {
     // Extrair transacções com IA
     var todasTransacoes = [];
     for (var pi = 0; pi < Math.min(imagens.length, 4); pi++) {
-      var prompt = 'Analisa este extracto bancário português. Extrai TODAS as transferências recebidas (créditos/entradas). Para cada uma extrai: data (YYYY-MM-DD), descricao (nome do ordenante/descrição), valor (número decimal, ex: 95.50), referencia (referência bancária se existir). Ignora débitos/saídas. Devolve APENAS JSON: {"transacoes":[{"data":"","descricao":"","valor":0,"referencia":""}]}';
+      var prompt = 'Analisa este extracto bancário português. Extrai TODAS as transferências recebidas (créditos/entradas de dinheiro). Para cada uma extrai: data (YYYY-MM-DD), descricao (nome completo do ordenante), valor (número decimal positivo, ex: 95.50), referencia (referência bancária se existir), iban_ordenante (IBAN do ordenante se visível, formato PT50...). Ignora débitos/saídas/pagamentos. Devolve APENAS JSON válido: {"transacoes":[{"data":"","descricao":"","valor":0,"referencia":"","iban_ordenante":""}]}';
       var res = await fetch(PROXY_URL, {
         method:'POST', headers:PROXY_HEADERS,
         body: JSON.stringify({ prompt, foto: imagens[pi], tipo: 'documento_import' })
@@ -4153,7 +4153,7 @@ async function importarExtratoBancario(input) {
 
     // Ir buscar quotas pendentes do mês
     var { data: quotasPendentes } = await sb.from('quotas')
-      .select('*, fracoes(codigo,proprietario_nome,permilagem)')
+      .select('*, fracoes(codigo,proprietario_nome,permilagem,nib_proprio)')
       .eq('condominio_id', currentCondo.id)
       .eq('mes', mes).eq('ano', ano)
       .in('estado', ['pendente','atraso','parcial']);
@@ -4180,8 +4180,10 @@ async function importarExtratoBancario(input) {
         var codFrac = (q.fracoes ? q.fracoes.codigo || '' : '').toLowerCase();
         var valorQ = parseFloat(q.valor_emitido);
         // Match por nome OU por código de fração na descrição OU por valor exacto
-        var nomePartes = nomeP.split(' ');
-        var nomeMatch = nomePartes.length > 1 && desc.includes(nomePartes[0]) && desc.includes(nomePartes[nomePartes.length-1]);
+        // Match de nome em qualquer ordem — banco usa apelido primeiro
+        var nomePartes = nomeP.replace(/[áàãâä]/g,'a').replace(/[éèêë]/g,'e').replace(/[íìîï]/g,'i').replace(/[óòõôö]/g,'o').replace(/[úùûü]/g,'u').replace(/[ç]/g,'c').split(' ').filter(function(p){ return p.length > 2; });
+        var descNorm = desc.replace(/[áàãâä]/g,'a').replace(/[éèêë]/g,'e').replace(/[íìîï]/g,'i').replace(/[óòõôö]/g,'o').replace(/[úùûü]/g,'u').replace(/[ç]/g,'c');
+        var nomeMatch = nomePartes.length >= 2 && nomePartes.filter(function(p){ return descNorm.includes(p); }).length >= 2;
         var codMatch = codFrac && desc.includes('fr' + codFrac) || desc.includes('fração ' + codFrac) || desc.includes('fracao ' + codFrac);
         var valorMatch = Math.abs(valor - valorQ) < 0.10;
         if (nomeMatch || codMatch || (valorMatch && !matched)) {
