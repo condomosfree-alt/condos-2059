@@ -1539,6 +1539,31 @@ textarea.fi{resize:vertical;min-height:60px;}
   </div>
 </div>
 
+<!-- MODAL ASSOCIAR TRANSACÇÃO -->
+<div class="mo" id="mo-assoc-trans">
+  <div class="mo-box" style="max-width:480px;">
+    <div class="mo-title">🔗 Associar Transacção a Fração <span class="mo-close" onclick="closeModal('mo-assoc-trans')"><i class="ti ti-x"></i></span></div>
+    <div style="padding:20px;">
+      <div style="background:var(--s2);border-radius:8px;padding:10px 12px;margin-bottom:16px;font-size:11px;">
+        <div style="color:var(--t3);margin-bottom:4px;">Transacção:</div>
+        <div id="assoc-desc" style="font-weight:600;color:var(--text);"></div>
+        <div id="assoc-valor" style="color:var(--green);margin-top:2px;"></div>
+      </div>
+      <div class="fl" style="margin-bottom:12px;">
+        <label>Associar à Fração</label>
+        <select class="fi" id="assoc-fracao"></select>
+      </div>
+      <div style="background:var(--adim);border:1px solid rgba(0,212,255,.2);border-radius:8px;padding:10px 12px;font-size:11px;color:var(--t2);">
+        💡 O programa vai <strong>memorizar</strong> esta associação. Na próxima vez que aparecer uma descrição similar, vai identificar automaticamente.
+      </div>
+      <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end;">
+        <button class="btn-ghost" onclick="closeModal('mo-assoc-trans')">Cancelar</button>
+        <button class="btn-primary" onclick="confirmarAssociacaoTransacao()"><i class="ti ti-brain"></i>Associar e Memorizar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL EMITIR MÊS -->
 <div class="mo" id="mo-emitir">
   <div class="mo-box" style="max-width:440px;">
@@ -4104,6 +4129,87 @@ async function saveQuota() {
   loadQuotas(); loadDashboard(); loadMovimentos(); updateBadges();
 }
 
+// ===== MEMÓRIA DE ASSOCIAÇÕES =====
+function normalizarDescBanco(desc) {
+  // Normalizar descrição para criar chave de memória
+  return (desc||'').toLowerCase()
+    .replace(/[áàãâä]/g,'a').replace(/[éèêë]/g,'e')
+    .replace(/[íìîï]/g,'i').replace(/[óòõôö]/g,'o')
+    .replace(/[úùûü]/g,'u').replace(/[ç]/g,'c')
+    .replace(/\d+/g,'') // remove números
+    .replace(/[^a-z\s]/g,' ')
+    .replace(/\s+/g,' ').trim()
+    .split(' ').slice(0,5).join(' '); // primeiras 5 palavras
+}
+
+async function carregarMemoriaExtrato() {
+  if (!currentCondo) return {};
+  var { data } = await sb.from('extrato_aprendizagem')
+    .select('descricao_chave, fracao_id')
+    .eq('condominio_id', currentCondo.id);
+  var mem = {};
+  (data||[]).forEach(function(r){ mem[r.descricao_chave] = r.fracao_id; });
+  return mem;
+}
+
+function abrirAssociarTransacao(idx) {
+  var tr = (window._naoCruzadasCache||[])[idx];
+  if (!tr) return;
+  window._transacaoParaAssociar = tr;
+  document.getElementById('assoc-desc').textContent = tr.descricao||'—';
+  document.getElementById('assoc-valor').textContent = parseFloat(tr.valor||0).toFixed(2) + ' €';
+  var sel = document.getElementById('assoc-fracao');
+  if (sel && fracoes.length) {
+    sel.innerHTML = '<option value="">— Seleccionar fração —</option>' +
+      fracoes.map(function(f){
+        return '<option value="'+f.id+'">'+f.codigo+(f.bloco?' Bl.'+f.bloco:'')+' — '+(f.proprietario_nome||'Sem proprietário')+'</option>';
+      }).join('');
+  }
+  openModal('mo-assoc-trans');
+}
+
+async function confirmarAssociacaoTransacao() {
+  var tr = window._transacaoParaAssociar;
+  var fracaoId = document.getElementById('assoc-fracao').value;
+  if (!tr || !fracaoId) { toast('Selecciona uma fração', 'err'); return; }
+
+  var chave = normalizarDescBanco(tr.descricao);
+
+  // Guardar na memória (upsert)
+  await sb.from('extrato_aprendizagem').upsert({
+    condominio_id: currentCondo.id,
+    descricao_chave: chave,
+    descricao_exemplo: (tr.descricao||'').slice(0,200),
+    fracao_id: fracaoId,
+    atualizado_em: new Date().toISOString()
+  }, { onConflict: 'condominio_id,descricao_chave' });
+
+  // Marcar a quota como paga se existir
+  var val = document.getElementById('q-mes-sel') ? document.getElementById('q-mes-sel').value : '';
+  if (val) {
+    var parts = val.split('-'); var mes = parseInt(parts[0]); var ano = parseInt(parts[1]);
+    var { data: qExist } = await sb.from('quotas').select('id,valor_emitido')
+      .eq('condominio_id', currentCondo.id)
+      .eq('fracao_id', fracaoId)
+      .eq('mes', mes).eq('ano', ano)
+      .in('estado', ['pendente','atraso','parcial']).limit(1);
+    if (qExist && qExist.length) {
+      await sb.from('quotas').update({
+        valor_pago: parseFloat(qExist[0].valor_emitido),
+        estado: 'pago',
+        metodo_pagamento: 'Transferência Bancária',
+        data_pagamento: tr.data || new Date().toISOString().split('T')[0],
+        notas: 'Associado manualmente: ' + (tr.descricao||'')
+      }).eq('id', qExist[0].id);
+      await loadQuotas();
+    }
+  }
+
+  toast('✅ Associação guardada! O programa vai memorizar para o futuro.', 'ok');
+  closeModal('mo-assoc-trans');
+  loadDashboard();
+}
+
 async function importarExtratoBancario(input) {
   var file = input.files[0];
   if (!file) return;
@@ -4150,6 +4256,9 @@ async function importarExtratoBancario(input) {
       toast('Não consegui extrair transacções do extrato', 'warn');
       input.value=''; return;
     }
+
+    // Carregar memória de associações
+    var memoriaAssoc = await carregarMemoriaExtrato();
 
     // Ir buscar quotas pendentes do mês
     var { data: quotasPendentes } = await sb.from('quotas')
@@ -4248,10 +4357,18 @@ async function importarExtratoBancario(input) {
 
       if (naoCruzadas.length) {
         html += '<div style="font-size:11px;font-weight:700;color:var(--amber);margin-bottom:8px;">TRANSACÇÕES NÃO IDENTIFICADAS (verifica manualmente):</div>';
-        html += '<table class="tbl"><thead><tr><th>Data</th><th>Descrição</th><th>Valor</th></tr></thead><tbody>';
-        naoCruzadas.forEach(function(tr) {
-          html += '<tr><td>' + (tr.data||'—') + '</td><td>' + (tr.descricao||'—') + '</td><td class="mn">' + parseFloat(tr.valor||0).toFixed(2) + '€</td></tr>';
+        html += '<table class="tbl"><thead><tr><th>Data</th><th>Descrição</th><th>Valor</th><th>Acção</th></tr></thead><tbody>';
+        naoCruzadas.forEach(function(tr, tridx) {
+          var trId = 'nc-' + tridx;
+          var descEnc = encodeURIComponent(JSON.stringify(tr));
+          html += '<tr>';
+          html += '<td>' + (tr.data||'—') + '</td>';
+          html += '<td>' + (tr.descricao||'—').slice(0,50) + '</td>';
+          html += '<td class="mn">' + parseFloat(tr.valor||0).toFixed(2) + '€</td>';
+          html += '<td><button onclick="abrirAssociarTransacao(' + tridx + ')" class="btn-ghost" style="font-size:10px;padding:3px 8px;color:var(--cyan);">🔗 Associar</button></td>';
+          html += '</tr>';
         });
+        window._naoCruzadasCache = naoCruzadas;
         html += '</tbody></table>';
       }
       resultado.innerHTML = html;
