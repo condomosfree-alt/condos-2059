@@ -4185,9 +4185,9 @@ async function confirmarAssociacaoTransacao() {
   }, { onConflict: 'condominio_id,descricao_chave' });
 
   // Marcar a quota como paga se existir
-  var val = document.getElementById('q-mes-sel') ? document.getElementById('q-mes-sel').value : '';
-  if (val) {
-    var parts = val.split('-'); var mes = parseInt(parts[0]); var ano = parseInt(parts[1]);
+  var rawAssoc = document.getElementById('q-mes-sel') ? document.getElementById('q-mes-sel').value : '';
+  if (rawAssoc) {
+    var partsAssoc = rawAssoc.split('-'); var mes = parseInt(partsAssoc[1]); var ano = parseInt(partsAssoc[0]);
     var { data: qExist } = await sb.from('quotas').select('id,valor_emitido')
       .eq('condominio_id', currentCondo.id)
       .eq('fracao_id', fracaoId)
@@ -4213,9 +4213,9 @@ async function confirmarAssociacaoTransacao() {
 async function importarExtratoBancario(input) {
   var file = input.files[0];
   if (!file) return;
-  var val = document.getElementById('q-mes-sel') ? document.getElementById('q-mes-sel').value : '';
-  if (!val) { toast('Selecciona um mês primeiro', 'err'); input.value=''; return; }
-  var parts = val.split('-'); var mes = parseInt(parts[0]); var ano = parseInt(parts[1]);
+  var rawExt = document.getElementById('q-mes-sel') ? document.getElementById('q-mes-sel').value : '';
+  if (!rawExt) { toast('Selecciona um mês primeiro', 'err'); input.value=''; return; }
+  var partsExt = rawExt.split('-'); var mes = parseInt(partsExt[1]); var ano = parseInt(partsExt[0]);
   var mesesNomes = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 
   toast('A IA está a analisar o extrato bancário...', 'ok');
