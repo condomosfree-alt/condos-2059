@@ -1002,7 +1002,12 @@ textarea.fi{resize:vertical;min-height:60px;}
         <div class="sec-hdr">
           <span class="sec-t">Quotas e Pagamentos</span>
           <div style="display:flex;gap:8px;align-items:center;">
-            <select class="fi" id="q-mes-sel" style="width:160px;" onchange="loadQuotas()"></select>
+            <div style="display:inline-flex;align-items:center;background:var(--s2);border:1px solid var(--b1);border-radius:8px;overflow:hidden;">
+              <button onclick="navegarMes(-1)" style="background:transparent;border:none;color:var(--t2);padding:6px 12px;cursor:pointer;font-size:18px;line-height:1;" title="Mês anterior">&#8249;</button>
+              <span id="q-mes-label-nav" style="font-size:13px;font-weight:600;color:var(--text);padding:6px 16px;min-width:130px;text-align:center;">—</span>
+              <button onclick="navegarMes(1)" style="background:transparent;border:none;color:var(--t2);padding:6px 12px;cursor:pointer;font-size:18px;line-height:1;" title="Mês seguinte">&#8250;</button>
+            </div>
+            <input type="hidden" id="q-mes-sel">
             <button class="btn-ghost" onclick="openModal('mo-emitir')" style="display:inline-flex;align-items:center;gap:6px;"><i class="ti ti-send"></i>Emitir Mês</button>
             <label style="cursor:pointer;">
               <input type="file" accept=".pdf,image/*" style="display:none;" onchange="importarExtratoBancario(this)">
@@ -1042,6 +1047,8 @@ textarea.fi{resize:vertical;min-height:60px;}
             <span class="pt">Quotas — <span id="q-mes-label2" style="color:var(--cyan);">selecciona um mês</span></span>
             <div style="display:flex;gap:6px;">
               <button class="btn-ghost" onclick="notificarDevedores()" style="font-size:11px;padding:5px 10px;display:inline-flex;align-items:center;gap:4px;"><i class="ti ti-bell"></i>Alertar Devedores</button>
+              <button class="btn-ghost" onclick="notificarDevedores()" style="font-size:11px;padding:5px 10px;display:inline-flex;align-items:center;gap:4px;"><i class="ti ti-bell"></i>Alertar Devedores</button>
+              <button class="btn-ghost" onclick="enviarMapaAnualTodos()" style="font-size:11px;padding:5px 10px;display:inline-flex;align-items:center;gap:4px;background:rgba(0,212,255,.08);border-color:rgba(0,212,255,.3);color:var(--cyan);"><i class="ti ti-mail"></i>Notificar Todos</button>
               <button class="btn-ghost" onclick="exportarQuotasPDF()" style="font-size:11px;padding:5px 10px;display:inline-flex;align-items:center;gap:4px;"><i class="ti ti-file-text"></i>Exportar PDF</button>
             </div>
           </div>
@@ -4036,34 +4043,35 @@ function populateQpFracao() {
 
 function abrirEmitirMes() { openModal('mo-emitir'); }
 
-function initQuotasMesSel() {
+// ===== NAVEGAÇÃO MÊS =====
+var _mesSel = { mes: new Date().getMonth()+1, ano: new Date().getFullYear() };
+var _mesesNomesNav = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+function actualizarNavMes() {
+  var lbl = document.getElementById('q-mes-label-nav');
   var sel = document.getElementById('q-mes-sel');
-  if (!sel || sel.options.length > 1) return;
-  var meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-  var hoje = new Date();
-  sel.innerHTML = '<option value="">— Seleccionar mês —</option>';
-  for (var y = hoje.getFullYear(); y >= hoje.getFullYear()-1; y--) {
-    for (var m = 12; m >= 1; m--) {
-      if (y === hoje.getFullYear() && m > hoje.getMonth()+2) continue;
-      var val = m + '-' + y;
-      var opt = document.createElement('option');
-      opt.value = val;
-      opt.textContent = meses[m-1] + ' ' + y;
-      if (m === hoje.getMonth()+1 && y === hoje.getFullYear()) opt.selected = true;
-      sel.appendChild(opt);
-    }
-  }
+  if (lbl) lbl.textContent = _mesesNomesNav[_mesSel.mes-1] + ' ' + _mesSel.ano;
+  if (sel) sel.value = _mesSel.mes + '-' + _mesSel.ano;
+}
+function navegarMes(dir) {
+  _mesSel.mes += dir;
+  if (_mesSel.mes > 12) { _mesSel.mes = 1; _mesSel.ano++; }
+  if (_mesSel.mes < 1)  { _mesSel.mes = 12; _mesSel.ano--; }
+  actualizarNavMes();
+  loadQuotas();
+}
+function initQuotasMesSel() {
+  actualizarNavMes();
 }
 
 async function loadQuotas() {
   if (!currentCondo) return;
   initQuotasMesSel();
-  const val = document.getElementById('q-mes-sel').value;
-  if (!val) return;
+  if (!_mesSel || !_mesSel.mes) return;
+  var mes = _mesSel.mes; var ano = _mesSel.ano; var val = mes+'-'+ano;
   // Verificar se o mês actual já foi emitido
   const hoje = new Date();
   const mesActual = (hoje.getMonth()+1)+'-'+hoje.getFullYear();
-  if (val === mesActual) {
+  if (mes === hoje.getMonth()+1 && ano === hoje.getFullYear()) {
     const { data: check } = await sb.from('quotas').select('id').eq('condominio_id',currentCondo.id).eq('mes',hoje.getMonth()+1).eq('ano',hoje.getFullYear()).limit(1);
     if (!check || !check.length) {
       const alertEl = document.getElementById('quotas-list');
@@ -4076,7 +4084,7 @@ async function loadQuotas() {
       return;
     }
   }
-  const [mes, ano] = val.split('-').map(Number);
+  // mes e ano já definidos via _mesSel
   var mesNome = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'][mes-1]+' '+ano;
   document.getElementById('q-mes-label').textContent = mesNome;
   var l2 = document.getElementById('q-mes-label2'); if(l2) l2.textContent = mesNome;
@@ -4185,9 +4193,8 @@ async function confirmarAssociacaoTransacao() {
   }, { onConflict: 'condominio_id,descricao_chave' });
 
   // Marcar a quota como paga se existir
-  var rawAssoc = document.getElementById('q-mes-sel') ? document.getElementById('q-mes-sel').value : '';
-  if (rawAssoc) {
-    var partsAssoc = rawAssoc.split('-'); var mes = parseInt(partsAssoc[1]); var ano = parseInt(partsAssoc[0]);
+  if (_mesSel && _mesSel.mes) {
+    var mes = _mesSel.mes; var ano = _mesSel.ano;
     var { data: qExist } = await sb.from('quotas').select('id,valor_emitido')
       .eq('condominio_id', currentCondo.id)
       .eq('fracao_id', fracaoId)
@@ -4213,9 +4220,8 @@ async function confirmarAssociacaoTransacao() {
 async function importarExtratoBancario(input) {
   var file = input.files[0];
   if (!file) return;
-  var rawExt = document.getElementById('q-mes-sel') ? document.getElementById('q-mes-sel').value : '';
-  if (!rawExt) { toast('Selecciona um mês primeiro', 'err'); input.value=''; return; }
-  var partsExt = rawExt.split('-'); var mes = parseInt(partsExt[1]); var ano = parseInt(partsExt[0]);
+  if (!_mesSel || !_mesSel.mes) { toast('Selecciona um mês primeiro', 'err'); input.value=''; return; }
+  var mes = _mesSel.mes; var ano = _mesSel.ano;
   var mesesNomes = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 
   toast('A IA está a analisar o extrato bancário...', 'ok');
@@ -4386,9 +4392,8 @@ async function importarExtratoBancario(input) {
 
 async function notificarDevedores() {
   if (!currentCondo) return;
-  var val = document.getElementById('q-mes-sel') ? document.getElementById('q-mes-sel').value : '';
-  if (!val) { toast('Selecciona um mês primeiro', 'err'); return; }
-  var parts = val.split('-'); var mes = parseInt(parts[0]); var ano = parseInt(parts[1]);
+  if (!_mesSel || !_mesSel.mes) { toast('Selecciona um mês primeiro', 'err'); return; }
+  var mes = _mesSel.mes; var ano = _mesSel.ano; var val = mes+'-'+ano;
   var { data: qs } = await sb.from('quotas').select('*, fracoes(codigo,proprietario_nome,proprietario_email,proprietario_tel)').eq('condominio_id',currentCondo.id).eq('mes',mes).eq('ano',ano).in('estado',['pendente','atraso','parcial']);
   if (!qs || !qs.length) { toast('Sem devedores este mês! ✅', 'ok'); return; }
   var enviados = 0;
@@ -4422,6 +4427,50 @@ async function notificarDevedores() {
     }
   }
   toast(enviados > 0 ? '📨 ' + enviados + ' devedores notificados!' : 'Sem contactos registados nos devedores', enviados > 0 ? 'ok' : 'warn');
+}
+
+async function enviarRecibo(qid) {
+  var { data: q } = await sb.from('quotas').select('*, fracoes(codigo,bloco,descricao,proprietario_nome,proprietario_email,permilagem)').eq('id',qid).single();
+  if (!q) { toast('Quota não encontrada','err'); return; }
+  var f = q.fracoes||{};
+  var email = f.proprietario_email;
+  if (!email) { toast('⚠️ Sem email registado. Preenche na ficha via QR Code.','warn'); return; }
+  var mN = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  var mNome = mN[(q.mes||1)-1]+' de '+(q.ano||2026);
+  var nRec = 'REC-'+(q.ano||2026)+'-'+String(q.mes||1).padStart(2,'0')+'-'+(f.codigo||'?');
+  var assunto = 'Recibo de Quota — '+mNome+' — '+displayNomeCondo(currentCondo.nome||'');
+  var corpo = '<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;"><div style="background:#003366;padding:24px;border-radius:8px 8px 0 0;text-align:center;"><div style="color:#00d4ff;font-family:monospace;font-size:20px;font-weight:700;letter-spacing:2px;">COND.OS 2059</div></div><div style="background:#fff;padding:32px;border:1px solid #eee;"><div style="text-align:center;margin-bottom:24px;"><div style="font-size:28px;font-weight:700;color:#003366;">RECIBO</div><div style="color:#999;font-size:13px;">N.º '+nRec+'</div></div><table style="width:100%;border-collapse:collapse;margin-bottom:24px;"><tr style="background:#f8f9fa;"><td style="padding:10px 14px;font-weight:700;color:#555;width:40%">Condómino</td><td style="padding:10px 14px;">'+(f.proprietario_nome||'—')+'</td></tr><tr><td style="padding:10px 14px;font-weight:700;color:#555;">Fração</td><td style="padding:10px 14px;">'+(f.codigo||'?')+(f.bloco?' — Bloco '+f.bloco:'')+(f.descricao?' ('+f.descricao+')':'')+'</td></tr><tr style="background:#f8f9fa;"><td style="padding:10px 14px;font-weight:700;color:#555;">Referente a</td><td style="padding:10px 14px;">'+mNome+'</td></tr><tr><td style="padding:10px 14px;font-weight:700;color:#555;">Data Pagamento</td><td style="padding:10px 14px;">'+(q.data_pagamento?new Date(q.data_pagamento).toLocaleDateString('pt-PT'):new Date().toLocaleDateString('pt-PT'))+'</td></tr><tr style="background:#f8f9fa;"><td style="padding:10px 14px;font-weight:700;color:#555;">Método</td><td style="padding:10px 14px;">'+(q.metodo_pagamento||'Transferência Bancária')+'</td></tr></table><div style="background:#e8f5e9;border:2px solid #4caf50;border-radius:8px;padding:20px;text-align:center;margin-bottom:24px;"><div style="color:#555;font-size:13px;">VALOR RECEBIDO</div><div style="font-size:36px;font-weight:700;color:#2e7d32;">'+parseFloat(q.valor_pago||0).toFixed(2)+' €</div></div><hr style="border:none;border-top:1px solid #eee;margin:20px 0;"><div style="font-weight:700;color:#333;">'+(currentCondo.administrador_nome||'Administrador')+'</div><div style="color:#999;font-size:12px;">'+(currentCondo.nome||'')+'</div></div><div style="background:#f8f9fa;padding:12px;text-align:center;font-size:11px;color:#aaa;border-radius:0 0 8px 8px;">COND.OS 2059 Pro · '+new Date().toLocaleDateString('pt-PT')+'</div></div>';
+  var ok = await enviarEmailGmail(email, assunto, corpo);
+  if (ok) toast('📧 Recibo enviado para '+email+'!','ok');
+  else toast('⚠️ Erro ao enviar. Verifica Gmail.','warn');
+}
+
+async function enviarMapaAnualTodos() {
+  if (!currentCondo) return;
+  var ano = _mesSel ? _mesSel.ano : new Date().getFullYear();
+  toast('A preparar notificações...','ok');
+  var { data: todasQ } = await sb.from('quotas').select('*, fracoes(id,codigo,bloco,descricao,proprietario_nome,proprietario_email,permilagem)').eq('condominio_id',currentCondo.id).eq('ano',ano);
+  if (!todasQ||!todasQ.length) { toast('Sem quotas para '+ano,'warn'); return; }
+  var pF={};
+  todasQ.forEach(function(q){var fid=q.fracao_id;if(!pF[fid])pF[fid]={fracao:q.fracoes,quotas:{}};pF[fid].quotas[q.mes]=q;});
+  var mN=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  var env=0,sem=0,mA=new Date().getMonth()+1;
+  for (var fid in pF) {
+    var d=pF[fid];var f=d.fracao||{};var em=f.proprietario_email;
+    if (!em){sem++;continue;}
+    var tE=0,tP=0;
+    for(var m=1;m<=mA;m++){var q=d.quotas[m];if(q){tE+=parseFloat(q.valor_emitido||0);tP+=parseFloat(q.valor_pago||0);}}
+    var div=tE-tP;var reg=div<=0;
+    var rows='';
+    for(var m2=1;m2<=12;m2++){var q2=d.quotas[m2];var fut=m2>mA;var bg=fut?'#f8f9fa':(q2&&q2.estado==='pago')?'#e8f5e9':m2<=mA?'#fff5f5':'#f8f9fa';var est=fut?'<span style="color:#ccc">—</span>':(q2&&q2.estado==='pago')?'<span style="color:#2e7d32;font-weight:700">✓ Pago</span>':q2?'<span style="color:#c62828;font-weight:700">⚠ Pendente</span>':'<span style="color:#aaa">Não emitido</span>';rows+='<tr style="background:'+bg+'"><td style="padding:8px 12px;font-weight:600;border-bottom:1px solid #eee;">'+mN[m2-1]+'</td><td style="padding:8px 12px;text-align:right;border-bottom:1px solid #eee;">'+(q2?parseFloat(q2.valor_emitido||0).toFixed(2)+'€':'—')+'</td><td style="padding:8px 12px;text-align:right;border-bottom:1px solid #eee;">'+(q2&&q2.estado==='pago'?parseFloat(q2.valor_pago||0).toFixed(2)+'€':'—')+'</td><td style="padding:8px 12px;text-align:center;border-bottom:1px solid #eee;">'+(q2&&q2.data_pagamento?new Date(q2.data_pagamento).toLocaleDateString('pt-PT'):'—')+'</td><td style="padding:8px 12px;text-align:center;border-bottom:1px solid #eee;">'+est+'</td></tr>';}
+    rows+='<tr style="background:#003366"><td style="padding:10px 12px;font-weight:700;color:#fff">TOTAL '+ano+'</td><td style="padding:10px 12px;text-align:right;font-weight:700;color:#fff">'+tE.toFixed(2)+'€</td><td style="padding:10px 12px;text-align:right;font-weight:700;color:'+(div>0?'#ff8a80':'#a5d6a7')+'">'+tP.toFixed(2)+'€</td><td style="text-align:center;color:#fff">—</td><td style="padding:10px 12px;text-align:center;font-weight:700;color:'+(div>0?'#ff8a80':'#a5d6a7')+'">'+(div>0?'⚠ '+div.toFixed(2)+'€ em dívida':'✓ Regularizado')+'</td></tr>';
+    var cE=reg?'#2e7d32':'#c62828';var bE=reg?'#e8f5e9':'#ffebee';
+    var ass=reg?'✅ Mapa de Quotas '+ano+' — '+displayNomeCondo(currentCondo.nome||''):'⚠️ Mapa de Quotas '+ano+' — Quotas por Regularizar';
+    var corpo='<div style="font-family:Arial,sans-serif;max-width:650px;margin:0 auto;background:#f4f6f9;"><div style="background:linear-gradient(135deg,#003366,#0066cc);padding:28px 32px;border-radius:12px 12px 0 0;"><table width=100%><tr><td><div style="color:#00d4ff;font-family:monospace;font-size:22px;font-weight:700;letter-spacing:3px;">COND.OS</div><div style="color:rgba(255,255,255,.6);font-size:11px;">2059 PRO</div></td><td style="text-align:right"><div style="color:#fff;font-size:13px;font-weight:600">MAPA DE QUOTAS</div><div style="color:#00d4ff;font-size:20px;font-weight:700">'+ano+'</div></td></tr></table></div><div style="background:#fff;padding:20px 32px;border-left:4px solid #0066cc"><div style="font-size:16px;font-weight:700;color:#003366">'+(currentCondo.nome||'')+'</div><div style="color:#666;font-size:12px">'+(currentCondo.morada||'')+'</div></div><div style="background:#f8f9fa;padding:16px 32px;border-bottom:1px solid #eee"><div style="font-size:11px;color:#999;text-transform:uppercase">Condómino</div><div style="font-size:15px;font-weight:700;color:#333">'+(f.proprietario_nome||'—')+'</div><div style="font-size:12px;color:#666">Fração '+(f.codigo||'?')+(f.bloco?' · Bloco '+f.bloco:'')+'</div></div><div style="background:'+bE+';padding:16px 32px;text-align:center;border-bottom:3px solid '+cE+'"><div style="font-size:16px;font-weight:700;color:'+cE+'">'+(reg?'✅ Situação Regularizada':'🔴 Quotas em Atraso')+'</div>'+(div>0?'<div style="font-size:13px;color:'+cE+';margin-top:4px">Total em dívida: <strong>'+div.toFixed(2)+'€</strong></div>':'<div style="font-size:12px;color:'+cE+';margin-top:4px">Obrigado pela pontualidade!</div>')+'</div><div style="background:#fff;padding:24px 32px"><div style="font-size:13px;font-weight:700;color:#003366;margin-bottom:12px;text-transform:uppercase;letter-spacing:1px">Detalhe por Mês</div><table width=100% style="border-collapse:collapse;font-size:13px"><thead><tr style="background:#003366"><th style="padding:10px 12px;color:#fff;text-align:left">Mês</th><th style="padding:10px 12px;color:#fff;text-align:right">Emitido</th><th style="padding:10px 12px;color:#fff;text-align:right">Pago</th><th style="padding:10px 12px;color:#fff;text-align:center">Data</th><th style="padding:10px 12px;color:#fff;text-align:center">Estado</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+(div>0?'<div style="background:#ffebee;padding:20px 32px;border-left:4px solid #c62828"><div style="font-size:13px;font-weight:700;color:#c62828;margin-bottom:6px">⚠️ Quotas por Regularizar</div><div style="font-size:12px;color:#666">Total em dívida: <strong style="color:#c62828">'+div.toFixed(2)+'€</strong></div><div style="margin-top:10px;padding:10px 14px;background:#fff;border-radius:6px;font-size:12px">IBAN: <strong>'+(currentCondo.iban_operacional||'Consulte o administrador')+'</strong></div></div>':'')+'<div style="background:#1a1a2e;padding:20px 32px;border-radius:0 0 12px 12px"><table width=100%><tr><td style="color:rgba(255,255,255,.7);font-size:11px"><div style="font-weight:600;color:#fff">'+(currentCondo.administrador_nome||'Administrador')+'</div></td><td style="text-align:right;color:rgba(255,255,255,.5);font-size:10px">COND.OS 2059 Pro · '+new Date().toLocaleDateString('pt-PT')+'</td></tr></table></div></div>';
+    var ok=await enviarEmailGmail(em,ass,corpo);
+    if(ok)env++;
+  }
+  toast('📧 '+env+' notificações enviadas!'+(sem>0?' ('+sem+' sem email)':''),'ok');
 }
 
 async function exportarQuotasPDF() {
