@@ -4040,7 +4040,18 @@ function populateQpFracao() {
   sel.innerHTML = fracoes.map(f=>`<option value="${f.id}">${f.codigo} — ${f.proprietario_nome||'?'}</option>`).join('');
 }
 
-function abrirEmitirMes() { openModal('mo-emitir'); }
+function abrirEmitirMes() {
+  if (_mesSel && _mesSel.mes) {
+    var em = document.getElementById("em-mes");
+    var ea = document.getElementById("em-ano");
+    var ev = document.getElementById("em-venc");
+    if (em) em.value = String(_mesSel.mes);
+    if (ea) ea.value = String(_mesSel.ano);
+    var dia = (currentCondo && currentCondo.dia_vencimento) || 8;
+    if (ev) ev.value = _mesSel.ano + "-" + String(_mesSel.mes).padStart(2,"0") + "-" + String(dia).padStart(2,"0");
+  }
+  openModal("mo-emitir");
+}
 
 // ===== NAVEGAÇÃO MÊS =====
 var _mesSel = { mes: new Date().getMonth()+1, ano: new Date().getFullYear() };
@@ -4110,7 +4121,7 @@ async function loadQuotas() {
         <td class="mn" style="color:${saldo>0?'var(--red)':'var(--green)'}">${saldo>0?'-':''}${saldo.toFixed(2)}€</td>
         <td>${pills[q.estado]||q.estado}</td>
         <td style="color:var(--t2);font-size:11px">${q.metodo_pagamento||'—'}</td>
-        <td>${saldo>0?`<button class="tb-btn" style="font-size:10px;padding:3px 7px;" onclick="markPago('${q.id}',${q.valor_emitido})"><i class="ti ti-check"></i>Pago</button>`:''}</td>
+        <td style="display:flex;gap:4px;align-items:center;">${saldo>0?`<button class="tb-btn" style="font-size:10px;padding:3px 7px;" onclick="markPago('${q.id}',${q.valor_emitido})"><i class="ti ti-check"></i>Pago</button>`:``}${q.estado==='pago'?`<button class="tb-btn" style="font-size:10px;padding:3px 7px;background:rgba(0,212,255,.1);border-color:rgba(0,212,255,.3);color:var(--cyan);" onclick="enviarRecibo('${q.id}')"><i class="ti ti-mail"></i>Recibo</button>`:``}</td>
       </tr>`;
     }).join('')+`</tbody></table>`;
 }
@@ -4555,8 +4566,8 @@ async function emitirQuotas() {
   if (!fracoes.length) { toast('Adiciona frações primeiro','err'); return; }
   const mes = parseInt(document.getElementById('em-mes').value);
   const ano = parseInt(document.getElementById('em-ano').value);
-  const dia = currentCondo.dia_vencimento || 8;
-  const dataVenc = `${ano}-${String(mes).padStart(2,'0')}-${String(dia).padStart(2,'0')}`;
+  const evField = document.getElementById('em-venc');
+  const dataVenc = (evField && evField.value) ? evField.value : (() => { const dia = currentCondo.dia_vencimento || 8; return `${ano}-${String(mes).padStart(2,'0')}-${String(dia).padStart(2,'0')}`; })();
   let criadas = 0;
   for (const f of fracoes) {
     if (!f.ativo) continue;
