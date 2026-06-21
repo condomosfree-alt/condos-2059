@@ -3991,14 +3991,28 @@ async function saveFracao() {
   };
   let error;
   if (editId) {
-    const res = await sb.from('fracoes').update(payload).eq('id', editId);
+    let res = await sb.from('fracoes').update(payload).eq('id', editId);
     error = res.error;
+    // Fallback: se alguma coluna não existir na BD, tentar só com os campos essenciais
+    if (error && (error.code === 'PGRST204' || /column|does not exist|schema cache/i.test(error.message||''))) {
+      console.warn('Update completo falhou, a tentar campos essenciais:', error.message);
+      const core = {
+        codigo: payload.codigo, tipo: payload.tipo, bloco: payload.bloco,
+        permilagem: payload.permilagem, quota_mensal: payload.quota_mensal,
+        proprietario_nome: payload.proprietario_nome, proprietario_email: payload.proprietario_email,
+        proprietario_tel: payload.proprietario_tel, proprietario_nif: payload.proprietario_nif,
+        proprietario_morada: payload.proprietario_morada
+      };
+      res = await sb.from('fracoes').update(core).eq('id', editId);
+      error = res.error;
+      if (!error) toast('⚠️ Guardado (alguns campos avançados ignorados — falta migração SQL)','warn');
+    }
     delete modal.dataset.editId;
   } else {
     const res = await sb.from('fracoes').insert(payload);
     error = res.error;
   }
-  if (error) { toast('Erro: '+error.message,'err'); return; }
+  if (error) { toast('Erro ao guardar: '+(error.message||error.code||'desconhecido'),'err'); console.error('saveFracao:', error); return; }
   closeModal('mo-fracao');
   toast(editId ? 'Fração actualizada!' : 'Fração adicionada!','ok');
   await loadFracoes();
@@ -4104,12 +4118,13 @@ async function carregarQuotasComFracoes(filtros) {
   // filtros: {mes, ano, estados, fracaoId, quotaId}
   // Faz query a quotas SEM join, depois junta fracoes em JS (robusto contra FK não declarada)
   var qb = sb.from('quotas').select('*').eq('condominio_id', currentCondo.id);
-  if (filtros.mes) qb = qb.eq('mes', filtros.mes);
-  if (filtros.ano) qb = qb.eq('ano', filtros.ano);
+  if (filtros.mes) qb = qb.eq('mes', parseInt(filtros.mes));
+  if (filtros.ano) qb = qb.eq('ano', parseInt(filtros.ano));
   if (filtros.estados) qb = qb.in('estado', filtros.estados);
   if (filtros.quotaId) qb = qb.eq('id', filtros.quotaId);
   var { data: qs, error } = await qb;
-  if (error) { console.error('Erro quotas:', error.message); return []; }
+  if (error) { console.error('Erro carregarQuotas:', error.message, 'filtros:', JSON.stringify(filtros)); return []; }
+  console.log('carregarQuotasComFracoes:', (qs||[]).length, 'quotas | filtros:', JSON.stringify(filtros));
   qs = qs || [];
   if (!qs.length) return [];
   // Carregar frações do condomínio (já temos em memória via global 'fracoes', mas garantir campos)
@@ -4554,68 +4569,116 @@ async function exportarQuotasPDF() {
   if (!window.jspdf || !window.jspdf.jsPDF) { toast("Biblioteca PDF não carregada. Recarrega a página.","err"); return; }
   var { jsPDF } = window.jspdf;
   var doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
-  // Cabeçalho
-  doc.setFillColor(0,51,102); doc.rect(0,0,210,28,'F');
-  doc.setTextColor(255,255,255);
-  doc.setFontSize(14); doc.setFont('helvetica','bold');
-  doc.text('COND.OS 2059 PRO', 14, 11);
-  doc.setFontSize(10); doc.setFont('helvetica','normal');
-  doc.text('Mapa de Quotas — '+mesNome, 14, 19);
-  doc.text(displayNomeCondo(currentCondo.nome||''), 196, 11, {align:'right'});
-  doc.text('Emitido em '+new Date().toLocaleDateString('pt-PT'), 196, 19, {align:'right'});
-  // KPIs
-  doc.setTextColor(0,0,0);
+  var W = 210, M = 15;
+  var eur = function(v){ return parseFloat(v||0).toFixed(2).replace('.',',') + ' EUR'; };
+
+  // ===== CABEÇALHO =====
+  doc.setFillColor(8,13,20); doc.rect(0,0,W,34,'F');
+  doc.setFillColor(0,212,255); doc.rect(0,34,W,1.2,'F');
+  // Logo textual
+  doc.setTextColor(0,212,255); doc.setFont('courier','bold'); doc.setFontSize(19);
+  doc.text('COND.OS', M, 16);
+  doc.setTextColor(150,160,170); doc.setFont('courier','normal'); doc.setFontSize(8);
+  doc.text('2059 PRO', M, 21);
+  // Lado direito
+  doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(13);
+  doc.text('Mapa de Quotas', W-M, 14, {align:'right'});
+  doc.setTextColor(0,212,255); doc.setFontSize(11);
+  doc.text(mesNome, W-M, 20, {align:'right'});
+  doc.setTextColor(150,160,170); doc.setFont('helvetica','normal'); doc.setFontSize(8);
+  doc.text(displayNomeCondo(currentCondo.nome||''), W-M, 26, {align:'right'});
+
+  // ===== KPIs =====
   var tE=qs.reduce(function(a,q){return a+parseFloat(q.valor_emitido||0);},0);
   var tP=qs.reduce(function(a,q){return a+parseFloat(q.valor_pago||0);},0);
   var tD=tE-tP; var tx=tE>0?Math.round(tP/tE*100):0;
-  var kpis=[[tE.toFixed(2)+'€','EMITIDO'],[tP.toFixed(2)+'€','COBRADO'],[tD.toFixed(2)+'€','EM DÍVIDA'],[tx+'%','TAXA']];
+  var kpis=[
+    {v:eur(tE), l:'EMITIDO', c:[0,102,153]},
+    {v:eur(tP), l:'COBRADO', c:[0,150,80]},
+    {v:eur(tD), l:'EM DÍVIDA', c:[200,50,50]},
+    {v:tx+'%', l:'TAXA COBRANÇA', c:[200,140,0]}
+  ];
+  var kpiY=42, kpiW=(W-2*M-3*4)/4, kpiH=20;
   kpis.forEach(function(k,i){
-    var x=14+i*49;
-    doc.setFillColor(i===2?255:i===1?240:240, i===2?240:i===1?255:248, i===2?240:i===1?240:255);
-    doc.rect(x,32,45,16,'F');
-    doc.setFontSize(7); doc.setTextColor(120,120,120);
-    doc.text(k[1], x+22.5, 37, {align:'center'});
-    doc.setFontSize(11); doc.setFont('helvetica','bold');
-    doc.setTextColor(i===2?180:i===1?0:0, i===2?0:i===1?120:51, i===2?0:i===1?0:102);
-    doc.text(k[0], x+22.5, 44, {align:'center'});
+    var x=M+i*(kpiW+4);
+    // caixa
+    doc.setFillColor(248,250,252); doc.setDrawColor(225,230,235); doc.setLineWidth(0.2);
+    doc.roundedRect(x,kpiY,kpiW,kpiH,1.5,1.5,'FD');
+    // barra de cor no topo
+    doc.setFillColor(k.c[0],k.c[1],k.c[2]); doc.roundedRect(x,kpiY,kpiW,1.5,1.5,1.5,'F');
+    doc.rect(x,kpiY+0.75,kpiW,0.75,'F');
+    // label
+    doc.setTextColor(140,150,160); doc.setFont('helvetica','normal'); doc.setFontSize(6.5);
+    doc.text(k.l, x+kpiW/2, kpiY+7, {align:'center'});
+    // valor
+    doc.setTextColor(k.c[0],k.c[1],k.c[2]); doc.setFont('helvetica','bold'); doc.setFontSize(11);
+    doc.text(k.v, x+kpiW/2, kpiY+15, {align:'center'});
   });
-  // Tabela
-  doc.setFont('helvetica','normal');
+
+  // ===== TABELA =====
   var rows=qs.map(function(q){
     var f=q.fracoes||{};
+    var estado = q.estado==='pago'?'Pago':q.estado==='atraso'?'Em atraso':q.estado==='parcial'?'Parcial':'Pendente';
     return [
-      (f.codigo||'?')+(f.bloco?' Bl.'+f.bloco:''),
-      f.descricao||'—',
+      (f.codigo||'?')+(f.bloco?' / '+f.bloco:''),
       f.proprietario_nome||'—',
-      parseFloat(f.permilagem||0).toFixed(1)+'‰',
-      parseFloat(q.valor_emitido||0).toFixed(2)+'€',
-      parseFloat(q.valor_pago||0).toFixed(2)+'€',
-      q.estado==='pago'?'✓ Pago':q.estado==='atraso'?'! Atraso':'Pendente',
+      parseFloat(f.permilagem||0).toFixed(1),
+      eur(q.valor_emitido),
+      eur(q.valor_pago),
+      estado,
       q.data_pagamento?new Date(q.data_pagamento).toLocaleDateString('pt-PT'):'—'
     ];
   });
   doc.autoTable({
-    head:[['Fração','Descrição','Proprietário','‰','Emitido','Pago','Estado','Data Pag.']],
-    body:rows, startY:52,
-    styles:{fontSize:8,cellPadding:2},
-    headStyles:{fillColor:[0,51,102],textColor:255,fontStyle:'bold'},
-    alternateRowStyles:{fillColor:[248,250,255]},
-    columnStyles:{0:{cellWidth:18},1:{cellWidth:28},2:{cellWidth:45},3:{cellWidth:12},4:{cellWidth:18},5:{cellWidth:18},6:{cellWidth:20},7:{cellWidth:20}},
+    head:[['Fração','Proprietário','Permil.','Emitido','Pago','Estado','Data Pag.']],
+    body:rows, startY:kpiY+kpiH+6,
+    theme:'grid',
+    styles:{fontSize:8,cellPadding:{top:2.5,bottom:2.5,left:3,right:3},lineColor:[230,235,240],lineWidth:0.1,textColor:[50,55,60]},
+    headStyles:{fillColor:[8,13,20],textColor:[255,255,255],fontStyle:'bold',fontSize:8,halign:'left',cellPadding:{top:3,bottom:3,left:3,right:3}},
+    alternateRowStyles:{fillColor:[249,251,253]},
+    columnStyles:{
+      0:{cellWidth:20,fontStyle:'bold'},
+      1:{cellWidth:'auto'},
+      2:{cellWidth:18,halign:'right'},
+      3:{cellWidth:26,halign:'right'},
+      4:{cellWidth:26,halign:'right'},
+      5:{cellWidth:22,halign:'center'},
+      6:{cellWidth:24,halign:'center'}
+    },
     didParseCell:function(d){
-      if(d.column.index===6&&d.section==='body'){
-        if(d.cell.raw&&d.cell.raw.includes('Pago'))d.cell.styles.textColor=[0,120,0];
-        else if(d.cell.raw&&d.cell.raw.includes('Atraso'))d.cell.styles.textColor=[180,0,0];
+      if(d.column.index===5&&d.section==='body'){
+        d.cell.styles.fontStyle='bold';
+        var v=d.cell.raw||'';
+        if(v==='Pago')d.cell.styles.textColor=[0,140,70];
+        else if(v==='Em atraso')d.cell.styles.textColor=[200,40,40];
+        else if(v==='Parcial')d.cell.styles.textColor=[200,140,0];
         else d.cell.styles.textColor=[150,100,0];
       }
     }
   });
-  var y=doc.lastAutoTable.finalY+6;
-  doc.setFontSize(7); doc.setTextColor(150,150,150);
-  doc.text('Administrador: '+(currentCondo.administrador_nome||'—')+' | IBAN: '+(currentCondo.iban_operacional||'—'), 14, y);
-  doc.text('COND.OS 2059 Pro', 196, y, {align:'right'});
+
+  // ===== RODAPÉ =====
+  var y=doc.lastAutoTable.finalY+8;
+  if (y > 270) { doc.addPage(); y = 20; }
+  doc.setDrawColor(225,230,235); doc.setLineWidth(0.2); doc.line(M,y,W-M,y);
+  y+=5;
+  doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.setTextColor(80,90,100);
+  doc.text('Administração', M, y);
+  doc.setFont('helvetica','normal'); doc.setTextColor(110,120,130);
+  doc.text(currentCondo.administrador_nome||'—', M, y+4);
+  doc.setFont('helvetica','bold'); doc.setTextColor(80,90,100);
+  doc.text('IBAN para pagamentos', M+90, y);
+  doc.setFont('helvetica','normal'); doc.setTextColor(110,120,130);
+  doc.text(currentCondo.iban_operacional||'— consulte o administrador —', M+90, y+4);
+
+  // rodapé absoluto
+  doc.setFontSize(7); doc.setTextColor(170,180,190);
+  doc.text('Documento gerado por COND.OS 2059 Pro · '+new Date().toLocaleDateString('pt-PT')+' '+new Date().toLocaleTimeString('pt-PT',{hour:'2-digit',minute:'2-digit'}), W/2, 290, {align:'center'});
+
   doc.save('Quotas_'+mesNome.replace(' ','_')+'_'+displayNomeCondo(currentCondo.nome||'').replace(/\s/g,'_')+'.pdf');
   toast('✅ PDF exportado!','ok');
 }
+
 
 async function markPago(qid, val) {
   await sb.from('quotas').update({valor_pago:val,estado:'pago',data_pagamento:new Date().toISOString().split('T')[0]}).eq('id',qid);
