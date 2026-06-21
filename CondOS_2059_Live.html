@@ -4100,6 +4100,29 @@ function initQuotasMesSel() {
   actualizarNavMes();
 }
 
+async function carregarQuotasComFracoes(filtros) {
+  // filtros: {mes, ano, estados, fracaoId, quotaId}
+  // Faz query a quotas SEM join, depois junta fracoes em JS (robusto contra FK não declarada)
+  var qb = sb.from('quotas').select('*').eq('condominio_id', currentCondo.id);
+  if (filtros.mes) qb = qb.eq('mes', filtros.mes);
+  if (filtros.ano) qb = qb.eq('ano', filtros.ano);
+  if (filtros.estados) qb = qb.in('estado', filtros.estados);
+  if (filtros.quotaId) qb = qb.eq('id', filtros.quotaId);
+  var { data: qs, error } = await qb;
+  if (error) { console.error('Erro quotas:', error.message); return []; }
+  qs = qs || [];
+  if (!qs.length) return [];
+  // Carregar frações do condomínio (já temos em memória via global 'fracoes', mas garantir campos)
+  var fIds = [...new Set(qs.map(function(q){ return q.fracao_id; }).filter(Boolean))];
+  var fMap = {};
+  if (fIds.length) {
+    var { data: fr } = await sb.from('fracoes').select('*').in('id', fIds);
+    (fr||[]).forEach(function(f){ fMap[f.id] = f; });
+  }
+  qs.forEach(function(q){ q.fracoes = fMap[q.fracao_id] || null; });
+  return qs;
+}
+
 async function loadQuotas() {
   if (!currentCondo) return;
   initQuotasMesSel();
@@ -4125,7 +4148,7 @@ async function loadQuotas() {
   var mesNome = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'][mes-1]+' '+ano;
   document.getElementById('q-mes-label').textContent = mesNome;
   var l2 = document.getElementById('q-mes-label2'); if(l2) l2.textContent = mesNome;
-  const { data: qs } = await sb.from('quotas').select('*, fracoes(codigo,proprietario_nome)').eq('condominio_id',currentCondo.id).eq('mes',mes).eq('ano',ano);
+  const qs = await carregarQuotasComFracoes({mes:mes, ano:ano});
   const quotas = qs || [];
   const totalEmitido = quotas.reduce((s,q)=>s+parseFloat(q.valor_emitido||0),0);
   const totalPago = quotas.reduce((s,q)=>s+parseFloat(q.valor_pago||0),0);
@@ -4431,8 +4454,11 @@ async function notificarDevedores() {
   if (!currentCondo) return;
   if (!_mesSel || !_mesSel.mes) { toast('Selecciona um mês primeiro', 'err'); return; }
   var mes = _mesSel.mes; var ano = _mesSel.ano; var val = mes+'-'+ano;
-  var { data: qs } = await sb.from('quotas').select('*, fracoes(codigo,proprietario_nome,proprietario_email,proprietario_tel)').eq('condominio_id',currentCondo.id).eq('mes',mes).eq('ano',ano).in('estado',['pendente','atraso','parcial']);
+  var qs = await carregarQuotasComFracoes({mes:mes, ano:ano, estados:['pendente','atraso','parcial']});
   if (!qs || !qs.length) { toast('Sem devedores este mês! ✅', 'ok'); return; }
+  if (!_gmailToken && qs.some(function(q){ return q.fracoes && q.fracoes.proprietario_email && !q.fracoes.proprietario_tel; })) {
+    if (!confirm('⚠️ Gmail não ligado. Condóminos sem telemóvel só podem ser notificados por email.\n\nLiga o Gmail em Definições → Integrações.\n\nContinuar via WhatsApp para os que têm telemóvel?')) return;
+  }
   var enviados = 0;
   var mesesNomes = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
   if (!_gmailToken && qs.some(function(q){ return q.fracoes && q.fracoes.proprietario_email && !q.fracoes.proprietario_tel; })) {
@@ -4470,7 +4496,7 @@ async function notificarDevedores() {
 }
 
 async function enviarRecibo(qid) {
-  var { data: q } = await sb.from('quotas').select('*, fracoes(codigo,bloco,descricao,proprietario_nome,proprietario_email,permilagem)').eq('id',qid).single();
+  var _qr = await carregarQuotasComFracoes({quotaId:qid}); var q = _qr[0];
   if (!q) { toast('Quota não encontrada','err'); return; }
   var f = q.fracoes||{};
   var email = f.proprietario_email;
@@ -4495,7 +4521,7 @@ async function enviarMapaAnualTodos() {
   }
   var ano = _mesSel ? _mesSel.ano : new Date().getFullYear();
   toast('A preparar notificações...','ok');
-  var { data: todasQ } = await sb.from('quotas').select('*, fracoes(id,codigo,bloco,descricao,proprietario_nome,proprietario_email,permilagem)').eq('condominio_id',currentCondo.id).eq('ano',ano);
+  var todasQ = await carregarQuotasComFracoes({ano:ano});
   if (!todasQ||!todasQ.length) { toast('Sem quotas para '+ano,'warn'); return; }
   var pF={};
   todasQ.forEach(function(q){var fid=q.fracao_id;if(!pF[fid])pF[fid]={fracao:q.fracoes,quotas:{}};pF[fid].quotas[q.mes]=q;});
@@ -4523,9 +4549,7 @@ async function exportarQuotasPDF() {
   if (!_mesSel || !_mesSel.mes) { toast('Selecciona um mês primeiro','err'); return; }
   var mes = _mesSel.mes; var ano = _mesSel.ano;
   var mesNome = (_mesesNomesNav||['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'])[mes-1]+' '+ano;
-  var { data: qs } = await sb.from('quotas')
-    .select('*, fracoes(codigo,bloco,descricao,proprietario_nome,permilagem)')
-    .eq('condominio_id',currentCondo.id).eq('mes',mes).eq('ano',ano);
+  var qs = await carregarQuotasComFracoes({mes:mes, ano:ano});
   if (!qs||!qs.length) { toast('Sem quotas para exportar','warn'); return; }
   if (!window.jspdf || !window.jspdf.jsPDF) { toast("Biblioteca PDF não carregada. Recarrega a página.","err"); return; }
   var { jsPDF } = window.jspdf;
