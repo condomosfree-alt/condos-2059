@@ -1003,9 +1003,16 @@ textarea.fi{resize:vertical;min-height:60px;}
           <span class="sec-t">Quotas e Pagamentos</span>
           <div style="display:flex;gap:8px;align-items:center;">
             <div style="display:inline-flex;align-items:center;background:var(--s2);border:1px solid var(--b1);border-radius:8px;overflow:hidden;">
-              <button onclick="navegarMes(-1)" style="background:transparent;border:none;color:var(--t2);padding:6px 12px;cursor:pointer;font-size:18px;line-height:1;" title="Mês anterior">&#8249;</button>
-              <span id="q-mes-label-nav" style="font-size:13px;font-weight:600;color:var(--text);padding:6px 16px;min-width:130px;text-align:center;">—</span>
-              <button onclick="navegarMes(1)" style="background:transparent;border:none;color:var(--t2);padding:6px 12px;cursor:pointer;font-size:18px;line-height:1;" title="Mês seguinte">&#8250;</button>
+              <button onclick="navegarMes(-1)" style="background:transparent;border:none;color:var(--t2);padding:6px 10px;cursor:pointer;font-size:18px;line-height:1;" title="Mês anterior">&#8249;</button>
+              <select id="q-mes-picker" onchange="irParaMes(this.value)" style="background:transparent;border:none;color:var(--text);font-size:13px;font-weight:600;padding:6px 4px;cursor:pointer;text-align:center;min-width:130px;outline:none;appearance:none;-webkit-appearance:none;text-align-last:center;">
+                <option value="1-2026">Janeiro 2026</option><option value="2-2026">Fevereiro 2026</option>
+                <option value="3-2026">Março 2026</option><option value="4-2026">Abril 2026</option>
+                <option value="5-2026">Maio 2026</option><option value="6-2026" selected>Junho 2026</option>
+                <option value="7-2026">Julho 2026</option><option value="8-2026">Agosto 2026</option>
+                <option value="9-2026">Setembro 2026</option><option value="10-2026">Outubro 2026</option>
+                <option value="11-2026">Novembro 2026</option><option value="12-2026">Dezembro 2026</option>
+              </select>
+              <button onclick="navegarMes(1)" style="background:transparent;border:none;color:var(--t2);padding:6px 10px;cursor:pointer;font-size:18px;line-height:1;" title="Mês seguinte">&#8250;</button>
             </div>
             <input type="hidden" id="q-mes-sel">
             <button class="btn-ghost" onclick="openModal('mo-emitir')" style="display:inline-flex;align-items:center;gap:6px;"><i class="ti ti-send"></i>Emitir Mês</button>
@@ -4057,15 +4064,35 @@ function abrirEmitirMes() {
 var _mesSel = { mes: new Date().getMonth()+1, ano: new Date().getFullYear() };
 var _mesesNomesNav = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 function actualizarNavMes() {
-  var lbl = document.getElementById('q-mes-label-nav');
+  var picker = document.getElementById('q-mes-picker');
   var sel = document.getElementById('q-mes-sel');
-  if (lbl) lbl.textContent = _mesesNomesNav[_mesSel.mes-1] + ' ' + _mesSel.ano;
-  if (sel) sel.value = _mesSel.mes + '-' + _mesSel.ano;
+  var val = _mesSel.mes + '-' + _mesSel.ano;
+  // Atualizar picker - se o ano mudou, regenerar opções
+  if (picker) {
+    var exists = Array.from(picker.options).some(function(o){ return o.value === val; });
+    if (!exists) {
+      // Gerar opções para o ano do _mesSel
+      var meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+      picker.innerHTML = meses.map(function(m,i){
+        return '<option value="'+(i+1)+'-'+_mesSel.ano+'"'+(i+1===_mesSel.mes?' selected':'')+'>'+m+' '+_mesSel.ano+'</option>';
+      }).join('');
+    } else {
+      picker.value = val;
+    }
+  }
+  if (sel) sel.value = val;
 }
 function navegarMes(dir) {
   _mesSel.mes += dir;
   if (_mesSel.mes > 12) { _mesSel.mes = 1; _mesSel.ano++; }
   if (_mesSel.mes < 1)  { _mesSel.mes = 12; _mesSel.ano--; }
+  actualizarNavMes();
+  loadQuotas();
+}
+function irParaMes(val) {
+  var parts = val.split('-');
+  _mesSel.mes = parseInt(parts[0]);
+  _mesSel.ano = parseInt(parts[1]);
   actualizarNavMes();
   loadQuotas();
 }
@@ -4408,6 +4435,9 @@ async function notificarDevedores() {
   if (!qs || !qs.length) { toast('Sem devedores este mês! ✅', 'ok'); return; }
   var enviados = 0;
   var mesesNomes = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  if (!_gmailToken && qs.some(function(q){ return q.fracoes && q.fracoes.proprietario_email && !q.fracoes.proprietario_tel; })) {
+    if (!confirm('Gmail não ligado. Condóminos sem telemóvel só podem ser notificados por email.\nLiga o Gmail em Definições → Integrações.\n\nContinuar via WhatsApp para os que têm telemóvel?')) return;
+  }
   for (var i = 0; i < qs.length; i++) {
     var q = qs[i];
     var f = q.fracoes;
@@ -4457,6 +4487,12 @@ async function enviarRecibo(qid) {
 
 async function enviarMapaAnualTodos() {
   if (!currentCondo) return;
+  if (!_gmailToken) {
+    if (confirm('Gmail não ligado!\n\nO Mapa Anual é enviado por email a cada condómino.\nLiga o Gmail em Definições → Integrações → Gmail.\n\nAbrir Definições agora?')) {
+      nav('definicoes');
+    }
+    return;
+  }
   var ano = _mesSel ? _mesSel.ano : new Date().getFullYear();
   toast('A preparar notificações...','ok');
   var { data: todasQ } = await sb.from('quotas').select('*, fracoes(id,codigo,bloco,descricao,proprietario_nome,proprietario_email,permilagem)').eq('condominio_id',currentCondo.id).eq('ano',ano);
@@ -4491,6 +4527,7 @@ async function exportarQuotasPDF() {
     .select('*, fracoes(codigo,bloco,descricao,proprietario_nome,permilagem)')
     .eq('condominio_id',currentCondo.id).eq('mes',mes).eq('ano',ano);
   if (!qs||!qs.length) { toast('Sem quotas para exportar','warn'); return; }
+  if (!window.jspdf || !window.jspdf.jsPDF) { toast("Biblioteca PDF não carregada. Recarrega a página.","err"); return; }
   var { jsPDF } = window.jspdf;
   var doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
   // Cabeçalho
