@@ -1054,7 +1054,8 @@ textarea.fi{resize:vertical;min-height:60px;}
             <span class="pt">Quotas — <span id="q-mes-label2" style="color:var(--cyan);">selecciona um mês</span></span>
             <div style="display:flex;gap:6px;">
               <button class="btn-ghost" onclick="notificarDevedores()" style="font-size:11px;padding:5px 10px;display:inline-flex;align-items:center;gap:4px;"><i class="ti ti-bell"></i>Alertar Devedores</button>
-              <button class="btn-ghost" onclick="enviarMapaAnualTodos()" style="font-size:11px;padding:5px 10px;display:inline-flex;align-items:center;gap:4px;background:rgba(0,212,255,.08);border-color:rgba(0,212,255,.3);color:var(--cyan);"><i class="ti ti-mail"></i>Notificar Todos</button>
+              <button class="btn-ghost" onclick="enviarMapaMensalTodos()" style="font-size:11px;padding:5px 10px;display:inline-flex;align-items:center;gap:4px;background:rgba(0,212,255,.08);border-color:rgba(0,212,255,.3);color:var(--cyan);" title="Recibo a quem pagou + alerta a quem deve, com PDF do mês"><i class="ti ti-calendar-stats"></i>Mapa Mensal</button>
+              <button class="btn-ghost" onclick="enviarMapaAnualTodos()" style="font-size:11px;padding:5px 10px;display:inline-flex;align-items:center;gap:4px;background:rgba(0,212,255,.08);border-color:rgba(0,212,255,.3);color:var(--cyan);" title="Estado geral do ano com detalhe mês a mês, com PDF anual"><i class="ti ti-calendar-month"></i>Mapa Anual</button>
               <button class="btn-ghost" onclick="exportarQuotasPDF()" style="font-size:11px;padding:5px 10px;display:inline-flex;align-items:center;gap:4px;"><i class="ti ti-file-text"></i>Exportar PDF</button>
             </div>
           </div>
@@ -4754,6 +4755,192 @@ async function enviarRecibo(qid) {
 }
 
 
+
+// ===== GERADORES DE PDF (devolvem base64 para anexo) =====
+function _pdfCabecalho(doc, titulo, subtitulo) {
+  var W = 210, M = 15;
+  doc.setFillColor(8,13,20); doc.rect(0,0,W,32,'F');
+  doc.setFillColor(0,212,255); doc.rect(0,32,W,1.2,'F');
+  doc.setTextColor(0,212,255); doc.setFont('courier','bold'); doc.setFontSize(18);
+  doc.text('COND.OS', M, 15);
+  doc.setTextColor(150,160,170); doc.setFont('courier','normal'); doc.setFontSize(7.5);
+  doc.text('2059 PRO', M, 20);
+  doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(12);
+  doc.text(titulo, W-M, 13, {align:'right'});
+  doc.setTextColor(0,212,255); doc.setFontSize(10);
+  doc.text(subtitulo, W-M, 19, {align:'right'});
+  doc.setTextColor(150,160,170); doc.setFont('helvetica','normal'); doc.setFontSize(8);
+  doc.text(displayNomeCondo(currentCondo.nome||''), W-M, 25, {align:'right'});
+}
+
+function gerarPDFMapaMensalFracao(f, q, mesNome) {
+  var { jsPDF } = window.jspdf;
+  var doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+  var W=210, M=15;
+  var eur = function(v){ return parseFloat(v||0).toFixed(2).replace('.',',')+' EUR'; };
+  _pdfCabecalho(doc, 'Quota Mensal', mesNome);
+  var emitido = parseFloat(q.valor_emitido||0);
+  var pago = parseFloat(q.valor_pago||0);
+  var saldo = emitido - pago;
+  var pagou = q.estado==='pago';
+  // Bloco condómino
+  doc.setTextColor(40,45,50); doc.setFont('helvetica','bold'); doc.setFontSize(13);
+  doc.text(f.proprietario_nome||'—', M, 46);
+  doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(110,120,130);
+  doc.text('Fração '+(f.codigo||'?')+(f.bloco?' · Bloco '+f.bloco:'')+(f.proprietario_nif?' · NIF '+f.proprietario_nif:''), M, 52);
+  // Estado
+  var cor = pagou?[16,150,90]:[200,50,50];
+  doc.setFillColor(pagou?236:255, pagou?253:235, pagou?245:235);
+  doc.setDrawColor(cor[0],cor[1],cor[2]); doc.setLineWidth(0.4);
+  doc.roundedRect(M, 58, W-2*M, 26, 2, 2, 'FD');
+  doc.setTextColor(cor[0],cor[1],cor[2]); doc.setFont('helvetica','bold'); doc.setFontSize(14);
+  doc.text(pagou?'QUOTA LIQUIDADA':'QUOTA EM DIVIDA', W/2, 68, {align:'center'});
+  doc.setFontSize(20);
+  doc.text(pagou?eur(pago):eur(saldo), W/2, 79, {align:'center'});
+  // Detalhe
+  doc.autoTable({
+    startY: 90,
+    head:[['Descrição','Mês','Valor']],
+    body:[['Quota de condomínio', mesNome, eur(emitido)],
+          ['Valor pago', pagou?(q.data_pagamento?new Date(q.data_pagamento).toLocaleDateString('pt-PT'):'—'):'—', eur(pago)],
+          ['Saldo', pagou?'Liquidado':'Em dívida', eur(saldo)]],
+    theme:'grid',
+    styles:{fontSize:9,cellPadding:3,textColor:[50,55,60],lineColor:[230,235,240],lineWidth:0.1},
+    headStyles:{fillColor:[8,13,20],textColor:[255,255,255],fontStyle:'bold'},
+    columnStyles:{0:{cellWidth:'auto'},1:{cellWidth:45,halign:'center'},2:{cellWidth:40,halign:'right',fontStyle:'bold'}}
+  });
+  var y=doc.lastAutoTable.finalY+10;
+  if (!pagou && currentCondo.iban_operacional) {
+    doc.setFontSize(9); doc.setTextColor(80,90,100); doc.setFont('helvetica','bold');
+    doc.text('IBAN para pagamento:', M, y);
+    doc.setFont('helvetica','normal'); doc.text(currentCondo.iban_operacional, M+42, y);
+    y+=8;
+  }
+  doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(80,90,100);
+  doc.text(currentCondo.administrador_nome||'A Administração', M, y+4);
+  doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor(170,180,190);
+  doc.text('Documento gerado por COND.OS 2059 Pro · '+new Date().toLocaleDateString('pt-PT'), W/2, 290, {align:'center'});
+  return doc.output('datauristring').split(',')[1];
+}
+
+function gerarPDFMapaAnualFracao(f, quotasPorMes, ano) {
+  var { jsPDF } = window.jspdf;
+  var doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+  var W=210, M=15;
+  var mN=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  var eur = function(v){ return parseFloat(v||0).toFixed(2).replace('.',',')+' EUR'; };
+  _pdfCabecalho(doc, 'Mapa de Quotas', String(ano));
+  doc.setTextColor(40,45,50); doc.setFont('helvetica','bold'); doc.setFontSize(13);
+  doc.text(f.proprietario_nome||'—', M, 46);
+  doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(110,120,130);
+  doc.text('Fração '+(f.codigo||'?')+(f.bloco?' · Bloco '+f.bloco:''), M, 52);
+  var mA=new Date().getMonth()+1;
+  var tE=0,tP=0;
+  var body=[];
+  for(var m=1;m<=12;m++){
+    var q=quotasPorMes[m];
+    var fut=m>mA;
+    if(q){tE+=parseFloat(q.valor_emitido||0);tP+=parseFloat(q.valor_pago||0);}
+    var est = fut?'—':(q&&q.estado==='pago')?'Pago':q?'Pendente':'Não emitido';
+    body.push([mN[m-1], q?eur(q.valor_emitido):'—', (q&&q.estado==='pago')?eur(q.valor_pago):'—',
+               (q&&q.data_pagamento)?new Date(q.data_pagamento).toLocaleDateString('pt-PT'):'—', est]);
+  }
+  var div=tE-tP;
+  doc.autoTable({
+    startY:58,
+    head:[['Mês','Emitido','Pago','Data Pag.','Estado']],
+    body:body,
+    foot:[['TOTAL '+ano, eur(tE), eur(tP), '', div>0?eur(div)+' em dívida':'Regularizado']],
+    theme:'grid',
+    styles:{fontSize:8.5,cellPadding:2.5,textColor:[50,55,60],lineColor:[230,235,240],lineWidth:0.1},
+    headStyles:{fillColor:[8,13,20],textColor:[255,255,255],fontStyle:'bold'},
+    footStyles:{fillColor:[8,13,20],textColor:[255,255,255],fontStyle:'bold'},
+    alternateRowStyles:{fillColor:[249,251,253]},
+    columnStyles:{0:{cellWidth:35,fontStyle:'bold'},1:{halign:'right'},2:{halign:'right'},3:{halign:'center'},4:{halign:'center'}},
+    didParseCell:function(d){
+      if(d.column.index===4&&d.section==='body'){
+        var v=d.cell.raw||'';
+        if(v==='Pago'){d.cell.styles.textColor=[0,140,70];d.cell.styles.fontStyle='bold';}
+        else if(v==='Pendente'){d.cell.styles.textColor=[200,40,40];d.cell.styles.fontStyle='bold';}
+      }
+    }
+  });
+  var y=doc.lastAutoTable.finalY+10;
+  if (div>0 && currentCondo.iban_operacional) {
+    doc.setFontSize(9); doc.setTextColor(200,40,40); doc.setFont('helvetica','bold');
+    doc.text('Quotas por regularizar: '+eur(div), M, y); y+=6;
+    doc.setTextColor(80,90,100); doc.text('IBAN:', M, y);
+    doc.setFont('helvetica','normal'); doc.text(currentCondo.iban_operacional, M+15, y); y+=8;
+  }
+  doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(80,90,100);
+  doc.text(currentCondo.administrador_nome||'A Administração', M, y+4);
+  doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor(170,180,190);
+  doc.text('Documento gerado por COND.OS 2059 Pro · '+new Date().toLocaleDateString('pt-PT'), W/2, 290, {align:'center'});
+  return doc.output('datauristring').split(',')[1];
+}
+
+
+async function enviarMapaMensalTodos() {
+  if (!currentCondo) return;
+  if (!_gmailToken) {
+    if (confirm('Gmail não ligado!\n\nO Mapa Mensal é enviado por email a cada condómino com o PDF em anexo.\nLiga o Gmail em Definições.\n\nAbrir Definições agora?')) nav('definicoes');
+    return;
+  }
+  var mes = _mesSel ? _mesSel.mes : new Date().getMonth()+1;
+  var ano = _mesSel ? _mesSel.ano : new Date().getFullYear();
+  var mN=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  var mesNome = mN[mes-1]+' '+ano;
+  var qs = await carregarQuotasComFracoes({mes:mes, ano:ano});
+  if (!qs || !qs.length) { toast('Sem quotas emitidas para '+mesNome+'. Emite o mês primeiro.','warn'); return; }
+  var comEmail = qs.filter(function(q){ return q.fracoes && q.fracoes.proprietario_email; });
+  if (!comEmail.length) { toast('Nenhuma fração tem email registado.','warn'); return; }
+  if (!confirm('Enviar mapa de '+mesNome+' a '+comEmail.length+' condómino(s)?\n\nQuem pagou recebe recibo, quem deve recebe alerta — ambos com PDF anexado.')) return;
+
+  toast('A enviar '+comEmail.length+' emails... aguarda.','ok');
+  var enviados=0, erros=0;
+  for (var i=0;i<comEmail.length;i++){
+    var q=comEmail[i], f=q.fracoes;
+    var pagou=q.estado==='pago';
+    var saldo=parseFloat(q.valor_emitido||0)-parseFloat(q.valor_pago||0);
+    var valor=parseFloat(pagou?q.valor_pago:saldo).toFixed(2).replace('.',',');
+    var condoNome=displayNomeCondo(currentCondo.nome||'');
+    var assunto=(pagou?'✅ Recibo':'🔴 Aviso de quota')+' — '+mesNome+' — '+condoNome;
+    var faixaCor=pagou?'#10b981':'#dc2626';
+    var faixaTxt=pagou?'✅ Quota de '+mN[mes-1]+' liquidada':'🔴 Quota de '+mN[mes-1]+' por regularizar';
+    var faixaSub=pagou?'O seu pagamento foi recebido e registado':'Encontra-se em dívida o valor abaixo indicado';
+    var corpo=
+      '<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#f4f6f8;">'+
+      '<div style="background:linear-gradient(135deg,#0a1119,#0d1825);padding:24px 28px;border-radius:10px 10px 0 0;">'+
+        '<table width=100%><tr><td><div style="color:#00d4ff;font-family:monospace;font-size:19px;font-weight:700;letter-spacing:2px;">COND.OS</div><div style="color:#5a6a79;font-size:9px;letter-spacing:3px;">2059 PRO</div></td>'+
+        '<td style="text-align:right;color:#fff;"><div style="font-size:13px;font-weight:600;">'+condoNome+'</div></td></tr></table>'+
+      '</div>'+
+      '<div style="background:'+faixaCor+';padding:15px 28px;color:#fff;text-align:center;"><div style="font-size:16px;font-weight:700;">'+faixaTxt+'</div><div style="font-size:12px;opacity:.9;margin-top:2px;">'+faixaSub+'</div></div>'+
+      '<div style="background:#fff;padding:26px 28px;">'+
+        '<p style="font-size:14px;color:#333;margin:0 0 16px;">Caro(a) <strong>'+(f.proprietario_nome||'condómino')+'</strong>,</p>'+
+        '<p style="font-size:13px;color:#555;line-height:1.6;margin:0 0 20px;">'+
+        (pagou?'Confirmamos a boa recepção do pagamento da quota de <strong>'+mesNome+'</strong>. Em anexo segue o comprovativo.':
+        'Informamos que se encontra por liquidar a quota de condomínio referente a <strong>'+mesNome+'</strong>. Em anexo segue o detalhe.')+'</p>'+
+        '<div style="background:'+(pagou?'#ecfdf5':'#fef2f2')+';border:1px solid '+(pagou?'#10b981':'#dc2626')+';border-radius:8px;padding:18px;text-align:center;margin-bottom:18px;">'+
+          '<div style="font-size:11px;color:#666;text-transform:uppercase;letter-spacing:1px;">'+(pagou?'Valor pago':'Valor em dívida')+'</div>'+
+          '<div style="font-size:28px;font-weight:700;color:'+(pagou?'#059669':'#dc2626')+';margin-top:2px;">'+valor+' €</div>'+
+          '<div style="font-size:11px;color:#999;margin-top:4px;">Fração '+(f.codigo||'?')+(f.bloco?' · Bloco '+f.bloco:'')+' · '+mesNome+'</div>'+
+        '</div>'+
+        (!pagou&&currentCondo.iban_operacional?'<p style="font-size:12px;color:#555;text-align:center;margin:0 0 18px;">Para regularizar: <strong>'+currentCondo.iban_operacional+'</strong></p>':'')+
+        '<div style="border-top:1px solid #eee;padding-top:14px;"><p style="font-size:12px;color:#555;margin:0;">Com os melhores cumprimentos,</p><p style="font-size:13px;color:#222;font-weight:700;margin:6px 0 0;">'+(currentCondo.administrador_nome||'A Administração')+'</p></div>'+
+      '</div>'+
+      '<div style="background:#0d1825;padding:12px 28px;text-align:center;border-radius:0 0 10px 10px;"><div style="color:#5a6a79;font-size:10px;">COND.OS 2059 Pro · '+new Date().toLocaleDateString('pt-PT')+'</div></div>'+
+      '</div>';
+    var pdf=null;
+    try { pdf=gerarPDFMapaMensalFracao(f, q, mesNome); } catch(e){ console.error('PDF mensal:',e.message); }
+    var ok;
+    if (pdf) ok=await enviarEmailGmailComAnexo(f.proprietario_email, assunto, corpo, pdf, 'Quota_'+mN[mes-1]+'_'+ano+'_'+(f.codigo||'')+'.pdf');
+    else ok=await enviarEmailGmail(f.proprietario_email, assunto, corpo);
+    if(ok)enviados++;else erros++;
+    await new Promise(function(r){setTimeout(r,400);});
+  }
+  toast('✅ '+enviados+' email(s) enviado(s)'+(erros?' · '+erros+' erro(s)':'')+'!','ok');
+}
+
 async function enviarMapaAnualTodos() {
   if (!currentCondo) return;
   if (!_gmailToken) {
@@ -4782,8 +4969,13 @@ async function enviarMapaAnualTodos() {
     var cE=reg?'#2e7d32':'#c62828';var bE=reg?'#e8f5e9':'#ffebee';
     var ass=reg?'✅ Mapa de Quotas '+ano+' — '+displayNomeCondo(currentCondo.nome||''):'⚠️ Mapa de Quotas '+ano+' — Quotas por Regularizar';
     var corpo='<div style="font-family:Arial,sans-serif;max-width:650px;margin:0 auto;background:#f4f6f9;"><div style="background:linear-gradient(135deg,#003366,#0066cc);padding:28px 32px;border-radius:12px 12px 0 0;"><table width=100%><tr><td><div style="color:#00d4ff;font-family:monospace;font-size:22px;font-weight:700;letter-spacing:3px;">COND.OS</div><div style="color:rgba(255,255,255,.6);font-size:11px;">2059 PRO</div></td><td style="text-align:right"><div style="color:#fff;font-size:13px;font-weight:600">MAPA DE QUOTAS</div><div style="color:#00d4ff;font-size:20px;font-weight:700">'+ano+'</div></td></tr></table></div><div style="background:#fff;padding:20px 32px;border-left:4px solid #0066cc"><div style="font-size:16px;font-weight:700;color:#003366">'+(currentCondo.nome||'')+'</div><div style="color:#666;font-size:12px">'+(currentCondo.morada||'')+'</div></div><div style="background:#f8f9fa;padding:16px 32px;border-bottom:1px solid #eee"><div style="font-size:11px;color:#999;text-transform:uppercase">Condómino</div><div style="font-size:15px;font-weight:700;color:#333">'+(f.proprietario_nome||'—')+'</div><div style="font-size:12px;color:#666">Fração '+(f.codigo||'?')+(f.bloco?' · Bloco '+f.bloco:'')+'</div></div><div style="background:'+bE+';padding:16px 32px;text-align:center;border-bottom:3px solid '+cE+'"><div style="font-size:16px;font-weight:700;color:'+cE+'">'+(reg?'✅ Situação Regularizada':'🔴 Quotas em Atraso')+'</div>'+(div>0?'<div style="font-size:13px;color:'+cE+';margin-top:4px">Total em dívida: <strong>'+div.toFixed(2)+'€</strong></div>':'<div style="font-size:12px;color:'+cE+';margin-top:4px">Obrigado pela pontualidade!</div>')+'</div><div style="background:#fff;padding:24px 32px"><div style="font-size:13px;font-weight:700;color:#003366;margin-bottom:12px;text-transform:uppercase;letter-spacing:1px">Detalhe por Mês</div><table width=100% style="border-collapse:collapse;font-size:13px"><thead><tr style="background:#003366"><th style="padding:10px 12px;color:#fff;text-align:left">Mês</th><th style="padding:10px 12px;color:#fff;text-align:right">Emitido</th><th style="padding:10px 12px;color:#fff;text-align:right">Pago</th><th style="padding:10px 12px;color:#fff;text-align:center">Data</th><th style="padding:10px 12px;color:#fff;text-align:center">Estado</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+(div>0?'<div style="background:#ffebee;padding:20px 32px;border-left:4px solid #c62828"><div style="font-size:13px;font-weight:700;color:#c62828;margin-bottom:6px">⚠️ Quotas por Regularizar</div><div style="font-size:12px;color:#666">Total em dívida: <strong style="color:#c62828">'+div.toFixed(2)+'€</strong></div><div style="margin-top:10px;padding:10px 14px;background:#fff;border-radius:6px;font-size:12px">IBAN: <strong>'+(currentCondo.iban_operacional||'Consulte o administrador')+'</strong></div></div>':'')+'<div style="background:#1a1a2e;padding:20px 32px;border-radius:0 0 12px 12px"><table width=100%><tr><td style="color:rgba(255,255,255,.7);font-size:11px"><div style="font-weight:600;color:#fff">'+(currentCondo.administrador_nome||'Administrador')+'</div></td><td style="text-align:right;color:rgba(255,255,255,.5);font-size:10px">COND.OS 2059 Pro · '+new Date().toLocaleDateString('pt-PT')+'</td></tr></table></div></div>';
-    var ok=await enviarEmailGmail(em,ass,corpo);
+    var pdf=null;
+    try { pdf=gerarPDFMapaAnualFracao(f, d.quotas, ano); } catch(e){ console.error('PDF anual:',e.message); }
+    var ok;
+    if (pdf) ok=await enviarEmailGmailComAnexo(em, ass, corpo, pdf, 'Mapa_Quotas_'+ano+'_'+(f.codigo||'')+'.pdf');
+    else ok=await enviarEmailGmail(em,ass,corpo);
     if(ok)env++;
+    await new Promise(function(r){setTimeout(r,400);});
   }
   toast('📧 '+env+' notificações enviadas!'+(sem>0?' ('+sem+' sem email)':''),'ok');
 }
@@ -5837,6 +6029,55 @@ async function enviarEmailGmail(para, assunto, corpoHtml) {
     return false;
   } catch(e) {
     toast('Erro ao enviar email: ' + e.message, 'err');
+    return false;
+  }
+}
+
+
+async function enviarEmailGmailComAnexo(para, assunto, corpoHtml, pdfBase64, nomePdf) {
+  if (!_gmailToken) {
+    toast('Gmail não ligado — liga em Definições para enviar com anexo','warn');
+    return false;
+  }
+  try {
+    var fromName = localStorage.getItem('condos_gmail_from_name') || 'Administração';
+    var encAssunto = '=?UTF-8?B?' + btoa(unescape(encodeURIComponent(assunto))) + '?=';
+    var encFromName = /[^\x00-\x7F]/.test(fromName)
+      ? '=?UTF-8?B?' + btoa(unescape(encodeURIComponent(fromName))) + '?='
+      : fromName;
+    var boundary = 'condos_' + Date.now();
+    var raw =
+      'From: ' + encFromName + ' <' + _gmailEmail + '>\r\n' +
+      'To: ' + para + '\r\n' +
+      'Subject: ' + encAssunto + '\r\n' +
+      'MIME-Version: 1.0\r\n' +
+      'Content-Type: multipart/mixed; boundary="' + boundary + '"\r\n\r\n' +
+      '--' + boundary + '\r\n' +
+      'Content-Type: text/html; charset=UTF-8\r\n' +
+      'Content-Transfer-Encoding: base64\r\n\r\n' +
+      btoa(unescape(encodeURIComponent(corpoHtml))) + '\r\n\r\n' +
+      '--' + boundary + '\r\n' +
+      'Content-Type: application/pdf\r\n' +
+      'Content-Transfer-Encoding: base64\r\n' +
+      'Content-Disposition: attachment; filename="' + (nomePdf||'mapa.pdf') + '"\r\n\r\n' +
+      pdfBase64 + '\r\n\r\n' +
+      '--' + boundary + '--';
+    var encoded = btoa(unescape(encodeURIComponent(raw))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+    var res = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + _gmailToken, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ raw: encoded })
+    });
+    if (res.ok) return true;
+    var err = await res.json();
+    if (err.error && err.error.code === 401) {
+      _gmailToken = null; localStorage.removeItem('condos_gmail_token');
+      toast('Sessão Gmail expirada — reconecta','warn'); ligarGmail(); return false;
+    }
+    toast('Erro ao enviar: ' + (err.error ? err.error.message : 'desconhecido'), 'err');
+    return false;
+  } catch(e) {
+    toast('Erro ao enviar com anexo: ' + e.message, 'err');
     return false;
   }
 }
