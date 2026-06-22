@@ -2243,7 +2243,7 @@ async function wizImportCaderneta(input) {
   try {
     var imagens = await pdfParaImagemBase64(file, 2);
     var base64 = imagens[0];
-    var prompt = 'Analisa esta caderneta predial urbana portuguesa (AT). Extrai: ano de construção, ano de inscrição na matriz, artigo matricial, valor patrimonial tributário total, área bruta total em m2, área privativa total em m2, IMI anual total. Devolve APENAS JSON: {"ano_construcao":0,"ano_inscricao":0,"artigo_matricial":"","vpt":0,"area_total":0,"area_privativa":0,"imi_anual":0}';
+    var prompt = 'Analisa esta caderneta predial urbana portuguesa (AT). Extrai os campos com ATENÇÃO aos vários anos (não os confundas): "ano_construcao" é o valor do campo "Ano de Construção" (ou "Época de Construção"); "ano_inscricao" é o campo "Ano de Inscrição na Matriz" (diferente do anterior). Extrai ainda: artigo matricial, valor patrimonial tributário (VPT) total, área bruta total em m2, área bruta privativa total em m2, IMI anual total. Para valores monetários e áreas devolve apenas o número (sem símbolos, sem separador de milhares, com ponto decimal). Se um campo não existir no documento, devolve 0 ou "". Devolve APENAS JSON, sem texto à volta: {"ano_construcao":0,"ano_inscricao":0,"artigo_matricial":"","vpt":0,"area_total":0,"area_privativa":0,"imi_anual":0}';
     var res = await fetch(PROXY_URL, {
       method:'POST', headers:PROXY_HEADERS,
       body: JSON.stringify({ prompt, foto: base64, tipo: 'caderneta_import' })
