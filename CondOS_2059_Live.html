@@ -1821,6 +1821,18 @@ textarea.fi{resize:vertical;min-height:60px;}
   </div>
 </div>
 
+<div class="mo" id="mo-cartao">
+  <div class="mo-box" style="width:440px;padding:0;overflow:hidden;background:transparent;border:none;">
+    <div id="cartao-render"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:14px;background:var(--s1);border-radius:0 0 14px 14px;border:1px solid var(--b1);border-top:none;">
+      <button class="btn-ghost" style="display:inline-flex;align-items:center;justify-content:center;gap:6px;background:rgba(37,211,102,.08);border-color:rgba(37,211,102,.3);color:#25d366;" onclick="cartaoWhatsApp()"><i class="ti ti-brand-whatsapp"></i>WhatsApp</button>
+      <button class="btn-ghost" style="display:inline-flex;align-items:center;justify-content:center;gap:6px;" onclick="cartaoEmail()"><i class="ti ti-mail"></i>Email</button>
+      <button class="btn-ghost" style="display:inline-flex;align-items:center;justify-content:center;gap:6px;" onclick="imprimirCartao()"><i class="ti ti-printer"></i>Imprimir</button>
+      <button class="btn-ghost" style="display:inline-flex;align-items:center;justify-content:center;gap:6px;" onclick="editarDoCartao()"><i class="ti ti-edit"></i>Editar</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -3469,11 +3481,15 @@ function calcularCustosPostais() {
   if (!fracoes.length) return;
   var TARIFAS = { email:0, whatsapp:0, carta_simples:0.73, carta_registada:3.75, carta_ar:5.54 };
   var LABELS = { email:'Email', whatsapp:'WhatsApp', carta_simples:'Carta Simples', carta_registada:'Carta Registada', carta_ar:'Carta Reg. + AR' };
+  // Prioridade de CUSTO: se a fração tem qualquer carta selecionada, conta a mais cara
+  // (a carta é sempre enviada na prática). Só digital = grátis.
+  var PRIORIDADE = ['carta_ar','carta_registada','carta_simples','email','whatsapp'];
   var grupos = {};
   fracoes.forEach(function(f) {
-    var m = f.metodo_notificacao || 'carta_registada';
-    if (!grupos[m]) grupos[m] = [];
-    grupos[m].push(f);
+    var sel = (f.metodo_notificacao || 'carta_registada').split(',').map(function(s){return s.trim();}).filter(Boolean);
+    var escolhido = PRIORIDADE.find(function(p){ return sel.indexOf(p) >= 0; }) || 'carta_registada';
+    if (!grupos[escolhido]) grupos[escolhido] = [];
+    grupos[escolhido].push(f);
   });
   var totalPorEvento = 0;
   var detalhe = [];
@@ -3487,7 +3503,7 @@ function calcularCustosPostais() {
   if (!el) return;
   var totalAnual2 = totalPorEvento * 2;
   var totalAnual3 = totalPorEvento * 3;
-  var semMetodo = fracoes.filter(function(f){return !f.metodo_notificacao||f.metodo_notificacao==='carta_registada'||f.metodo_notificacao==='carta_ar';}).length;
+  var semMetodo = fracoes.filter(function(f){ var s=(f.metodo_notificacao||'carta_registada'); return /carta/.test(s); }).length;
   el.innerHTML =
     '<div style="background:var(--s1);border:1px solid var(--b1);border-radius:10px;padding:14px;margin-bottom:16px;">' +
     '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">' +
@@ -3528,7 +3544,7 @@ function editFracao(id) {
   document.getElementById('f-aemail').value = f.arrendatario_email || '';
   document.getElementById('f-pin').value = f.portal_pin || '1234';
   // Método de notificação
-  selectNotif(f.metodo_notificacao || 'carta_registada');
+  setNotifMetodos(f.metodo_notificacao || 'carta_registada');
   if (f.notificacao_digital_aceite) {
     var aceiteEl = document.getElementById('f-notif-aceite');
     if (aceiteEl) aceiteEl.checked = true;
@@ -3575,7 +3591,7 @@ function abrirNovoCondomino() {
   document.getElementById('f-pin').value='1234';
   document.getElementById('f-permilagem').value='';
   document.getElementById('f-quota').value='';
-  selectNotif('carta_registada');
+  setNotifMetodos('carta_registada');
   openModal('mo-fracao');
 }
 
@@ -3622,12 +3638,12 @@ function renderCondominos(lista) {
       return '<tr style="' + trBorder + '">' +
         '<td><span class="apt">' + (f.codigo||'—') + '</span></td>' +
         '<td><span class="pill info">' + (f.bloco||'—') + '</span></td>' +
-        '<td><div style="font-weight:500">' + (f.proprietario_nome||'<span style="color:var(--t3)">Sem nome</span>') + '</div>' +
+        '<td><div style="font-weight:500;cursor:pointer;color:var(--cyan);display:inline-flex;align-items:center;gap:5px;" onclick="abrirCartaoCondomino(\'' + f.id + '\')" title="Ver ficha"><i class="ti ti-id-badge-2" style="font-size:14px;opacity:.7;"></i>' + (f.proprietario_nome||'<span style="color:var(--t3)">Sem nome</span>') + '</div>' +
           (f.proprietario_morada ? '<div style="font-size:10px;color:var(--t3)">' + f.proprietario_morada + '</div>' : '') + '</td>' +
         '<td class="mn" style="font-size:11px">' + (f.proprietario_nif||'<span style="color:var(--red)">⚠️ Falta</span>') + '</td>' +
         '<td><div style="font-size:11px">' + (f.proprietario_tel||'—') + '</div>' +
           '<div style="font-size:10px;color:var(--t3)">' + (f.proprietario_email||'—') + '</div></td>' +
-        '<td><span style="font-size:10px;color:' + (METODO_COLOR[metodo]||'var(--t2)') + '">' + (METODO_LABEL[metodo]||metodo) + '</span></td>' +
+        '<td>' + ((metodo||'').split(',').map(function(s){return s.trim();}).filter(Boolean).map(function(mm){ return '<span style="font-size:9px;color:' + (METODO_COLOR[mm]||'var(--t2)') + ';display:inline-block;margin:1px 2px;">' + (METODO_LABEL[mm]||mm) + '</span>'; }).join('') || '<span style="font-size:10px;color:var(--t3)">—</span>') + '</td>' +
         '<td>' + (alertas.length ? '<span style="font-size:9px;color:var(--red)">⚠️ ' + alertas.join(', ') + '</span>' : '<span style="font-size:9px;color:var(--green)">✅ Completa</span>') + '</td>' +
         '<td>' + alertaData + '</td>' +
         '<td><div style="display:flex;gap:4px;">' +
@@ -3641,7 +3657,7 @@ function renderCondominos(lista) {
   var resumoEl = document.getElementById('cond-resumo-notif');
   if (resumoEl) {
     var porMetodo = {};
-    lista.forEach(function(f) { var m = f.metodo_notificacao||'carta_registada'; porMetodo[m]=(porMetodo[m]||0)+1; });
+    lista.forEach(function(f) { (f.metodo_notificacao||'carta_registada').split(',').map(function(s){return s.trim();}).filter(Boolean).forEach(function(m){ porMetodo[m]=(porMetodo[m]||0)+1; }); });
     var incompletas = lista.filter(function(f){return !f.proprietario_nif||!f.proprietario_tel;}).length;
     resumoEl.innerHTML = '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:4px;">' +
       Object.keys(porMetodo).map(function(m) {
@@ -3869,6 +3885,123 @@ function exportarCondominosPDF() {
 
 var _qrLinkActual = '';
 var _qrFracaoId = '';
+
+// ===== CARTÃO DE CONDÓMINO (visualização) =====
+var _cartaoFracaoId = null;
+function abrirCartaoCondomino(fracaoId) {
+  var f = fracoes.find(function(x){ return x.id === fracaoId; });
+  if (!f) { toast('Fração não encontrada','err'); return; }
+  _cartaoFracaoId = fracaoId;
+  document.getElementById('cartao-render').innerHTML = renderCartaoHTML(f);
+  openModal('mo-cartao');
+}
+
+function renderCartaoHTML(f) {
+  var METODO_LABEL = { email:'📧 Email', whatsapp:'💬 WhatsApp', carta_simples:'✉️ Carta Simples', carta_registada:'📬 Carta Registada', carta_ar:'📮 Carta Reg.+AR' };
+  var PAG_LABEL = { transferencia:'🏦 Transferência', debito_direto:'🔄 Débito Directo', mbway:'📱 MB WAY', multibanco:'🏧 Multibanco', cheque:'📝 Cheque' };
+  var metodos = (f.metodo_notificacao||'').split(',').map(function(s){return s.trim();}).filter(Boolean);
+  var pagamentos = (f.metodo_pagamento||'').split(',').map(function(s){return s.trim();}).filter(Boolean);
+  var iniciais = (f.proprietario_nome||'?').split(' ').filter(Boolean).slice(0,2).map(function(p){return p[0];}).join('').toUpperCase();
+  var papel = f.papel_legal ? f.papel_legal.charAt(0).toUpperCase()+f.papel_legal.slice(1) : null;
+  var dataFicha = f.notificacao_digital_data ? new Date(f.notificacao_digital_data).toLocaleDateString('pt-PT') : null;
+  var condoNome = displayNomeCondo(currentCondo ? (currentCondo.nome||'') : '');
+
+  function linha(icon, label, valor) {
+    if (!valor) return '';
+    return '<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.05);">' +
+      '<i class="ti ' + icon + '" style="font-size:15px;color:#00d4ff;width:18px;text-align:center;flex-shrink:0;"></i>' +
+      '<span style="font-size:10px;color:#7a8a99;width:78px;flex-shrink:0;">' + label + '</span>' +
+      '<span style="font-size:12px;color:#e8eef4;font-weight:500;word-break:break-word;">' + valor + '</span></div>';
+  }
+
+  return '<div id="cartao-print-area" style="background:linear-gradient(155deg,#0a1119 0%,#0d1825 55%,#0a1420 100%);border-radius:14px 14px 0 0;border:1px solid rgba(0,212,255,.25);border-bottom:none;overflow:hidden;position:relative;">' +
+    // faixa topo
+    '<div style="height:4px;background:linear-gradient(90deg,#00d4ff,#0088cc);"></div>' +
+    // cabeçalho
+    '<div style="padding:18px 20px 14px;display:flex;align-items:center;justify-content:space-between;">' +
+      '<div style="font-family:\'Courier New\',monospace;"><div style="font-size:16px;font-weight:700;color:#00d4ff;letter-spacing:1px;">COND.OS</div><div style="font-size:8px;color:#5a6a79;letter-spacing:2px;">2059 PRO</div></div>' +
+      '<div style="text-align:right;"><div style="font-size:9px;color:#5a6a79;text-transform:uppercase;letter-spacing:1px;">Ficha de Condómino</div><div style="font-size:11px;color:#a8b8c8;font-weight:600;margin-top:2px;">' + condoNome + '</div></div>' +
+    '</div>' +
+    // avatar + nome
+    '<div style="padding:6px 20px 16px;display:flex;align-items:center;gap:14px;">' +
+      '<div style="width:58px;height:58px;border-radius:50%;background:linear-gradient(135deg,#00d4ff,#0066aa);display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:#04111c;flex-shrink:0;box-shadow:0 4px 16px rgba(0,212,255,.3);">' + iniciais + '</div>' +
+      '<div style="min-width:0;"><div style="font-size:18px;font-weight:700;color:#fff;line-height:1.2;">' + (f.proprietario_nome||'Sem nome') + '</div>' +
+        '<div style="display:flex;gap:6px;margin-top:5px;flex-wrap:wrap;">' +
+          '<span style="font-size:10px;font-weight:700;background:rgba(0,212,255,.15);color:#00d4ff;padding:2px 9px;border-radius:20px;">Fração ' + (f.codigo||'—') + '</span>' +
+          (f.bloco ? '<span style="font-size:10px;background:rgba(255,255,255,.08);color:#a8b8c8;padding:2px 9px;border-radius:20px;">Bloco ' + f.bloco + '</span>' : '') +
+          (papel ? '<span style="font-size:10px;background:rgba(180,140,255,.15);color:#b48cff;padding:2px 9px;border-radius:20px;">' + papel + '</span>' : '') +
+        '</div></div>' +
+    '</div>' +
+    // dados
+    '<div style="padding:4px 20px 18px;">' +
+      linha('ti-id','NIF', f.proprietario_nif) +
+      linha('ti-phone','Telefone', f.proprietario_tel) +
+      linha('ti-mail','Email', f.proprietario_email) +
+      linha('ti-map-pin','Morada', f.proprietario_morada) +
+      linha('ti-building-bank','IBAN', f.nib_proprio) +
+      (metodos.length ? linha('ti-bell','Notificação', metodos.map(function(m){return METODO_LABEL[m]||m;}).join('  ·  ')) : '') +
+      (pagamentos.length ? linha('ti-credit-card','Pagamento', pagamentos.map(function(p){return PAG_LABEL[p]||p;}).join('  ·  ')) : '') +
+      (f.funcao_operacional ? linha('ti-tool','Função', f.funcao_operacional) : '') +
+    '</div>' +
+    // rodapé
+    '<div style="padding:10px 20px;background:rgba(0,0,0,.25);display:flex;align-items:center;justify-content:space-between;font-size:9px;color:#5a6a79;">' +
+      '<span>' + (dataFicha ? 'Dados atualizados a ' + dataFicha : 'Dados ainda não confirmados pelo condómino') + '</span>' +
+      '<span>COND.OS 2059 Pro</span>' +
+    '</div>' +
+  '</div>';
+}
+
+function imprimirCartao() {
+  var f = fracoes.find(function(x){ return x.id === _cartaoFracaoId; });
+  if (!f) return;
+  var html = renderCartaoHTML(f);
+  var w = window.open('', '_blank', 'width=480,height=720');
+  w.document.write('<!DOCTYPE html><html><head><title>Ficha — ' + (f.proprietario_nome||'Condómino') + '</title>' +
+    '<link href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.30.0/tabler-icons.min.css" rel="stylesheet">' +
+    '<style>body{margin:0;padding:30px;background:#050a0f;font-family:system-ui,sans-serif;display:flex;justify-content:center;}#cartao-print-area{max-width:440px;}@media print{body{background:#fff;padding:0;}}</style>' +
+    '</head><body>' + html + '</body></html>');
+  w.document.close();
+  setTimeout(function(){ w.print(); }, 500);
+}
+
+function cartaoEmail() {
+  var f = fracoes.find(function(x){ return x.id === _cartaoFracaoId; });
+  if (!f) return;
+  if (!f.proprietario_email) { toast('Esta fração não tem email registado','warn'); return; }
+  var condoNome = displayNomeCondo(currentCondo ? (currentCondo.nome||'') : '');
+  var assunto = 'Ficha de Condómino — ' + condoNome + ' — Fração ' + (f.codigo||'');
+  var corpo = 'Caro(a) ' + (f.proprietario_nome||'condómino') + ',%0D%0A%0D%0A' +
+    'Segue a sua ficha de condómino registada em ' + condoNome + ':%0D%0A%0D%0A' +
+    'Fração: ' + (f.codigo||'—') + (f.bloco?' (Bloco '+f.bloco+')':'') + '%0D%0A' +
+    'NIF: ' + (f.proprietario_nif||'—') + '%0D%0A' +
+    'Telefone: ' + (f.proprietario_tel||'—') + '%0D%0A' +
+    'Email: ' + (f.proprietario_email||'—') + '%0D%0A' +
+    'Morada: ' + (f.proprietario_morada||'—') + '%0D%0A%0D%0A' +
+    'Caso algum dado esteja incorrecto, por favor contacte a administração.%0D%0A%0D%0ACumprimentos,%0D%0AAdministração de ' + condoNome;
+  window.location.href = 'mailto:' + f.proprietario_email + '?subject=' + encodeURIComponent(assunto) + '&body=' + corpo;
+}
+
+function cartaoWhatsApp() {
+  var f = fracoes.find(function(x){ return x.id === _cartaoFracaoId; });
+  if (!f) return;
+  var condoNome = displayNomeCondo(currentCondo ? (currentCondo.nome||'') : '');
+  var texto = '*Ficha de Condómino — ' + condoNome + '*%0A%0A' +
+    '👤 ' + (f.proprietario_nome||'—') + '%0A' +
+    '🏠 Fração ' + (f.codigo||'—') + (f.bloco?' · Bloco '+f.bloco:'') + '%0A' +
+    '🪪 NIF: ' + (f.proprietario_nif||'—') + '%0A' +
+    '📞 ' + (f.proprietario_tel||'—') + '%0A' +
+    '📧 ' + (f.proprietario_email||'—');
+  var tel = (f.proprietario_tel||'').replace(/\s|\+/g,'');
+  var base = tel ? 'https://wa.me/351' + tel : 'https://wa.me/';
+  window.open(base + '?text=' + texto, '_blank');
+}
+
+function editarDoCartao() {
+  closeModal('mo-cartao');
+  editFracao(_cartaoFracaoId);
+}
+
+
 function gerarQRCondomino(fracaoId) {
   const f = fracoes.find(x=>x.id===fracaoId);
   if (!f) return;
@@ -3946,14 +4079,45 @@ document.addEventListener('change', function(e) {
 });
 
 function selectNotif(tipo) {
-  document.getElementById('f-notif').value = tipo;
+  // MULTI-SELECT: alterna a seleção do método clicado (permite vários em simultâneo)
+  var hidden = document.getElementById('f-notif');
+  var sel = (hidden.value||'').split(',').map(function(s){return s.trim();}).filter(Boolean);
+  var idx = sel.indexOf(tipo);
+  if (idx >= 0) sel.splice(idx,1); else sel.push(tipo);
+  hidden.value = sel.join(',');
+  // Atualizar visual de TODOS os cartões
   ['email','whatsapp','carta_simples','carta_registada','carta_ar'].forEach(function(t) {
     var el = document.getElementById('notif-'+t);
-    if (el) el.style.border = t === tipo ? '2px solid var(--cyan)' : '2px solid var(--b1)';
-    if (el) el.querySelector('div:nth-child(2)').style.color = t === tipo ? 'var(--cyan)' : 'var(--t2)';
+    if (!el) return;
+    var ativo = sel.indexOf(t) >= 0;
+    el.style.border = ativo ? '2px solid var(--cyan)' : '2px solid var(--b1)';
+    el.style.background = ativo ? 'rgba(0,212,255,.06)' : 'var(--s2)';
+    var lbl = el.querySelector('div:nth-child(2)');
+    if (lbl) lbl.style.color = ativo ? 'var(--cyan)' : 'var(--t2)';
   });
-  var digital = tipo === 'email' || tipo === 'whatsapp';
-  document.getElementById('notif-aceitou-row').style.display = digital ? 'block' : 'none';
+  // Mostrar linha de "aceitou digital" se algum método digital estiver selecionado
+  var digital = sel.indexOf('email') >= 0 || sel.indexOf('whatsapp') >= 0;
+  var row = document.getElementById('notif-aceitou-row');
+  if (row) row.style.display = digital ? 'block' : 'none';
+}
+
+function setNotifMetodos(valor) {
+  // Aplica uma seleção (string com vírgulas) ao conjunto de cartões — usado ao abrir/editar
+  var hidden = document.getElementById('f-notif');
+  hidden.value = valor || '';
+  var sel = (valor||'').split(',').map(function(s){return s.trim();}).filter(Boolean);
+  ['email','whatsapp','carta_simples','carta_registada','carta_ar'].forEach(function(t) {
+    var el = document.getElementById('notif-'+t);
+    if (!el) return;
+    var ativo = sel.indexOf(t) >= 0;
+    el.style.border = ativo ? '2px solid var(--cyan)' : '2px solid var(--b1)';
+    el.style.background = ativo ? 'rgba(0,212,255,.06)' : 'var(--s2)';
+    var lbl = el.querySelector('div:nth-child(2)');
+    if (lbl) lbl.style.color = ativo ? 'var(--cyan)' : 'var(--t2)';
+  });
+  var digital = sel.indexOf('email') >= 0 || sel.indexOf('whatsapp') >= 0;
+  var row = document.getElementById('notif-aceitou-row');
+  if (row) row.style.display = digital ? 'block' : 'none';
 }
 
 async function saveFracao() {
@@ -3962,57 +4126,55 @@ async function saveFracao() {
   if (!cod && !letra) { toast('Preenche pelo menos o campo Fração','err'); return; }
   const modal = document.getElementById('mo-fracao');
   const editId = modal.dataset.editId;
-  const payload = {
+  // CORE: campos essenciais que existem de certeza na tabela fracoes
+  const gv = function(id){ var el=document.getElementById(id); return el?el.value:''; };
+  const core = {
     condominio_id: currentCondo.id,
     codigo: cod || letra,
-    tipo: document.getElementById('f-tipo').value,
-    bloco: document.getElementById('f-bloco').value,
-    permilagem: parseFloat(document.getElementById('f-permilagem').value)||0,
-    quota_mensal: parseFloat(document.getElementById('f-quota').value)||currentCondo.quota_base||0,
-    proprietario_nome: document.getElementById('f-pnome').value,
-    proprietario_email: document.getElementById('f-pemail').value,
-    proprietario_tel: document.getElementById('f-ptel').value,
-    proprietario_nif: document.getElementById('f-nif').value,
-    proprietario_morada: document.getElementById('f-pmorada').value,
-    metodo_notificacao: document.getElementById('f-notif').value,
-    notificacao_digital_aceite: document.getElementById('f-notif-aceite') ? document.getElementById('f-notif-aceite').checked : false,
-    notificacao_digital_data: document.getElementById('f-notif-data') ? document.getElementById('f-notif-data').value : null,
-    arrendatario_nome: document.getElementById('f-anome').value,
-    arrendatario_email: document.getElementById('f-aemail').value,
-    portal_pin: document.getElementById('f-pin').value||'1234',
-    papel_legal: document.getElementById('f-papel-legal') ? document.getElementById('f-papel-legal').value || null : null,
-    funcao_operacional: document.getElementById('f-funcao-operacional') ? document.getElementById('f-funcao-operacional').value || null : null,
-    nib_proprio: document.getElementById('f-nib-proprio') ? document.getElementById('f-nib-proprio').value.trim() || null : null,
-    seguro_cobre_partes_comuns: document.getElementById('f-seguro-cobre') && document.getElementById('f-seguro-cobre').value !== '' ? document.getElementById('f-seguro-cobre').value === 'true' : null,
-    seguro_seguradora: document.getElementById('f-seguro-seguradora') ? document.getElementById('f-seguro-seguradora').value.trim() || null : null,
-    seguro_apolice: document.getElementById('f-seguro-apolice') ? document.getElementById('f-seguro-apolice').value.trim() || null : null,
-    seguro_validade: document.getElementById('f-seguro-validade') ? document.getElementById('f-seguro-validade').value || null : null,
-    seguro_capital: document.getElementById('f-seguro-capital') ? parseFloat(document.getElementById('f-seguro-capital').value) || null : null
+    tipo: gv('f-tipo'),
+    bloco: gv('f-bloco'),
+    permilagem: parseFloat(gv('f-permilagem'))||0,
+    quota_mensal: parseFloat(gv('f-quota'))||currentCondo.quota_base||0,
+    proprietario_nome: gv('f-pnome'),
+    proprietario_email: gv('f-pemail'),
+    proprietario_tel: gv('f-ptel'),
+    proprietario_nif: gv('f-nif'),
+    proprietario_morada: gv('f-pmorada'),
+    arrendatario_nome: gv('f-anome'),
+    arrendatario_email: gv('f-aemail'),
+    portal_pin: gv('f-pin')||'1234',
+    metodo_notificacao: gv('f-notif')
   };
-  let error;
+  // EXTRA: campos avançados que podem não existir ainda (gravados num 2.º passo opcional)
+  const extra = {
+    notificacao_digital_aceite: document.getElementById('f-notif-aceite') ? document.getElementById('f-notif-aceite').checked : false,
+    notificacao_digital_data: document.getElementById('f-notif-data') ? (document.getElementById('f-notif-data').value||null) : null,
+    papel_legal: gv('f-papel-legal')||null,
+    funcao_operacional: gv('f-funcao-operacional')||null,
+    nib_proprio: (gv('f-nib-proprio')||'').trim()||null,
+    seguro_cobre_partes_comuns: document.getElementById('f-seguro-cobre') && gv('f-seguro-cobre')!=='' ? gv('f-seguro-cobre')==='true' : null,
+    seguro_seguradora: (gv('f-seguro-seguradora')||'').trim()||null,
+    seguro_apolice: (gv('f-seguro-apolice')||'').trim()||null,
+    seguro_validade: gv('f-seguro-validade')||null,
+    seguro_capital: gv('f-seguro-capital') ? (parseFloat(gv('f-seguro-capital'))||null) : null
+  };
+  let error, savedId = editId;
   if (editId) {
-    let res = await sb.from('fracoes').update(payload).eq('id', editId);
+    // 1) Gravar CORE (garante que email/dados básicos guardam SEMPRE)
+    const res = await sb.from('fracoes').update(core).eq('id', editId);
     error = res.error;
-    // Fallback: se alguma coluna não existir na BD, tentar só com os campos essenciais
-    if (error && (error.code === 'PGRST204' || /column|does not exist|schema cache/i.test(error.message||''))) {
-      console.warn('Update completo falhou, a tentar campos essenciais:', error.message);
-      const core = {
-        codigo: payload.codigo, tipo: payload.tipo, bloco: payload.bloco,
-        permilagem: payload.permilagem, quota_mensal: payload.quota_mensal,
-        proprietario_nome: payload.proprietario_nome, proprietario_email: payload.proprietario_email,
-        proprietario_tel: payload.proprietario_tel, proprietario_nif: payload.proprietario_nif,
-        proprietario_morada: payload.proprietario_morada
-      };
-      res = await sb.from('fracoes').update(core).eq('id', editId);
-      error = res.error;
-      if (!error) toast('⚠️ Guardado (alguns campos avançados ignorados — falta migração SQL)','warn');
-    }
     delete modal.dataset.editId;
   } else {
-    const res = await sb.from('fracoes').insert(payload);
+    const res = await sb.from('fracoes').insert(core).select('id').single();
     error = res.error;
+    if (res.data) savedId = res.data.id;
   }
-  if (error) { toast('Erro ao guardar: '+(error.message||error.code||'desconhecido'),'err'); console.error('saveFracao:', error); return; }
+  if (error) { toast('Erro ao guardar: '+(error.message||error.code||'desconhecido'),'err'); console.error('saveFracao CORE:', error); return; }
+  // 2) Tentar gravar EXTRA por cima (se a coluna não existir, ignora silenciosamente)
+  if (savedId) {
+    const resX = await sb.from('fracoes').update(extra).eq('id', savedId);
+    if (resX.error) console.warn('Campos avançados não gravados (faltam colunas na BD):', resX.error.message);
+  }
   closeModal('mo-fracao');
   toast(editId ? 'Fração actualizada!' : 'Fração adicionada!','ok');
   await loadFracoes();
