@@ -759,7 +759,7 @@ textarea.fi{resize:vertical;min-height:60px;}
             <div style="padding:16px;">
               <div id="ed-caderneta-resultado" style="display:none;margin-bottom:12px;"></div>
               <div class="form-row">
-                <div class="fl"><label>Ano de Construção</label><input class="fi" id="ed-ano" type="number" placeholder="Ex: 1998" oninput="calcularAlturaEdificio()"></div>
+                <div class="fl"><label>Ano de Construção</label><input class="fi" id="ed-ano2" type="number" placeholder="Ex: 1998" oninput="document.getElementById('ed-ano').value=this.value;calcularAlturaEdificio()"></div>
                 <div class="fl"><label>Ano de Inscrição na Matriz</label><input class="fi" id="ed-ano-inscricao" type="number" placeholder="Ex: 2001"></div>
               </div>
               <div class="form-row">
@@ -1824,9 +1824,14 @@ textarea.fi{resize:vertical;min-height:60px;}
 </div>
 
 <div class="mo" id="mo-cartao">
-  <div class="mo-box" style="width:440px;padding:0;overflow:visible;background:transparent;border:none;position:relative;">
+  <div class="mo-box" style="width:470px;padding:0;overflow:visible;background:transparent;border:none;position:relative;">
     <button onclick="closeModal('mo-cartao')" title="Fechar" style="position:absolute;top:10px;right:10px;z-index:10;width:32px;height:32px;border-radius:50%;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.25);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:20px;line-height:1;font-family:Arial,sans-serif;padding:0;font-weight:300;">&times;</button>
     <div id="cartao-render"></div>
+    <div style="display:flex;background:var(--s1);border-left:1px solid var(--b1);border-right:1px solid var(--b1);">
+      <button id="tab-ficha" onclick="cartaoTab('ficha')" style="flex:1;padding:11px;background:transparent;border:none;border-bottom:2px solid var(--cyan);color:var(--cyan);font-size:12px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;"><i class="ti ti-id-badge-2"></i>Ficha</button>
+      <button id="tab-dossier" onclick="cartaoTab('dossier')" style="flex:1;padding:11px;background:transparent;border:none;border-bottom:2px solid transparent;color:var(--t2);font-size:12px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;"><i class="ti ti-wallet"></i>Dossier Financeiro</button>
+    </div>
+    <div id="dossier-render" style="display:none;"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;padding:14px;background:var(--s1);border-radius:0 0 14px 14px;border:1px solid var(--b1);border-top:none;">
       <button class="btn-ghost" style="display:inline-flex;align-items:center;justify-content:center;gap:6px;background:rgba(37,211,102,.08);border-color:rgba(37,211,102,.3);color:#25d366;" onclick="cartaoWhatsApp()"><i class="ti ti-brand-whatsapp"></i>WhatsApp</button>
       <button class="btn-ghost" style="display:inline-flex;align-items:center;justify-content:center;gap:6px;" onclick="cartaoEmail()"><i class="ti ti-mail"></i>Email</button>
@@ -2256,6 +2261,7 @@ async function wizImportCaderneta(input) {
     var json = JSON.parse(text.slice(start, end+1));
     var set = function(id, val) { var el = document.getElementById(id); if(el && val) el.value = val; };
     set('ed-ano', json.ano_construcao);
+    set('ed-ano2', json.ano_construcao);
     set('ed-ano-inscricao', json.ano_inscricao);
     set('ed-artigo-matricial', json.artigo_matricial);
     set('ed-vpt', json.vpt);
@@ -3898,7 +3904,141 @@ function abrirCartaoCondomino(fracaoId) {
   if (!f) { toast('Fração não encontrada','err'); return; }
   _cartaoFracaoId = fracaoId;
   document.getElementById('cartao-render').innerHTML = renderCartaoHTML(f);
+  cartaoTab('ficha');
   openModal('mo-cartao');
+}
+
+
+// ===== DOSSIER FINANCEIRO (dentro do cartão) =====
+var _dossierAno = new Date().getFullYear();
+
+function cartaoTab(tab) {
+  var fichaEl = document.getElementById('cartao-render');
+  var dossierEl = document.getElementById('dossier-render');
+  var tFicha = document.getElementById('tab-ficha');
+  var tDossier = document.getElementById('tab-dossier');
+  if (tab === 'dossier') {
+    fichaEl.style.display = 'none';
+    dossierEl.style.display = 'block';
+    tDossier.style.borderBottomColor = 'var(--cyan)'; tDossier.style.color = 'var(--cyan)';
+    tFicha.style.borderBottomColor = 'transparent'; tFicha.style.color = 'var(--t2)';
+    _dossierAno = new Date().getFullYear();
+    carregarDossier();
+  } else {
+    fichaEl.style.display = 'block';
+    dossierEl.style.display = 'none';
+    tFicha.style.borderBottomColor = 'var(--cyan)'; tFicha.style.color = 'var(--cyan)';
+    tDossier.style.borderBottomColor = 'transparent'; tDossier.style.color = 'var(--t2)';
+  }
+}
+
+async function carregarDossier() {
+  var el = document.getElementById('dossier-render');
+  el.innerHTML = '<div style="background:#0d1825;padding:40px;text-align:center;color:#7a8a99;font-size:13px;">A carregar histórico...</div>';
+  var f = fracoes.find(function(x){ return x.id === _cartaoFracaoId; });
+  if (!f) { el.innerHTML = '<div style="padding:20px;color:#999;">Fração não encontrada.</div>'; return; }
+  // Todas as quotas da fração (todos os anos) - sem filtro de mês/ano para descobrir anos disponíveis
+  var todas = await sb.from('quotas').select('*').eq('condominio_id', currentCondo.id).eq('fracao_id', f.id).order('ano',{ascending:false}).order('mes',{ascending:true});
+  var quotas = todas.data || [];
+  // Anos disponíveis
+  var anos = [...new Set(quotas.map(function(q){return q.ano;}))].sort(function(a,b){return b-a;});
+  if (!anos.length) anos = [new Date().getFullYear()];
+  if (anos.indexOf(_dossierAno) === -1) _dossierAno = anos[0];
+  el.innerHTML = renderDossierHTML(f, quotas, anos);
+}
+
+function renderDossierHTML(f, todasQuotas, anos) {
+  var mN = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  var mNomes = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  var eur = function(v){ return parseFloat(v||0).toFixed(2).replace('.',',')+'€'; };
+  var doAno = todasQuotas.filter(function(q){ return q.ano === _dossierAno; });
+  var porMes = {}; doAno.forEach(function(q){ porMes[q.mes] = q; });
+
+  // Totais do ano
+  var tE=0, tP=0;
+  doAno.forEach(function(q){ tE+=parseFloat(q.valor_emitido||0); tP+=parseFloat(q.valor_pago||0); });
+  var div = tE - tP;
+
+  // Juros de mora (Art. 1424º CC): juros legais civis 4%/ano sobre quotas vencidas e não pagas
+  // Calculado pro-rata desde o vencimento até hoje
+  var TAXA_JURO = 0.04;
+  var jurosTotal = 0;
+  var hoje = new Date();
+  doAno.forEach(function(q){
+    var saldoQ = parseFloat(q.valor_emitido||0) - parseFloat(q.valor_pago||0);
+    if (saldoQ > 0 && q.data_vencimento) {
+      var venc = new Date(q.data_vencimento);
+      if (hoje > venc) {
+        var dias = Math.floor((hoje - venc)/(1000*60*60*24));
+        jurosTotal += saldoQ * TAXA_JURO * (dias/365);
+      }
+    }
+  });
+
+  // Histórico acumulado de TODOS os anos
+  var tEGlobal=0, tPGlobal=0;
+  todasQuotas.forEach(function(q){ tEGlobal+=parseFloat(q.valor_emitido||0); tPGlobal+=parseFloat(q.valor_pago||0); });
+  var divGlobal = tEGlobal - tPGlobal;
+
+  // Seletor de anos
+  var anosBtns = anos.map(function(a){
+    var ativo = a === _dossierAno;
+    return '<button onclick="_dossierAno='+a+';carregarDossier()" style="padding:5px 14px;border-radius:20px;border:1px solid '+(ativo?'#00d4ff':'rgba(255,255,255,.15)')+';background:'+(ativo?'rgba(0,212,255,.15)':'transparent')+';color:'+(ativo?'#00d4ff':'#9ab')+';font-size:12px;font-weight:600;cursor:pointer;">'+a+'</button>';
+  }).join('');
+
+  // Linhas dos meses
+  var linhas = '';
+  for (var m=1; m<=12; m++) {
+    var q = porMes[m];
+    var mA = new Date().getMonth()+1;
+    var fut = (_dossierAno > hoje.getFullYear()) || (_dossierAno === hoje.getFullYear() && m > mA);
+    var saldoM = q ? (parseFloat(q.valor_emitido||0)-parseFloat(q.valor_pago||0)) : 0;
+    var cor, txt, icon;
+    if (!q) { cor='#5a6a79'; txt = fut?'—':'Não emitido'; icon='○'; }
+    else if (q.estado === 'pago') { cor='#10b981'; txt='Pago'; icon='✓'; }
+    else if (saldoM > 0 && parseFloat(q.valor_pago||0) > 0) { cor='#f59e0b'; txt='Parcial'; icon='◐'; }
+    else { cor='#dc2626'; txt='Em dívida'; icon='✕'; }
+    linhas +=
+      '<div style="display:flex;align-items:center;padding:9px 16px;border-bottom:1px solid rgba(255,255,255,.05);">'+
+        '<div style="width:38px;font-size:12px;color:#9ab;font-weight:600;">'+mN[m-1]+'</div>'+
+        '<div style="flex:1;font-size:12px;color:#cdd;">'+(q?eur(q.valor_emitido):'<span style="color:#5a6a79">—</span>')+'</div>'+
+        '<div style="flex:1;font-size:12px;color:'+(q&&parseFloat(q.valor_pago||0)>0?'#10b981':'#5a6a79')+';">'+(q&&parseFloat(q.valor_pago||0)>0?eur(q.valor_pago):'—')+'</div>'+
+        '<div style="flex:1;font-size:12px;color:'+(saldoM>0?'#dc2626':'#5a6a79')+';">'+(saldoM>0?eur(saldoM):'—')+'</div>'+
+        '<div style="width:70px;text-align:right;font-size:11px;font-weight:700;color:'+cor+';"><span style="margin-right:3px;">'+icon+'</span>'+txt+'</div>'+
+      '</div>';
+  }
+
+  return '<div style="background:#0a1119;border-left:1px solid rgba(0,212,255,.25);border-right:1px solid rgba(0,212,255,.25);max-height:480px;overflow-y:auto;">'+
+    // Seletor de ano
+    '<div style="padding:14px 16px;display:flex;gap:6px;flex-wrap:wrap;border-bottom:1px solid rgba(255,255,255,.08);background:#0d1825;">'+anosBtns+'</div>'+
+    // KPIs do ano
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1px;background:rgba(255,255,255,.05);">'+
+      '<div style="background:#0d1825;padding:14px 10px;text-align:center;"><div style="font-size:9px;color:#7a8a99;text-transform:uppercase;letter-spacing:1px;">Emitido '+_dossierAno+'</div><div style="font-size:16px;font-weight:700;color:#fff;margin-top:3px;">'+eur(tE)+'</div></div>'+
+      '<div style="background:#0d1825;padding:14px 10px;text-align:center;"><div style="font-size:9px;color:#7a8a99;text-transform:uppercase;letter-spacing:1px;">Pago</div><div style="font-size:16px;font-weight:700;color:#10b981;margin-top:3px;">'+eur(tP)+'</div></div>'+
+      '<div style="background:#0d1825;padding:14px 10px;text-align:center;"><div style="font-size:9px;color:#7a8a99;text-transform:uppercase;letter-spacing:1px;">Em dívida</div><div style="font-size:16px;font-weight:700;color:'+(div>0?'#dc2626':'#10b981')+';margin-top:3px;">'+eur(div)+'</div></div>'+
+    '</div>'+
+    // Cabeçalho da tabela
+    '<div style="display:flex;padding:8px 16px;background:#0d1825;border-bottom:2px solid rgba(0,212,255,.2);font-size:9px;color:#7a8a99;text-transform:uppercase;letter-spacing:.5px;">'+
+      '<div style="width:38px;">Mês</div><div style="flex:1;">Emitido</div><div style="flex:1;">Pago</div><div style="flex:1;">Dívida</div><div style="width:70px;text-align:right;">Estado</div>'+
+    '</div>'+
+    // Linhas
+    linhas +
+    // Juros de mora
+    (jurosTotal > 0 ?
+      '<div style="padding:12px 16px;background:rgba(220,38,38,.08);border-top:1px solid rgba(220,38,38,.2);">'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;">'+
+          '<div><div style="font-size:11px;color:#f87171;font-weight:700;">⚖️ Juros de mora (Art. 1424.º CC)</div><div style="font-size:9px;color:#9ab;margin-top:2px;">Taxa legal civil 4%/ano sobre valores vencidos</div></div>'+
+          '<div style="font-size:16px;font-weight:700;color:#f87171;">'+eur(jurosTotal)+'</div>'+
+        '</div>'+
+      '</div>' : '')+
+    // Resumo histórico global
+    '<div style="padding:14px 16px;background:#0d1825;border-top:1px solid rgba(255,255,255,.08);">'+
+      '<div style="font-size:9px;color:#7a8a99;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Histórico Global (todos os anos)</div>'+
+      '<div style="display:flex;justify-content:space-between;font-size:12px;color:#cdd;margin-bottom:4px;"><span>Total emitido</span><span style="font-weight:600;">'+eur(tEGlobal)+'</span></div>'+
+      '<div style="display:flex;justify-content:space-between;font-size:12px;color:#cdd;margin-bottom:4px;"><span>Total pago</span><span style="font-weight:600;color:#10b981;">'+eur(tPGlobal)+'</span></div>'+
+      '<div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;padding-top:6px;border-top:1px solid rgba(255,255,255,.08);"><span style="color:#fff;">Saldo total</span><span style="color:'+(divGlobal>0?'#dc2626':'#10b981')+';">'+(divGlobal>0?eur(divGlobal)+' em dívida':'Regularizado ✓')+'</span></div>'+
+    '</div>'+
+  '</div>';
 }
 
 function renderCartaoHTML(f) {
@@ -5733,7 +5873,7 @@ function loadEdificio() {
 
   // Geral
   set('ed-nome', c.nome); set('ed-nif', c.nif); set('ed-morada', c.morada);
-  set('ed-ano', c.ano_construcao); set('ed-ano-inscricao', c.ano_inscricao);
+  set('ed-ano', c.ano_construcao); set('ed-ano2', c.ano_construcao); set('ed-ano-inscricao', c.ano_inscricao);
   set('ed-artigo-matricial', c.artigo_matricial); set('ed-vpt', c.vpt);
   set('ed-area-total', c.area_total); set('ed-area-privativa', c.area_privativa);
   set('ed-imi-anual', c.imi_anual); set('ed-conservacao', c.conservacao);
@@ -5800,6 +5940,7 @@ async function saveEdificio() {
 
   var payload = {
     nif: g('ed-nif'), conservacao: g('ed-conservacao'),
+    ano_construcao: gi('ed-ano'),
     ano_inscricao: gi('ed-ano-inscricao'), artigo_matricial: g('ed-artigo-matricial'),
     vpt: gn('ed-vpt'), area_total: gn('ed-area-total'),
     area_privativa: gn('ed-area-privativa'), imi_anual: gn('ed-imi-anual'),
