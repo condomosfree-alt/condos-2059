@@ -803,6 +803,7 @@ textarea.fi{resize:vertical;min-height:60px;}
                 <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--t2);cursor:pointer;"><input type="checkbox" id="ed-alerta-dia5" style="accent-color:var(--cyan);"> ⚠️ Dia 5 — cotas em falta</label>
                 <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--t2);cursor:pointer;"><input type="checkbox" id="ed-alerta-dia8" checked style="accent-color:var(--cyan);"> 🔴 Dia 8 — devedores</label>
               </div>
+              <div style="margin-top:8px;font-size:10px;color:var(--amber);background:rgba(255,180,0,.08);border:1px solid rgba(255,180,0,.2);border-radius:6px;padding:7px 10px;">⏳ <strong>Preferências guardadas.</strong> O envio automático nestes dias requer um agendador no servidor (GitHub Actions) — ainda por ativar. Por agora, usa os botões <strong>Mapa Mensal</strong>, <strong>Mapa Anual</strong> e <strong>Alertar Devedores</strong> no módulo Quotas para enviar manualmente quando quiseres.</div>
             </div>
           </div>
         </div>
@@ -2248,9 +2249,10 @@ async function wizImportCaderneta(input) {
       body: JSON.stringify({ prompt, foto: base64, tipo: 'caderneta_import' })
     });
     var data = await res.json();
-    var text = data.text || '';
+    var text = (data.text || '').replace(/^`{3}json\s*/,'').replace(/\s*`{3}$/,'').trim();
+    console.log('Resposta IA caderneta:', text.slice(0,300));
     var start = text.indexOf('{'); var end = text.lastIndexOf('}');
-    if (start === -1) throw new Error('Não encontrei dados na caderneta');
+    if (start === -1 || end <= start) throw new Error('A IA não conseguiu ler a caderneta. Verifica que o PDF/foto está legível e é uma caderneta predial.');
     var json = JSON.parse(text.slice(start, end+1));
     var set = function(id, val) { var el = document.getElementById(id); if(el && val) el.value = val; };
     set('ed-ano', json.ano_construcao);
