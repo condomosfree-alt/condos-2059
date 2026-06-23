@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.06.23-0842</div>
+      <div class="sb-tag">2059 Pro · build v2026.06.23-0854</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -4345,7 +4345,40 @@ async function gerarQRTodosPDF() {
   if (!window.jspdf || !window.jspdf.jsPDF) { toast('Biblioteca PDF não carregada','err'); return; }
   if (typeof QRCode === 'undefined') { toast('Biblioteca QR não carregada','err'); return; }
 
-  if (!await confirmar('Vai ser gerado um PDF com 1 QR Code por página para cada uma das ' + fracoes.length + ' frações.\n\nIdeal para imprimir e colocar em cada caixa de correio.\n\nMarcar todas como notificadas após gerar?', {titulo:'Gerar QR Codes (carta)', tipo:'info', icon:'🖨️', okTexto:'Gerar PDF', cancelarTexto:'Cancelar'})) return;
+  // FILTRO INTELIGENTE: quem precisa de carta = sem email OU escolheu carta como método
+  // E que ainda NÃO foi notificado (para não duplicar quem já recebeu email/carta)
+  function precisaCarta(f) {
+    var metodos = (f.metodo_notificacao||'').split(',').map(function(s){return s.trim();}).filter(Boolean);
+    var temCartaEscolhida = metodos.some(function(m){ return m.indexOf('carta') === 0; });
+    return !f.proprietario_email || temCartaEscolhida;
+  }
+  var candidatos = fracoes.filter(precisaCarta);
+  var porNotificar = candidatos.filter(function(f){ return !f.ultima_notificacao; });
+  var jaNotificados = candidatos.filter(function(f){ return f.ultima_notificacao; });
+
+  if (!candidatos.length) {
+    await confirmar('Todas as frações têm email e nenhuma escolheu carta como método de notificação.\n\nUsa o "Notificar Todos" para enviar por email.', {titulo:'Sem frações para carta', tipo:'info', icon:'📧', okTexto:'Entendido', cancelarTexto:'Fechar'});
+    return;
+  }
+
+  // Decidir o que gerar
+  var msgFiltro = porNotificar.length + ' fração(ões) por notificar (precisam de carta).';
+  if (jaNotificados.length) msgFiltro += '\n' + jaNotificados.length + ' já foram notificadas anteriormente.';
+  msgFiltro += '\n\nQueres gerar QR apenas para as que faltam, ou para todas as que precisam de carta?';
+
+  var opcao;
+  if (jaNotificados.length && porNotificar.length) {
+    // Há ambos — perguntar qual
+    var soFaltam = await confirmar(msgFiltro, {titulo:'Gerar QR (carta)', tipo:'info', icon:'🖨️', okTexto:'Só as que faltam ('+porNotificar.length+')', cancelarTexto:'Todas ('+candidatos.length+')'});
+    opcao = soFaltam ? porNotificar : candidatos;
+  } else if (porNotificar.length) {
+    if (!await confirmar('Vão ser geradas ' + porNotificar.length + ' páginas (1 QR por fração que precisa de carta).\n\nIdeal para imprimir e colocar em cada caixa de correio.\n\nMarcar como notificadas após gerar?', {titulo:'Gerar QR (carta)', tipo:'info', icon:'🖨️', okTexto:'Gerar PDF', cancelarTexto:'Cancelar'})) return;
+    opcao = porNotificar;
+  } else {
+    // Todas já notificadas
+    if (!await confirmar('Todas as ' + candidatos.length + ' frações que precisam de carta já foram notificadas.\n\nQueres gerar o PDF na mesma (re-notificar)?', {titulo:'Já notificadas', tipo:'aviso', icon:'🔄', okTexto:'Gerar mesmo assim', cancelarTexto:'Cancelar'})) return;
+    opcao = candidatos;
+  }
 
   toast('A gerar QR Codes... aguarda.','');
   var { jsPDF } = window.jspdf;
@@ -4360,7 +4393,7 @@ async function gerarQRTodosPDF() {
   var moradaCondo = [currentCondo.morada, [currentCondo.codigo_postal, currentCondo.cidade].filter(Boolean).join(' ')].filter(Boolean).join(', ');
 
   // Ordenar por bloco e código
-  var lista = fracoes.slice().sort(function(a,b){
+  var lista = opcao.slice().sort(function(a,b){
     var ba=(a.bloco||''), bb=(b.bloco||'');
     if (ba!==bb) return ba<bb?-1:1;
     return (a.codigo||'')<(b.codigo||'')?-1:1;
