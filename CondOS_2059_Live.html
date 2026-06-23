@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.06.23-0801</div>
+      <div class="sb-tag">2059 Pro · build v2026.06.23-0822</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -3634,7 +3634,7 @@ function renderCondominos(lista) {
   var METODO_LABEL = { email:'📧 Email', whatsapp:'💬 WhatsApp', carta_simples:'✉️ Carta Simples', carta_registada:'📬 Carta Reg.', carta_ar:'📮 Carta Reg.+AR' };
   var METODO_COLOR = { email:'var(--green)', whatsapp:'var(--green)', carta_simples:'var(--amber)', carta_registada:'var(--amber)', carta_ar:'var(--orange)' };
   el.innerHTML = '<table class="tbl"><thead><tr>' +
-    '<th>Fração</th><th>Bloco</th><th>Proprietário</th><th>NIF</th><th>Contacto</th><th>Notificação</th><th>Ficha</th><th>Atualização</th><th>Ações</th>' +
+    '<th>Fração</th><th>Bloco</th><th>Proprietário</th><th>NIF</th><th>Contacto</th><th>Notificação</th><th>Ficha</th><th>Atualização</th><th>Últ. Notif.</th><th>Ações</th>' +
     '</tr></thead><tbody>' +
     lista.map(function(f) {
       var metodo = f.metodo_notificacao || 'carta_registada';
@@ -3676,9 +3676,24 @@ function renderCondominos(lista) {
         '<td>' + ((metodo||'').split(',').map(function(s){return s.trim();}).filter(Boolean).map(function(mm){ return '<span style="font-size:9px;color:' + (METODO_COLOR[mm]||'var(--t2)') + ';display:inline-block;margin:1px 2px;">' + (METODO_LABEL[mm]||mm) + '</span>'; }).join('') || '<span style="font-size:10px;color:var(--t3)">—</span>') + '</td>' +
         '<td>' + (alertas.length ? '<span style="font-size:9px;color:var(--red)">⚠️ ' + alertas.join(', ') + '</span>' : '<span style="font-size:9px;color:var(--green)">✅ Completa</span>') + '</td>' +
         '<td>' + alertaData + '</td>' +
+        '<td>' + (function(){
+          var dn = f.ultima_notificacao ? new Date(f.ultima_notificacao) : null;
+          if (!dn) return '<span style="font-size:9px;color:var(--t3)">—</span>';
+          var diasN = Math.floor((new Date() - dn)/(1000*60*60*24));
+          var corN = diasN > 365 ? 'var(--amber)' : 'var(--green)';
+          return '<span style="font-size:9px;color:'+corN+'">📨 ' + dn.toLocaleDateString("pt-PT") + '</span>';
+        })() + '</td>' +
         '<td><div style="display:flex;gap:4px;">' +
-          '<button class="tb-btn" onclick="editFracao(\'' + f.id + '\')" style="font-size:11px;padding:5px 10px;display:inline-flex;align-items:center;gap:5px;border-radius:6px;"><i class="ti ti-edit"></i> Editar</button>' +
-          '<button class="tb-btn" onclick="gerarQRCondomino(\'' + f.id + '\')" style="font-size:11px;padding:5px 10px;display:inline-flex;align-items:center;gap:5px;border-radius:6px;"><i class="ti ti-qrcode"></i> QR</button>' +
+          '<button class="tb-btn" onclick="editFracao(\'' + f.id + '\')" style="font-size:11px;padding:5px 9px;display:inline-flex;align-items:center;gap:4px;border-radius:6px;"><i class="ti ti-edit"></i> Editar</button>' +
+          '<button class="tb-btn" onclick="gerarQRCondomino(\'' + f.id + '\')" style="font-size:11px;padding:5px 9px;display:inline-flex;align-items:center;gap:4px;border-radius:6px;"><i class="ti ti-qrcode"></i> QR</button>' +
+          (function(){
+            var notificado = !!f.ultima_notificacao;
+            if (notificado) {
+              return '<button class="tb-btn" onclick="notificarIndividual(\'' + f.id + '\')" style="font-size:11px;padding:5px 9px;display:inline-flex;align-items:center;gap:4px;border-radius:6px;background:rgba(16,185,129,.12);border-color:rgba(16,185,129,.35);color:var(--green);" title="Já notificado — clica para notificar de novo"><i class="ti ti-circle-check"></i> Notificado</button>';
+            } else {
+              return '<button class="tb-btn" onclick="notificarIndividual(\'' + f.id + '\')" style="font-size:11px;padding:5px 9px;display:inline-flex;align-items:center;gap:4px;border-radius:6px;background:rgba(0,212,255,.1);border-color:rgba(0,212,255,.3);color:var(--cyan);" title="Notificar este condómino"><i class="ti ti-send"></i> Notificar</button>';
+            }
+          })() +
         '</div></td>' +
         '</tr>';
     }).join('') + '</tbody></table>';
@@ -5639,6 +5654,51 @@ async function enviarQREmail() {
 }
 
 // ===== NOTIFICAR TODOS =====
+async function notificarIndividual(fracaoId) {
+  var f = fracoes.find(function(x){ return x.id === fracaoId; });
+  if (!f) return;
+  if (!f.proprietario_email) {
+    await confirmar('Esta fração não tem email registado.\n\nImprime o QR Code (botão QR) e entrega por carta para o condómino actualizar os dados.', {titulo:'Sem email', tipo:'aviso', icon:'📭', okTexto:'Entendido', cancelarTexto:'Fechar'});
+    return;
+  }
+  if (!_gmailToken) {
+    if (await confirmar('O envio automático requer o Gmail ligado.\n\nAbrir Definições para ligar?', {titulo:'Gmail não ligado', tipo:'aviso', icon:'📧', okTexto:'Abrir Definições'})) nav('definicoes');
+    return;
+  }
+  var condoNome = displayNomeCondo(currentCondo.nome||'');
+  var isLocal2 = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost' || window.location.protocol === 'file:';
+  var isGithub2 = window.location.hostname.includes('github.io');
+  var baseUrl = isLocal2 ? 'https://condomosfree-alt.github.io/condos-2059' : isGithub2 ? window.location.origin + '/condos-2059' : window.location.origin;
+  var url = baseUrl + '/ficha.html?condo=' + encodeURIComponent(currentCondo.id) + '&fracao=' + encodeURIComponent(f.id) + '&codigo=' + encodeURIComponent(f.codigo||'') + '&bloco=' + encodeURIComponent(f.bloco||'');
+  var assunto = '📋 Actualização de dados — ' + condoNome + ' — Fração ' + (f.codigo||'');
+  var corpo = notificacaoEmailHTML(f, condoNome, url);
+  toast('A enviar email...','');
+  var ok = await enviarEmailGmail(f.proprietario_email, assunto, corpo);
+  if (ok) {
+    var upd = await sb.from('fracoes').update({ultima_notificacao: new Date().toISOString()}).eq('id', f.id);
+    if (upd.error) { console.warn('Coluna ultima_notificacao em falta na BD:', upd.error.message); toast('📧 Enviado! (cria a coluna ultima_notificacao no Supabase para guardar a data)','ok'); }
+    else { f.ultima_notificacao = new Date().toISOString(); toast('📧 ' + (f.proprietario_nome||'Condómino') + ' notificado!','ok'); renderCondominos(_condominosAll); }
+  } else {
+    toast('⚠️ Erro ao enviar. Verifica o Gmail.','warn');
+  }
+}
+
+function notificacaoEmailHTML(f, condoNome, url) {
+  return '<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#f4f6f8;">'+
+    '<div style="background:linear-gradient(135deg,#0a1119,#0d1825);padding:24px 28px;border-radius:10px 10px 0 0;">'+
+      '<table width=100%><tr><td><div style="color:#00d4ff;font-family:monospace;font-size:19px;font-weight:700;letter-spacing:2px;">COND.OS</div><div style="color:#5a6a79;font-size:9px;letter-spacing:3px;">2059 PRO</div></td>'+
+      '<td style="text-align:right;color:#fff;"><div style="font-size:13px;font-weight:600;">'+condoNome+'</div></td></tr></table>'+
+    '</div>'+
+    '<div style="background:#fff;padding:26px 28px;">'+
+      '<p style="font-size:14px;color:#333;margin:0 0 16px;">Caro(a) <strong>'+(f.proprietario_nome||'condómino')+'</strong>,</p>'+
+      '<p style="font-size:13px;color:#555;line-height:1.6;margin:0 0 20px;">No âmbito da Lei n.º 8/2022, solicitamos a actualização dos seus dados de contacto (NIF, morada, telefone e email) referentes à <strong>Fração '+(f.codigo||'?')+(f.bloco?' · Bloco '+f.bloco:'')+'</strong>.</p>'+
+      '<div style="text-align:center;margin:24px 0;"><a href="'+url+'" style="display:inline-block;background:#00d4ff;color:#04111c;font-weight:700;font-size:14px;padding:13px 28px;border-radius:8px;text-decoration:none;">Actualizar os meus dados</a></div>'+
+      '<p style="font-size:11px;color:#999;text-align:center;margin:0 0 18px;word-break:break-all;">Ou copie este link: '+url+'</p>'+
+      '<div style="border-top:1px solid #eee;padding-top:14px;"><p style="font-size:12px;color:#555;margin:0;">Com os melhores cumprimentos,</p><p style="font-size:13px;color:#222;font-weight:700;margin:6px 0 0;">'+(currentCondo.administrador_nome||'A Administração')+'</p></div>'+
+    '</div>'+
+    '<div style="background:#0d1825;padding:12px 28px;text-align:center;border-radius:0 0 10px 10px;"><div style="color:#5a6a79;font-size:10px;">COND.OS 2059 Pro · '+new Date().toLocaleDateString('pt-PT')+'</div></div></div>';
+}
+
 async function notificarTodos() {
   if (!currentCondo) return;
   var comEmail = fracoes.filter(function(f){ return f.proprietario_email; });
@@ -5653,11 +5713,8 @@ async function notificarTodos() {
     return;
   }
 
-  var msg = comEmail.length + ' fração(ões) serão notificadas automaticamente por email para actualizarem os dados.';
-  if (semEmail.length) {
-    var listaNomes = semEmail.slice(0,8).map(function(f){ return '• ' + (f.codigo||'?') + (f.bloco?' ('+f.bloco+')':'') + ' — ' + (f.proprietario_nome||'sem nome'); }).join('\n');
-    msg += '\n\n⚠️ ' + semEmail.length + ' fração(ões) SEM email (precisam de carta/QR impresso):\n' + listaNomes + (semEmail.length>8?'\n…e mais '+(semEmail.length-8):'');
-  }
+  var msg = '✅ ' + comEmail.length + ' serão notificados por email.';
+  if (semEmail.length) msg += '\n📭 ' + semEmail.length + ' sem email (use o QR/carta individualmente).';
   if (!await confirmar(msg, {titulo:'Notificar por email', tipo:'info', icon:'📤', okTexto:'Enviar emails'})) return;
 
   toast('A enviar '+comEmail.length+' emails...','');
@@ -5685,7 +5742,11 @@ async function notificarTodos() {
       '</div>'+
       '<div style="background:#0d1825;padding:12px 28px;text-align:center;border-radius:0 0 10px 10px;"><div style="color:#5a6a79;font-size:10px;">COND.OS 2059 Pro · '+new Date().toLocaleDateString('pt-PT')+'</div></div></div>';
     var ok = await enviarEmailGmail(f.proprietario_email, assunto, corpo);
-    if (ok) enviados++; else falhas++;
+    if (ok) {
+      enviados++;
+      await sb.from('fracoes').update({ultima_notificacao: new Date().toISOString()}).eq('id', f.id);
+      f.ultima_notificacao = new Date().toISOString();
+    } else falhas++;
     await new Promise(function(r){ setTimeout(r, 400); });
   }
 
@@ -5693,6 +5754,7 @@ async function notificarTodos() {
   if (falhas) resumo += ' · ' + falhas + ' falha(s)';
   if (semEmail.length) resumo += ' · ' + semEmail.length + ' sem email (usar QR/carta)';
   toast(resumo, 'ok');
+  renderCondominos(_condominosAll);
 }
 
 // ===== MÓDULO EDIFÍCIO — TABS =====
