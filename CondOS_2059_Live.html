@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.06.23-0822</div>
+      <div class="sb-tag">2059 Pro · build v2026.06.23-0842</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -969,6 +969,7 @@ textarea.fi{resize:vertical;min-height:60px;}
           <span class="sec-t">Condóminos</span>
           <div style="display:flex;gap:8px;">
             <button class="btn-ghost" onclick="exportarCondominosPDF()" style="display:inline-flex;align-items:center;gap:6px;" title="Exportar lista em PDF profissional"><i class="ti ti-file-type-pdf"></i>Exportar PDF</button>
+            <button class="btn-ghost" onclick="gerarQRTodosPDF()" style="display:inline-flex;align-items:center;gap:6px;" title="Gerar PDF com 1 QR Code por página para distribuir em cada caixa de correio"><i class="ti ti-qrcode"></i>Gerar QR (carta)</button>
             <button class="btn-ghost" style="display:inline-flex;align-items:center;gap:6px;background:rgba(0,212,255,.06);border-color:rgba(0,212,255,.3);color:var(--cyan);" onclick="notificarTodos()"><i class="ti ti-send"></i>Notificar Todos</button>
             <button class="btn-primary" onclick="abrirNovoCondomino()"><i class="ti ti-plus"></i>Adicionar</button>
           </div>
@@ -4320,6 +4321,134 @@ function editarDoCartao() {
   editFracao(_cartaoFracaoId);
 }
 
+
+
+// Gera o dataURL de um QR code (usa qrcodejs num div temporário invisível)
+function gerarQRDataURL(texto) {
+  return new Promise(function(resolve) {
+    var temp = document.createElement('div');
+    temp.style.position = 'absolute'; temp.style.left = '-9999px';
+    document.body.appendChild(temp);
+    new QRCode(temp, { text: texto, width: 400, height: 400, colorDark:'#000000', colorLight:'#ffffff', correctLevel: QRCode.CorrectLevel.H });
+    setTimeout(function() {
+      var img = temp.querySelector('img');
+      var canvas = temp.querySelector('canvas');
+      var dataURL = img ? img.src : (canvas ? canvas.toDataURL('image/png') : null);
+      document.body.removeChild(temp);
+      resolve(dataURL);
+    }, 200);
+  });
+}
+
+async function gerarQRTodosPDF() {
+  if (!currentCondo || !fracoes.length) { toast('Sem frações para gerar QR','warn'); return; }
+  if (!window.jspdf || !window.jspdf.jsPDF) { toast('Biblioteca PDF não carregada','err'); return; }
+  if (typeof QRCode === 'undefined') { toast('Biblioteca QR não carregada','err'); return; }
+
+  if (!await confirmar('Vai ser gerado um PDF com 1 QR Code por página para cada uma das ' + fracoes.length + ' frações.\n\nIdeal para imprimir e colocar em cada caixa de correio.\n\nMarcar todas como notificadas após gerar?', {titulo:'Gerar QR Codes (carta)', tipo:'info', icon:'🖨️', okTexto:'Gerar PDF', cancelarTexto:'Cancelar'})) return;
+
+  toast('A gerar QR Codes... aguarda.','');
+  var { jsPDF } = window.jspdf;
+  var doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+  var W = 210, H = 297, M = 18;
+
+  var isLocal = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost' || window.location.protocol === 'file:';
+  var isGithub = window.location.hostname.includes('github.io');
+  var baseUrl = isLocal ? 'https://condomosfree-alt.github.io/condos-2059' : isGithub ? window.location.origin + '/condos-2059' : window.location.origin;
+
+  var condoNome = displayNomeCondo(currentCondo.nome||'');
+  var moradaCondo = [currentCondo.morada, [currentCondo.codigo_postal, currentCondo.cidade].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+
+  // Ordenar por bloco e código
+  var lista = fracoes.slice().sort(function(a,b){
+    var ba=(a.bloco||''), bb=(b.bloco||'');
+    if (ba!==bb) return ba<bb?-1:1;
+    return (a.codigo||'')<(b.codigo||'')?-1:1;
+  });
+
+  for (var i = 0; i < lista.length; i++) {
+    var f = lista[i];
+    if (i > 0) doc.addPage();
+    var url = baseUrl + '/ficha.html?condo=' + encodeURIComponent(currentCondo.id) + '&fracao=' + encodeURIComponent(f.id) + '&codigo=' + encodeURIComponent(f.codigo||'') + '&bloco=' + encodeURIComponent(f.bloco||'');
+    var qrData = await gerarQRDataURL(url);
+
+    // ===== CABEÇALHO ESCURO =====
+    doc.setFillColor(8,13,20); doc.rect(0,0,W,42,'F');
+    doc.setFillColor(0,212,255); doc.rect(0,42,W,1.5,'F');
+    doc.setTextColor(0,212,255); doc.setFont('courier','bold'); doc.setFontSize(22);
+    doc.text('COND.OS', M, 20);
+    doc.setTextColor(150,160,170); doc.setFont('courier','normal'); doc.setFontSize(9);
+    doc.text('2059 PRO', M, 26);
+    doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(13);
+    doc.text(condoNome, W-M, 18, {align:'right'});
+    doc.setTextColor(150,160,170); doc.setFont('helvetica','normal'); doc.setFontSize(8.5);
+    if (moradaCondo) doc.text(moradaCondo, W-M, 24, {align:'right'});
+    if (currentCondo.nif) doc.text('NIPC ' + currentCondo.nif, W-M, 29, {align:'right'});
+
+    // ===== TÍTULO =====
+    doc.setTextColor(40,45,50); doc.setFont('helvetica','bold'); doc.setFontSize(15);
+    doc.text('Actualização de Dados de Condómino', W/2, 58, {align:'center'});
+    doc.setTextColor(110,120,130); doc.setFont('helvetica','normal'); doc.setFontSize(9.5);
+    doc.text('Lei n.º 8/2022 — Base de Dados Obrigatória do Condomínio', W/2, 65, {align:'center'});
+
+    // ===== CAIXA DA FRAÇÃO =====
+    doc.setFillColor(245,248,251); doc.setDrawColor(0,212,255); doc.setLineWidth(0.4);
+    doc.roundedRect(M, 73, W-2*M, 22, 2, 2, 'FD');
+    doc.setTextColor(0,90,140); doc.setFont('helvetica','bold'); doc.setFontSize(20);
+    doc.text('Fração ' + (f.codigo||'—') + (f.bloco ? '  ·  Bloco ' + f.bloco : ''), W/2, 86, {align:'center'});
+    if (f.proprietario_nome) {
+      doc.setTextColor(90,100,110); doc.setFont('helvetica','normal'); doc.setFontSize(10);
+      doc.text(f.proprietario_nome, W/2, 92, {align:'center'});
+    }
+
+    // ===== QR CODE =====
+    if (qrData) {
+      var qrSize = 78;
+      doc.addImage(qrData, 'PNG', (W-qrSize)/2, 102, qrSize, qrSize);
+    }
+
+    // ===== INSTRUÇÕES =====
+    var yInstr = 102 + 78 + 12;
+    doc.setTextColor(40,45,50); doc.setFont('helvetica','bold'); doc.setFontSize(12);
+    doc.text('Digitalize o código com o seu telemóvel', W/2, yInstr, {align:'center'});
+    doc.setTextColor(110,120,130); doc.setFont('helvetica','normal'); doc.setFontSize(9.5);
+    doc.text('Abra a câmara do telemóvel e aponte para o código acima.', W/2, yInstr+7, {align:'center'});
+    doc.text('Preencha ou actualize os seus dados (NIF, morada, telefone, email).', W/2, yInstr+12, {align:'center'});
+
+    // Link em texto pequeno (alternativa)
+    doc.setTextColor(150,160,170); doc.setFont('helvetica','normal'); doc.setFontSize(7);
+    doc.text('Ou aceda a: ' + url, W/2, yInstr+22, {align:'center', maxWidth: W-2*M});
+
+    // ===== NOTA LEGAL =====
+    var yNota = yInstr + 32;
+    doc.setFillColor(255,250,235); doc.setDrawColor(245,200,100); doc.setLineWidth(0.3);
+    doc.roundedRect(M, yNota, W-2*M, 18, 2, 2, 'FD');
+    doc.setTextColor(150,110,20); doc.setFont('helvetica','bold'); doc.setFontSize(8.5);
+    doc.text('Obrigação legal', M+5, yNota+6);
+    doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(120,100,40);
+    doc.text('Nos termos da Lei n.º 8/2022, os condóminos são obrigados a fornecer e manter actualizados', M+5, yNota+11, {maxWidth: W-2*M-10});
+    doc.text('os seus dados de contacto junto da administração do condomínio.', M+5, yNota+15, {maxWidth: W-2*M-10});
+
+    // ===== RODAPÉ =====
+    doc.setDrawColor(225,230,235); doc.setLineWidth(0.2); doc.line(M, H-20, W-M, H-20);
+    doc.setTextColor(120,130,140); doc.setFont('helvetica','bold'); doc.setFontSize(8.5);
+    doc.text(currentCondo.administrador_nome || 'A Administração', M, H-14);
+    doc.setTextColor(170,180,190); doc.setFont('helvetica','normal'); doc.setFontSize(7);
+    doc.text('Documento gerado por COND.OS 2059 Pro · ' + new Date().toLocaleDateString('pt-PT'), W/2, H-8, {align:'center'});
+  }
+
+  doc.save('QR_Codes_' + condoNome.replace(/\s+/g,'_') + '.pdf');
+
+  // Marcar como notificadas (data de notificação)
+  var agora = new Date().toISOString();
+  var marcadas = 0;
+  for (var j = 0; j < lista.length; j++) {
+    var upd = await sb.from('fracoes').update({ultima_notificacao: agora}).eq('id', lista[j].id);
+    if (!upd.error) { lista[j].ultima_notificacao = agora; marcadas++; }
+  }
+  if (marcadas > 0) { renderCondominos(_condominosAll); toast('✅ PDF gerado e ' + marcadas + ' frações marcadas como notificadas!','ok'); }
+  else toast('✅ PDF gerado! (cria a coluna ultima_notificacao no Supabase para guardar datas)','ok');
+}
 
 function gerarQRCondomino(fracaoId) {
   const f = fracoes.find(x=>x.id===fracaoId);
