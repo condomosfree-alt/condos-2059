@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.06.23-1921</div>
+      <div class="sb-tag">2059 Pro · build v2026.06.23-2123</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -1115,8 +1115,10 @@ textarea.fi{resize:vertical;min-height:60px;}
           <span class="sec-t">Orçamento</span>
           <div style="display:flex;gap:8px;align-items:center;">
             <select class="fi" id="orc-ano-sel" style="width:90px;" onchange="loadOrcamento()"></select>
+            <button class="btn-ghost" onclick="sugerirOrcamentoIA()" style="background:linear-gradient(135deg,rgba(0,212,255,.15),rgba(180,140,255,.15));border-color:rgba(0,212,255,.4);color:var(--cyan);font-weight:600;" title="O programa analisa o edifício e sugere um orçamento realista com base nos dados, manutenções obrigatórias e inflação"><i class="ti ti-sparkles"></i>Sugerir Orçamento</button>
             <button class="btn-ghost" onclick="copiarOrcamentoAnoAnterior()"><i class="ti ti-copy"></i>Copiar ano anterior</button>
             <button class="btn-ghost" onclick="importarOrcamentoFoto()"><i class="ti ti-camera"></i>Importar por foto</button>
+            <button class="btn-ghost" onclick="exportarOrcamentoPDF()" title="Gerar PDF do orçamento para apresentar em assembleia"><i class="ti ti-file-type-pdf"></i>PDF Assembleia</button>
             <button class="btn-primary" onclick="openModal('mo-rubrica')"><i class="ti ti-plus"></i>Adicionar Rubrica</button>
           </div>
         </div>
@@ -1642,6 +1644,15 @@ textarea.fi{resize:vertical;min-height:60px;}
 </div>
 
 <!-- MODAL REGISTAR PAGAMENTO -->
+<div class="mo" id="mo-sugerir-orc">
+  <div class="mo-box" style="width:680px;max-width:96vw;max-height:88vh;overflow-y:auto;">
+    <div class="mo-title">✨ Orçamento Sugerido <span class="mo-close" onclick="closeModal('mo-sugerir-orc')"><i class="ti ti-x"></i></span></div>
+    <div id="sugerir-orc-body" style="padding:4px 2px;">
+      <div style="text-align:center;padding:40px;color:var(--t3);"><div class="spin"></div><div style="margin-top:12px;">A analisar o edifício...</div></div>
+    </div>
+  </div>
+</div>
+
 <div class="mo" id="mo-despesa">
   <div class="mo-box" style="width:560px;max-width:95vw;">
     <div class="mo-title">🛠️ Nova Despesa / Derrama <span class="mo-close" onclick="closeModal('mo-despesa')"><i class="ti ti-x"></i></span></div>
@@ -7395,6 +7406,316 @@ async function initOrcamentoAno() {
   const anoActual = new Date().getFullYear();
   sel.innerHTML = [anoActual+1, anoActual, anoActual-1, anoActual-2].map(a =>
     `<option value="${a}" ${a===anoActual?'selected':''}>${a}</option>`).join('');
+}
+
+
+
+// ===== PDF DO ORÇAMENTO PARA ASSEMBLEIA =====
+async function exportarOrcamentoPDF() {
+  if (!currentCondo) { toast('Selecciona um condomínio','err'); return; }
+  if (!window.jspdf || !window.jspdf.jsPDF) { toast('Biblioteca PDF não carregada','err'); return; }
+  var ano = parseInt(document.getElementById('orc-ano-sel').value) || new Date().getFullYear();
+  toast('A gerar PDF do orçamento...','');
+
+  var res = await sb.from('orcamento_rubricas').select('*').eq('condominio_id', currentCondo.id).eq('ano', ano).order('categoria');
+  var rubricas = res.data || [];
+  if (!rubricas.length) { toast('Sem rubricas no orçamento de ' + ano,'warn'); return; }
+
+  var { jsPDF } = window.jspdf;
+  var doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+  var W = 210, H = 297, M = 18;
+  var eur = function(v){ return parseFloat(v||0).toFixed(2).replace('.',',') + ' €'; };
+  var condoNome = displayNomeCondo(currentCondo.nome||'');
+  var moradaCondo = [currentCondo.morada, [currentCondo.codigo_postal, currentCondo.cidade].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+
+  // CABEÇALHO
+  doc.setFillColor(8,13,20); doc.rect(0,0,W,38,'F');
+  doc.setFillColor(0,212,255); doc.rect(0,38,W,1.2,'F');
+  doc.setTextColor(0,212,255); doc.setFont('courier','bold'); doc.setFontSize(19);
+  doc.text('COND.OS', M, 18);
+  doc.setTextColor(150,160,170); doc.setFont('courier','normal'); doc.setFontSize(8);
+  doc.text('2059 PRO', M, 23);
+  doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(12);
+  doc.text(condoNome, W-M, 16, {align:'right'});
+  doc.setTextColor(150,160,170); doc.setFont('helvetica','normal'); doc.setFontSize(8);
+  if (moradaCondo) doc.text(moradaCondo, W-M, 21, {align:'right'});
+  if (currentCondo.nif) doc.text('NIPC ' + currentCondo.nif, W-M, 25.5, {align:'right'});
+
+  // TÍTULO
+  doc.setTextColor(20,25,30); doc.setFont('helvetica','bold'); doc.setFontSize(16);
+  doc.text('ORÇAMENTO ANUAL ' + ano, W/2, 54, {align:'center'});
+  doc.setTextColor(110,120,130); doc.setFont('helvetica','normal'); doc.setFontSize(9);
+  doc.text('Proposta de orçamento para aprovação em assembleia de condóminos', W/2, 60, {align:'center'});
+
+  // Separar comuns e por bloco
+  var comuns = rubricas.filter(function(r){ return r.categoria !== 'bloco'; });
+  var porBloco = rubricas.filter(function(r){ return r.categoria === 'bloco'; });
+  var totalComum = comuns.reduce(function(a,r){ return a+parseFloat(r.valor_total||0); }, 0);
+  var totalBloco = porBloco.reduce(function(a,r){ return a+parseFloat(r.valor_total||0); }, 0);
+  var totalGeral = totalComum + totalBloco;
+
+  var startY = 70;
+  // Tabela rubricas comuns
+  doc.autoTable({
+    startY: startY,
+    head: [['Rubrica (Despesas Comuns)', 'Valor Anual']],
+    body: comuns.map(function(r){ return [r.nome + (r.nota_admin?'  ('+r.nota_admin+')':''), eur(r.valor_total)]; }),
+    foot: [['Subtotal Despesas Comuns', eur(totalComum)]],
+    theme: 'grid',
+    styles: { fontSize: 9, cellPadding: 2.5, textColor:[50,55,60], lineColor:[230,235,240], lineWidth:0.1 },
+    headStyles: { fillColor:[8,13,20], textColor:[255,255,255], fontStyle:'bold' },
+    footStyles: { fillColor:[235,240,245], textColor:[20,25,30], fontStyle:'bold' },
+    columnStyles: { 0:{cellWidth:'auto'}, 1:{cellWidth:40,halign:'right'} },
+    margin: { left: M, right: M }
+  });
+
+  var y = doc.lastAutoTable.finalY + 6;
+  if (porBloco.length) {
+    doc.autoTable({
+      startY: y,
+      head: [['Rubrica (Despesas por Bloco)', 'Valor Anual']],
+      body: porBloco.map(function(r){ return [r.nome + (r.bloco?' [Bloco '+r.bloco+']':''), eur(r.valor_total)]; }),
+      foot: [['Subtotal Despesas por Bloco', eur(totalBloco)]],
+      theme: 'grid',
+      styles: { fontSize: 9, cellPadding: 2.5, textColor:[50,55,60], lineColor:[230,235,240], lineWidth:0.1 },
+      headStyles: { fillColor:[60,40,90], textColor:[255,255,255], fontStyle:'bold' },
+      footStyles: { fillColor:[235,240,245], textColor:[20,25,30], fontStyle:'bold' },
+      columnStyles: { 0:{cellWidth:'auto'}, 1:{cellWidth:40,halign:'right'} },
+      margin: { left: M, right: M }
+    });
+    y = doc.lastAutoTable.finalY + 6;
+  }
+
+  // TOTAL GERAL
+  if (y > H - 60) { doc.addPage(); y = 30; }
+  doc.setFillColor(0,212,255); doc.roundedRect(M, y, W-2*M, 16, 2, 2, 'F');
+  doc.setTextColor(4,17,28); doc.setFont('helvetica','bold'); doc.setFontSize(12);
+  doc.text('TOTAL ORÇAMENTO ANUAL ' + ano, M+5, y+10);
+  doc.text(eur(totalGeral), W-M-5, y+10, {align:'right'});
+  y += 22;
+
+  // Repartição mensal por fração (informativo)
+  var nFracoes = fracoes.length || 1;
+  doc.setTextColor(90,100,110); doc.setFont('helvetica','normal'); doc.setFontSize(9);
+  doc.text('Média por fração: ' + eur(totalGeral/nFracoes) + '/ano  ·  ' + eur(totalGeral/nFracoes/12) + '/mês  (' + nFracoes + ' frações)', M, y);
+  doc.setFontSize(8); doc.setTextColor(140,150,160);
+  doc.text('Nota: o valor real por fração é calculado por permilagem. Esta média é apenas indicativa.', M, y+5);
+  y += 16;
+
+  // Assinatura
+  if (y > H - 40) { doc.addPage(); y = 30; }
+  doc.setTextColor(40,45,50); doc.setFont('helvetica','normal'); doc.setFontSize(9);
+  doc.text((currentCondo.cidade||'____________') + ', ' + new Date().toLocaleDateString('pt-PT'), M, y+6);
+  doc.setDrawColor(120,130,140); doc.line(M, y+24, M+75, y+24);
+  doc.setFont('helvetica','bold'); doc.setFontSize(9);
+  doc.text(currentCondo.administrador_nome || 'A Administração', M, y+29);
+  doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(110,120,130);
+  doc.text('A Administração do Condomínio', M, y+34);
+
+  // Rodapé
+  doc.setTextColor(170,180,190); doc.setFontSize(7);
+  doc.text('Documento gerado por COND.OS 2059 Pro · ' + new Date().toLocaleDateString('pt-PT'), W/2, H-10, {align:'center'});
+
+  doc.save('Orcamento_' + ano + '_' + condoNome.replace(/\s+/g,'_') + '.pdf');
+  toast('📄 PDF do orçamento gerado!','ok');
+}
+
+// ===== ORÇAMENTO INTELIGENTE SUGERIDO =====
+var _orcSugerido = null;
+
+async function sugerirOrcamentoIA() {
+  if (!currentCondo) { toast('Selecciona um condomínio primeiro','err'); return; }
+  var ano = parseInt(document.getElementById('orc-ano-sel').value) || new Date().getFullYear();
+  openModal('mo-sugerir-orc');
+  var body = document.getElementById('sugerir-orc-body');
+  body.innerHTML = '<div style="text-align:center;padding:40px;color:var(--t3);"><div class="spin"></div><div style="margin-top:12px;">A analisar o edifício e a recolher dados...</div></div>';
+
+  // ===== 1. RECOLHER DADOS REAIS DO PROGRAMA =====
+  var c = currentCondo;
+  var dados = { rubricas: [], avisos: [], fonte: [] };
+  var eur = function(v){ return parseFloat(v||0).toFixed(2); };
+
+  // Nº frações e blocos
+  var nFracoes = fracoes.length;
+  var blocos = [...new Set(fracoes.map(function(f){return f.bloco;}).filter(Boolean))];
+  var nBlocos = blocos.length || 1;
+
+  // Seguro (do perfil)
+  if (c.seg_premio) { dados.rubricas.push({nome:'Seguro do Condomínio', valor:parseFloat(c.seg_premio), origem:'real', cat:'comum'}); dados.fonte.push('Seguro: '+eur(c.seg_premio)+'€ (do perfil)'); }
+  // Extintores
+  if (c.ext_custo) { dados.rubricas.push({nome:'Manutenção de Extintores', valor:parseFloat(c.ext_custo), origem:'real', cat:'comum'}); dados.fonte.push('Extintores: '+eur(c.ext_custo)+'€/ano (do perfil)'); }
+
+  // Equipamentos (elevadores, etc) da tabela
+  var eqRes = await sb.from('equipamentos').select('*').eq('condominio_id', c.id);
+  var equipamentos = eqRes.data || [];
+  var temElevador = equipamentos.some(function(e){return e.tipo==='elevador';}) || (c.num_elevadores>0);
+
+  // Despesas recorrentes do ano anterior (para detetar manutenções periódicas)
+  var despRes = await sb.from('despesas').select('*').eq('condominio_id', c.id);
+  var despesasAnteriores = despRes.data || [];
+
+  // Orçamento do ano anterior (rubricas) para base
+  var rubAnteriorRes = await sb.from('orcamento_rubricas').select('*').eq('condominio_id', c.id).eq('ano', ano-1);
+  var rubricasAnterior = rubAnteriorRes.data || [];
+
+  // ===== 2. MONTAR CONTEXTO PARA A IA =====
+  body.innerHTML = '<div style="text-align:center;padding:40px;color:var(--t3);"><div class="spin"></div><div style="margin-top:12px;">A IA está a calcular o orçamento realista...</div></div>';
+
+  var contexto = {
+    ano: ano,
+    nome: displayNomeCondo(c.nome||''),
+    n_fracoes: nFracoes,
+    n_blocos: nBlocos,
+    n_pisos: c.num_pisos || null,
+    tem_elevador: temElevador,
+    n_elevadores: c.num_elevadores || equipamentos.filter(function(e){return e.tipo==='elevador';}).length || 0,
+    tem_jardim: c.tem_jardim || false,
+    tem_garagem: c.tem_garagem || false,
+    tem_piscina: c.tem_piscina || false,
+    tem_rede_incendio: c.incendio_tem === 'sim',
+    n_extintores: c.ext_num || 0,
+    tem_cctv: c.cctv === 'sim',
+    ano_construcao: c.ano_construcao || null,
+    custos_conhecidos: dados.rubricas.map(function(r){ return r.nome+': '+eur(r.valor)+'€/ano'; }),
+    rubricas_ano_anterior: rubricasAnterior.map(function(r){ return r.nome+': '+eur(r.valor_total)+'€'; }),
+    despesas_passadas: despesasAnteriores.map(function(d){ return d.descricao+': '+eur(d.valor_total)+'€ ('+(d.data_despesa||'?')+')'; })
+  };
+
+  var prompt = 'És um perito em gestão de condomínios em Portugal. Com base nos dados do edifício abaixo, cria um ORÇAMENTO ANUAL REALISTA e COMPLETO para o ano ' + ano + '. ' +
+    'Inclui TODAS as rubricas obrigatórias e habituais que um condomínio deste tipo tem, mesmo as que os gestores costumam esquecer. ' +
+    'Considera: limpeza de partes comuns, electricidade das partes comuns, água comum, manutenção de elevador (se tem, contrato mensal obrigatório DL 320/2002 + inspeção periódica), seguro obrigatório, extintores e rede de incêndio (manutenção anual obrigatória), jardim (se tem), manutenção de portões/garagem (se tem), piscina (se tem), pequenas reparações, material de limpeza, gestão/administração, e fundo comum de reserva. ' +
+    'Para custos que já são conhecidos (na lista custos_conhecidos), USA esses valores exactos. Para os restantes, ESTIMA valores realistas de mercado em Portugal para ' + ano + ' para um prédio com ' + nFracoes + ' frações. ' +
+    'Aplica a inflação estimada de Portugal para ' + ano + ' (indica a percentagem que usaste). ' +
+    'Para cada rubrica indica se é "comum" (todos os blocos) ou "bloco" (só um bloco, ex: elevador). ' +
+    'DADOS DO EDIFÍCIO:\n' + JSON.stringify(contexto, null, 1) + '\n\n' +
+    'Responde APENAS com JSON válido, sem texto à volta, neste formato exacto: ' +
+    '{"inflacao_pct":X,"ano":'+ano+',"rubricas":[{"nome":"...","valor":0,"categoria":"comum|bloco","obrigatoria":true|false,"nota":"breve justificação ou base legal","origem":"real|estimada"}],"avisos":["manutenções obrigatórias em falta ou a agendar"],"resumo":"2 frases sobre o orçamento"}';
+
+  var jsonResp;
+  try {
+    var txt = await callIA(prompt, 'orcamento');
+    txt = (txt||'').replace(/^`{3}json\s*/,'').replace(/\s*`{3}$/,'').trim();
+    var s = txt.indexOf('{'), e = txt.lastIndexOf('}');
+    if (s === -1 || e <= s) throw new Error('Resposta inválida da IA');
+    jsonResp = JSON.parse(txt.slice(s, e+1));
+  } catch(err) {
+    body.innerHTML = '<div style="padding:30px;text-align:center;color:var(--t2);"><i class="ti ti-alert-circle" style="font-size:32px;color:var(--amber);"></i><div style="margin-top:12px;">Não foi possível gerar a sugestão automática.</div><div style="font-size:11px;color:var(--t3);margin-top:6px;">' + err.message + '</div><button class="btn-ghost" style="margin-top:16px;" onclick="sugerirOrcamentoIA()">Tentar de novo</button></div>';
+    return;
+  }
+
+  _orcSugerido = jsonResp;
+  // Guardar os valores base (sem inflação) para permitir recálculo
+  var inflInicial = parseFloat(jsonResp.inflacao_pct||0);
+  (jsonResp.rubricas||[]).forEach(function(r){
+    r._valorBase = parseFloat(r.valor||0) / (1 + inflInicial/100);
+  });
+  renderSugestaoOrcamento(jsonResp, ano);
+}
+
+function renderSugestaoOrcamento(j, ano) {
+  var body = document.getElementById('sugerir-orc-body');
+  var eur = function(v){ return parseFloat(v||0).toFixed(2).replace('.',',')+'€'; };
+  var rubricas = j.rubricas || [];
+  var total = rubricas.reduce(function(a,r){ return a + parseFloat(r.valor||0); }, 0);
+
+  var html = '';
+  // Resumo
+  html += '<div style="background:linear-gradient(135deg,rgba(0,212,255,.08),rgba(180,140,255,.08));border:1px solid rgba(0,212,255,.25);border-radius:10px;padding:14px 16px;margin-bottom:14px;">';
+  html += '<div style="font-size:13px;color:var(--text);line-height:1.5;">' + (j.resumo||'Orçamento sugerido com base nos dados do edifício.') + '</div>';
+  html += '</div>';
+
+  // Campo de inflação editável (a tua ideia: IA sugere, tu confirmas com o valor real)
+  html += '<div style="background:var(--s2);border:1px solid var(--b1);border-radius:10px;padding:14px 16px;margin-bottom:14px;">';
+  html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">';
+  html += '<div><div style="font-size:11px;color:var(--cyan);font-weight:700;">📈 Inflação aplicada</div><div style="font-size:10px;color:var(--t3);margin-top:2px;">A IA estimou ' + (j.inflacao_pct||0) + '% para ' + ano + '. Confirma com o valor real (INE) se quiseres.</div></div>';
+  html += '<div style="display:flex;align-items:center;gap:6px;">';
+  html += '<input type="number" id="orc-inflacao-input" value="' + (j.inflacao_pct||0) + '" step="0.1" style="width:70px;background:var(--s1);border:1px solid var(--b1);border-radius:6px;padding:6px 8px;color:var(--text);font-size:13px;font-weight:600;text-align:center;">';
+  html += '<span style="color:var(--t2);font-size:13px;">%</span>';
+  html += '<button class="btn-ghost" style="font-size:11px;padding:6px 12px;" onclick="recalcularInflacao()">Recalcular</button>';
+  html += '</div></div></div>';
+
+  // Total destaque
+  html += '<div style="display:flex;justify-content:space-between;align-items:center;background:var(--s2);border-radius:10px;padding:14px 18px;margin-bottom:14px;">';
+  html += '<div><div style="font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:1px;">Total Anual Sugerido</div><div style="font-size:26px;font-weight:800;font-family:var(--mono);color:var(--cyan);">' + eur(total) + '</div></div>';
+  html += '<div style="text-align:right;font-size:11px;color:var(--t3);">' + rubricas.length + ' rubricas<br>' + (fracoes.length||0) + ' frações</div>';
+  html += '</div>';
+
+  // Avisos (manutenções em falta)
+  if (j.avisos && j.avisos.length) {
+    html += '<div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);border-radius:8px;padding:12px 14px;margin-bottom:14px;">';
+    html += '<div style="font-size:11px;font-weight:700;color:var(--amber);margin-bottom:6px;">⚠️ A ter em atenção</div>';
+    html += j.avisos.map(function(a){ return '<div style="font-size:11px;color:var(--t2);margin:3px 0;">• ' + a + '</div>'; }).join('');
+    html += '</div>';
+  }
+
+  // Tabela de rubricas
+  html += '<div style="border:1px solid var(--b1);border-radius:8px;overflow:hidden;">';
+  html += '<div style="display:flex;background:var(--s2);padding:8px 12px;font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;font-weight:700;"><div style="flex:1;">Rubrica</div><div style="width:70px;text-align:center;">Tipo</div><div style="width:90px;text-align:right;">Valor/ano</div></div>';
+  rubricas.forEach(function(r){
+    var corOrigem = r.origem === 'real' ? 'var(--green)' : 'var(--t3)';
+    html += '<div style="display:flex;align-items:center;padding:9px 12px;border-top:1px solid var(--b1);">';
+    html += '<div style="flex:1;"><div style="font-size:12px;color:var(--text);font-weight:500;">' + (r.nome||'—') + (r.obrigatoria?' <span style="font-size:8px;background:rgba(220,38,38,.15);color:#f87171;padding:1px 5px;border-radius:5px;">OBRIG.</span>':'') + '</div>';
+    if (r.nota) html += '<div style="font-size:10px;color:var(--t3);margin-top:2px;">' + r.nota + '</div>';
+    html += '</div>';
+    html += '<div style="width:70px;text-align:center;"><span style="font-size:9px;color:var(--t2);">' + (r.categoria==='bloco'?'🛗 Bloco':'🏢 Comum') + '</span></div>';
+    html += '<div style="width:90px;text-align:right;font-family:var(--mono);font-size:12px;font-weight:600;color:' + corOrigem + ';">' + eur(r.valor) + '</div>';
+    html += '</div>';
+  });
+  html += '</div>';
+
+  html += '<div style="font-size:10px;color:var(--t3);margin-top:10px;text-align:center;">🟢 verde = valor real do programa · cinza = estimativa da IA · podes editar tudo depois de aplicar</div>';
+
+  // Botões
+  html += '<div style="display:flex;gap:8px;margin-top:18px;justify-content:flex-end;">';
+  html += '<button class="btn-ghost" onclick="closeModal(\'mo-sugerir-orc\')">Cancelar</button>';
+  html += '<button class="btn-primary" onclick="aplicarOrcamentoSugerido()"><i class="ti ti-check"></i>Aplicar ao Orçamento ' + ano + '</button>';
+  html += '</div>';
+
+  body.innerHTML = html;
+}
+
+function recalcularInflacao() {
+  if (!_orcSugerido) return;
+  var novaInfl = parseFloat(document.getElementById('orc-inflacao-input').value) || 0;
+  _orcSugerido.inflacao_pct = novaInfl;
+  _orcSugerido.rubricas.forEach(function(r){
+    var base = r._valorBase != null ? r._valorBase : parseFloat(r.valor||0);
+    if (r.origem === 'real') { r.valor = Math.round(base*100)/100; }
+    else { r.valor = Math.round(base * (1 + novaInfl/100) * 100) / 100; }
+  });
+  var ano = _orcSugerido.ano || new Date().getFullYear();
+  renderSugestaoOrcamento(_orcSugerido, ano);
+  toast('Recalculado com ' + novaInfl + '% de inflação','ok');
+}
+
+async function aplicarOrcamentoSugerido() {
+  if (!_orcSugerido || !_orcSugerido.rubricas) { toast('Sem sugestão para aplicar','err'); return; }
+  var ano = _orcSugerido.ano || new Date().getFullYear();
+
+  // Verificar se já há rubricas nesse ano
+  var existentes = await sb.from('orcamento_rubricas').select('id').eq('condominio_id', currentCondo.id).eq('ano', ano);
+  if (existentes.data && existentes.data.length) {
+    if (!await confirmar('Já existem ' + existentes.data.length + ' rubricas no orçamento de ' + ano + '.\n\nAs rubricas sugeridas serão ADICIONADAS às existentes (não substituem).\n\nContinuar?', {titulo:'Orçamento já tem rubricas', tipo:'aviso', icon:'📋', okTexto:'Adicionar'})) return;
+  }
+
+  toast('A aplicar orçamento...','');
+  var criadas = 0;
+  for (var i = 0; i < _orcSugerido.rubricas.length; i++) {
+    var r = _orcSugerido.rubricas[i];
+    var ins = await sb.from('orcamento_rubricas').insert({
+      condominio_id: currentCondo.id,
+      ano: ano,
+      nome: r.nome,
+      valor_total: parseFloat(r.valor||0),
+      categoria: r.categoria === 'bloco' ? 'bloco' : 'comum',
+      tipo_distribuicao: 'permilagem',
+      nota_admin: (r.nota || '') + (r.origem==='estimada' ? ' [estimativa IA]' : '')
+    });
+    if (!ins.error) criadas++;
+  }
+  closeModal('mo-sugerir-orc');
+  toast('✅ ' + criadas + ' rubricas adicionadas ao orçamento ' + ano + '!','ok');
+  if (typeof loadOrcamento === 'function') loadOrcamento();
 }
 
 async function loadOrcamento() {
