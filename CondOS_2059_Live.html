@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.06.23-0746</div>
+      <div class="sb-tag">2059 Pro · build v2026.06.23-0801</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -4198,30 +4198,86 @@ function imprimirCartao() {
   setTimeout(function(){ w.print(); }, 500);
 }
 
-function cartaoEmail() {
+async function cartaoEmail() {
   var f = fracoes.find(function(x){ return x.id === _cartaoFracaoId; });
   if (!f) return;
   if (!f.proprietario_email) { toast('Esta fração não tem email registado','warn'); return; }
+  if (!_gmailToken) {
+    if (await confirmar('O envio automático de email requer o Gmail ligado.\n\nAbrir Definições para ligar?', {titulo:'Gmail não ligado', tipo:'aviso', icon:'📧', okTexto:'Abrir Definições'})) nav('definicoes');
+    return;
+  }
   var condoNome = displayNomeCondo(currentCondo ? (currentCondo.nome||'') : '');
   var assunto, corpo;
   if (_cartaoTabAtual === 'dossier') {
     assunto = 'Dossier Financeiro ' + _dossierAno + ' — ' + condoNome + ' — Fração ' + (f.codigo||'');
-    corpo = 'Caro(a) ' + (f.proprietario_nome||'condómino') + ',%0D%0A%0D%0A' +
-      'Segue o resumo da sua situação financeira em ' + condoNome + ':%0D%0A%0D%0A' +
-      dossierResumoTexto(f, 'email') + '%0D%0A%0D%0A' +
-      'Para qualquer esclarecimento, contacte a administração.%0D%0A%0D%0ACumprimentos,%0D%0AAdministração de ' + condoNome;
+    corpo = cartaoEmailHTML(f, 'dossier', condoNome);
   } else {
     assunto = 'Ficha de Condómino — ' + condoNome + ' — Fração ' + (f.codigo||'');
-    corpo = 'Caro(a) ' + (f.proprietario_nome||'condómino') + ',%0D%0A%0D%0A' +
-      'Segue a sua ficha de condómino registada em ' + condoNome + ':%0D%0A%0D%0A' +
-      'Fração: ' + (f.codigo||'—') + (f.bloco?' (Bloco '+f.bloco+')':'') + '%0D%0A' +
-      'NIF: ' + (f.proprietario_nif||'—') + '%0D%0A' +
-      'Telefone: ' + (f.proprietario_tel||'—') + '%0D%0A' +
-      'Email: ' + (f.proprietario_email||'—') + '%0D%0A' +
-      'Morada: ' + (f.proprietario_morada||'—') + '%0D%0A%0D%0A' +
-      'Caso algum dado esteja incorrecto, por favor contacte a administração.%0D%0A%0D%0ACumprimentos,%0D%0AAdministração de ' + condoNome;
+    corpo = cartaoEmailHTML(f, 'ficha', condoNome);
   }
-  window.location.href = 'mailto:' + f.proprietario_email + '?subject=' + encodeURIComponent(assunto) + '&body=' + corpo;
+  toast('A enviar email...','');
+  var ok = await enviarEmailGmail(f.proprietario_email, assunto, corpo);
+  if (ok) toast('📧 Email enviado para '+f.proprietario_email+'!','ok');
+  else toast('⚠️ Erro ao enviar. Verifica o Gmail.','warn');
+}
+
+function cartaoEmailHTML(f, modo, condoNome) {
+  var eur = function(v){ return parseFloat(v||0).toFixed(2).replace('.',',')+'€'; };
+  var cab =
+    '<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#f4f6f8;">'+
+    '<div style="background:linear-gradient(135deg,#0a1119,#0d1825);padding:24px 28px;border-radius:10px 10px 0 0;">'+
+      '<table width=100%><tr><td><div style="color:#00d4ff;font-family:monospace;font-size:19px;font-weight:700;letter-spacing:2px;">COND.OS</div><div style="color:#5a6a79;font-size:9px;letter-spacing:3px;">2059 PRO</div></td>'+
+      '<td style="text-align:right;color:#fff;"><div style="font-size:13px;font-weight:600;">'+condoNome+'</div></td></tr></table>'+
+    '</div>';
+  var rodape =
+    '<div style="background:#0d1825;padding:12px 28px;text-align:center;border-radius:0 0 10px 10px;"><div style="color:#5a6a79;font-size:10px;">COND.OS 2059 Pro · '+new Date().toLocaleDateString('pt-PT')+'</div></div></div>';
+
+  if (modo === 'dossier') {
+    var doAno = _dossierQuotas.filter(function(q){return q.ano===_dossierAno;});
+    var tE=0,tP=0; doAno.forEach(function(q){tE+=parseFloat(q.valor_emitido||0);tP+=parseFloat(q.valor_pago||0);});
+    var div=tE-tP;
+    var mN=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+    var linhas='';
+    doAno.sort(function(a,b){return a.mes-b.mes;}).forEach(function(q){
+      var s=parseFloat(q.valor_emitido||0)-parseFloat(q.valor_pago||0);
+      var est=q.estado==='pago'?'<span style="color:#10b981;font-weight:600">✓ Pago</span>':s>0&&parseFloat(q.valor_pago||0)>0?'<span style="color:#f59e0b;font-weight:600">Parcial</span>':'<span style="color:#dc2626;font-weight:600">Em dívida</span>';
+      linhas+='<tr><td style="padding:6px 10px;border-bottom:1px solid #eee;">'+mN[q.mes-1]+'</td><td style="padding:6px 10px;border-bottom:1px solid #eee;text-align:right;">'+eur(q.valor_emitido)+'</td><td style="padding:6px 10px;border-bottom:1px solid #eee;text-align:center;">'+est+'</td></tr>';
+    });
+    return cab +
+      '<div style="background:'+(div>0?'#fef2f2':'#ecfdf5')+';padding:15px 28px;color:'+(div>0?'#dc2626':'#059669')+';text-align:center;"><div style="font-size:16px;font-weight:700;">'+(div>0?'⚠️ Situação com valores em dívida':'✅ Situação regularizada')+'</div></div>'+
+      '<div style="background:#fff;padding:26px 28px;">'+
+        '<p style="font-size:14px;color:#333;margin:0 0 16px;">Caro(a) <strong>'+(f.proprietario_nome||'condómino')+'</strong>,</p>'+
+        '<p style="font-size:13px;color:#555;margin:0 0 18px;">Segue o resumo da sua situação financeira referente a <strong>'+_dossierAno+'</strong> (Fração '+(f.codigo||'?')+(f.bloco?' · Bloco '+f.bloco:'')+'):</p>'+
+        '<div style="display:flex;gap:10px;margin-bottom:18px;">'+
+          '<div style="flex:1;background:#f8f9fa;border-radius:8px;padding:12px;text-align:center;"><div style="font-size:10px;color:#888;text-transform:uppercase;">Emitido</div><div style="font-size:17px;font-weight:700;color:#333;">'+eur(tE)+'</div></div>'+
+          '<div style="flex:1;background:#ecfdf5;border-radius:8px;padding:12px;text-align:center;"><div style="font-size:10px;color:#888;text-transform:uppercase;">Pago</div><div style="font-size:17px;font-weight:700;color:#059669;">'+eur(tP)+'</div></div>'+
+          '<div style="flex:1;background:'+(div>0?'#fef2f2':'#f8f9fa')+';border-radius:8px;padding:12px;text-align:center;"><div style="font-size:10px;color:#888;text-transform:uppercase;">Em dívida</div><div style="font-size:17px;font-weight:700;color:'+(div>0?'#dc2626':'#333')+';">'+eur(div)+'</div></div>'+
+        '</div>'+
+        '<table width=100% style="border-collapse:collapse;font-size:13px;margin-bottom:18px;"><thead><tr style="background:#003366;color:#fff;"><th style="padding:8px 10px;text-align:left;">Mês</th><th style="padding:8px 10px;text-align:right;">Emitido</th><th style="padding:8px 10px;text-align:center;">Estado</th></tr></thead><tbody>'+linhas+'</tbody></table>'+
+        (div>0 && currentCondo.iban_operacional ? '<p style="font-size:12px;color:#555;text-align:center;">Para regularizar: <strong>'+currentCondo.iban_operacional+'</strong></p>' : '')+
+        '<div style="border-top:1px solid #eee;padding-top:14px;margin-top:14px;"><p style="font-size:12px;color:#555;margin:0;">Com os melhores cumprimentos,</p><p style="font-size:13px;color:#222;font-weight:700;margin:6px 0 0;">'+(currentCondo.administrador_nome||'A Administração')+'</p></div>'+
+      '</div>' + rodape;
+  } else {
+    var METODO_LABEL = { email:'📧 Email', whatsapp:'💬 WhatsApp', carta_simples:'✉️ Carta Simples', carta_registada:'📬 Carta Registada', carta_ar:'📮 Carta Reg.+AR' };
+    var metodos = (f.metodo_notificacao||'').split(',').map(function(s){return s.trim();}).filter(Boolean).map(function(m){return METODO_LABEL[m]||m;}).join(' · ');
+    function linha(label, valor) {
+      return '<tr><td style="padding:9px 10px;color:#777;border-bottom:1px solid #f0f3f6;width:38%;">'+label+'</td><td style="padding:9px 10px;color:#222;border-bottom:1px solid #f0f3f6;font-weight:600;">'+(valor||'—')+'</td></tr>';
+    }
+    return cab +
+      '<div style="background:#fff;padding:26px 28px;">'+
+        '<p style="font-size:14px;color:#333;margin:0 0 16px;">Caro(a) <strong>'+(f.proprietario_nome||'condómino')+'</strong>,</p>'+
+        '<p style="font-size:13px;color:#555;margin:0 0 18px;">Seguem os dados da sua ficha de condómino registados em '+condoNome+'. Caso algo esteja incorrecto, contacte a administração.</p>'+
+        '<table width=100% style="border-collapse:collapse;font-size:13px;border:1px solid #eee;border-radius:8px;overflow:hidden;margin-bottom:18px;">'+
+          linha('Fração', (f.codigo||'—')+(f.bloco?' · Bloco '+f.bloco:''))+
+          linha('NIF', f.proprietario_nif)+
+          linha('Telefone', f.proprietario_tel)+
+          linha('Email', f.proprietario_email)+
+          linha('Morada', f.proprietario_morada)+
+          (metodos?linha('Notificação', metodos):'')+
+        '</table>'+
+        '<div style="border-top:1px solid #eee;padding-top:14px;"><p style="font-size:12px;color:#555;margin:0;">Com os melhores cumprimentos,</p><p style="font-size:13px;color:#222;font-weight:700;margin:6px 0 0;">'+(currentCondo.administrador_nome||'A Administração')+'</p></div>'+
+      '</div>' + rodape;
+  }
 }
 
 function cartaoWhatsApp() {
@@ -5584,63 +5640,60 @@ async function enviarQREmail() {
 
 // ===== NOTIFICAR TODOS =====
 async function notificarTodos() {
-  var temContacto = fracoes.filter(f => f.proprietario_tel || f.proprietario_email);
-  var semContacto = fracoes.filter(f => !f.proprietario_tel && !f.proprietario_email);
+  if (!currentCondo) return;
+  var comEmail = fracoes.filter(function(f){ return f.proprietario_email; });
+  var semEmail = fracoes.filter(function(f){ return !f.proprietario_email; });
 
-  var msg = '📋 Resumo da notificação:\n\n';
-  msg += '✅ ' + temContacto.length + ' frações com contacto (WhatsApp/Email)\n';
-  msg += '🖨️ ' + semContacto.length + ' frações sem contacto (necessitam QR impresso)\n\n';
-  msg += 'Pretende enviar notificação a todas as frações com contacto?';
+  if (!comEmail.length) {
+    await confirmar('Nenhuma fração tem email registado.\n\nPara notificar estes condóminos, imprime o QR Code de cada um (botão QR) e entrega por carta.', {titulo:'Sem emails registados', tipo:'aviso', icon:'📭', okTexto:'Entendido', cancelarTexto:'Fechar'});
+    return;
+  }
+  if (!_gmailToken) {
+    if (await confirmar('O envio automático de emails requer o Gmail ligado.\n\nAbrir Definições para ligar?', {titulo:'Gmail não ligado', tipo:'aviso', icon:'📧', okTexto:'Abrir Definições'})) nav('definicoes');
+    return;
+  }
 
-  if (!await confirmar(msg, {titulo:'Notificar condóminos', tipo:'info', icon:'📤', okTexto:'Enviar'})) return;
+  var msg = comEmail.length + ' fração(ões) serão notificadas automaticamente por email para actualizarem os dados.';
+  if (semEmail.length) {
+    var listaNomes = semEmail.slice(0,8).map(function(f){ return '• ' + (f.codigo||'?') + (f.bloco?' ('+f.bloco+')':'') + ' — ' + (f.proprietario_nome||'sem nome'); }).join('\n');
+    msg += '\n\n⚠️ ' + semEmail.length + ' fração(ões) SEM email (precisam de carta/QR impresso):\n' + listaNomes + (semEmail.length>8?'\n…e mais '+(semEmail.length-8):'');
+  }
+  if (!await confirmar(msg, {titulo:'Notificar por email', tipo:'info', icon:'📤', okTexto:'Enviar emails'})) return;
 
-  var enviados = 0;
-  var falhas = 0;
-
-  for (var i = 0; i < temContacto.length; i++) {
-    var f = temContacto[i];
+  toast('A enviar '+comEmail.length+' emails...','');
+  var enviados = 0, falhas = 0;
+  var condoNome = displayNomeCondo(currentCondo.nome||'');
+  for (var i = 0; i < comEmail.length; i++) {
+    var f = comEmail[i];
     var isLocal2 = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost' || window.location.protocol === 'file:';
     var isGithub2 = window.location.hostname.includes('github.io');
-    var baseUrl = isLocal2
-      ? 'https://condomosfree-alt.github.io/condos-2059'
-      : isGithub2 ? window.location.origin + '/condos-2059' : window.location.origin;
-    var url = baseUrl + '/ficha.html?condo=' + encodeURIComponent(currentCondo.id) +
-      '&fracao=' + encodeURIComponent(f.id) +
-      '&codigo=' + encodeURIComponent(f.codigo||'') +
-      '&bloco=' + encodeURIComponent(f.bloco||'');
-
-    // Preferência: WhatsApp se tem telefone, Email se não
-    if (f.proprietario_tel) {
-      var tel = f.proprietario_tel.replace(/\D/g,'');
-      if (!tel.startsWith('351')) tel = '351' + tel;
-      var wamsg = encodeURIComponent(
-        '🏢 ' + (currentCondo.nome||'Condomínio') + '\n' +
-        'Fração ' + (f.codigo||'') + (f.bloco ? ' — Bloco ' + f.bloco : '') + '\n\n' +
-        'Por favor actualize os seus dados:\n' + url
-      );
-      window.open('https://wa.me/' + tel + '?text=' + wamsg, '_blank');
-      enviados++;
-      // Pausa entre aberturas para não bloquear o browser
-      await new Promise(r => setTimeout(r, 800));
-    } else if (f.proprietario_email) {
-      var subject = encodeURIComponent('Actualização de dados — ' + (currentCondo.nome||'Condomínio'));
-      var body = encodeURIComponent('Por favor actualize os seus dados:\n' + url);
-      window.open('mailto:' + f.proprietario_email + '?subject=' + subject + '&body=' + body, '_blank');
-      enviados++;
-      await new Promise(r => setTimeout(r, 800));
-    } else {
-      falhas++;
-    }
+    var baseUrl = isLocal2 ? 'https://condomosfree-alt.github.io/condos-2059' : isGithub2 ? window.location.origin + '/condos-2059' : window.location.origin;
+    var url = baseUrl + '/ficha.html?condo=' + encodeURIComponent(currentCondo.id) + '&fracao=' + encodeURIComponent(f.id) + '&codigo=' + encodeURIComponent(f.codigo||'') + '&bloco=' + encodeURIComponent(f.bloco||'');
+    var assunto = '📋 Actualização de dados — ' + condoNome + ' — Fração ' + (f.codigo||'');
+    var corpo =
+      '<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#f4f6f8;">'+
+      '<div style="background:linear-gradient(135deg,#0a1119,#0d1825);padding:24px 28px;border-radius:10px 10px 0 0;">'+
+        '<table width=100%><tr><td><div style="color:#00d4ff;font-family:monospace;font-size:19px;font-weight:700;letter-spacing:2px;">COND.OS</div><div style="color:#5a6a79;font-size:9px;letter-spacing:3px;">2059 PRO</div></td>'+
+        '<td style="text-align:right;color:#fff;"><div style="font-size:13px;font-weight:600;">'+condoNome+'</div></td></tr></table>'+
+      '</div>'+
+      '<div style="background:#fff;padding:26px 28px;">'+
+        '<p style="font-size:14px;color:#333;margin:0 0 16px;">Caro(a) <strong>'+(f.proprietario_nome||'condómino')+'</strong>,</p>'+
+        '<p style="font-size:13px;color:#555;line-height:1.6;margin:0 0 20px;">No âmbito da Lei n.º 8/2022, solicitamos a actualização dos seus dados de contacto (NIF, morada, telefone e email) referentes à <strong>Fração '+(f.codigo||'?')+(f.bloco?' · Bloco '+f.bloco:'')+'</strong>.</p>'+
+        '<div style="text-align:center;margin:24px 0;"><a href="'+url+'" style="display:inline-block;background:#00d4ff;color:#04111c;font-weight:700;font-size:14px;padding:13px 28px;border-radius:8px;text-decoration:none;">Actualizar os meus dados</a></div>'+
+        '<p style="font-size:11px;color:#999;text-align:center;margin:0 0 18px;word-break:break-all;">Ou copie este link: '+url+'</p>'+
+        '<div style="border-top:1px solid #eee;padding-top:14px;"><p style="font-size:12px;color:#555;margin:0;">Com os melhores cumprimentos,</p><p style="font-size:13px;color:#222;font-weight:700;margin:6px 0 0;">'+(currentCondo.administrador_nome||'A Administração')+'</p></div>'+
+      '</div>'+
+      '<div style="background:#0d1825;padding:12px 28px;text-align:center;border-radius:0 0 10px 10px;"><div style="color:#5a6a79;font-size:10px;">COND.OS 2059 Pro · '+new Date().toLocaleDateString('pt-PT')+'</div></div></div>';
+    var ok = await enviarEmailGmail(f.proprietario_email, assunto, corpo);
+    if (ok) enviados++; else falhas++;
+    await new Promise(function(r){ setTimeout(r, 400); });
   }
 
-  if (semContacto.length > 0) {
-    toast('✅ ' + enviados + ' notificações enviadas. ' + semContacto.length + ' frações sem contacto — imprimir QR manualmente.', 'ok');
-  } else {
-    toast('✅ ' + enviados + ' notificações enviadas com sucesso!', 'ok');
-  }
+  var resumo = '✅ ' + enviados + ' email(s) enviado(s)';
+  if (falhas) resumo += ' · ' + falhas + ' falha(s)';
+  if (semEmail.length) resumo += ' · ' + semEmail.length + ' sem email (usar QR/carta)';
+  toast(resumo, 'ok');
 }
-
-
 
 // ===== MÓDULO EDIFÍCIO — TABS =====
 function switchEdificioTab(tab) {
