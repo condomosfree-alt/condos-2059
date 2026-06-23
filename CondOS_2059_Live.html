@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.06.23-0854</div>
+      <div class="sb-tag">2059 Pro · build v2026.06.23-0859</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -1843,7 +1843,8 @@ textarea.fi{resize:vertical;min-height:60px;}
       <button class="btn-ghost" style="display:inline-flex;align-items:center;justify-content:center;gap:6px;" onclick="cartaoEmail()"><i class="ti ti-mail"></i>Email</button>
       <button class="btn-ghost" style="display:inline-flex;align-items:center;justify-content:center;gap:6px;" onclick="imprimirCartao()"><i class="ti ti-printer"></i>Imprimir</button>
       <button class="btn-ghost" style="display:inline-flex;align-items:center;justify-content:center;gap:6px;" onclick="editarDoCartao()"><i class="ti ti-edit"></i>Editar</button>
-      <button class="btn-ghost" style="display:inline-flex;align-items:center;justify-content:center;gap:6px;grid-column:span 2;" onclick="closeModal('mo-cartao')"><i class="ti ti-x"></i>Fechar</button>
+      <button class="btn-ghost" style="display:inline-flex;align-items:center;justify-content:center;gap:6px;background:rgba(180,140,255,.1);border-color:rgba(180,140,255,.3);color:#b48cff;" onclick="gerarDeclaracaoDivida()" title="Declaração de dívida para venda da fração (Art. 1424.º-A CC)"><i class="ti ti-file-certificate"></i>Declaração</button>
+      <button class="btn-ghost" style="display:inline-flex;align-items:center;justify-content:center;gap:6px;" onclick="closeModal('mo-cartao')"><i class="ti ti-x"></i>Fechar</button>
     </div>
   </div>
 </div>
@@ -4314,6 +4315,168 @@ function cartaoWhatsApp() {
   var tel = (f.proprietario_tel||'').replace(/\s|\+/g,'');
   var base = tel ? 'https://wa.me/351' + tel : 'https://wa.me/';
   window.open(base + '?text=' + texto, '_blank');
+}
+
+
+// ===== DECLARAÇÃO DE DÍVIDA (Art. 1424.º-A CC) — para venda de fração =====
+async function gerarDeclaracaoDivida() {
+  var f = fracoes.find(function(x){ return x.id === _cartaoFracaoId; });
+  if (!f) { toast('Fração não encontrada','err'); return; }
+  if (!window.jspdf || !window.jspdf.jsPDF) { toast('Biblioteca PDF não carregada','err'); return; }
+
+  toast('A gerar declaração...','');
+
+  // Carregar TODAS as quotas da fração (para apurar dívidas e encargos em vigor)
+  var todas = await sb.from('quotas').select('*').eq('condominio_id', currentCondo.id).eq('fracao_id', f.id).order('ano').order('mes');
+  var quotas = todas.data || [];
+
+  // Apurar dívidas (quotas com saldo > 0)
+  var hoje = new Date();
+  var TAXA_JURO = (currentCondo && currentCondo.taxa_juro_mora) ? (parseFloat(currentCondo.taxa_juro_mora)/100) : 0.04;
+  var dividas = [];
+  var totalDivida = 0, totalJuros = 0;
+  var mN = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  quotas.forEach(function(q){
+    var saldo = parseFloat(q.valor_emitido||0) - parseFloat(q.valor_pago||0);
+    if (saldo > 0.005) {
+      var juros = 0;
+      if (q.data_vencimento) {
+        var venc = new Date(q.data_vencimento);
+        if (hoje > venc) juros = saldo * TAXA_JURO * (Math.floor((hoje-venc)/86400000)/365);
+      }
+      dividas.push({ desc: 'Quota de condomínio — ' + mN[(q.mes||1)-1] + ' ' + q.ano, venc: q.data_vencimento, valor: saldo, juros: juros });
+      totalDivida += saldo; totalJuros += juros;
+    }
+  });
+  var temDivida = totalDivida > 0.005;
+
+  // Quota mensal em vigor
+  var quotaVigor = parseFloat(f.quota_mensal || currentCondo.quota_base || 0);
+
+  var { jsPDF } = window.jspdf;
+  var doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+  var W = 210, H = 297, M = 20;
+  var eur = function(v){ return parseFloat(v||0).toFixed(2).replace('.',',') + ' €'; };
+  var condoNome = displayNomeCondo(currentCondo.nome||'');
+  var moradaCondo = [currentCondo.morada, [currentCondo.codigo_postal, currentCondo.cidade].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+  var hojeStr = hoje.toLocaleDateString('pt-PT', {day:'2-digit', month:'long', year:'numeric'});
+
+  // ===== CABEÇALHO =====
+  doc.setFillColor(8,13,20); doc.rect(0,0,W,38,'F');
+  doc.setFillColor(0,212,255); doc.rect(0,38,W,1.2,'F');
+  doc.setTextColor(0,212,255); doc.setFont('courier','bold'); doc.setFontSize(19);
+  doc.text('COND.OS', M, 18);
+  doc.setTextColor(150,160,170); doc.setFont('courier','normal'); doc.setFontSize(8);
+  doc.text('2059 PRO', M, 23);
+  doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(12);
+  doc.text(condoNome, W-M, 16, {align:'right'});
+  doc.setTextColor(150,160,170); doc.setFont('helvetica','normal'); doc.setFontSize(8);
+  if (moradaCondo) doc.text(moradaCondo, W-M, 21, {align:'right'});
+  if (currentCondo.nif) doc.text('NIPC ' + currentCondo.nif, W-M, 25.5, {align:'right'});
+
+  // ===== TÍTULO =====
+  var y = 54;
+  doc.setTextColor(20,25,30); doc.setFont('helvetica','bold'); doc.setFontSize(15);
+  doc.text('DECLARAÇÃO DE DÍVIDA DE CONDOMÍNIO', W/2, y, {align:'center'});
+  doc.setTextColor(110,120,130); doc.setFont('helvetica','normal'); doc.setFontSize(9);
+  doc.text('(Artigo 1424.º-A do Código Civil — para efeitos de alienação da fração)', W/2, y+6, {align:'center'});
+
+  // ===== IDENTIFICAÇÃO DA FRAÇÃO =====
+  y += 18;
+  doc.setFillColor(245,248,251); doc.setDrawColor(220,228,235); doc.setLineWidth(0.3);
+  doc.roundedRect(M, y, W-2*M, 30, 2, 2, 'FD');
+  doc.setTextColor(0,90,140); doc.setFont('helvetica','bold'); doc.setFontSize(9);
+  doc.text('FRAÇÃO', M+6, y+8);
+  doc.setTextColor(40,45,50); doc.setFont('helvetica','bold'); doc.setFontSize(13);
+  doc.text((f.codigo||'—') + (f.bloco ? '  ·  Bloco ' + f.bloco : ''), M+6, y+16);
+  doc.setTextColor(90,100,110); doc.setFont('helvetica','normal'); doc.setFontSize(9);
+  doc.text('Proprietário: ' + (f.proprietario_nome||'—'), M+6, y+23);
+  if (f.proprietario_nif) doc.text('NIF: ' + f.proprietario_nif, M+6, y+28);
+  if (f.permilagem) {
+    doc.setTextColor(90,100,110); doc.setFontSize(9);
+    doc.text('Permilagem: ' + parseFloat(f.permilagem).toFixed(1) + ' ‰', W-M-6, y+16, {align:'right'});
+  }
+
+  // ===== CORPO DA DECLARAÇÃO =====
+  y += 42;
+  doc.setTextColor(40,45,50); doc.setFont('helvetica','normal'); doc.setFontSize(10);
+  var admNome = currentCondo.administrador_nome || 'A administração';
+  var intro = admNome + ', na qualidade de administração do condomínio do prédio sito em ' + (moradaCondo || condoNome) + ', declara, para os efeitos previstos no artigo 1424.º-A do Código Civil, o seguinte relativamente à fração identificada:';
+  var introLines = doc.splitTextToSize(intro, W-2*M);
+  doc.text(introLines, M, y);
+  y += introLines.length * 5 + 6;
+
+  // ===== ENCARGOS EM VIGOR =====
+  doc.setTextColor(0,90,140); doc.setFont('helvetica','bold'); doc.setFontSize(10);
+  doc.text('1. Encargos de condomínio em vigor', M, y);
+  y += 6;
+  doc.setTextColor(40,45,50); doc.setFont('helvetica','normal'); doc.setFontSize(9.5);
+  doc.text('• Quota mensal ordinária: ' + eur(quotaVigor) + ' (vencimento dia ' + (currentCondo.dia_vencimento||8) + ' de cada mês)', M+4, y);
+  y += 6;
+
+  // ===== DÍVIDAS EXISTENTES =====
+  doc.setTextColor(0,90,140); doc.setFont('helvetica','bold'); doc.setFontSize(10);
+  doc.text('2. Dívidas existentes', M, y);
+  y += 4;
+
+  if (!temDivida) {
+    doc.setFillColor(236,253,245); doc.setDrawColor(16,185,129); doc.setLineWidth(0.4);
+    doc.roundedRect(M, y, W-2*M, 16, 2, 2, 'FD');
+    doc.setTextColor(5,150,105); doc.setFont('helvetica','bold'); doc.setFontSize(11);
+    doc.text('NÃO EXISTEM DÍVIDAS', W/2, y+7, {align:'center'});
+    doc.setFont('helvetica','normal'); doc.setFontSize(8.5);
+    doc.text('A fração tem a sua situação totalmente regularizada perante o condomínio.', W/2, y+12, {align:'center'});
+    y += 22;
+  } else {
+    doc.autoTable({
+      startY: y,
+      head: [['Natureza do encargo', 'Vencimento', 'Capital', 'Juros mora']],
+      body: dividas.map(function(d){ return [d.desc, d.venc?new Date(d.venc).toLocaleDateString('pt-PT'):'—', eur(d.valor), d.juros>0?eur(d.juros):'—']; }),
+      foot: [['TOTAL EM DÍVIDA', '', eur(totalDivida), totalJuros>0?eur(totalJuros):'—']],
+      theme: 'grid',
+      styles: { fontSize: 8.5, cellPadding: 2.5, textColor:[50,55,60], lineColor:[230,235,240], lineWidth:0.1 },
+      headStyles: { fillColor:[8,13,20], textColor:[255,255,255], fontStyle:'bold', fontSize:8.5 },
+      footStyles: { fillColor:[190,30,30], textColor:[255,255,255], fontStyle:'bold' },
+      columnStyles: { 0:{cellWidth:'auto'}, 1:{cellWidth:28,halign:'center'}, 2:{cellWidth:28,halign:'right'}, 3:{cellWidth:28,halign:'right'} },
+      margin: { left: M, right: M }
+    });
+    y = doc.lastAutoTable.finalY + 4;
+    doc.setTextColor(150,30,30); doc.setFont('helvetica','bold'); doc.setFontSize(10);
+    doc.text('Total geral (capital + juros): ' + eur(totalDivida + totalJuros), W-M, y, {align:'right'});
+    y += 8;
+    if (currentCondo.iban_operacional) {
+      doc.setTextColor(90,100,110); doc.setFont('helvetica','normal'); doc.setFontSize(8.5);
+      doc.text('IBAN para regularização: ' + currentCondo.iban_operacional, M, y);
+      y += 6;
+    }
+  }
+
+  // ===== NOTA LEGAL =====
+  y += 2;
+  doc.setTextColor(110,120,130); doc.setFont('helvetica','italic'); doc.setFontSize(8);
+  var nota = 'Nota: Nos termos do n.º 4 do artigo 1424.º-A do Código Civil, os montantes que constituam encargos do condomínio que se vençam em data posterior à transmissão da fração são da responsabilidade do novo proprietário. A presente declaração é válida à data da sua emissão.';
+  var notaLines = doc.splitTextToSize(nota, W-2*M);
+  doc.text(notaLines, M, y);
+  y += notaLines.length * 4 + 10;
+
+  // ===== DATA E ASSINATURA =====
+  if (y > H - 50) { doc.addPage(); y = 40; }
+  doc.setTextColor(40,45,50); doc.setFont('helvetica','normal'); doc.setFontSize(9.5);
+  doc.text((currentCondo.cidade || '____________') + ', ' + hojeStr, M, y);
+  y += 22;
+  doc.setDrawColor(120,130,140); doc.setLineWidth(0.3);
+  doc.line(M, y, M+75, y);
+  doc.setTextColor(60,70,80); doc.setFont('helvetica','bold'); doc.setFontSize(9.5);
+  doc.text(admNome, M, y+5);
+  doc.setTextColor(110,120,130); doc.setFont('helvetica','normal'); doc.setFontSize(8.5);
+  doc.text('A Administração do Condomínio', M, y+10);
+
+  // ===== RODAPÉ =====
+  doc.setTextColor(170,180,190); doc.setFont('helvetica','normal'); doc.setFontSize(7);
+  doc.text('Documento gerado por COND.OS 2059 Pro · ' + hoje.toLocaleDateString('pt-PT') + ' ' + hoje.toLocaleTimeString('pt-PT',{hour:'2-digit',minute:'2-digit'}), W/2, H-10, {align:'center'});
+
+  doc.save('Declaracao_Divida_' + (f.codigo||'fracao') + '_' + condoNome.replace(/\s+/g,'_') + '.pdf');
+  toast(temDivida ? '📄 Declaração gerada (com dívidas)' : '📄 Declaração gerada (sem dívidas)','ok');
 }
 
 function editarDoCartao() {
