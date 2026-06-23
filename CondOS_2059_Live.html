@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.06.23-0859</div>
+      <div class="sb-tag">2059 Pro · build v2026.06.23-0956</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -568,6 +568,7 @@ textarea.fi{resize:vertical;min-height:60px;}
       <div class="ni" onclick="nav('quotas')"><i class="ti ti-receipt"></i><span>Quotas</span><span class="nb" id="nb-quotas"></span></div>
       <div class="ni" onclick="nav('financeiro')"><i class="ti ti-cash"></i><span>Financeiro</span></div>
       <div class="ni" onclick="nav('orcamento')"><i class="ti ti-calculator"></i><span>Orçamento</span></div>
+      <div class="ni" onclick="nav('despesas')"><i class="ti ti-tools"></i><span>Despesas</span><span class="nb" id="nb-despesas"></span></div>
       <div class="nav-section">Edifício</div>
       <div class="ni" onclick="nav('edificio')"><i class="ti ti-home-2"></i><span>Perfil do Edifício</span></div>
       <div class="nav-section">Gestão</div>
@@ -1155,6 +1156,22 @@ textarea.fi{resize:vertical;min-height:60px;}
       </div>
 
       <!-- OCORRÊNCIAS -->
+      <div class="page" id="page-despesas">
+        <div class="sec-hdr">
+          <span class="sec-t">Despesas, Derramas e Outros Gastos</span>
+          <button class="btn-primary" onclick="abrirNovaDespesa()"><i class="ti ti-plus"></i>Nova Despesa</button>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;">
+          <div class="kpi" style="border-top:2px solid var(--cyan);"><div class="kpi-label">Total Despesas</div><div class="kpi-val" id="desp-total">0,00€</div></div>
+          <div class="kpi" style="border-top:2px solid var(--amber);"><div class="kpi-label">Por Pagar</div><div class="kpi-val" id="desp-porpagar">0,00€</div></div>
+          <div class="kpi" style="border-top:2px solid var(--green);"><div class="kpi-label">Pagas</div><div class="kpi-val" id="desp-pagas">0,00€</div></div>
+          <div class="kpi" style="border-top:2px solid var(--violet);"><div class="kpi-label">Nº Despesas</div><div class="kpi-val" id="desp-num">0</div></div>
+        </div>
+        <div class="panel">
+          <div id="despesas-list"><div class="loading"><div class="spin"></div></div></div>
+        </div>
+      </div>
+
       <div class="page" id="page-ocorrencias">
         <div class="sec-hdr"><span class="sec-t">Ocorrências</span><button class="btn-primary" onclick="openModal('mo-oc')"><i class="ti ti-plus"></i>Nova</button></div>
         <div class="panel">
@@ -1625,6 +1642,86 @@ textarea.fi{resize:vertical;min-height:60px;}
 </div>
 
 <!-- MODAL REGISTAR PAGAMENTO -->
+<div class="mo" id="mo-despesa">
+  <div class="mo-box" style="width:560px;max-width:95vw;">
+    <div class="mo-title">🛠️ Nova Despesa / Derrama <span class="mo-close" onclick="closeModal('mo-despesa')"><i class="ti ti-x"></i></span></div>
+    <div style="padding:4px 2px;">
+      <div class="fl" style="margin-bottom:12px;">
+        <label>Descrição *</label>
+        <input class="fi" id="dsp-desc" placeholder="Ex: Pintura da fachada, Reparação do elevador...">
+      </div>
+      <div class="form-row">
+        <div class="fl"><label>Tipo</label>
+          <select class="fi" id="dsp-tipo">
+            <option value="extraordinaria">Despesa Extraordinária</option>
+            <option value="derrama">Derrama</option>
+            <option value="obra">Obra</option>
+            <option value="reparacao">Reparação</option>
+            <option value="outro">Outro</option>
+          </select>
+        </div>
+        <div class="fl"><label>Valor Total (€) *</label>
+          <input class="fi" id="dsp-valor" type="number" step="0.01" placeholder="0.00">
+        </div>
+      </div>
+      <div class="form-row" style="margin-top:12px;">
+        <div class="fl"><label>Data</label><input class="fi" id="dsp-data" type="date"></div>
+        <div class="fl"><label>Estado</label>
+          <select class="fi" id="dsp-estado">
+            <option value="planeada">Planeada</option>
+            <option value="aprovada">Aprovada</option>
+            <option value="em_curso">Em curso</option>
+            <option value="paga">Paga</option>
+            <option value="cancelada">Cancelada</option>
+          </select>
+        </div>
+      </div>
+      <div style="margin-top:14px;font-size:10px;color:var(--cyan);font-weight:700;text-transform:uppercase;letter-spacing:1px;">Origem / Interligação</div>
+      <div class="form-row" style="margin-top:8px;">
+        <div class="fl"><label>Origem</label>
+          <select class="fi" id="dsp-origem" onchange="dspToggleOrigem()">
+            <option value="manual">Registo manual</option>
+            <option value="assembleia">Aprovada em Assembleia</option>
+            <option value="ocorrencia">Resulta de Ocorrência</option>
+            <option value="parceiro">Orçamento de Parceiro</option>
+          </select>
+        </div>
+        <div class="fl" id="dsp-origem-link-wrap" style="display:none;"><label id="dsp-origem-link-label">Referência</label>
+          <select class="fi" id="dsp-origem-link"><option value="">—</option></select>
+        </div>
+      </div>
+      <div class="fl" style="margin-top:12px;">
+        <label>Motivo / Referência da Ata</label>
+        <input class="fi" id="dsp-motivo" placeholder="Ex: Ata nº 12, 15/03/2026 — obra aprovada por maioria">
+      </div>
+      <div style="margin-top:14px;font-size:10px;color:var(--cyan);font-weight:700;text-transform:uppercase;letter-spacing:1px;">Cobrança</div>
+      <div class="form-row" style="margin-top:8px;">
+        <div class="fl"><label>Distribuição pelas frações</label>
+          <select class="fi" id="dsp-distribuicao">
+            <option value="permilagem">Por permilagem (proporcional)</option>
+            <option value="igual">Valor igual para todas</option>
+          </select>
+        </div>
+        <div class="fl"><label>Forma de pagamento</label>
+          <select class="fi" id="dsp-forma">
+            <option value="quota_extra">Quota extraordinária aos condóminos</option>
+            <option value="saldo_condominio">Pago pelo saldo do condomínio</option>
+            <option value="misto">Misto</option>
+          </select>
+        </div>
+      </div>
+      <div class="fl" style="margin-top:12px;">
+        <label>Notas</label>
+        <input class="fi" id="dsp-notas" placeholder="Opcional">
+      </div>
+      <div style="display:flex;gap:8px;margin-top:18px;justify-content:flex-end;">
+        <button class="btn-ghost" onclick="closeModal('mo-despesa')">Cancelar</button>
+        <button class="btn-primary" onclick="saveDespesa()"><i class="ti ti-check"></i>Guardar Despesa</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="mo" id="mo-quota">
   <div class="mo-box" style="max-width:480px;">
     <div class="mo-title">💰 Registar Pagamento <span class="mo-close" onclick="closeModal('mo-quota')"><i class="ti ti-x"></i></span></div>
@@ -4971,6 +5068,13 @@ async function loadQuotas() {
   var l2 = document.getElementById('q-mes-label2'); if(l2) l2.textContent = mesNome;
   const qs = await carregarQuotasComFracoes({mes:mes, ano:ano});
   const quotas = qs || [];
+  // Carregar descrições das despesas (para quotas extraordinárias)
+  var despMap = {};
+  var despIds = [...new Set(quotas.filter(function(q){return q.despesa_id;}).map(function(q){return q.despesa_id;}))];
+  if (despIds.length) {
+    var dres = await sb.from('despesas').select('id,descricao').in('id', despIds);
+    (dres.data||[]).forEach(function(d){ despMap[d.id] = d.descricao; });
+  }
   const totalEmitido = quotas.reduce((s,q)=>s+parseFloat(q.valor_emitido||0),0);
   const totalPago = quotas.reduce((s,q)=>s+parseFloat(q.valor_pago||0),0);
   const taxa = totalEmitido>0 ? Math.round(totalPago/totalEmitido*100) : 0;
@@ -4984,9 +5088,12 @@ async function loadQuotas() {
   el.innerHTML = `<table class="tbl"><thead><tr><th>Fração</th><th>Morador</th><th>Emitido</th><th>Pago</th><th>Saldo</th><th>Estado</th><th>Método</th><th>Ação</th></tr></thead><tbody>`+
     quotas.map(q=>{
       const saldo = parseFloat(q.valor_emitido)-parseFloat(q.valor_pago||0);
-      return `<tr>
-        <td class="apt">${q.fracoes ? q.fracoes.codigo : '—'}</td>
-        <td>${q.fracoes ? (q.fracoes.proprietario_nome||'—') : '—'}</td>
+      const isExtra = q.tipo === 'extraordinaria';
+      const extraBadge = isExtra ? ' <span style="font-size:8px;background:rgba(180,140,255,.18);color:#b48cff;padding:1px 5px;border-radius:6px;font-weight:700;vertical-align:middle;">EXTRA</span>' : '';
+      const origemDesc = isExtra && q.despesa_id && despMap[q.despesa_id] ? `<div style="font-size:9px;color:#b48cff;margin-top:2px;">🛠️ ${despMap[q.despesa_id]}</div>` : '';
+      return `<tr${isExtra?' style="background:rgba(180,140,255,.04);"':''}>
+        <td class="apt">${q.fracoes ? q.fracoes.codigo : '—'}${extraBadge}</td>
+        <td>${q.fracoes ? (q.fracoes.proprietario_nome||'—') : '—'}${origemDesc}</td>
         <td class="mn">${parseFloat(q.valor_emitido).toFixed(2)}€</td>
         <td class="mn" style="color:var(--green)">${parseFloat(q.valor_pago||0).toFixed(2)}€</td>
         <td class="mn" style="color:${saldo>0?'var(--red)':'var(--green)'}">${saldo>0?'-':''}${saldo.toFixed(2)}€</td>
@@ -5807,6 +5914,183 @@ async function saveMov() {
 }
 
 // ===== OCORRÊNCIAS =====
+
+// ===== DESPESAS / DERRAMAS / OUTROS GASTOS =====
+var _despesasAll = [];
+
+async function loadDespesas() {
+  if (!currentCondo) return;
+  var el = document.getElementById('despesas-list');
+  var res = await sb.from('despesas').select('*').eq('condominio_id', currentCondo.id).order('data_despesa', {ascending:false});
+  if (res.error) {
+    el.innerHTML = '<div class="empty"><i class="ti ti-alert-circle"></i><div class="empty-title">Tabela de despesas não encontrada</div><div class="empty-sub">Executa o SQL sql_despesas.sql no Supabase para ativar este módulo.</div></div>';
+    console.warn('Despesas:', res.error.message);
+    return;
+  }
+  _despesasAll = res.data || [];
+  var eur = function(v){ return parseFloat(v||0).toFixed(2).replace('.',',')+'€'; };
+
+  // KPIs
+  var total=0, pagas=0, porPagar=0;
+  _despesasAll.forEach(function(d){
+    var v = parseFloat(d.valor_total||0);
+    total += v;
+    if (d.estado === 'paga') pagas += v; else porPagar += v;
+  });
+  document.getElementById('desp-total').textContent = eur(total);
+  document.getElementById('desp-pagas').textContent = eur(pagas);
+  document.getElementById('desp-porpagar').textContent = eur(porPagar);
+  document.getElementById('desp-num').textContent = _despesasAll.length;
+
+  if (!_despesasAll.length) {
+    el.innerHTML = emptyState('ti-tools','Sem despesas registadas','Regista obras, derramas ou despesas extraordinárias.');
+    return;
+  }
+
+  var TIPO_LABEL = {extraordinaria:'Extraordinária', derrama:'Derrama', obra:'Obra', reparacao:'Reparação', outro:'Outro'};
+  var ESTADO_CLS = {planeada:'info', aprovada:'warn', em_curso:'warn', paga:'ok', cancelada:''};
+  var ORIGEM_ICO = {assembleia:'🏛️', ocorrencia:'⚠️', parceiro:'🔧', manual:'✍️'};
+
+  el.innerHTML = '<table class="tbl"><thead><tr>' +
+    '<th>Descrição</th><th>Tipo</th><th>Origem</th><th>Valor</th><th>Distribuição</th><th>Estado</th><th>Data</th><th>Ações</th>' +
+    '</tr></thead><tbody>' +
+    _despesasAll.map(function(d) {
+      return '<tr>' +
+        '<td><div style="font-weight:500;">' + (d.descricao||'—') + '</div>' + (d.motivo?'<div style="font-size:10px;color:var(--t3)">' + d.motivo + '</div>':'') + '</td>' +
+        '<td><span style="font-size:11px;color:var(--t2)">' + (TIPO_LABEL[d.tipo]||d.tipo||'—') + '</span></td>' +
+        '<td><span style="font-size:11px;">' + (ORIGEM_ICO[d.origem_tipo]||'') + ' ' + (d.origem_tipo||'manual') + '</span></td>' +
+        '<td class="mn" style="font-weight:600;">' + parseFloat(d.valor_total||0).toFixed(2).replace('.',',') + '€</td>' +
+        '<td><span style="font-size:10px;color:var(--t3)">' + (d.distribuicao==='igual'?'Igual':'Permilagem') + '</span></td>' +
+        '<td><span class="pill ' + (ESTADO_CLS[d.estado]||'') + '">' + (d.estado||'planeada') + '</span></td>' +
+        '<td class="mn" style="font-size:11px;">' + (d.data_despesa||'—') + '</td>' +
+        '<td><div style="display:flex;gap:4px;">' +
+          (d.quota_gerada
+            ? '<span class="pill ok" style="font-size:9px;">✓ Quota gerada</span>'
+            : '<button class="tb-btn" style="font-size:10px;padding:4px 8px;background:rgba(0,212,255,.1);border-color:rgba(0,212,255,.3);color:var(--cyan);" onclick="gerarQuotaExtra(\'' + d.id + '\')" title="Gerar quota extraordinária dividida pelas frações"><i class="ti ti-divide"></i> Gerar Quota</button>') +
+          '<button class="tb-btn" style="font-size:10px;padding:4px 8px;" onclick="apagarDespesa(\'' + d.id + '\')"><i class="ti ti-trash"></i></button>' +
+        '</div></td>' +
+        '</tr>';
+    }).join('') + '</tbody></table>';
+}
+
+function abrirNovaDespesa() {
+  if (!currentCondo) { toast('Selecciona um condomínio primeiro','err'); return; }
+  ['dsp-desc','dsp-valor','dsp-motivo','dsp-notas'].forEach(function(id){ var e=document.getElementById(id); if(e) e.value=''; });
+  document.getElementById('dsp-data').value = new Date().toISOString().split('T')[0];
+  document.getElementById('dsp-tipo').value = 'extraordinaria';
+  document.getElementById('dsp-estado').value = 'planeada';
+  document.getElementById('dsp-origem').value = 'manual';
+  document.getElementById('dsp-distribuicao').value = 'permilagem';
+  document.getElementById('dsp-forma').value = 'quota_extra';
+  dspToggleOrigem();
+  openModal('mo-despesa');
+}
+
+async function dspToggleOrigem() {
+  var origem = document.getElementById('dsp-origem').value;
+  var wrap = document.getElementById('dsp-origem-link-wrap');
+  var sel = document.getElementById('dsp-origem-link');
+  var lbl = document.getElementById('dsp-origem-link-label');
+  if (origem === 'manual') { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+  sel.innerHTML = '<option value="">— a carregar —</option>';
+  if (origem === 'assembleia') {
+    lbl.textContent = 'Assembleia';
+    var r = await sb.from('assembleias').select('id,tipo,data_assembleia').eq('condominio_id', currentCondo.id).order('data_assembleia',{ascending:false});
+    sel.innerHTML = '<option value="">— selecciona —</option>' + (r.data||[]).map(function(a){ return '<option value="'+a.id+'">'+(a.tipo||'Assembleia')+' · '+(a.data_assembleia||'')+'</option>'; }).join('');
+  } else if (origem === 'ocorrencia') {
+    lbl.textContent = 'Ocorrência';
+    var r2 = await sb.from('ocorrencias').select('id,descricao,categoria').eq('condominio_id', currentCondo.id).order('criado_em',{ascending:false});
+    sel.innerHTML = '<option value="">— selecciona —</option>' + (r2.data||[]).map(function(o){ return '<option value="'+o.id+'">'+(o.categoria||'')+' · '+(o.descricao||'').slice(0,40)+'</option>'; }).join('');
+  } else if (origem === 'parceiro') {
+    lbl.textContent = 'Parceiro';
+    var r3 = await sb.from('parceiros').select('id,nome,categoria').eq('condominio_id', currentCondo.id).order('nome');
+    sel.innerHTML = '<option value="">— selecciona —</option>' + (r3.data||[]).map(function(p){ return '<option value="'+p.id+'">'+(p.nome||'')+(p.categoria?' ('+p.categoria+')':'')+'</option>'; }).join('');
+  }
+}
+
+async function saveDespesa() {
+  var desc = document.getElementById('dsp-desc').value.trim();
+  var valor = parseFloat(document.getElementById('dsp-valor').value);
+  if (!desc || !valor) { toast('Preenche descrição e valor','err'); return; }
+  var origem = document.getElementById('dsp-origem').value;
+  var linkId = document.getElementById('dsp-origem-link').value || null;
+  var payload = {
+    condominio_id: currentCondo.id,
+    descricao: desc,
+    tipo: document.getElementById('dsp-tipo').value,
+    valor_total: valor,
+    data_despesa: document.getElementById('dsp-data').value || null,
+    estado: document.getElementById('dsp-estado').value,
+    distribuicao: document.getElementById('dsp-distribuicao').value,
+    origem_tipo: origem,
+    assembleia_id: origem === 'assembleia' ? linkId : null,
+    ocorrencia_id: origem === 'ocorrencia' ? linkId : null,
+    parceiro_id: origem === 'parceiro' ? linkId : null,
+    motivo: document.getElementById('dsp-motivo').value || null,
+    forma_pagamento: document.getElementById('dsp-forma').value,
+    notas: document.getElementById('dsp-notas').value || null,
+    quota_gerada: false
+  };
+  var res = await sb.from('despesas').insert(payload);
+  if (res.error) { toast('Erro ao guardar: ' + res.error.message, 'err'); console.error(res.error); return; }
+  closeModal('mo-despesa');
+  toast('✅ Despesa registada!','ok');
+  loadDespesas();
+}
+
+async function apagarDespesa(id) {
+  if (!await confirmar('Eliminar esta despesa? As quotas já geradas não são apagadas automaticamente.', {titulo:'Eliminar despesa?', tipo:'perigo', icon:'🗑️', okTexto:'Eliminar'})) return;
+  await sb.from('despesas').delete().eq('id', id);
+  toast('Despesa eliminada','ok');
+  loadDespesas();
+}
+
+async function gerarQuotaExtra(despesaId) {
+  var d = _despesasAll.find(function(x){ return x.id === despesaId; });
+  if (!d) return;
+  if (!fracoes.length) { toast('Sem frações para distribuir','err'); return; }
+  var valor = parseFloat(d.valor_total||0);
+  if (!valor) { toast('A despesa não tem valor','err'); return; }
+
+  var ativas = fracoes.filter(function(f){ return f.ativo !== false; });
+  var msg = 'Vai ser criada uma quota extraordinária de ' + valor.toFixed(2).replace('.',',') + '€ dividida por ' + ativas.length + ' frações (' + (d.distribuicao==='igual'?'valor igual':'por permilagem') + ').\n\nCada fração recebe a sua parte. Continuar?';
+  if (!await confirmar(msg, {titulo:'Gerar Quota Extraordinária', tipo:'info', icon:'➗', okTexto:'Gerar'})) return;
+
+  // Calcular total de permilagem (para distribuição proporcional)
+  var totalPerm = ativas.reduce(function(a,f){ return a + parseFloat(f.permilagem||0); }, 0);
+  var hoje = new Date();
+  var mes = hoje.getMonth()+1, ano = hoje.getFullYear();
+  var dataVenc = d.data_despesa || hoje.toISOString().split('T')[0];
+
+  var criadas = 0;
+  for (var i = 0; i < ativas.length; i++) {
+    var f = ativas[i];
+    var parte;
+    if (d.distribuicao === 'igual' || totalPerm <= 0) {
+      parte = valor / ativas.length;
+    } else {
+      parte = valor * (parseFloat(f.permilagem||0) / totalPerm);
+    }
+    parte = Math.round(parte * 100) / 100;
+    var ins = await sb.from('quotas').insert({
+      condominio_id: currentCondo.id, fracao_id: f.id, mes: mes, ano: ano,
+      valor_emitido: parte, valor_pago: 0, estado: 'pendente',
+      data_vencimento: dataVenc, tipo: 'extraordinaria', despesa_id: d.id,
+      notas: 'Quota extraordinária: ' + d.descricao
+    });
+    if (!ins.error) criadas++;
+  }
+  await sb.from('despesas').update({quota_gerada: true, estado: d.estado==='planeada'?'aprovada':d.estado}).eq('id', d.id);
+  toast('✅ Quota extraordinária gerada para ' + criadas + ' frações!','ok');
+  loadDespesas();
+  // Levar o utilizador às quotas do mês onde foram geradas
+  if (typeof _mesSel !== 'undefined') { _mesSel.mes = mes; _mesSel.ano = ano; }
+  if (await confirmar('Quota extraordinária criada em ' + ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'][mes-1] + ' ' + ano + '.\n\nVer as quotas agora?', {titulo:'Quota gerada', tipo:'info', icon:'✅', okTexto:'Ver Quotas', cancelarTexto:'Mais tarde'})) {
+    nav('quotas');
+  }
+}
+
 async function loadOcorrencias() {
   if (!currentCondo) return;
   const { data } = await sb.from('ocorrencias').select('*').eq('condominio_id',currentCondo.id).order('criado_em',{ascending:false});
@@ -8153,6 +8437,7 @@ function nav(p) {
   if(p==='fracoes')renderFracoes();
   if(p==='edificio'){ loadEdificio(); }
   if(p==='quotas'){ initQuotasMesSel(); loadQuotas(); }
+  if(p==='despesas') loadDespesas();
   if(p==='definicoes')loadDefForm();
 }
 
