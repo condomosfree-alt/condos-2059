@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.06.24-1615</div>
+      <div class="sb-tag">2059 Pro · build v2026.06.24-1643</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -6424,8 +6424,15 @@ async function analisarFundoReserva() {
   var anoAtual = new Date().getFullYear();
 
   // ===== CÁLCULO DETERMINÍSTICO (funciona sempre, sem IA) =====
-  var idade = c.ano_construcao ? (anoAtual - parseInt(c.ano_construcao)) : 30;
+  var temAnoConstrucao = !!c.ano_construcao;
+  var idade = temAnoConstrucao ? (anoAtual - parseInt(c.ano_construcao)) : 30;
   if (idade < 0) idade = 0;
+  var dadosEmFalta = [];
+  if (!temAnoConstrucao) dadosEmFalta.push('ano de construção');
+  if (!c.regiao) dadosEmFalta.push('região');
+  if (c.perto_mar === undefined || c.perto_mar === null) dadosEmFalta.push('proximidade do mar');
+  if (!c.fachada_ano) dadosEmFalta.push('ano da última pintura de fachada');
+  if (!c.imper_ano) dadosEmFalta.push('ano da última impermeabilização');
 
   // Fator idade: edifícios mais velhos desgastam mais rápido
   var fatorIdade = idade < 10 ? 1.0 : idade < 25 ? 1.25 : idade < 40 ? 1.5 : 1.8;
@@ -6488,7 +6495,8 @@ async function analisarFundoReserva() {
     idade: idade, fatorIdade: fatorIdade, pertoMar: pertoMar, regiao: c.regiao||'centro',
     componentes: componentes, totalDesgaste8: totalDesgaste8,
     reservaAnualIdeal: reservaAnualIdeal, reservaMensalFracao: reservaMensalFracao,
-    fcrSugerido: fcrSugerido, nFracoes: nFracoes, orcAnual: orcAnual, data: new Date().toISOString()
+    fcrSugerido: fcrSugerido, nFracoes: nFracoes, orcAnual: orcAnual, data: new Date().toISOString(),
+    dadosEmFalta: dadosEmFalta
   };
 
   renderFundoReserva(_fundoAnalise);
@@ -6531,6 +6539,14 @@ function renderFundoReserva(a) {
 
   // Comentário IA (preenchido depois, async)
   html += '<div id="fundo-ia-comentario"></div>';
+
+  // Aviso de dados em falta (transparência sobre a precisão)
+  if (a.dadosEmFalta && a.dadosEmFalta.length) {
+    html += '<div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);border-radius:8px;padding:11px 14px;margin-top:12px;">';
+    html += '<div style="font-size:11px;color:var(--amber);font-weight:600;margin-bottom:4px;">⚠️ Cálculo com valores assumidos</div>';
+    html += '<div style="font-size:10px;color:var(--t2);line-height:1.5;">Para maior precisão, preenche no Perfil do Edifício: <strong>' + a.dadosEmFalta.join(', ') + '</strong>. Sem estes dados, o cálculo usa estimativas médias (por isso pode dar valores parecidos entre edifícios diferentes).</div>';
+    html += '</div>';
+  }
 
   // Componentes de desgaste
   html += '<div style="border:1px solid var(--b1);border-radius:8px;overflow:hidden;margin-top:14px;">';
