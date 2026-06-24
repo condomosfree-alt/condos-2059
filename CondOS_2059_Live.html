@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.06.24-1543</div>
+      <div class="sb-tag">2059 Pro · build v2026.06.24-1550</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -7605,13 +7605,17 @@ async function sugerirOrcamentoIA() {
 
   var jsonResp;
   try {
-    var txt = await callIA(prompt, 'orcamento');
-    txt = (txt||'').replace(/^`{3}json\s*/,'').replace(/\s*`{3}$/,'').trim();
+    var txt = await callIA(prompt, 'legislacao');
+    console.log('Resposta IA orçamento (raw):', txt ? txt.slice(0,500) : '(vazio)');
+    if (!txt || !txt.trim()) throw new Error('A IA devolveu resposta vazia. Verifica a ligação ou tenta novamente.');
+    txt = txt.replace(/```json/gi,'').replace(/```/g,'').trim();
     var s = txt.indexOf('{'), e = txt.lastIndexOf('}');
-    if (s === -1 || e <= s) throw new Error('Resposta inválida da IA');
+    if (s === -1 || e <= s) throw new Error('A resposta não contém JSON válido. Resposta: ' + txt.slice(0,120));
     jsonResp = JSON.parse(txt.slice(s, e+1));
+    if (!jsonResp.rubricas || !jsonResp.rubricas.length) throw new Error('A IA não devolveu rubricas. Tenta novamente.');
   } catch(err) {
-    body.innerHTML = '<div style="padding:30px;text-align:center;color:var(--t2);"><i class="ti ti-alert-circle" style="font-size:32px;color:var(--amber);"></i><div style="margin-top:12px;">Não foi possível gerar a sugestão automática.</div><div style="font-size:11px;color:var(--t3);margin-top:6px;">' + err.message + '</div><button class="btn-ghost" style="margin-top:16px;" onclick="sugerirOrcamentoIA()">Tentar de novo</button></div>';
+    console.error('Erro sugestão orçamento:', err);
+    body.innerHTML = '<div style="padding:30px;text-align:center;color:var(--t2);"><i class="ti ti-alert-circle" style="font-size:32px;color:var(--amber);"></i><div style="margin-top:12px;">Não foi possível gerar a sugestão automática.</div><div style="font-size:11px;color:var(--t3);margin-top:6px;max-width:400px;margin-left:auto;margin-right:auto;">' + err.message + '</div><button class="btn-ghost" style="margin-top:16px;" onclick="sugerirOrcamentoIA()">Tentar de novo</button></div>';
     return;
   }
 
