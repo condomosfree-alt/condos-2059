@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.06.23-2123</div>
+      <div class="sb-tag">2059 Pro · build v2026.06.24-0814</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -7401,10 +7401,19 @@ function verificarDivergencia() {
 }
 
 async function initOrcamentoAno() {
-  // Popular selector de anos
   const sel = document.getElementById('orc-ano-sel');
   const anoActual = new Date().getFullYear();
-  sel.innerHTML = [anoActual+1, anoActual, anoActual-1, anoActual-2].map(a =>
+  // Base: próximo ano até 2 anos atrás
+  var anos = [anoActual+1, anoActual, anoActual-1, anoActual-2];
+  // Adicionar anos que já têm rubricas (para não perder histórico — programa "infinito")
+  if (currentCondo) {
+    try {
+      var r = await sb.from('orcamento_rubricas').select('ano').eq('condominio_id', currentCondo.id);
+      (r.data||[]).forEach(function(x){ if (anos.indexOf(x.ano) === -1) anos.push(x.ano); });
+    } catch(e) {}
+  }
+  anos = [...new Set(anos)].sort(function(a,b){ return b-a; });
+  sel.innerHTML = anos.map(a =>
     `<option value="${a}" ${a===anoActual?'selected':''}>${a}</option>`).join('');
 }
 
@@ -7583,13 +7592,16 @@ async function sugerirOrcamentoIA() {
 
   var prompt = 'És um perito em gestão de condomínios em Portugal. Com base nos dados do edifício abaixo, cria um ORÇAMENTO ANUAL REALISTA e COMPLETO para o ano ' + ano + '. ' +
     'Inclui TODAS as rubricas obrigatórias e habituais que um condomínio deste tipo tem, mesmo as que os gestores costumam esquecer. ' +
-    'Considera: limpeza de partes comuns, electricidade das partes comuns, água comum, manutenção de elevador (se tem, contrato mensal obrigatório DL 320/2002 + inspeção periódica), seguro obrigatório, extintores e rede de incêndio (manutenção anual obrigatória), jardim (se tem), manutenção de portões/garagem (se tem), piscina (se tem), pequenas reparações, material de limpeza, gestão/administração, e fundo comum de reserva. ' +
+    'Considera: limpeza de partes comuns, electricidade das partes comuns, água comum, manutenção de elevador (se tem, contrato mensal obrigatório DL 320/2002 + inspeção periódica), seguro obrigatório, extintores e rede de incêndio (manutenção anual obrigatória), jardim (se tem), manutenção de portões/garagem (se tem), piscina (se tem), pequenas reparações, gestão/administração, e fundo comum de reserva. ' +
+    'NÃO incluas "material de limpeza" como rubrica separada SE já existir uma rubrica de serviço de limpeza contratado — nesse caso os produtos estão incluídos no serviço da empresa. Só inclui material de limpeza se a limpeza for feita pelos próprios condóminos (sem empresa). ' +
     'Para custos que já são conhecidos (na lista custos_conhecidos), USA esses valores exactos. Para os restantes, ESTIMA valores realistas de mercado em Portugal para ' + ano + ' para um prédio com ' + nFracoes + ' frações. ' +
-    'Aplica a inflação estimada de Portugal para ' + ano + ' (indica a percentagem que usaste). ' +
+    'IMPORTANTE sobre o histórico: usa "rubricas_ano_anterior" como base para as despesas RECORRENTES (repetem todos os anos). Mas em "despesas_passadas", DISTINGUE: despesas pontuais de obras/reparações já concluídas (ex: "pintura fachada 2025", "reparação telhado") NÃO devem ser incluídas no orçamento deste ano, pois já foram feitas. Só inclui despesas passadas se forem manutenções PERIÓDICAS que voltam a vencer este ano. ' +
+    'Se detectares uma manutenção periódica feita há 1-2 anos que costuma repetir-se (ex: manutenção de mangueiras/rede incêndio a cada 2 anos, inspeção de elevador), AVISA no campo avisos que deve ser agendada/orçamentada este ano. ' +
+    'Aplica a inflação estimada de Portugal para ' + ano + ' (indica a percentagem que usaste) APENAS às rubricas estimadas. ' +
     'Para cada rubrica indica se é "comum" (todos os blocos) ou "bloco" (só um bloco, ex: elevador). ' +
     'DADOS DO EDIFÍCIO:\n' + JSON.stringify(contexto, null, 1) + '\n\n' +
     'Responde APENAS com JSON válido, sem texto à volta, neste formato exacto: ' +
-    '{"inflacao_pct":X,"ano":'+ano+',"rubricas":[{"nome":"...","valor":0,"categoria":"comum|bloco","obrigatoria":true|false,"nota":"breve justificação ou base legal","origem":"real|estimada"}],"avisos":["manutenções obrigatórias em falta ou a agendar"],"resumo":"2 frases sobre o orçamento"}';
+    '{"inflacao_pct":X,"ano":'+ano+',"rubricas":[{"nome":"...","valor":0,"categoria":"comum|bloco","obrigatoria":true|false,"nota":"breve justificação ou base legal","origem":"real|estimada"}],"avisos":["manutenções periódicas a agendar este ano","despesas pontuais do ano anterior que NÃO incluí e porquê"],"resumo":"2 frases sobre o orçamento"}';
 
   var jsonResp;
   try {
@@ -7663,12 +7675,13 @@ function renderSugestaoOrcamento(j, ano) {
   });
   html += '</div>';
 
-  html += '<div style="font-size:10px;color:var(--t3);margin-top:10px;text-align:center;">🟢 verde = valor real do programa · cinza = estimativa da IA · podes editar tudo depois de aplicar</div>';
+  html += '<div style="font-size:10px;color:var(--t3);margin-top:10px;text-align:center;">🟢 verde = valor real do programa · cinza = estimativa da IA · os valores são da sugestão automática. Para ajustar, fá-lo depois no orçamento (fica registado como alteração do administrador).</div>';
 
   // Botões
-  html += '<div style="display:flex;gap:8px;margin-top:18px;justify-content:flex-end;">';
-  html += '<button class="btn-ghost" onclick="closeModal(\'mo-sugerir-orc\')">Cancelar</button>';
-  html += '<button class="btn-primary" onclick="aplicarOrcamentoSugerido()"><i class="ti ti-check"></i>Aplicar ao Orçamento ' + ano + '</button>';
+  html += '<div style="display:flex;gap:8px;margin-top:18px;justify-content:flex-end;flex-wrap:wrap;">';
+  html += '<button class="btn-ghost" onclick="descartarSugestao()" style="color:#f87171;border-color:rgba(248,113,113,.3);"><i class="ti ti-trash"></i>Descartar</button>';
+  html += '<button class="btn-ghost" onclick="imprimirSugestaoOrcamento()"><i class="ti ti-printer"></i>Imprimir Proposta</button>';
+  html += '<button class="btn-primary" onclick="aplicarOrcamentoSugerido()"><i class="ti ti-check"></i>Guardar no Orçamento ' + ano + '</button>';
   html += '</div>';
 
   body.innerHTML = html;
@@ -7686,6 +7699,59 @@ function recalcularInflacao() {
   var ano = _orcSugerido.ano || new Date().getFullYear();
   renderSugestaoOrcamento(_orcSugerido, ano);
   toast('Recalculado com ' + novaInfl + '% de inflação','ok');
+}
+
+
+function descartarSugestao() {
+  _orcSugerido = null;
+  closeModal('mo-sugerir-orc');
+  toast('Sugestão descartada','ok');
+}
+
+function imprimirSugestaoOrcamento() {
+  if (!_orcSugerido || !_orcSugerido.rubricas) { toast('Sem sugestão para imprimir','err'); return; }
+  var j = _orcSugerido;
+  var ano = j.ano || new Date().getFullYear();
+  var eur = function(v){ return parseFloat(v||0).toFixed(2).replace('.',',') + ' €'; };
+  var condoNome = displayNomeCondo(currentCondo.nome||'');
+  var moradaCondo = [currentCondo.morada, [currentCondo.codigo_postal, currentCondo.cidade].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+  var total = j.rubricas.reduce(function(a,r){ return a + parseFloat(r.valor||0); }, 0);
+  var nFracoes = fracoes.length || 1;
+
+  var linhas = j.rubricas.map(function(r){
+    return '<tr><td style="padding:7px 10px;border-bottom:1px solid #eee;">' + r.nome + (r.obrigatoria?' <span style="font-size:9px;color:#c00;">(obrig.)</span>':'') +
+      (r.nota?'<div style="font-size:9px;color:#999;">'+r.nota+'</div>':'') + '</td>' +
+      '<td style="padding:7px 10px;border-bottom:1px solid #eee;text-align:center;font-size:11px;color:#666;">' + (r.categoria==='bloco'?'Bloco':'Comum') + '</td>' +
+      '<td style="padding:7px 10px;border-bottom:1px solid #eee;text-align:right;font-weight:600;">' + eur(r.valor) + '</td></tr>';
+  }).join('');
+
+  var html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Proposta de Orçamento ' + ano + '</title>' +
+    '<style>body{font-family:Arial,sans-serif;margin:0;padding:30px;color:#222;}@media print{body{padding:0;}}' +
+    'table{width:100%;border-collapse:collapse;font-size:13px;}</style></head><body>' +
+    '<div style="background:#0d1825;color:#fff;padding:20px 24px;border-radius:8px 8px 0 0;display:flex;justify-content:space-between;align-items:center;">' +
+      '<div><div style="color:#00d4ff;font-family:monospace;font-size:18px;font-weight:700;letter-spacing:2px;">COND.OS</div><div style="font-size:8px;color:#5a6a79;letter-spacing:3px;">2059 PRO</div></div>' +
+      '<div style="text-align:right;"><div style="font-size:13px;font-weight:600;">' + condoNome + '</div>' + (moradaCondo?'<div style="font-size:10px;color:#9ab;">'+moradaCondo+'</div>':'') + '</div>' +
+    '</div>' +
+    '<div style="border:1px solid #ddd;border-top:none;padding:24px;border-radius:0 0 8px 8px;">' +
+      '<h2 style="text-align:center;margin:0 0 4px;">PROPOSTA DE ORÇAMENTO ' + ano + '</h2>' +
+      '<p style="text-align:center;color:#888;font-size:12px;margin:0 0 20px;">Para apreciação e aprovação em assembleia de condóminos</p>' +
+      (j.resumo?'<p style="background:#f4f8fb;padding:12px;border-radius:6px;font-size:12px;color:#444;">' + j.resumo + '</p>':'') +
+      (j.inflacao_pct?'<p style="font-size:11px;color:#0088cc;">Inflação aplicada às estimativas: ' + j.inflacao_pct + '%</p>':'') +
+      '<table><thead><tr style="background:#0d1825;color:#fff;"><th style="padding:9px 10px;text-align:left;">Rubrica</th><th style="padding:9px 10px;">Tipo</th><th style="padding:9px 10px;text-align:right;">Valor/ano</th></tr></thead>' +
+      '<tbody>' + linhas + '</tbody>' +
+      '<tfoot><tr style="background:#00d4ff;color:#04111c;font-weight:700;font-size:15px;"><td style="padding:12px 10px;" colspan="2">TOTAL ANUAL</td><td style="padding:12px 10px;text-align:right;">' + eur(total) + '</td></tr></tfoot></table>' +
+      '<p style="font-size:12px;color:#666;margin-top:16px;">Média por fração: <strong>' + eur(total/nFracoes) + '/ano</strong> · ' + eur(total/nFracoes/12) + '/mês (' + nFracoes + ' frações). Valor real calculado por permilagem.</p>' +
+      (j.avisos&&j.avisos.length?'<div style="background:#fff8e8;border:1px solid #f0c860;border-radius:6px;padding:12px;margin-top:14px;font-size:11px;color:#8a6010;"><strong>A ter em atenção:</strong><br>' + j.avisos.map(function(a){return '• '+a;}).join('<br>') + '</div>':'') +
+      '<div style="margin-top:40px;font-size:12px;">' + (currentCondo.cidade||'____________') + ', ' + new Date().toLocaleDateString('pt-PT') + '</div>' +
+      '<div style="margin-top:30px;border-top:1px solid #999;width:240px;padding-top:5px;font-size:12px;font-weight:600;">' + (currentCondo.administrador_nome||'A Administração') + '</div>' +
+      '<div style="font-size:10px;color:#999;">A Administração do Condomínio</div>' +
+      '<p style="font-size:9px;color:#bbb;text-align:center;margin-top:24px;">Proposta gerada por COND.OS 2059 Pro · ' + new Date().toLocaleDateString('pt-PT') + '. Documento de trabalho sujeito a aprovação em assembleia.</p>' +
+    '</div></body></html>';
+
+  var w = window.open('', '_blank');
+  w.document.write(html);
+  w.document.close();
+  setTimeout(function(){ w.print(); }, 400);
 }
 
 async function aplicarOrcamentoSugerido() {
