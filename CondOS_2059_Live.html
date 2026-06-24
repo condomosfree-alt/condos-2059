@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.06.24-1550</div>
+      <div class="sb-tag">2059 Pro · build v2026.06.24-1615</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -862,6 +862,7 @@ textarea.fi{resize:vertical;min-height:60px;}
           <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:12px;">
             <button id="mtab-fachada" onclick="switchManutencaoTab('fachada')" style="padding:7px 14px;border:1px solid rgba(0,212,255,.4);border-radius:8px;background:rgba(0,212,255,.1);color:var(--cyan);font-size:12px;font-weight:700;cursor:pointer;">🏗️ Fachada</button>
             <button id="mtab-outros" onclick="switchManutencaoTab('outros')" style="padding:7px 14px;border:1px solid var(--b1);border-radius:8px;background:transparent;color:var(--t2);font-size:12px;cursor:pointer;">🔧 Outros</button>
+            <button id="mtab-fundo" onclick="switchManutencaoTab('fundo')" style="padding:7px 14px;border:1px solid rgba(180,140,255,.4);border-radius:8px;background:transparent;color:var(--t2);font-size:12px;cursor:pointer;">💎 Fundo Reserva</button>
           </div>
           <div id="mtab-content-fachada">
             <div class="panel">
@@ -901,6 +902,18 @@ textarea.fi{resize:vertical;min-height:60px;}
                   <div class="fl"><label>Próxima limpeza</label><input class="fi" id="ed-cisternas-prox" type="date"></div>
                   <div class="fl"><label>Custo (€)</label><input class="fi" id="ed-cisternas-custo" type="number" step="0.01" placeholder="Ex: 180"></div>
                 </div>
+              </div>
+            </div>
+          </div>
+          <div id="mtab-content-fundo" style="display:none;">
+            <div class="panel">
+              <div class="ph"><span class="pt">💎 Fundo de Reserva Inteligente</span></div>
+              <div style="padding:16px;">
+                <div style="background:linear-gradient(135deg,rgba(180,140,255,.08),rgba(0,212,255,.06));border:1px solid rgba(180,140,255,.25);border-radius:10px;padding:14px 16px;margin-bottom:16px;">
+                  <div style="font-size:13px;color:var(--text);line-height:1.6;">Análise inteligente do desgaste do edifício a 8 anos, considerando idade, região, proximidade do mar, exposição solar e estado dos equipamentos. Calcula quanto o condomínio <strong>deveria ter em fundo de reserva</strong> para fazer face a reparações futuras com segurança.</div>
+                </div>
+                <button class="btn-primary" onclick="analisarFundoReserva()" style="background:linear-gradient(135deg,#b48cff,#00d4ff);border:none;"><i class="ti ti-sparkles"></i> Analisar Fundo de Reserva</button>
+                <div id="fundo-resultado" style="margin-top:16px;"></div>
               </div>
             </div>
           </div>
@@ -3033,7 +3046,7 @@ function renderFracoes() {
           </div>
         </div>
         <div>
-          <div style="font-size:10px;color:var(--t2);margin-bottom:4px;letter-spacing:.5px;">FCR % <span style="color:var(--amber)">(mín. 10% legal)</span></div>
+          <div style="font-size:10px;color:var(--t2);margin-bottom:4px;letter-spacing:.5px;">FCR % <span style="color:var(--amber)">(mín. 10% legal)</span>${currentCondo.fcr_origem==='inteligente' ? '<span style="color:#b48cff;margin-left:4px;" title="Calculado por análise inteligente de desgaste">💎 sugerido</span>' : ''}</div>
           <div style="display:flex;align-items:center;gap:4px;">
             <input id="fcr-pct" type="number" min="10" max="100" step="0.5" placeholder="10" style="width:70px;background:var(--s2);border:1px solid var(--amber);border-radius:6px;padding:6px 10px;font-size:13px;color:var(--amber);outline:none;font-family:var(--mono);font-weight:700;" oninput="validarFCR(this);calcularQuotas()" value="${currentCondo.fcr_pct||10}">
             <span style="font-size:11px;color:var(--t2);">%</span>
@@ -3121,6 +3134,12 @@ function renderFracoes() {
 function validarFCR(input) {
   if (parseFloat(input.value) < 10) { input.value = 10; toast('FCR mínimo legal é 10%','warn'); }
   if (parseFloat(input.value) > 100) input.value = 100;
+  // Mudança manual: deixa de ser "inteligente"
+  if (currentCondo && currentCondo.fcr_origem === 'inteligente') {
+    currentCondo.fcr_origem = 'manual';
+    var badge = document.querySelector('[title="Calculado por análise inteligente de desgaste"]');
+    if (badge) badge.remove();
+  }
 }
 
 function getOrcamentoBloco(bloco) {
@@ -6392,14 +6411,229 @@ function switchContadorTab(tab) {
   });
 }
 
+
+// ===== FUNDO DE RESERVA INTELIGENTE (análise de desgaste a 8 anos) =====
+var _fundoAnalise = null;
+
+async function analisarFundoReserva() {
+  if (!currentCondo) { toast('Selecciona um condomínio','err'); return; }
+  var el = document.getElementById('fundo-resultado');
+  el.innerHTML = '<div style="text-align:center;padding:30px;color:var(--t3);"><div class="spin"></div><div style="margin-top:10px;">A analisar o desgaste do edifício...</div></div>';
+
+  var c = currentCondo;
+  var anoAtual = new Date().getFullYear();
+
+  // ===== CÁLCULO DETERMINÍSTICO (funciona sempre, sem IA) =====
+  var idade = c.ano_construcao ? (anoAtual - parseInt(c.ano_construcao)) : 30;
+  if (idade < 0) idade = 0;
+
+  // Fator idade: edifícios mais velhos desgastam mais rápido
+  var fatorIdade = idade < 10 ? 1.0 : idade < 25 ? 1.25 : idade < 40 ? 1.5 : 1.8;
+
+  // Fator região / mar (proximidade do mar acelera corrosão e desgaste)
+  var pertoMar = c.perto_mar === true || c.perto_mar === 'sim';
+  var fatorMar = pertoMar ? 1.35 : 1.0;
+
+  // Fator região climática (norte = mais chuva/humidade; sul = mais sol/calor)
+  var regiao = (c.regiao || '').toLowerCase();
+  var fatorRegiao = regiao.indexOf('norte') >= 0 ? 1.15 : regiao.indexOf('sul') >= 0 ? 1.1 : 1.05;
+
+  // Base de custo de manutenção estrutural: estimativa por fração/ano
+  var nFracoes = fracoes.length || 1;
+  var custoBaseFracaoAno = 180; // € por fração/ano de provisão estrutural base
+
+  // Componentes de desgaste a 8 anos (valores típicos de reparação)
+  var componentes = [];
+  // Fachada / pintura (a cada ~10 anos)
+  var anoFachada = c.fachada_ano ? parseInt(c.fachada_ano) : (c.ano_construcao ? parseInt(c.ano_construcao) : anoAtual-10);
+  var idadeFachada = anoAtual - anoFachada;
+  var custoFachada = nFracoes * 350 * fatorMar * fatorRegiao;
+  componentes.push({ nome: 'Pintura / reparação de fachada', prazo: Math.max(1, 10 - idadeFachada), custo: Math.round(custoFachada), nota: 'Última: ' + (anoFachada||'?') + ' · ciclo ~10 anos' + (pertoMar?' (acelerado pelo mar)':'') });
+
+  // Impermeabilização / cobertura (a cada ~12 anos)
+  var anoImper = c.imper_ano ? parseInt(c.imper_ano) : (c.ano_construcao ? parseInt(c.ano_construcao) : anoAtual-12);
+  var idadeImper = anoAtual - anoImper;
+  var custoImper = nFracoes * 220 * fatorRegiao;
+  componentes.push({ nome: 'Impermeabilização / cobertura', prazo: Math.max(1, 12 - idadeImper), custo: Math.round(custoImper), nota: 'Última: ' + (anoImper||'?') + ' · ciclo ~12 anos' });
+
+  // Elevadores (grande reparação/modernização a cada ~15 anos)
+  var nElev = parseInt(c.num_elevadores||0) || 0;
+  if (nElev > 0) {
+    componentes.push({ nome: 'Modernização de elevador(es)', prazo: 6, custo: Math.round(nElev * 8000 * fatorIdade), nota: nElev + ' elevador(es) · grande intervenção a médio prazo' });
+  }
+
+  // Canalizações / esgotos (edifícios mais velhos)
+  if (idade > 25) {
+    componentes.push({ nome: 'Canalizações e esgotos', prazo: 4, custo: Math.round(nFracoes * 400 * fatorIdade), nota: 'Edifício com ' + idade + ' anos · risco crescente' });
+  }
+
+  // Pintura zonas comuns / escadas (a cada ~7 anos)
+  componentes.push({ nome: 'Pintura zonas comuns', prazo: 5, custo: Math.round(nFracoes * 90), nota: 'Escadas, halls, garagem · ciclo ~7 anos' });
+
+  // Total projetado a 8 anos
+  var totalDesgaste8 = componentes.reduce(function(a,x){ return a + x.custo; }, 0);
+
+  // Quanto deveria reservar por ano (distribuído pelos 8 anos)
+  var reservaAnualIdeal = Math.round(totalDesgaste8 / 8);
+  var reservaMensalFracao = Math.round((reservaAnualIdeal / nFracoes / 12) * 100) / 100;
+
+  // % de FCR sugerida (sobre orçamento anual base, mínimo 10% legal)
+  var orcAnual = parseFloat(c.orcamento_anual||0);
+  var fcrSugerido = 10;
+  if (orcAnual > 0) {
+    fcrSugerido = Math.max(10, Math.round((reservaAnualIdeal / orcAnual) * 100));
+  }
+
+  _fundoAnalise = {
+    idade: idade, fatorIdade: fatorIdade, pertoMar: pertoMar, regiao: c.regiao||'centro',
+    componentes: componentes, totalDesgaste8: totalDesgaste8,
+    reservaAnualIdeal: reservaAnualIdeal, reservaMensalFracao: reservaMensalFracao,
+    fcrSugerido: fcrSugerido, nFracoes: nFracoes, orcAnual: orcAnual, data: new Date().toISOString()
+  };
+
+  renderFundoReserva(_fundoAnalise);
+
+  // ===== CAMADA IA (opcional, enriquece) =====
+  tentarAnaliseIAFundo(c, _fundoAnalise);
+}
+
+async function tentarAnaliseIAFundo(c, analise) {
+  try {
+    var prompt = 'És um perito em manutenção de edifícios em Portugal. Em 2-3 frases curtas, comenta o estado e risco de desgaste deste prédio e dá um conselho prático sobre o fundo de reserva. Dados: idade ' + analise.idade + ' anos, ' + analise.nFracoes + ' frações, região ' + (c.regiao||'centro') + (analise.pertoMar?', perto do mar':'') + '. Responde só texto corrido, sem markdown.';
+    var txt = await callIA(prompt, 'legislacao');
+    if (txt && txt.trim()) {
+      var box = document.getElementById('fundo-ia-comentario');
+      if (box) box.innerHTML = '<div style="background:rgba(0,212,255,.06);border:1px solid rgba(0,212,255,.2);border-radius:8px;padding:12px 14px;margin-top:12px;"><div style="font-size:10px;color:var(--cyan);font-weight:700;margin-bottom:5px;">🤖 ANÁLISE INTELIGENTE</div><div style="font-size:12px;color:var(--t2);line-height:1.6;">' + txt.trim() + '</div></div>';
+    }
+  } catch(e) { console.log('IA fundo indisponível (cálculo determinístico mantém-se):', e.message); }
+}
+
+function renderFundoReserva(a) {
+  var el = document.getElementById('fundo-resultado');
+  var eur = function(v){ return parseFloat(v||0).toFixed(2).replace('.',',')+'€'; };
+  var eur0 = function(v){ return Math.round(parseFloat(v||0)).toLocaleString('pt-PT')+'€'; };
+
+  var html = '';
+  // KPIs principais
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px;">';
+  html += '<div style="background:var(--s2);border-radius:10px;padding:14px;text-align:center;border-top:2px solid #b48cff;"><div style="font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:1px;">Desgaste 8 anos</div><div style="font-size:20px;font-weight:800;font-family:var(--mono);color:#b48cff;margin-top:4px;">' + eur0(a.totalDesgaste8) + '</div></div>';
+  html += '<div style="background:var(--s2);border-radius:10px;padding:14px;text-align:center;border-top:2px solid var(--cyan);"><div style="font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:1px;">Reservar/ano</div><div style="font-size:20px;font-weight:800;font-family:var(--mono);color:var(--cyan);margin-top:4px;">' + eur0(a.reservaAnualIdeal) + '</div></div>';
+  html += '<div style="background:var(--s2);border-radius:10px;padding:14px;text-align:center;border-top:2px solid var(--green);"><div style="font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:1px;">Por fração/mês</div><div style="font-size:20px;font-weight:800;font-family:var(--mono);color:var(--green);margin-top:4px;">' + eur(a.reservaMensalFracao) + '</div></div>';
+  html += '</div>';
+
+  // Perfil do edifício
+  html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;font-size:11px;">';
+  html += '<span style="background:var(--s2);border-radius:6px;padding:5px 10px;color:var(--t2);">🏗️ ' + a.idade + ' anos</span>';
+  html += '<span style="background:var(--s2);border-radius:6px;padding:5px 10px;color:var(--t2);">📍 ' + a.regiao + '</span>';
+  if (a.pertoMar) html += '<span style="background:rgba(0,150,200,.15);border-radius:6px;padding:5px 10px;color:#4cb8e0;">🌊 Perto do mar (+35% desgaste)</span>';
+  html += '<span style="background:var(--s2);border-radius:6px;padding:5px 10px;color:var(--t2);">🏢 ' + a.nFracoes + ' frações</span>';
+  html += '</div>';
+
+  // Comentário IA (preenchido depois, async)
+  html += '<div id="fundo-ia-comentario"></div>';
+
+  // Componentes de desgaste
+  html += '<div style="border:1px solid var(--b1);border-radius:8px;overflow:hidden;margin-top:14px;">';
+  html += '<div style="display:flex;background:var(--s2);padding:8px 12px;font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;font-weight:700;"><div style="flex:1;">Componente</div><div style="width:80px;text-align:center;">Prazo est.</div><div style="width:90px;text-align:right;">Custo est.</div></div>';
+  a.componentes.forEach(function(comp){
+    var urgente = comp.prazo <= 2;
+    html += '<div style="display:flex;align-items:center;padding:9px 12px;border-top:1px solid var(--b1);">';
+    html += '<div style="flex:1;"><div style="font-size:12px;color:var(--text);font-weight:500;">' + comp.nome + '</div><div style="font-size:10px;color:var(--t3);margin-top:2px;">' + comp.nota + '</div></div>';
+    html += '<div style="width:80px;text-align:center;"><span style="font-size:11px;font-weight:600;color:' + (urgente?'var(--red)':'var(--t2)') + ';">' + (comp.prazo <= 1 ? 'Este ano' : '~' + comp.prazo + ' anos') + '</span></div>';
+    html += '<div style="width:90px;text-align:right;font-family:var(--mono);font-size:12px;font-weight:600;color:var(--text);">' + eur0(comp.custo) + '</div>';
+    html += '</div>';
+  });
+  html += '</div>';
+
+  // Recomendação FCR
+  html += '<div style="background:linear-gradient(135deg,rgba(180,140,255,.1),rgba(0,212,255,.06));border:1px solid rgba(180,140,255,.3);border-radius:10px;padding:14px 16px;margin-top:14px;">';
+  html += '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">';
+  html += '<div><div style="font-size:12px;font-weight:700;color:#b48cff;">FCR recomendado: ' + a.fcrSugerido + '%</div><div style="font-size:10px;color:var(--t3);margin-top:3px;">Sobre o orçamento anual base · mínimo legal 10% (Art. 1438.º-A CC) sempre respeitado</div></div>';
+  html += '</div></div>';
+
+  // Botões
+  html += '<div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end;flex-wrap:wrap;">';
+  html += '<button class="btn-ghost" onclick="document.getElementById(\'fundo-resultado\').innerHTML=\'\'" style="color:#f87171;border-color:rgba(248,113,113,.3);">Cancelar</button>';
+  html += '<button class="btn-ghost" onclick="imprimirFundoReserva()"><i class="ti ti-printer"></i>Imprimir (assembleia)</button>';
+  html += '<button class="btn-primary" onclick="usarFundoReserva()" style="background:linear-gradient(135deg,#b48cff,#00d4ff);border:none;"><i class="ti ti-check"></i>Usar este valor (' + a.fcrSugerido + '%)</button>';
+  html += '</div>';
+
+  el.innerHTML = html;
+}
+
+async function usarFundoReserva() {
+  if (!_fundoAnalise) return;
+  var fcr = _fundoAnalise.fcrSugerido;
+  // Gravar no condomínio: fcr_pct + marca que foi por análise inteligente
+  var upd = await sb.from('condominios').update({
+    fcr_pct: fcr,
+    fcr_origem: 'inteligente',
+    fcr_data_analise: _fundoAnalise.data
+  }).eq('id', currentCondo.id);
+  if (upd.error) {
+    // Se as colunas fcr_origem/fcr_data_analise não existirem, grava só o fcr_pct
+    var upd2 = await sb.from('condominios').update({ fcr_pct: fcr }).eq('id', currentCondo.id);
+    if (upd2.error) { toast('Erro ao guardar: ' + upd2.error.message, 'err'); return; }
+    currentCondo.fcr_pct = fcr;
+    toast('✅ FCR ' + fcr + '% aplicado! (cria colunas fcr_origem/fcr_data_analise no Supabase p/ guardar a marca)', 'ok');
+    return;
+  }
+  currentCondo.fcr_pct = fcr;
+  currentCondo.fcr_origem = 'inteligente';
+  currentCondo.fcr_data_analise = _fundoAnalise.data;
+  toast('✅ FCR de ' + fcr + '% aplicado por análise inteligente! Aparece automaticamente no cálculo de quotas das frações.', 'ok');
+}
+
+function imprimirFundoReserva() {
+  if (!_fundoAnalise) { toast('Faz a análise primeiro','err'); return; }
+  var a = _fundoAnalise;
+  var eur0 = function(v){ return Math.round(parseFloat(v||0)).toLocaleString('pt-PT')+'€'; };
+  var condoNome = displayNomeCondo(currentCondo.nome||'');
+  var moradaCondo = [currentCondo.morada, [currentCondo.codigo_postal, currentCondo.cidade].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+
+  var comps = a.componentes.map(function(comp){
+    return '<tr><td style="padding:7px 10px;border-bottom:1px solid #eee;">' + comp.nome + '<div style="font-size:9px;color:#999;">' + comp.nota + '</div></td>' +
+      '<td style="padding:7px 10px;border-bottom:1px solid #eee;text-align:center;">' + (comp.prazo<=1?'Este ano':'~'+comp.prazo+' anos') + '</td>' +
+      '<td style="padding:7px 10px;border-bottom:1px solid #eee;text-align:right;font-weight:600;">' + eur0(comp.custo) + '</td></tr>';
+  }).join('');
+
+  var html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Estudo Fundo de Reserva — ' + condoNome + '</title>' +
+    '<style>body{font-family:Arial,sans-serif;margin:0;padding:30px;color:#222;}@media print{body{padding:0;}}table{width:100%;border-collapse:collapse;font-size:13px;}</style></head><body>' +
+    '<div style="background:#0d1825;color:#fff;padding:20px 24px;border-radius:8px 8px 0 0;display:flex;justify-content:space-between;align-items:center;">' +
+      '<div><div style="color:#00d4ff;font-family:monospace;font-size:18px;font-weight:700;letter-spacing:2px;">COND.OS</div><div style="font-size:8px;color:#5a6a79;letter-spacing:3px;">2059 PRO</div></div>' +
+      '<div style="text-align:right;"><div style="font-size:13px;font-weight:600;">' + condoNome + '</div>' + (moradaCondo?'<div style="font-size:10px;color:#9ab;">'+moradaCondo+'</div>':'') + '</div></div>' +
+    '<div style="border:1px solid #ddd;border-top:none;padding:24px;border-radius:0 0 8px 8px;">' +
+      '<h2 style="text-align:center;margin:0 0 4px;">ESTUDO DO FUNDO DE RESERVA</h2>' +
+      '<p style="text-align:center;color:#888;font-size:12px;margin:0 0 20px;">Projeção de desgaste a 8 anos · para apreciação em assembleia</p>' +
+      '<div style="display:flex;gap:10px;margin-bottom:20px;">' +
+        '<div style="flex:1;background:#f4f0fb;border-radius:8px;padding:14px;text-align:center;"><div style="font-size:10px;color:#888;text-transform:uppercase;">Desgaste 8 anos</div><div style="font-size:20px;font-weight:700;color:#7c4dff;">' + eur0(a.totalDesgaste8) + '</div></div>' +
+        '<div style="flex:1;background:#f0f8fb;border-radius:8px;padding:14px;text-align:center;"><div style="font-size:10px;color:#888;text-transform:uppercase;">Reservar/ano</div><div style="font-size:20px;font-weight:700;color:#0088cc;">' + eur0(a.reservaAnualIdeal) + '</div></div>' +
+        '<div style="flex:1;background:#f0fbf4;border-radius:8px;padding:14px;text-align:center;"><div style="font-size:10px;color:#888;text-transform:uppercase;">FCR recomendado</div><div style="font-size:20px;font-weight:700;color:#0a8;">' + a.fcrSugerido + '%</div></div>' +
+      '</div>' +
+      '<p style="font-size:12px;color:#555;">Perfil do edifício: <strong>' + a.idade + ' anos</strong>, região <strong>' + a.regiao + '</strong>' + (a.pertoMar?', <strong>perto do mar</strong> (desgaste acelerado)':'') + ', ' + a.nFracoes + ' frações.</p>' +
+      '<table><thead><tr style="background:#0d1825;color:#fff;"><th style="padding:9px 10px;text-align:left;">Componente</th><th style="padding:9px 10px;">Prazo estimado</th><th style="padding:9px 10px;text-align:right;">Custo estimado</th></tr></thead><tbody>' + comps + '</tbody>' +
+      '<tfoot><tr style="background:#7c4dff;color:#fff;font-weight:700;"><td style="padding:11px 10px;" colspan="2">TOTAL PROJETADO A 8 ANOS</td><td style="padding:11px 10px;text-align:right;">' + eur0(a.totalDesgaste8) + '</td></tr></tfoot></table>' +
+      '<div style="background:#fff8e8;border:1px solid #f0c860;border-radius:6px;padding:12px;margin-top:16px;font-size:11px;color:#8a6010;"><strong>Nota:</strong> Esta projeção é uma estimativa baseada na idade, localização e equipamentos do edifício, para apoiar a decisão sobre o fundo comum de reserva. Os valores reais dependem do estado efetivo e de orçamentos de empresas. O mínimo legal de 10% (Art. 1438.º-A CC) é sempre respeitado.</div>' +
+      '<div style="margin-top:30px;font-size:12px;">' + (currentCondo.cidade||'____________') + ', ' + new Date().toLocaleDateString('pt-PT') + '</div>' +
+      '<div style="margin-top:30px;border-top:1px solid #999;width:240px;padding-top:5px;font-size:12px;font-weight:600;">' + (currentCondo.administrador_nome||'A Administração') + '</div>' +
+      '<p style="font-size:9px;color:#bbb;text-align:center;margin-top:24px;">Estudo gerado por COND.OS 2059 Pro · ' + new Date().toLocaleDateString('pt-PT') + '</p>' +
+    '</div></body></html>';
+
+  var w = window.open('', '_blank');
+  w.document.write(html);
+  w.document.close();
+  setTimeout(function(){ w.print(); }, 400);
+}
+
 function switchManutencaoTab(tab) {
-  ['fachada','outros'].forEach(function(t) {
+  ['fachada','outros','fundo'].forEach(function(t) {
     var btn = document.getElementById('mtab-' + t);
     var c = document.getElementById('mtab-content-' + t);
     if (btn) {
-      btn.style.background = t === tab ? 'rgba(0,212,255,.1)' : 'transparent';
-      btn.style.borderColor = t === tab ? 'rgba(0,212,255,.4)' : 'var(--b1)';
-      btn.style.color = t === tab ? 'var(--cyan)' : 'var(--t2)';
+      var cor = t === 'fundo' ? 'rgba(180,140,255,' : 'rgba(0,212,255,';
+      btn.style.background = t === tab ? cor + '.1)' : 'transparent';
+      btn.style.borderColor = t === tab ? cor + '.4)' : 'var(--b1)';
+      btn.style.color = t === tab ? (t === 'fundo' ? '#b48cff' : 'var(--cyan)') : 'var(--t2)';
       btn.style.fontWeight = t === tab ? '700' : '400';
     }
     if (c) c.style.display = t === tab ? 'block' : 'none';
