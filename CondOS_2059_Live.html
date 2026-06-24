@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.06.24-0814</div>
+      <div class="sb-tag">2059 Pro · build v2026.06.24-1543</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -7628,7 +7628,7 @@ function renderSugestaoOrcamento(j, ano) {
   var body = document.getElementById('sugerir-orc-body');
   var eur = function(v){ return parseFloat(v||0).toFixed(2).replace('.',',')+'€'; };
   var rubricas = j.rubricas || [];
-  var total = rubricas.reduce(function(a,r){ return a + parseFloat(r.valor||0); }, 0);
+  var total = rubricas.filter(function(r){ return !r._anulada; }).reduce(function(a,r){ return a + parseFloat(r.valor||0); }, 0);
 
   var html = '';
   // Resumo
@@ -7662,20 +7662,34 @@ function renderSugestaoOrcamento(j, ano) {
 
   // Tabela de rubricas
   html += '<div style="border:1px solid var(--b1);border-radius:8px;overflow:hidden;">';
-  html += '<div style="display:flex;background:var(--s2);padding:8px 12px;font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;font-weight:700;"><div style="flex:1;">Rubrica</div><div style="width:70px;text-align:center;">Tipo</div><div style="width:90px;text-align:right;">Valor/ano</div></div>';
-  rubricas.forEach(function(r){
-    var corOrigem = r.origem === 'real' ? 'var(--green)' : 'var(--t3)';
-    html += '<div style="display:flex;align-items:center;padding:9px 12px;border-top:1px solid var(--b1);">';
-    html += '<div style="flex:1;"><div style="font-size:12px;color:var(--text);font-weight:500;">' + (r.nome||'—') + (r.obrigatoria?' <span style="font-size:8px;background:rgba(220,38,38,.15);color:#f87171;padding:1px 5px;border-radius:5px;">OBRIG.</span>':'') + '</div>';
-    if (r.nota) html += '<div style="font-size:10px;color:var(--t3);margin-top:2px;">' + r.nota + '</div>';
+  html += '<div style="display:flex;background:var(--s2);padding:8px 12px;font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;font-weight:700;"><div style="flex:1;">Rubrica</div><div style="width:70px;text-align:center;">Tipo</div><div style="width:95px;text-align:right;">Valor/ano</div><div style="width:64px;text-align:center;">Ações</div></div>';
+  rubricas.forEach(function(r, idx){
+    var anulada = r._anulada === true;
+    var ajustada = r._ajustada === true;
+    var corOrigem = anulada ? 'var(--t3)' : (ajustada ? 'var(--amber)' : (r.origem === 'real' ? 'var(--green)' : 'var(--t3)'));
+    var estiloLinha = anulada ? 'opacity:.5;' : '';
+    var decoracao = anulada ? 'text-decoration:line-through;' : '';
+    html += '<div style="display:flex;align-items:center;padding:9px 12px;border-top:1px solid var(--b1);' + estiloLinha + '">';
+    html += '<div style="flex:1;"><div style="font-size:12px;color:var(--text);font-weight:500;' + decoracao + '">' + (r.nome||'—') + (r.obrigatoria&&!anulada?' <span style="font-size:8px;background:rgba(220,38,38,.15);color:#f87171;padding:1px 5px;border-radius:5px;">OBRIG.</span>':'') + (anulada?' <span style="font-size:8px;background:rgba(150,150,150,.2);color:var(--t3);padding:1px 5px;border-radius:5px;">ANULADO</span>':'') + '</div>';
+    if (r.nota) html += '<div style="font-size:10px;color:var(--t3);margin-top:2px;' + decoracao + '">' + r.nota + '</div>';
+    if (ajustada) html += '<div style="font-size:10px;color:var(--amber);margin-top:2px;font-style:italic;">✎ Ajuste do valor pela administração</div>';
     html += '</div>';
     html += '<div style="width:70px;text-align:center;"><span style="font-size:9px;color:var(--t2);">' + (r.categoria==='bloco'?'🛗 Bloco':'🏢 Comum') + '</span></div>';
-    html += '<div style="width:90px;text-align:right;font-family:var(--mono);font-size:12px;font-weight:600;color:' + corOrigem + ';">' + eur(r.valor) + '</div>';
+    html += '<div style="width:95px;text-align:right;font-family:var(--mono);font-size:12px;font-weight:600;color:' + corOrigem + ';' + decoracao + '">' + eur(r.valor) + '</div>';
+    // Ações: editar valor + anular/restaurar
+    html += '<div style="width:64px;display:flex;gap:3px;justify-content:center;">';
+    if (!anulada) {
+      html += '<button title="Ajustar valor" onclick="ajustarValorRubrica(' + idx + ')" style="background:transparent;border:none;color:var(--cyan);cursor:pointer;padding:3px;font-size:13px;"><i class="ti ti-pencil"></i></button>';
+      html += '<button title="Anular esta rubrica" onclick="toggleAnularRubrica(' + idx + ')" style="background:transparent;border:none;color:#f87171;cursor:pointer;padding:3px;font-size:13px;"><i class="ti ti-circle-minus"></i></button>';
+    } else {
+      html += '<button title="Restaurar rubrica" onclick="toggleAnularRubrica(' + idx + ')" style="background:transparent;border:none;color:var(--green);cursor:pointer;padding:3px;font-size:13px;"><i class="ti ti-rotate"></i></button>';
+    }
+    html += '</div>';
     html += '</div>';
   });
   html += '</div>';
 
-  html += '<div style="font-size:10px;color:var(--t3);margin-top:10px;text-align:center;">🟢 verde = valor real do programa · cinza = estimativa da IA · os valores são da sugestão automática. Para ajustar, fá-lo depois no orçamento (fica registado como alteração do administrador).</div>';
+  html += '<div style="font-size:10px;color:var(--t3);margin-top:10px;text-align:center;">🟢 verde = valor real do programa · cinza = estimativa da IA · 🟠 laranja = ajustado pela administração. Rubricas anuladas aparecem riscadas na impressão (os condóminos podem repô-las).</div>';
 
   // Botões
   html += '<div style="display:flex;gap:8px;margin-top:18px;justify-content:flex-end;flex-wrap:wrap;">';
@@ -7687,11 +7701,59 @@ function renderSugestaoOrcamento(j, ano) {
   body.innerHTML = html;
 }
 
+function toggleAnularRubrica(idx) {
+  if (!_orcSugerido || !_orcSugerido.rubricas[idx]) return;
+  var r = _orcSugerido.rubricas[idx];
+  r._anulada = !r._anulada;
+  renderSugestaoOrcamento(_orcSugerido, _orcSugerido.ano || new Date().getFullYear());
+}
+
+async function ajustarValorRubrica(idx) {
+  if (!_orcSugerido || !_orcSugerido.rubricas[idx]) return;
+  var r = _orcSugerido.rubricas[idx];
+  var atual = parseFloat(r.valor||0).toFixed(2);
+  var novo = await pedirValor('Ajustar valor — ' + r.nome, 'Valor anual (€)', atual);
+  if (novo === null) return;
+  var v = parseFloat(String(novo).replace(',','.'));
+  if (isNaN(v) || v < 0) { toast('Valor inválido','err'); return; }
+  r.valor = Math.round(v*100)/100;
+  r._ajustada = true;
+  r._valorBase = r.valor; // o ajuste manual passa a ser a base (inflação não mexe)
+  r.origem = 'ajustada';
+  renderSugestaoOrcamento(_orcSugerido, _orcSugerido.ano || new Date().getFullYear());
+  toast('Valor ajustado pela administração','ok');
+}
+
+// Pedir um valor ao utilizador (modal bonito, substitui prompt())
+function pedirValor(titulo, label, valorInicial) {
+  return new Promise(function(resolve) {
+    var modal = document.getElementById('mo-pedir-valor');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'mo-pedir-valor';
+      modal.className = 'mo';
+      modal.innerHTML = '<div class="mo-box" style="width:340px;"><div class="mo-title" id="pv-titulo"></div><div style="padding:6px 2px;"><label id="pv-label" style="font-size:12px;color:var(--t2);display:block;margin-bottom:6px;"></label><input id="pv-input" class="fi" type="text" style="width:100%;"><div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end;"><button class="btn-ghost" id="pv-cancel">Cancelar</button><button class="btn-primary" id="pv-ok">Confirmar</button></div></div></div>';
+      document.body.appendChild(modal);
+    }
+    document.getElementById('pv-titulo').textContent = titulo;
+    document.getElementById('pv-label').textContent = label;
+    var inp = document.getElementById('pv-input');
+    inp.value = valorInicial || '';
+    modal.classList.add('open');
+    setTimeout(function(){ inp.focus(); inp.select(); }, 50);
+    function fechar(val) { modal.classList.remove('open'); document.getElementById('pv-ok').onclick=null; document.getElementById('pv-cancel').onclick=null; inp.onkeydown=null; resolve(val); }
+    document.getElementById('pv-ok').onclick = function(){ fechar(inp.value); };
+    document.getElementById('pv-cancel').onclick = function(){ fechar(null); };
+    inp.onkeydown = function(e){ if(e.key==='Enter'){ fechar(inp.value); } if(e.key==='Escape'){ fechar(null); } };
+  });
+}
+
 function recalcularInflacao() {
   if (!_orcSugerido) return;
   var novaInfl = parseFloat(document.getElementById('orc-inflacao-input').value) || 0;
   _orcSugerido.inflacao_pct = novaInfl;
   _orcSugerido.rubricas.forEach(function(r){
+    if (r._ajustada) return;
     var base = r._valorBase != null ? r._valorBase : parseFloat(r.valor||0);
     if (r.origem === 'real') { r.valor = Math.round(base*100)/100; }
     else { r.valor = Math.round(base * (1 + novaInfl/100) * 100) / 100; }
@@ -7715,14 +7777,17 @@ function imprimirSugestaoOrcamento() {
   var eur = function(v){ return parseFloat(v||0).toFixed(2).replace('.',',') + ' €'; };
   var condoNome = displayNomeCondo(currentCondo.nome||'');
   var moradaCondo = [currentCondo.morada, [currentCondo.codigo_postal, currentCondo.cidade].filter(Boolean).join(' ')].filter(Boolean).join(', ');
-  var total = j.rubricas.reduce(function(a,r){ return a + parseFloat(r.valor||0); }, 0);
+  var total = j.rubricas.filter(function(r){ return !r._anulada; }).reduce(function(a,r){ return a + parseFloat(r.valor||0); }, 0);
   var nFracoes = fracoes.length || 1;
 
   var linhas = j.rubricas.map(function(r){
-    return '<tr><td style="padding:7px 10px;border-bottom:1px solid #eee;">' + r.nome + (r.obrigatoria?' <span style="font-size:9px;color:#c00;">(obrig.)</span>':'') +
-      (r.nota?'<div style="font-size:9px;color:#999;">'+r.nota+'</div>':'') + '</td>' +
-      '<td style="padding:7px 10px;border-bottom:1px solid #eee;text-align:center;font-size:11px;color:#666;">' + (r.categoria==='bloco'?'Bloco':'Comum') + '</td>' +
-      '<td style="padding:7px 10px;border-bottom:1px solid #eee;text-align:right;font-weight:600;">' + eur(r.valor) + '</td></tr>';
+    var anulada = r._anulada === true;
+    var estilo = anulada ? 'text-decoration:line-through;color:#aaa;' : '';
+    return '<tr' + (anulada?' style="background:#fafafa;"':'') + '><td style="padding:7px 10px;border-bottom:1px solid #eee;' + estilo + '">' + r.nome + (r.obrigatoria&&!anulada?' <span style="font-size:9px;color:#c00;">(obrig.)</span>':'') + (anulada?' <span style="font-size:9px;color:#999;">(anulado)</span>':'') +
+      (r.nota?'<div style="font-size:9px;color:#999;' + estilo + '">'+r.nota+'</div>':'') +
+      (r._ajustada?'<div style="font-size:9px;color:#c88a00;font-style:italic;">Ajuste do valor pela administração</div>':'') + '</td>' +
+      '<td style="padding:7px 10px;border-bottom:1px solid #eee;text-align:center;font-size:11px;color:#666;' + estilo + '">' + (r.categoria==='bloco'?'Bloco':'Comum') + '</td>' +
+      '<td style="padding:7px 10px;border-bottom:1px solid #eee;text-align:right;font-weight:600;' + estilo + '">' + eur(r.valor) + '</td></tr>';
   }).join('');
 
   var html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Proposta de Orçamento ' + ano + '</title>' +
@@ -7765,9 +7830,13 @@ async function aplicarOrcamentoSugerido() {
   }
 
   toast('A aplicar orçamento...','');
-  var criadas = 0;
+  var criadas = 0, anuladas = 0;
   for (var i = 0; i < _orcSugerido.rubricas.length; i++) {
     var r = _orcSugerido.rubricas[i];
+    if (r._anulada) { anuladas++; continue; } // rubricas anuladas não são guardadas
+    var notaFinal = (r.nota || '');
+    if (r._ajustada) notaFinal += ' [valor ajustado pela administração]';
+    else if (r.origem === 'estimada') notaFinal += ' [estimativa IA]';
     var ins = await sb.from('orcamento_rubricas').insert({
       condominio_id: currentCondo.id,
       ano: ano,
@@ -7775,12 +7844,12 @@ async function aplicarOrcamentoSugerido() {
       valor_total: parseFloat(r.valor||0),
       categoria: r.categoria === 'bloco' ? 'bloco' : 'comum',
       tipo_distribuicao: 'permilagem',
-      nota_admin: (r.nota || '') + (r.origem==='estimada' ? ' [estimativa IA]' : '')
+      nota_admin: notaFinal.trim()
     });
     if (!ins.error) criadas++;
   }
   closeModal('mo-sugerir-orc');
-  toast('✅ ' + criadas + ' rubricas adicionadas ao orçamento ' + ano + '!','ok');
+  toast('✅ ' + criadas + ' rubricas adicionadas' + (anuladas?' ('+anuladas+' anuladas ignoradas)':'') + ' ao orçamento ' + ano + '!','ok');
   if (typeof loadOrcamento === 'function') loadOrcamento();
 }
 
