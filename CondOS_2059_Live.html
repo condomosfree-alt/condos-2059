@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.06.25-0816</div>
+      <div class="sb-tag">2059 Pro · build v2026.06.25-0833</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -862,6 +862,7 @@ textarea.fi{resize:vertical;min-height:60px;}
           <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:12px;">
             <button id="mtab-fachada" onclick="switchManutencaoTab('fachada')" style="padding:7px 14px;border:1px solid rgba(0,212,255,.4);border-radius:8px;background:rgba(0,212,255,.1);color:var(--cyan);font-size:12px;font-weight:700;cursor:pointer;">🏗️ Fachada</button>
             <button id="mtab-outros" onclick="switchManutencaoTab('outros')" style="padding:7px 14px;border:1px solid var(--b1);border-radius:8px;background:transparent;color:var(--t2);font-size:12px;cursor:pointer;">🔧 Outros</button>
+            <button id="mtab-equipamentos" onclick="switchManutencaoTab('equipamentos')" style="padding:7px 14px;border:1px solid rgba(16,185,129,.4);border-radius:8px;background:transparent;color:var(--t2);font-size:12px;cursor:pointer;">☀️ Equipamentos Comuns</button>
             <button id="mtab-fundo" onclick="switchManutencaoTab('fundo')" style="padding:7px 14px;border:1px solid rgba(180,140,255,.4);border-radius:8px;background:transparent;color:var(--t2);font-size:12px;cursor:pointer;">💎 Fundo Reserva</button>
           </div>
           <div id="mtab-content-fachada">
@@ -905,7 +906,20 @@ textarea.fi{resize:vertical;min-height:60px;}
               </div>
             </div>
           </div>
+          <div id="mtab-content-equipamentos" style="display:none;">
+            <div class="panel">
+              <div class="ph"><span class="pt">☀️ Equipamentos de Áreas Comuns</span></div>
+              <div style="padding:16px;">
+                <div style="font-size:11px;color:var(--t2);line-height:1.6;background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.2);border-radius:8px;padding:10px 12px;margin-bottom:14px;">
+                  Regista equipamentos partilhados por todos: <strong>painéis solares, ar condicionado de zonas comuns, carregadores elétricos</strong>, etc. Entram no cálculo de desgaste do Fundo de Reserva e nos custos de manutenção. Bens comuns = responsabilidade de todos os condóminos.
+                </div>
+                <div id="equip-comuns-lista"></div>
+                <button class="btn-ghost" onclick="adicionarEquipComum()" style="display:inline-flex;align-items:center;gap:6px;margin-top:8px;"><i class="ti ti-plus"></i> Adicionar Equipamento</button>
+              </div>
+            </div>
+          </div>
           <div id="mtab-content-fundo" style="display:none;">
+
             <div class="panel">
               <div class="ph"><span class="pt">💎 Fundo de Reserva Inteligente</span></div>
               <div style="padding:16px;">
@@ -6417,6 +6431,61 @@ function switchContadorTab(tab) {
 }
 
 
+
+// ===== EQUIPAMENTOS DE ÁREAS COMUNS (solar, AC, carregadores...) =====
+var _equipComuns = [];
+
+var EQUIP_TIPOS = {
+  solar: { label:'☀️ Painéis Solares', vida:25, custoManut:150 },
+  ac: { label:'❄️ Ar Condicionado', vida:12, custoManut:200 },
+  carregador: { label:'🔌 Carregador Elétrico', vida:10, custoManut:120 },
+  bomba: { label:'💧 Bomba de Água', vida:15, custoManut:180 },
+  portao: { label:'🚪 Portão Automático', vida:15, custoManut:150 },
+  videoporteiro: { label:'📹 Vídeoporteiro', vida:12, custoManut:100 },
+  outro: { label:'🔧 Outro', vida:10, custoManut:100 }
+};
+
+function adicionarEquipComum(eq) {
+  eq = eq || {};
+  var idx = _equipComuns.length;
+  _equipComuns.push(idx);
+  var blocos = [...new Set(fracoes.map(function(f){return f.bloco;}).filter(Boolean))].sort();
+  var optBlocos = '<option value="">🏢 Comum (todos)</option>' + blocos.map(function(b){ return '<option value="'+b+'"'+(eq.bloco===b?' selected':'')+'>Bloco '+b+'</option>'; }).join('');
+  var optTipos = Object.keys(EQUIP_TIPOS).map(function(t){ return '<option value="'+t+'"'+(eq.tipo===t?' selected':'')+'>'+EQUIP_TIPOS[t].label+'</option>'; }).join('');
+  var div = document.createElement('div');
+  div.className = 'equip-comum-row';
+  div.style = 'display:grid;grid-template-columns:1.4fr 1fr 0.7fr 0.9fr 0.9fr auto;gap:8px;margin-bottom:8px;align-items:end;';
+  div.innerHTML =
+    '<div class="fl"><label>Tipo</label><select class="fi eq-tipo">'+optTipos+'</select></div>' +
+    '<div class="fl"><label>Localização</label><select class="fi eq-bloco">'+optBlocos+'</select></div>' +
+    '<div class="fl"><label>Qtd</label><input class="fi eq-qtd" type="number" min="1" value="'+(eq.qtd||1)+'"></div>' +
+    '<div class="fl"><label>Ano instalação</label><input class="fi eq-ano" type="number" placeholder="2022" value="'+(eq.ano||'')+'"></div>' +
+    '<div class="fl"><label>Valor (€)</label><input class="fi eq-valor" type="number" placeholder="Ex: 8000" value="'+(eq.valor||'')+'"></div>' +
+    '<button class="tb-btn" style="color:var(--red);border-color:rgba(255,68,68,.3);background:var(--rdim);padding:9px;height:38px;" onclick="this.parentElement.remove()"><i class="ti ti-trash"></i></button>';
+  document.getElementById('equip-comuns-lista').appendChild(div);
+}
+
+function getEquipComuns() {
+  var result = [];
+  document.querySelectorAll('#equip-comuns-lista .equip-comum-row').forEach(function(row){
+    var tipo = row.querySelector('.eq-tipo').value;
+    var valor = parseFloat(row.querySelector('.eq-valor').value) || 0;
+    var ano = parseInt(row.querySelector('.eq-ano').value) || null;
+    var qtd = parseInt(row.querySelector('.eq-qtd').value) || 1;
+    var bloco = row.querySelector('.eq-bloco').value || null;
+    if (tipo) result.push({ tipo:tipo, valor:valor, ano:ano, qtd:qtd, bloco:bloco });
+  });
+  return result;
+}
+
+function renderEquipComuns(lista) {
+  _equipComuns = [];
+  var cont = document.getElementById('equip-comuns-lista');
+  if (!cont) return;
+  cont.innerHTML = '';
+  (lista||[]).forEach(function(eq){ adicionarEquipComum(eq); });
+}
+
 // ===== FUNDO DE RESERVA INTELIGENTE (análise de desgaste a 8 anos) =====
 var _fundoAnalise = null;
 
@@ -6481,6 +6550,35 @@ async function analisarFundoReserva() {
 
   // Pintura zonas comuns / escadas (a cada ~7 anos)
   componentes.push({ nome: 'Pintura zonas comuns', prazo: 5, custo: Math.round(nFracoes * 90), nota: 'Escadas, halls, garagem · ciclo ~7 anos' });
+
+  // Equipamentos comuns (solar, AC, carregadores...) — substituição no fim da vida útil
+  var equipamentosComuns = [];
+  try { if (c.equip_comuns) equipamentosComuns = JSON.parse(c.equip_comuns); } catch(e) {}
+  equipamentosComuns.forEach(function(eq){
+    var info = (typeof EQUIP_TIPOS !== 'undefined' && EQUIP_TIPOS[eq.tipo]) ? EQUIP_TIPOS[eq.tipo] : { label: eq.tipo, vida: 12, custoManut: 150 };
+    var qtd = eq.qtd || 1;
+    var valorUnit = parseFloat(eq.valor||0);
+    var idadeEq = eq.ano ? (anoAtual - parseInt(eq.ano)) : 0;
+    var anosRestantes = Math.max(1, info.vida - idadeEq);
+    // Custo de substituição estimado no fim da vida (se dentro da janela de 8 anos)
+    if (anosRestantes <= 8 && valorUnit > 0) {
+      componentes.push({
+        nome: 'Substituição: ' + info.label.replace(/^[^ ]+ /,''),
+        prazo: anosRestantes,
+        custo: Math.round(valorUnit * qtd * 0.85), // substituição ~85% do valor inicial
+        nota: qtd + 'x · instalado ' + (eq.ano||'?') + ' · vida útil ~' + info.vida + ' anos' + (eq.bloco?' · Bloco '+eq.bloco:' · comum')
+      });
+    }
+    // Manutenção anual recorrente (provisão)
+    if (info.custoManut) {
+      componentes.push({
+        nome: 'Manutenção: ' + info.label.replace(/^[^ ]+ /,''),
+        prazo: 1,
+        custo: Math.round(info.custoManut * qtd * 8), // 8 anos de manutenção
+        nota: 'Manutenção periódica · ' + info.custoManut + '€/ano x ' + qtd + ' x 8 anos'
+      });
+    }
+  });
 
   // Total projetado a 8 anos
   var totalDesgaste8 = componentes.reduce(function(a,x){ return a + x.custo; }, 0);
@@ -6647,14 +6745,15 @@ function imprimirFundoReserva() {
 }
 
 function switchManutencaoTab(tab) {
-  ['fachada','outros','fundo'].forEach(function(t) {
+  ['fachada','outros','equipamentos','fundo'].forEach(function(t) {
     var btn = document.getElementById('mtab-' + t);
     var c = document.getElementById('mtab-content-' + t);
     if (btn) {
-      var cor = t === 'fundo' ? 'rgba(180,140,255,' : 'rgba(0,212,255,';
+      var cor = t === 'fundo' ? 'rgba(180,140,255,' : t === 'equipamentos' ? 'rgba(16,185,129,' : 'rgba(0,212,255,';
+      var corTexto = t === 'fundo' ? '#b48cff' : t === 'equipamentos' ? '#10b981' : 'var(--cyan)';
       btn.style.background = t === tab ? cor + '.1)' : 'transparent';
       btn.style.borderColor = t === tab ? cor + '.4)' : 'var(--b1)';
-      btn.style.color = t === tab ? (t === 'fundo' ? '#b48cff' : 'var(--cyan)') : 'var(--t2)';
+      btn.style.color = t === tab ? corTexto : 'var(--t2)';
       btn.style.fontWeight = t === tab ? '700' : '400';
     }
     if (c) c.style.display = t === tab ? 'block' : 'none';
@@ -7006,6 +7105,7 @@ function loadEdificio() {
     try { if(c.contadores_luz) loadContadores('luz', JSON.parse(c.contadores_luz)); } catch(e){}
     try { if(c.contadores_gas) loadContadores('gas', JSON.parse(c.contadores_gas)); } catch(e){}
     try { if(c.elevadores_lista) loadElevadores(JSON.parse(c.elevadores_lista)); } catch(e){}
+    try { if(c.equip_comuns) renderEquipComuns(JSON.parse(c.equip_comuns)); } catch(e){}
     try { if(c.fornecedores_extras) loadFornecedoresEdificio(JSON.parse(c.fornecedores_extras)); } catch(e){}
     calcularAlturaEdificio();
   }, 200);
@@ -7051,6 +7151,7 @@ async function saveEdificio() {
     contadores_luz: JSON.stringify(getContadores('luz')),
     contadores_gas: JSON.stringify(getContadores('gas')),
     elevadores_lista: JSON.stringify(getElevadores()),
+    equip_comuns: JSON.stringify(getEquipComuns()),
     fornecedores_extras: JSON.stringify(getFornecedoresEdificio())
   };
 
