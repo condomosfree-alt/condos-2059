@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.06.25-2250</div>
+      <div class="sb-tag">2059 Pro · build v2026.06.25-2307</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -6744,7 +6744,7 @@ async function loadAssembleias() {
   const estadoCls = {agendada:'par',realizada:'ok',cancelada:'pend'};
   document.getElementById('assembleias-list').innerHTML = as.length ?
     `<table class="tbl"><thead><tr><th>Tipo</th><th>Data</th><th>Local</th><th>Estado</th><th>Ata IA</th><th>Ação</th></tr></thead><tbody>`+
-    as.map(a=>`<tr style="${a.estado==='cancelada'?'opacity:.5;':''}"><td>${a.tipo}${a.estado==='cancelada'?' <span style="font-size:9px;color:var(--t3);">(cancelada)</span>':''}</td><td class="mn">${a.data_assembleia?(new Date(a.data_assembleia)).toLocaleDateString('pt-PT'):'—'}</td><td style="color:var(--t2);font-size:11px">${a.local_assembleia||'—'}</td><td><span class="pill ${estadoCls[a.estado]||''}">${a.estado}</span></td><td>${a.ata_gerada_ia?'<span class="pill ok">IA</span>':'—'}</td><td><div style="display:flex;gap:4px;">${a.estado!=='cancelada'?`<button class="tb-btn" style="font-size:10px;padding:3px 7px;background:rgba(248,113,113,.1);border-color:rgba(248,113,113,.3);color:#f87171;" onclick="abrirSalaAssembleia('${a.id}')"><i class="ti ti-broadcast"></i>Abrir Sala</button><button class="tb-btn" style="font-size:10px;padding:3px 7px;" onclick="gerarAta('${a.id}','${(a.ordem_trabalhos||'').replace(/'/g,'`')}')"><i class="ti ti-robot"></i>Ata IA</button>`:''}<button class="tb-btn" style="font-size:10px;padding:3px 9px;color:#f87171;border-color:rgba(248,113,113,.3);" onclick="removerAssembleia('${a.id}')" title="Apagar (se agendada) ou cancelar (se já realizada)">✕ Remover</button></div></td></tr>`).join('')+`</tbody></table>` :
+    as.map(a=>`<tr style="${a.estado==='cancelada'?'opacity:.5;':''}"><td>${a.tipo}${a.estado==='cancelada'?' <span style="font-size:9px;color:var(--t3);">(cancelada)</span>':''}</td><td class="mn">${a.data_assembleia?(new Date(a.data_assembleia)).toLocaleDateString('pt-PT'):'—'}</td><td style="color:var(--t2);font-size:11px">${a.local_assembleia||'—'}</td><td><span class="pill ${estadoCls[a.estado]||''}">${a.estado}</span></td><td>${a.ata_gerada_ia?'<span class="pill ok">IA</span>':'—'}</td><td><div style="display:flex;gap:4px;">${a.estado!=='cancelada'?`<button class="tb-btn" style="font-size:10px;padding:3px 9px;color:var(--cyan);border-color:rgba(0,212,255,.3);" onclick="reimprimirConvocatoria('${a.id}')" title="Gerar/reimprimir a convocatória em PDF">\u{1F4C4} PDF</button><button class="tb-btn" style="font-size:10px;padding:3px 7px;background:rgba(248,113,113,.1);border-color:rgba(248,113,113,.3);color:#f87171;" onclick="abrirSalaAssembleia('${a.id}')"><i class="ti ti-broadcast"></i>Abrir Sala</button><button class="tb-btn" style="font-size:10px;padding:3px 7px;" onclick="gerarAta('${a.id}','${(a.ordem_trabalhos||'').replace(/'/g,'`')}')"><i class="ti ti-robot"></i>Ata IA</button>`:''}<button class="tb-btn" style="font-size:10px;padding:3px 9px;color:#f87171;border-color:rgba(248,113,113,.3);" onclick="removerAssembleia('${a.id}')" title="Apagar (se agendada) ou cancelar (se já realizada)">✕ Remover</button></div></td></tr>`).join('')+`</tbody></table>` :
     emptyState('ti-speakerphone','Sem assembleias','Convoca a primeira assembleia do condomínio.');
 }
 
@@ -6957,6 +6957,22 @@ async function sugerirOrdemTrabalhos() {
   } finally {
     if (btnOriginal) { btnOriginal.disabled = false; btnOriginal.innerHTML = '<i class="ti ti-sparkles"></i> Sugerir Pontos (IA)'; }
   }
+}
+
+// Reimprimir a convocatória de uma assembleia já criada
+async function reimprimirConvocatoria(assembleiaId) {
+  var aRes = await sb.from('assembleias').select('*').eq('id', assembleiaId).single();
+  if (aRes.error || !aRes.data) { toast('Erro ao carregar a assembleia','err'); return; }
+  var a = aRes.data;
+  var dados = {
+    tipo: a.tipo,
+    data: a.data_assembleia,
+    hora: a.hora_assembleia || '20:00',
+    local: a.local_assembleia,
+    ordem: a.ordem_trabalhos
+  };
+  if (!dados.ordem || !dados.ordem.trim()) { toast('Esta assembleia não tem ordem de trabalhos','err'); return; }
+  gerarConvocatoriaPDF(dados, assembleiaId);
 }
 
 function gerarConvocatoriaDoModal() {
