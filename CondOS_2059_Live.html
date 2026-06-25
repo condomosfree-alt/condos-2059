@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.06.25-2231</div>
+      <div class="sb-tag">2059 Pro · build v2026.06.25-2238</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -679,7 +679,17 @@ textarea.fi{resize:vertical;min-height:60px;}
                 <div class="fl"><label>NIF do Condomínio</label><input class="fi" id="ed-nif" placeholder="5XXXXXXXX"></div>
               </div>
               <div class="fl"><label>Morada</label><input class="fi" id="ed-morada" disabled style="color:var(--t2)"></div>
-              <div class="fl"><label>Local habitual das assembleias <span style="color:var(--t3);font-size:10px;">(aparece automaticamente na convocatória)</span></label><input class="fi" id="ed-sala-reunioes" placeholder="Ex: Sala de condomínio, piso -1"></div>
+              <div style="background:var(--s2);border:1px solid var(--b1);border-radius:8px;padding:12px;margin-top:4px;">
+                <div style="font-size:11px;color:var(--cyan);font-weight:700;margin-bottom:8px;">📍 Local habitual das assembleias <span style="color:var(--t3);font-weight:400;">(sai na convocatória)</span></div>
+                <div class="form-row">
+                  <div class="fl"><label>Sala / espaço</label><input class="fi" id="ed-sala-reunioes" placeholder="Ex: Sala de condomínio"></div>
+                  <div class="fl"><label>Bloco / Entrada</label><select class="fi" id="ed-sala-bloco"><option value="">— Não aplicável —</option></select></div>
+                </div>
+                <div class="form-row" style="margin-top:8px;">
+                  <div class="fl"><label>Piso</label><input class="fi" id="ed-sala-piso" placeholder="Ex: -1, R/C, 1º"></div>
+                  <div class="fl"><label>Indicações extra</label><input class="fi" id="ed-sala-extra" placeholder="Ex: junto à garagem"></div>
+                </div>
+              </div>
               <div class="form-row">
                 <div class="fl"><label>Ano de Construção</label><input class="fi" id="ed-ano" type="number" placeholder="Ex: 1995" oninput="calcularAlturaEdificio()"></div>
                 <div class="fl"><label>Estado de Conservação</label>
@@ -6744,13 +6754,43 @@ async function loadAssembleias() {
 
 // ===== SUGERIR ORDEM DE TRABALHOS (IA varre o programa) =====
 
+
+// ===== LOCALIZAÇÃO DA SALA DE ASSEMBLEIAS =====
+function popularSalaBlocos() {
+  var sel = document.getElementById('ed-sala-bloco');
+  if (!sel) return;
+  var blocos = [...new Set(fracoes.map(function(f){return f.bloco;}).filter(Boolean))].sort();
+  var atual = (currentCondo && currentCondo.sala_bloco) || '';
+  sel.innerHTML = '<option value="">— Não aplicável —</option>' + blocos.map(function(b){
+    return '<option value="'+b+'"'+(atual===b?' selected':'')+'>Bloco '+b+'</option>';
+  }).join('');
+}
+
+// Monta o local completo numa frase legível para a convocatória
+function montarLocalCompleto(c) {
+  c = c || currentCondo;
+  if (!c) return '';
+  var partes = [];
+  if (c.sala_reunioes) partes.push(c.sala_reunioes);
+  var loc = [];
+  if (c.sala_bloco) loc.push('Bloco ' + c.sala_bloco);
+  if (c.sala_piso) loc.push('piso ' + c.sala_piso);
+  if (loc.length) partes.push(loc.join(', '));
+  if (c.sala_extra) partes.push(c.sala_extra);
+  var base = partes.join(', ');
+  // Acrescentar a morada do prédio se houver
+  if (c.morada && base) return base + ' — ' + c.morada;
+  return base || c.morada || '';
+}
+
 // ===== CONVOCATÓRIA: abrir com local pré-preenchido =====
 function abrirConvocatoria() {
   if (!currentCondo) { toast('Selecciona um condomínio','err'); return; }
-  // Pré-preencher o local com a sala habitual do prédio
+  // Pré-preencher o local com a sala habitual do prédio (completa: sala + bloco + piso)
   var localEl = document.getElementById('as-local');
-  if (localEl && !localEl.value && currentCondo.sala_reunioes) {
-    localEl.value = currentCondo.sala_reunioes;
+  if (localEl && !localEl.value) {
+    var localCompleto = montarLocalCompleto(currentCondo);
+    if (localCompleto) localEl.value = localCompleto;
   }
   // Data por defeito: hoje
   var dataEl = document.getElementById('as-data');
@@ -7747,7 +7787,8 @@ function loadEdificio() {
   var setChk = function(id, val) { var el = document.getElementById(id); if(el) el.checked = !!val; };
 
   // Geral
-  set('ed-nome', c.nome); set('ed-nif', c.nif); set('ed-morada', c.morada); set('ed-sala-reunioes', c.sala_reunioes);
+  set('ed-nome', c.nome); set('ed-nif', c.nif); set('ed-morada', c.morada); set('ed-sala-reunioes', c.sala_reunioes); set('ed-sala-bloco', c.sala_bloco); set('ed-sala-piso', c.sala_piso); set('ed-sala-extra', c.sala_extra);
+  popularSalaBlocos();
   set('ed-ano', c.ano_construcao); set('ed-ano2', c.ano_construcao); set('ed-ano-inscricao', c.ano_inscricao);
   set('ed-taxa-juro', c.taxa_juro_mora); set('ed-juro-ata', c.juro_ata);
   set('ed-artigo-matricial', c.artigo_matricial); set('ed-vpt', c.vpt);
@@ -7816,7 +7857,7 @@ async function saveEdificio() {
   var gi = function(id) { var el = document.getElementById(id); return el && el.value ? parseInt(el.value) : null; };
 
   var payload = {
-    nif: g('ed-nif'), conservacao: g('ed-conservacao'), sala_reunioes: g('ed-sala-reunioes'),
+    nif: g('ed-nif'), conservacao: g('ed-conservacao'), sala_reunioes: g('ed-sala-reunioes'), sala_bloco: g('ed-sala-bloco'), sala_piso: g('ed-sala-piso'), sala_extra: g('ed-sala-extra'),
     ano_construcao: gi('ed-ano'),
     taxa_juro_mora: gn('ed-taxa-juro'), juro_ata: g('ed-juro-ata'),
     ano_inscricao: gi('ed-ano-inscricao'), artigo_matricial: g('ed-artigo-matricial'),
