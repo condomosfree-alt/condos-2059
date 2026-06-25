@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.06.25-0833</div>
+      <div class="sb-tag">2059 Pro · build v2026.06.25-0902</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -6461,7 +6461,7 @@ function adicionarEquipComum(eq) {
     '<div class="fl"><label>Qtd</label><input class="fi eq-qtd" type="number" min="1" value="'+(eq.qtd||1)+'"></div>' +
     '<div class="fl"><label>Ano instalação</label><input class="fi eq-ano" type="number" placeholder="2022" value="'+(eq.ano||'')+'"></div>' +
     '<div class="fl"><label>Valor (€)</label><input class="fi eq-valor" type="number" placeholder="Ex: 8000" value="'+(eq.valor||'')+'"></div>' +
-    '<button class="tb-btn" style="color:var(--red);border-color:rgba(255,68,68,.3);background:var(--rdim);padding:9px;height:38px;" onclick="this.parentElement.remove()"><i class="ti ti-trash"></i></button>';
+    '<button class="tb-btn" title="Remover equipamento" style="color:var(--red);border-color:rgba(255,68,68,.3);background:var(--rdim);padding:0;height:38px;width:38px;display:flex;align-items:center;justify-content:center;font-size:15px;" onclick="this.parentElement.remove()">✕</button>';
   document.getElementById('equip-comuns-lista').appendChild(div);
 }
 
@@ -7915,6 +7915,7 @@ async function sugerirOrcamentoIA() {
   var c = currentCondo;
   var dados = { rubricas: [], avisos: [], fonte: [] };
   var eur = function(v){ return parseFloat(v||0).toFixed(2); };
+  var anoAtualReal = new Date().getFullYear();
 
   // Nº frações e blocos
   var nFracoes = fracoes.length;
@@ -7923,7 +7924,7 @@ async function sugerirOrcamentoIA() {
 
   // Seguro (do perfil)
   if (c.seg_premio) { dados.rubricas.push({nome:'Seguro do Condomínio', valor:parseFloat(c.seg_premio), origem:'real', cat:'comum'}); dados.fonte.push('Seguro: '+eur(c.seg_premio)+'€ (do perfil)'); }
-  // Extintores
+  // Extintores (manutenção anual obrigatória)
   if (c.ext_custo) { dados.rubricas.push({nome:'Manutenção de Extintores', valor:parseFloat(c.ext_custo), origem:'real', cat:'comum'}); dados.fonte.push('Extintores: '+eur(c.ext_custo)+'€/ano (do perfil)'); }
 
   // Equipamentos (elevadores, etc) da tabela
@@ -7931,16 +7932,89 @@ async function sugerirOrcamentoIA() {
   var equipamentos = eqRes.data || [];
   var temElevador = equipamentos.some(function(e){return e.tipo==='elevador';}) || (c.num_elevadores>0);
 
-  // Despesas recorrentes do ano anterior (para detetar manutenções periódicas)
+  // TODAS as despesas (passado e futuro) — para detetar ciclos de manutenção
   var despRes = await sb.from('despesas').select('*').eq('condominio_id', c.id);
-  var despesasAnteriores = despRes.data || [];
+  var todasDespesas = despRes.data || [];
 
-  // Orçamento do ano anterior (rubricas) para base
-  var rubAnteriorRes = await sb.from('orcamento_rubricas').select('*').eq('condominio_id', c.id).eq('ano', ano-1);
-  var rubricasAnterior = rubAnteriorRes.data || [];
+  // TODOS os orçamentos de TODOS os anos (cruzamento histórico completo)
+  var rubTodosRes = await sb.from('orcamento_rubricas').select('*').eq('condominio_id', c.id);
+  var rubricasTodas = rubTodosRes.data || [];
+  // Agrupar por ano
+  var rubricasPorAno = {};
+  rubricasTodas.forEach(function(r){ (rubricasPorAno[r.ano] = rubricasPorAno[r.ano] || []).push(r); });
+  var anosComOrcamento = Object.keys(rubricasPorAno).map(Number).sort();
+  var rubricasAnterior = rubricasPorAno[ano-1] || [];
+  var rubricasAtual = rubricasPorAno[ano] || [];
+
+  // ===== ANÁLISE DE MANUTENÇÕES PERIÓDICAS (cruza perfil + ciclos) =====
+  // Periodicidades típicas (anos): cada tipo de manutenção tem o seu ciclo
+  var manutPeriodicas = [];
+  var avisosManut = [];
+
+  // Helper: dado um "ano da última intervenção" e a periodicidade, vê se vence no ano alvo
+  function verificaCiclo(nomeManut, anoUltima, periodicidade, custoEstimado, obrigatoria) {
+    if (!anoUltima) {
+      // Sem dados — alerta para incluir por segurança (legal)
+      avisosManut.push('Sem registo da última ' + nomeManut.toLowerCase() + '. ' + (obrigatoria ? 'É obrigatória — incluída por segurança legal. ' : 'Incluída por precaução. ') + 'Se souberes que não é necessária este ano, risca a rubrica.');
+      return { incluir: true, motivo: 'sem dados (precaução)' };
+    }
+    var proxima = parseInt(anoUltima) + periodicidade;
+    // Vence no ano alvo (ou já devia ter sido feita)
+    if (proxima <= ano) {
+      return { incluir: true, motivo: 'última em ' + anoUltima + ', ciclo ' + periodicidade + ' anos → vence ' + proxima };
+    }
+    return { incluir: false, motivo: 'última em ' + anoUltima + ', próxima só em ' + proxima };
+  }
+
+  // Rede de incêndio / mangueiras (manutenção a cada 2 anos)
+  if (c.incendio_tem === 'sim' && c.incendio_data) {
+    var anoInc = new Date(c.incendio_data).getFullYear();
+    var rInc = verificaCiclo('Manutenção da rede de incêndio', anoInc, 2, null, true);
+    if (rInc.incluir) manutPeriodicas.push({ nome: 'Manutenção rede de incêndio/mangueiras', nota: rInc.motivo, obrigatoria: true });
+  }
+  // Dedetização / pragas (anual ou bianual)
+  if (c.pragas_prox) {
+    var anoPragas = new Date(c.pragas_prox).getFullYear();
+    if (anoPragas <= ano) manutPeriodicas.push({ nome: 'Dedetização / controlo de pragas', nota: 'próxima agendada para ' + anoPragas, custo: c.pragas_custo, obrigatoria: false });
+  }
+  // Limpeza de cisternas/depósitos (anual)
+  if (c.cisternas_prox) {
+    var anoCist = new Date(c.cisternas_prox).getFullYear();
+    if (anoCist <= ano) manutPeriodicas.push({ nome: 'Limpeza de cisternas/depósitos', nota: 'próxima agendada para ' + anoCist, custo: c.cisternas_custo, obrigatoria: false });
+  }
+  // Inspeção periódica de elevadores (a cada 2 anos - DL 320/2002)
+  if (temElevador) {
+    manutPeriodicas.push({ nome: 'Inspeção periódica de elevador(es)', nota: 'obrigatória a cada 2 anos (DL 320/2002)', obrigatoria: true });
+  }
+
+  // Detetar ciclos nas despesas passadas (ex: manutenção feita em anos alternados)
+  var despesasPorDescricao = {};
+  todasDespesas.forEach(function(d){
+    var chave = (d.descricao||'').toLowerCase().replace(/[0-9]/g,'').trim();
+    (despesasPorDescricao[chave] = despesasPorDescricao[chave] || []).push(d);
+  });
+  Object.keys(despesasPorDescricao).forEach(function(chave){
+    var lista = despesasPorDescricao[chave];
+    if (lista.length >= 2) {
+      // Há repetição → provável manutenção periódica. Calcular intervalo médio
+      var anos = lista.map(function(d){ return d.data_despesa ? new Date(d.data_despesa).getFullYear() : null; }).filter(Boolean).sort();
+      if (anos.length >= 2) {
+        var intervalo = Math.round((anos[anos.length-1] - anos[0]) / (anos.length-1));
+        var ultimoAno = anos[anos.length-1];
+        if (intervalo > 0 && (ultimoAno + intervalo) <= ano) {
+          manutPeriodicas.push({ nome: lista[0].descricao, nota: 'padrão periódico detetado (~' + intervalo + ' anos), vence este ano', custo: lista[lista.length-1].valor_total, obrigatoria: false });
+        }
+      }
+    }
+  });
 
   // ===== 2. MONTAR CONTEXTO PARA A IA =====
   body.innerHTML = '<div style="text-align:center;padding:40px;color:var(--t3);"><div class="spin"></div><div style="margin-top:12px;">A IA está a calcular o orçamento realista...</div></div>';
+
+  // Rubricas do ANO ATUAL (o orçamento que o gestor já tem) — âncora de realismo
+  // Total do orçamento atual (âncora de realismo)
+  var orcamentoAtualTotal = rubricasAtual.reduce(function(a,r){ return a + parseFloat(r.valor_total||0); }, 0);
+  if (!orcamentoAtualTotal && c.orcamento_anual) orcamentoAtualTotal = parseFloat(c.orcamento_anual);
 
   var contexto = {
     ano: ano,
@@ -7948,6 +8022,9 @@ async function sugerirOrcamentoIA() {
     n_fracoes: nFracoes,
     n_blocos: nBlocos,
     n_pisos: c.num_pisos || null,
+    regiao: c.regiao || 'centro de Portugal',
+    tipo_gestao: c.tipo_gestao || 'própria',
+    tem_empresa_gestao: c.tipo_gestao === 'empresa' || !!c.empresa_nome,
     tem_elevador: temElevador,
     n_elevadores: c.num_elevadores || equipamentos.filter(function(e){return e.tipo==='elevador';}).length || 0,
     tem_jardim: c.tem_jardim || false,
@@ -7957,23 +8034,33 @@ async function sugerirOrcamentoIA() {
     n_extintores: c.ext_num || 0,
     tem_cctv: c.cctv === 'sim',
     ano_construcao: c.ano_construcao || null,
+    orcamento_atual_total: orcamentoAtualTotal ? orcamentoAtualTotal.toFixed(2)+'€' : 'não definido',
+    rubricas_atuais: rubricasAtual.map(function(r){ return r.nome+': '+eur(r.valor_total)+'€'; }),
+    anos_com_orcamento: anosComOrcamento,
+    historico_orcamentos: anosComOrcamento.map(function(a){
+      var tot = rubricasPorAno[a].reduce(function(s,r){ return s+parseFloat(r.valor_total||0); }, 0);
+      return a + ': ' + tot.toFixed(2) + '€ (' + rubricasPorAno[a].length + ' rubricas)';
+    }),
     custos_conhecidos: dados.rubricas.map(function(r){ return r.nome+': '+eur(r.valor)+'€/ano'; }),
     rubricas_ano_anterior: rubricasAnterior.map(function(r){ return r.nome+': '+eur(r.valor_total)+'€'; }),
-    despesas_passadas: despesasAnteriores.map(function(d){ return d.descricao+': '+eur(d.valor_total)+'€ ('+(d.data_despesa||'?')+')'; })
+    manutencoes_periodicas_a_incluir: manutPeriodicas.map(function(m){ return m.nome + ' — ' + m.nota + (m.custo?' (~'+eur(m.custo)+'€)':'') + (m.obrigatoria?' [OBRIGATÓRIA]':''); }),
+    despesas_passadas: todasDespesas.map(function(d){ return d.descricao+': '+eur(d.valor_total)+'€ ('+(d.data_despesa||'?')+')'; })
   };
 
-  var prompt = 'És um perito em gestão de condomínios em Portugal. Com base nos dados do edifício abaixo, cria um ORÇAMENTO ANUAL REALISTA e COMPLETO para o ano ' + ano + '. ' +
-    'Inclui TODAS as rubricas obrigatórias e habituais que um condomínio deste tipo tem, mesmo as que os gestores costumam esquecer. ' +
-    'Considera: limpeza de partes comuns, electricidade das partes comuns, água comum, manutenção de elevador (se tem, contrato mensal obrigatório DL 320/2002 + inspeção periódica), seguro obrigatório, extintores e rede de incêndio (manutenção anual obrigatória), jardim (se tem), manutenção de portões/garagem (se tem), piscina (se tem), pequenas reparações, gestão/administração, e fundo comum de reserva. ' +
-    'NÃO incluas "material de limpeza" como rubrica separada SE já existir uma rubrica de serviço de limpeza contratado — nesse caso os produtos estão incluídos no serviço da empresa. Só inclui material de limpeza se a limpeza for feita pelos próprios condóminos (sem empresa). ' +
-    'Para custos que já são conhecidos (na lista custos_conhecidos), USA esses valores exactos. Para os restantes, ESTIMA valores realistas de mercado em Portugal para ' + ano + ' para um prédio com ' + nFracoes + ' frações. ' +
-    'IMPORTANTE sobre o histórico: usa "rubricas_ano_anterior" como base para as despesas RECORRENTES (repetem todos os anos). Mas em "despesas_passadas", DISTINGUE: despesas pontuais de obras/reparações já concluídas (ex: "pintura fachada 2025", "reparação telhado") NÃO devem ser incluídas no orçamento deste ano, pois já foram feitas. Só inclui despesas passadas se forem manutenções PERIÓDICAS que voltam a vencer este ano. ' +
-    'Se detectares uma manutenção periódica feita há 1-2 anos que costuma repetir-se (ex: manutenção de mangueiras/rede incêndio a cada 2 anos, inspeção de elevador), AVISA no campo avisos que deve ser agendada/orçamentada este ano. ' +
-    'Aplica a inflação estimada de Portugal para ' + ano + ' (indica a percentagem que usaste) APENAS às rubricas estimadas. ' +
-    'Para cada rubrica indica se é "comum" (todos os blocos) ou "bloco" (só um bloco, ex: elevador). ' +
-    'DADOS DO EDIFÍCIO:\n' + JSON.stringify(contexto, null, 1) + '\n\n' +
+  var prompt = 'És um perito em gestão de condomínios em Portugal, RIGOROSO e CONSERVADOR nos valores. Com base nos dados do edifício abaixo, cria um ORÇAMENTO ANUAL REALISTA para o ano ' + ano + '. ' +
+    'REGRA DE OURO - REALISMO: se existir orcamento_atual_total ou rubricas_atuais, USA-OS COMO ANCORA principal. O teu total NAO deve afastar-se muito do orçamento atual, exceto se faltarem rubricas obrigatórias. NAO inventes valores inflacionados de mercado - usa valores reais e moderados para a região indicada. ' +
+    'AJUSTE A REGIAO: adapta os custos à zona "' + (contexto.regiao) + '". O preço da água, limpeza e serviços varia por região em Portugal (interior/sul mais barato que grandes cidades/litoral). ' +
+    'TIPO DE GESTAO: a gestão é "' + (contexto.tipo_gestao) + '". Se for gestão por EMPRESA, honorários mais altos (4-8€/fração/mês). Se for gestão PROPRIA (um condómino), honorários baixos ou simbólicos (0-2€/fração/mês ou mesmo 0). NAO apliques honorários de empresa a uma gestão própria. ' +
+    'Inclui as rubricas obrigatórias e habituais: limpeza, electricidade comum, água comum, manutenção de elevador (se tem, DL 320/2002), seguro obrigatório, extintores e rede de incêndio (se aplicável), jardim (se tem), portões/garagem (se tem), piscina (se tem), pequenas reparações, gestão/administração, fundo comum de reserva. ' +
+    'NAO incluas material de limpeza separado se há serviço de limpeza contratado. ' +
+    'Para custos_conhecidos USA esses valores exactos. Para os restantes, usa rubricas_atuais/rubricas_ano_anterior como base e aplica APENAS a inflação por cima - não reinventes do zero. ' +
+    'Em despesas_passadas: distingue obras pontuais já concluídas (NAO incluir) de manutenções periódicas que voltam a vencer. ' +
+    'MANUTENCOES PERIODICAS: a lista manutencoes_periodicas_a_incluir foi calculada cruzando o perfil do edifício e o histórico — INCLUI essas rubricas no orçamento (são manutenções que vencem este ano por ciclo). Usa historico_orcamentos para perceber a evolução dos valores ao longo dos anos. ' +
+    'Aplica a inflação estimada de Portugal para ' + ano + ' (indica a percentagem) APENAS às rubricas estimadas. ' +
+    'Para cada rubrica indica "comum" ou "bloco". ' +
+    'DADOS DO EDIFICIO:\n' + JSON.stringify(contexto, null, 1) + '\n\n' +
     'Responde APENAS com JSON válido, sem texto à volta, neste formato exacto: ' +
-    '{"inflacao_pct":X,"ano":'+ano+',"rubricas":[{"nome":"...","valor":0,"categoria":"comum|bloco","obrigatoria":true|false,"nota":"breve justificação ou base legal","origem":"real|estimada"}],"avisos":["manutenções periódicas a agendar este ano","despesas pontuais do ano anterior que NÃO incluí e porquê"],"resumo":"2 frases sobre o orçamento"}';
+    '{"inflacao_pct":X,"ano":'+ano+',"rubricas":[{"nome":"...","valor":0,"categoria":"comum|bloco","obrigatoria":true|false,"nota":"breve justificação","origem":"real|estimada"}],"avisos":["notas sobre manutenções a agendar"],"resumo":"2 frases, dizendo se o valor está alinhado com o orçamento atual"}';
 
   var jsonResp;
   try {
@@ -7992,6 +8079,10 @@ async function sugerirOrcamentoIA() {
   }
 
   _orcSugerido = jsonResp;
+  // Juntar os avisos de manutenções sem dados (calculados localmente) aos da IA
+  if (avisosManut.length) {
+    jsonResp.avisos = (jsonResp.avisos || []).concat(avisosManut);
+  }
   // Guardar os valores base (sem inflação) para permitir recálculo
   var inflInicial = parseFloat(jsonResp.inflacao_pct||0);
   (jsonResp.rubricas||[]).forEach(function(r){
@@ -8053,12 +8144,12 @@ function renderSugestaoOrcamento(j, ano) {
     html += '<div style="width:70px;text-align:center;"><span style="font-size:9px;color:var(--t2);">' + (r.categoria==='bloco'?'🛗 Bloco':'🏢 Comum') + '</span></div>';
     html += '<div style="width:95px;text-align:right;font-family:var(--mono);font-size:12px;font-weight:600;color:' + corOrigem + ';' + decoracao + '">' + eur(r.valor) + '</div>';
     // Ações: editar valor + anular/restaurar
-    html += '<div style="width:64px;display:flex;gap:3px;justify-content:center;">';
+    html += '<div style="width:64px;display:flex;gap:4px;justify-content:center;">';
     if (!anulada) {
-      html += '<button title="Ajustar valor" onclick="ajustarValorRubrica(' + idx + ')" style="background:transparent;border:none;color:var(--cyan);cursor:pointer;padding:3px;font-size:13px;"><i class="ti ti-pencil"></i></button>';
-      html += '<button title="Anular esta rubrica" onclick="toggleAnularRubrica(' + idx + ')" style="background:transparent;border:none;color:#f87171;cursor:pointer;padding:3px;font-size:13px;"><i class="ti ti-circle-minus"></i></button>';
+      html += '<button title="Ajustar valor" onclick="ajustarValorRubrica(' + idx + ')" style="background:rgba(0,212,255,.12);border:1px solid rgba(0,212,255,.3);border-radius:5px;color:var(--cyan);cursor:pointer;padding:4px 7px;font-size:12px;line-height:1;">✎</button>';
+      html += '<button title="Anular esta rubrica" onclick="toggleAnularRubrica(' + idx + ')" style="background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.3);border-radius:5px;color:#f87171;cursor:pointer;padding:4px 7px;font-size:12px;line-height:1;">✕</button>';
     } else {
-      html += '<button title="Restaurar rubrica" onclick="toggleAnularRubrica(' + idx + ')" style="background:transparent;border:none;color:var(--green);cursor:pointer;padding:3px;font-size:13px;"><i class="ti ti-rotate"></i></button>';
+      html += '<button title="Restaurar rubrica" onclick="toggleAnularRubrica(' + idx + ')" style="background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.3);border-radius:5px;color:var(--green);cursor:pointer;padding:4px 7px;font-size:12px;line-height:1;">↺</button>';
     }
     html += '</div>';
     html += '</div>';
@@ -8640,6 +8731,7 @@ async function analisarOrcamentoFoto() {
 
   var prompt = 'Analisa este documento de orcamento de condominio portugues.\n\n' + ctx + '\n' +
     'Extrai TODAS as rubricas com valores anuais em euros.\n' +
+    'CRITICO: Se alguma rubrica estiver RISCADA, com uma linha por cima do texto, marcada como "ANULADO"/"anulado", ou visivelmente cortada/cancelada, NAO a incluas no resultado — essas rubricas foram rejeitadas (ex: em assembleia) e nao contam. Extrai apenas as rubricas ATIVAS/validas.\n' +
     'IMPORTANTE: Mesmo que a imagem nao seja perfeita, tenta extrair o maximo possivel.\n\n' +
     'REGRAS DE CLASSIFICACAO:\n' + regrasBloco +
     (temJardim ? '- Jardineiro/Jardim: comum\n' : '') +
