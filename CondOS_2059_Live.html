@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.06.24-1643</div>
+      <div class="sb-tag">2059 Pro · build v2026.06.25-0816</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -962,6 +962,11 @@ textarea.fi{resize:vertical;min-height:60px;}
           </div>
           <div id="ed-fornecedores-lista"></div>
           <button class="btn-ghost" onclick="adicionarFornecedorEdificio()" style="display:inline-flex;align-items:center;gap:6px;"><i class="ti ti-plus"></i> Adicionar Fornecedor</button>
+        </div>
+
+        <!-- BARRA GUARDAR FIXA -->
+        <div style="position:sticky;bottom:0;background:linear-gradient(to top,var(--bg) 60%,transparent);padding:14px 0 4px;margin-top:16px;display:flex;justify-content:flex-end;gap:10px;z-index:20;">
+          <button class="btn-primary" onclick="saveEdificio()" style="padding:10px 24px;box-shadow:0 4px 16px rgba(0,212,255,.2);"><i class="ti ti-check"></i> Guardar Alterações</button>
         </div>
 
       </div><!-- /page-edificio -->
@@ -7050,7 +7055,23 @@ async function saveEdificio() {
   };
 
   var res = await sb.from('condominios').update(payload).eq('id', currentCondo.id);
-  if (res.error) { toast('Erro: ' + res.error.message, 'err'); return; }
+  if (res.error) {
+    console.error('Erro saveEdificio:', res.error);
+    // Se o erro for de coluna inexistente, tenta remover essa coluna e gravar de novo
+    var msg = res.error.message || '';
+    var match = msg.match(/column "?([a-z_]+)"? .* does not exist/i) || msg.match(/'([a-z_]+)' column/i) || msg.match(/Could not find the '([a-z_]+)' column/i);
+    if (match && match[1] && payload.hasOwnProperty(match[1])) {
+      console.warn('Coluna em falta na BD, a remover do payload:', match[1]);
+      delete payload[match[1]];
+      var res2 = await sb.from('condominios').update(payload).eq('id', currentCondo.id);
+      if (res2.error) { toast('Erro ao guardar: ' + res2.error.message + ' (cria a coluna em falta no Supabase)', 'err'); return; }
+      Object.assign(currentCondo, payload);
+      toast('Guardado! (nota: a coluna "' + match[1] + '" não existe na BD — corre o SQL para a criar)', 'ok');
+      return;
+    }
+    toast('Erro ao guardar: ' + msg, 'err');
+    return;
+  }
   Object.assign(currentCondo, payload);
   toast('Edifício guardado com sucesso!', 'ok');
 }
