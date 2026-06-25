@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.06.25-2153</div>
+      <div class="sb-tag">2059 Pro · build v2026.06.25-2212</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -679,6 +679,7 @@ textarea.fi{resize:vertical;min-height:60px;}
                 <div class="fl"><label>NIF do Condomínio</label><input class="fi" id="ed-nif" placeholder="5XXXXXXXX"></div>
               </div>
               <div class="fl"><label>Morada</label><input class="fi" id="ed-morada" disabled style="color:var(--t2)"></div>
+              <div class="fl"><label>Local habitual das assembleias <span style="color:var(--t3);font-size:10px;">(aparece automaticamente na convocatória)</span></label><input class="fi" id="ed-sala-reunioes" placeholder="Ex: Sala de condomínio, piso -1"></div>
               <div class="form-row">
                 <div class="fl"><label>Ano de Construção</label><input class="fi" id="ed-ano" type="number" placeholder="Ex: 1995" oninput="calcularAlturaEdificio()"></div>
                 <div class="fl"><label>Estado de Conservação</label>
@@ -1235,7 +1236,7 @@ textarea.fi{resize:vertical;min-height:60px;}
           <span class="sec-t">Assembleias</span>
           <div style="display:flex;gap:8px;">
             <button class="btn-ghost" onclick="openModal('mo-import-ata')"><i class="ti ti-file-upload"></i>Importar Ata IA</button>
-            <button class="btn-primary" onclick="openModal('mo-assembleia')"><i class="ti ti-plus"></i>Convocar</button>
+            <button class="btn-primary" onclick="abrirConvocatoria()"><i class="ti ti-plus"></i>Convocar</button>
           </div>
         </div>
         <div class="panel" style="margin-bottom:16px;">
@@ -1588,7 +1589,7 @@ textarea.fi{resize:vertical;min-height:60px;}
     </div>
     <div class="fl"><label>Local</label><input class="fi" id="as-local" placeholder="Ex: Sala do condomínio"></div>
     <div class="fl"><label style="display:flex;justify-content:space-between;align-items:center;">Ordem de Trabalhos <button class="btn-ghost" onclick="sugerirOrdemTrabalhos()" style="font-size:10px;padding:3px 10px;background:linear-gradient(135deg,rgba(0,212,255,.15),rgba(180,140,255,.15));border-color:rgba(0,212,255,.4);color:var(--cyan);font-weight:600;"><i class="ti ti-sparkles"></i> Sugerir Pontos (IA)</button></label><textarea class="fi" id="as-ot" rows="6" placeholder="1. Aprovação do orçamento 2026&#10;2. Eleição da administração&#10;3. Diversos"></textarea></div>
-    <div class="btn-row"><button class="btn-ghost" onclick="closeModal('mo-assembleia')">Cancelar</button><button class="btn-primary" onclick="saveAssembleia()"><i class="ti ti-send"></i>Convocar</button></div>
+    <div class="btn-row"><button class="btn-ghost" onclick="closeModal('mo-assembleia')">Cancelar</button><button class="btn-ghost" onclick="gerarConvocatoriaDoModal()"><i class="ti ti-printer"></i>Gerar PDF</button><button class="btn-primary" onclick="saveAssembleia()"><i class="ti ti-send"></i>Convocar</button></div>
   </div>
 </div>
 
@@ -6684,6 +6685,122 @@ async function loadAssembleias() {
 
 
 // ===== SUGERIR ORDEM DE TRABALHOS (IA varre o programa) =====
+
+// ===== CONVOCATÓRIA: abrir com local pré-preenchido =====
+function abrirConvocatoria() {
+  if (!currentCondo) { toast('Selecciona um condomínio','err'); return; }
+  // Pré-preencher o local com a sala habitual do prédio
+  var localEl = document.getElementById('as-local');
+  if (localEl && !localEl.value && currentCondo.sala_reunioes) {
+    localEl.value = currentCondo.sala_reunioes;
+  }
+  // Data por defeito: hoje
+  var dataEl = document.getElementById('as-data');
+  if (dataEl && !dataEl.value) dataEl.value = new Date().toISOString().split('T')[0];
+  openModal('mo-assembleia');
+}
+
+// ===== GERAR PDF DA CONVOCATÓRIA (para imprimir/email/carta) + guardar nos Documentos =====
+async function gerarConvocatoriaPDF(dados, assembleiaId) {
+  if (!window.jspdf || !window.jspdf.jsPDF) { toast('Biblioteca PDF não carregada','err'); return; }
+  var { jsPDF } = window.jspdf;
+  var doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+  var W = 210, M = 20;
+  var condoNome = displayNomeCondo(currentCondo.nome||'');
+  var moradaCondo = [currentCondo.morada, [currentCondo.codigo_postal, currentCondo.cidade].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+
+  // Cabeçalho
+  doc.setFillColor(8,13,20); doc.rect(0,0,W,36,'F');
+  doc.setFillColor(0,212,255); doc.rect(0,36,W,1,'F');
+  doc.setTextColor(0,212,255); doc.setFont('courier','bold'); doc.setFontSize(18);
+  doc.text('COND.OS', M, 17);
+  doc.setTextColor(150,160,170); doc.setFont('courier','normal'); doc.setFontSize(8);
+  doc.text('2059 PRO', M, 22);
+  doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(11);
+  doc.text(condoNome, W-M, 15, {align:'right'});
+  doc.setTextColor(150,160,170); doc.setFont('helvetica','normal'); doc.setFontSize(8);
+  if (moradaCondo) doc.text(moradaCondo, W-M, 20, {align:'right'});
+  if (currentCondo.nif) doc.text('NIPC ' + currentCondo.nif, W-M, 24, {align:'right'});
+
+  // Título
+  doc.setTextColor(20,25,30); doc.setFont('helvetica','bold'); doc.setFontSize(15);
+  doc.text('CONVOCATÓRIA', W/2, 52, {align:'center'});
+  doc.setFont('helvetica','normal'); doc.setFontSize(11);
+  doc.text('Assembleia ' + (dados.tipo||'Ordinária') + ' de Condóminos', W/2, 60, {align:'center'});
+
+  // Corpo
+  var y = 76;
+  doc.setTextColor(40,45,50); doc.setFontSize(10.5);
+  var dataFmt = dados.data ? new Date(dados.data).toLocaleDateString('pt-PT', {weekday:'long', year:'numeric', month:'long', day:'numeric'}) : '___';
+  var intro = 'Nos termos legais e do regulamento do condomínio, convocam-se todos os condóminos do ' + condoNome + ' para a Assembleia ' + (dados.tipo||'Ordinária') + ' de Condóminos, a realizar:';
+  var linhasIntro = doc.splitTextToSize(intro, W-2*M);
+  doc.text(linhasIntro, M, y); y += linhasIntro.length * 6 + 4;
+
+  // Caixa data/hora/local
+  doc.setFillColor(244,248,251); doc.roundedRect(M, y, W-2*M, 26, 2, 2, 'F');
+  doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(20,25,30);
+  doc.text('Data:', M+6, y+8); doc.text('Hora:', M+6, y+15); doc.text('Local:', M+6, y+22);
+  doc.setFont('helvetica','normal'); doc.setTextColor(50,55,60);
+  doc.text(dataFmt, M+30, y+8);
+  doc.text((dados.hora||'20:00') + ' (1.ª convocatória)   ·   ' + (dados.hora2||addMin(dados.hora||'20:00',30)) + ' (2.ª convocatória)', M+30, y+15);
+  doc.text(dados.local||'A definir', M+30, y+22);
+  y += 34;
+
+  // 2ª convocatória nota
+  doc.setFontSize(9); doc.setTextColor(90,100,110);
+  var nota2 = 'Não havendo quórum à hora marcada para a primeira convocatória, a assembleia reunirá em segunda convocatória 30 minutos depois, deliberando validamente com os condóminos presentes (Art. 1432.º CC).';
+  var linhasNota = doc.splitTextToSize(nota2, W-2*M);
+  doc.text(linhasNota, M, y); y += linhasNota.length * 5 + 8;
+
+  // Ordem de trabalhos
+  doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(20,25,30);
+  doc.text('Ordem de Trabalhos', M, y); y += 8;
+  doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(45,50,55);
+  var pontos = (dados.ordem||'').split(/\n/).filter(function(l){ return l.trim(); });
+  pontos.forEach(function(p){
+    var linhas = doc.splitTextToSize(p.trim(), W-2*M-4);
+    if (y > 270) { doc.addPage(); y = 25; }
+    doc.text(linhas, M+2, y); y += linhas.length * 5.5 + 2;
+  });
+  y += 10;
+
+  // Assinatura
+  if (y > 250) { doc.addPage(); y = 30; }
+  doc.setFontSize(10); doc.setTextColor(40,45,50);
+  doc.text((currentCondo.cidade||'____________') + ', ' + new Date().toLocaleDateString('pt-PT'), M, y); y += 16;
+  doc.setDrawColor(120,130,140); doc.line(M, y, M+70, y); y += 5;
+  doc.setFont('helvetica','bold'); doc.text(currentCondo.administrador_nome || 'A Administração', M, y);
+  doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(110,120,130);
+  doc.text('A Administração do Condomínio', M, y+5);
+
+  // Rodapé
+  doc.setTextColor(170,180,190); doc.setFontSize(7);
+  doc.text('Documento gerado por COND.OS 2059 Pro · ' + new Date().toLocaleDateString('pt-PT'), W/2, 290, {align:'center'});
+
+  var nomeFich = 'Convocatoria_' + (dados.data||'') + '_' + condoNome.replace(/\s+/g,'_') + '.pdf';
+  doc.save(nomeFich);
+
+  // Registar nos Documentos
+  try {
+    await sb.from('documentos').insert({
+      condominio_id: currentCondo.id,
+      nome: 'Convocatória — Assembleia ' + (dados.tipo||'') + ' de ' + (dados.data ? new Date(dados.data).toLocaleDateString('pt-PT') : ''),
+      categoria: 'Legal',
+      data_documento: dados.data || new Date().toISOString().split('T')[0]
+    });
+    toast('📄 Convocatória gerada e registada nos Documentos!', 'ok');
+  } catch(e) {
+    toast('📄 Convocatória gerada! (não foi registada nos Documentos)', 'ok');
+  }
+}
+
+// Helper: adicionar minutos a uma hora "HH:MM"
+function addMin(hora, min) {
+  var p = (hora||'20:00').split(':');
+  var d = new Date(); d.setHours(parseInt(p[0])||20, (parseInt(p[1])||0)+min, 0);
+  return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+}
+
 async function sugerirOrdemTrabalhos() {
   if (!currentCondo) { toast('Selecciona um condomínio','err'); return; }
   var ta = document.getElementById('as-ot');
@@ -6745,6 +6862,19 @@ async function sugerirOrdemTrabalhos() {
   } finally {
     if (btnOriginal) { btnOriginal.disabled = false; btnOriginal.innerHTML = '<i class="ti ti-sparkles"></i> Sugerir Pontos (IA)'; }
   }
+}
+
+function gerarConvocatoriaDoModal() {
+  var dados = {
+    tipo: document.getElementById('as-tipo').value,
+    data: document.getElementById('as-data').value,
+    hora: document.getElementById('as-hora') ? document.getElementById('as-hora').value : '20:00',
+    local: document.getElementById('as-local').value,
+    ordem: document.getElementById('as-ot').value
+  };
+  if (!dados.data) { toast('Define a data primeiro','err'); return; }
+  if (!dados.ordem.trim()) { toast('Define a ordem de trabalhos primeiro','err'); return; }
+  gerarConvocatoriaPDF(dados);
 }
 
 async function saveAssembleia() {
@@ -7559,7 +7689,7 @@ function loadEdificio() {
   var setChk = function(id, val) { var el = document.getElementById(id); if(el) el.checked = !!val; };
 
   // Geral
-  set('ed-nome', c.nome); set('ed-nif', c.nif); set('ed-morada', c.morada);
+  set('ed-nome', c.nome); set('ed-nif', c.nif); set('ed-morada', c.morada); set('ed-sala-reunioes', c.sala_reunioes);
   set('ed-ano', c.ano_construcao); set('ed-ano2', c.ano_construcao); set('ed-ano-inscricao', c.ano_inscricao);
   set('ed-taxa-juro', c.taxa_juro_mora); set('ed-juro-ata', c.juro_ata);
   set('ed-artigo-matricial', c.artigo_matricial); set('ed-vpt', c.vpt);
@@ -7628,7 +7758,7 @@ async function saveEdificio() {
   var gi = function(id) { var el = document.getElementById(id); return el && el.value ? parseInt(el.value) : null; };
 
   var payload = {
-    nif: g('ed-nif'), conservacao: g('ed-conservacao'),
+    nif: g('ed-nif'), conservacao: g('ed-conservacao'), sala_reunioes: g('ed-sala-reunioes'),
     ano_construcao: gi('ed-ano'),
     taxa_juro_mora: gn('ed-taxa-juro'), juro_ata: g('ed-juro-ata'),
     ano_inscricao: gi('ed-ano-inscricao'), artigo_matricial: g('ed-artigo-matricial'),
