@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.06.25-0902</div>
+      <div class="sb-tag">2059 Pro · build v2026.06.25-2140</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -1589,6 +1589,19 @@ textarea.fi{resize:vertical;min-height:60px;}
     <div class="fl"><label>Local</label><input class="fi" id="as-local" placeholder="Ex: Sala do condomínio"></div>
     <div class="fl"><label>Ordem de Trabalhos</label><textarea class="fi" id="as-ot" rows="4" placeholder="1. Aprovação do orçamento 2026&#10;2. Eleição da administração&#10;3. Diversos"></textarea></div>
     <div class="btn-row"><button class="btn-ghost" onclick="closeModal('mo-assembleia')">Cancelar</button><button class="btn-primary" onclick="saveAssembleia()"><i class="ti ti-send"></i>Convocar</button></div>
+  </div>
+</div>
+
+
+<div class="mo" id="mo-sala-assembleia">
+  <div class="mo-box" style="width:920px;max-width:97vw;max-height:92vh;overflow-y:auto;">
+    <div class="mo-title">
+      <span><i class="ti ti-broadcast" style="color:#f87171;"></i> Sala da Assembleia <span id="sala-estado-badge" style="font-size:10px;background:rgba(248,113,113,.15);color:#f87171;padding:2px 8px;border-radius:6px;margin-left:8px;">AO VIVO</span></span>
+      <span class="mo-close" onclick="fecharSalaAssembleia()"><i class="ti ti-x"></i></span>
+    </div>
+    <div id="sala-conteudo" style="padding:4px 2px;">
+      <div style="text-align:center;padding:30px;color:var(--t3);"><div class="spin"></div></div>
+    </div>
   </div>
 </div>
 
@@ -6227,6 +6240,437 @@ async function deleteDoc(id) {
 }
 
 // ===== ASSEMBLEIAS =====
+
+// ===== SALA DA ASSEMBLEIA — Livro de Atos Imutável =====
+var _salaAssembleia = null;   // assembleia atual aberta na sala
+var _salaPontos = [];         // ordem de trabalhos parseada
+var _salaPontoAtual = 0;
+var _salaPresencas = {};      // fracao_id -> estado
+var _salaVotos = {};          // ponto -> { fracao_id -> voto }
+
+// Parsear ordem de trabalhos (texto livre numerado) em array de pontos
+function parsearOrdemTrabalhos(texto) {
+  if (!texto) return [];
+  var linhas = texto.split(/\n/).map(function(l){ return l.trim(); }).filter(Boolean);
+  return linhas.map(function(l, i){
+    // Remove numeração inicial "1." "2)" etc
+    var limpo = l.replace(/^\s*\d+[\.\)\-]\s*/, '').trim();
+    return { num: i+1, texto: limpo || l };
+  });
+}
+
+async function abrirSalaAssembleia(assembleiaId) {
+  if (!currentCondo) return;
+  openModal('mo-sala-assembleia');
+  var cont = document.getElementById('sala-conteudo');
+  cont.innerHTML = '<div style="text-align:center;padding:30px;color:var(--t3);"><div class="spin"></div><div style="margin-top:10px;">A abrir a sala...</div></div>';
+
+  // Carregar a assembleia
+  var aRes = await sb.from('assembleias').select('*').eq('id', assembleiaId).single();
+  if (aRes.error || !aRes.data) { cont.innerHTML = '<div style="padding:30px;text-align:center;color:var(--t2);">Erro ao carregar a assembleia.</div>'; return; }
+  _salaAssembleia = aRes.data;
+  _salaPontos = parsearOrdemTrabalhos(_salaAssembleia.ordem_trabalhos);
+  _salaPontoAtual = _salaAssembleia.ponto_atual || 0;
+
+  // Carregar presenças existentes
+  _salaPresencas = {};
+  var pRes = await sb.from('assembleia_presencas').select('*').eq('assembleia_id', assembleiaId);
+  (pRes.data || []).forEach(function(p){ _salaPresencas[p.fracao_id] = p.estado; });
+
+  // Carregar votos existentes
+  _salaVotos = {};
+  var vRes = await sb.from('assembleia_votos').select('*').eq('assembleia_id', assembleiaId);
+  (vRes.data || []).forEach(function(v){ (_salaVotos[v.ponto_num] = _salaVotos[v.ponto_num] || {})[v.fracao_id] = v.voto; });
+
+  renderSala();
+}
+
+function calcularQuorum() {
+  var totalPerm = 0, presentePerm = 0;
+  fracoes.forEach(function(f){
+    var p = parseFloat(f.permilagem || 0);
+    totalPerm += p;
+    var estado = _salaPresencas[f.id];
+    if (estado === 'presente' || estado === 'representado') presentePerm += p;
+  });
+  return { total: totalPerm, presente: presentePerm, pct: totalPerm > 0 ? (presentePerm/totalPerm*100) : 0 };
+}
+
+function renderSala() {
+  var cont = document.getElementById('sala-conteudo');
+  var q = calcularQuorum();
+  var nPresentes = Object.values(_salaPresencas).filter(function(e){ return e==='presente'; }).length;
+  var nRepresentados = Object.values(_salaPresencas).filter(function(e){ return e==='representado'; }).length;
+  var nAusentes = fracoes.length - nPresentes - nRepresentados;
+
+  var html = '';
+
+  // CABEÇALHO: estado + quórum
+  html += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px;">';
+  html += '<div style="background:var(--s2);border-radius:8px;padding:12px;text-align:center;border-top:2px solid var(--green);"><div style="font-size:9px;color:var(--t3);text-transform:uppercase;">Presentes</div><div style="font-size:22px;font-weight:800;font-family:var(--mono);color:var(--green);">' + nPresentes + '</div></div>';
+  html += '<div style="background:var(--s2);border-radius:8px;padding:12px;text-align:center;border-top:2px solid var(--cyan);"><div style="font-size:9px;color:var(--t3);text-transform:uppercase;">Representados</div><div style="font-size:22px;font-weight:800;font-family:var(--mono);color:var(--cyan);">' + nRepresentados + '</div></div>';
+  html += '<div style="background:var(--s2);border-radius:8px;padding:12px;text-align:center;border-top:2px solid var(--t3);"><div style="font-size:9px;color:var(--t3);text-transform:uppercase;">Ausentes</div><div style="font-size:22px;font-weight:800;font-family:var(--mono);color:var(--t2);">' + nAusentes + '</div></div>';
+  var qCor = q.pct >= 50 ? 'var(--green)' : 'var(--amber)';
+  html += '<div style="background:var(--s2);border-radius:8px;padding:12px;text-align:center;border-top:2px solid ' + qCor + ';"><div style="font-size:9px;color:var(--t3);text-transform:uppercase;">Quórum</div><div style="font-size:22px;font-weight:800;font-family:var(--mono);color:' + qCor + ';">' + Math.round(q.presente) + '‰</div></div>';
+  html += '</div>';
+
+  // ESTADO DA SESSÃO + controlo
+  var estadoSessao = _salaAssembleia.estado_sessao || 'agendada';
+  if (estadoSessao === 'agendada') {
+    html += '<div style="background:rgba(0,212,255,.06);border:1px solid rgba(0,212,255,.2);border-radius:8px;padding:14px;margin-bottom:16px;text-align:center;">';
+    html += '<div style="font-size:12px;color:var(--t2);margin-bottom:10px;">Marca as presenças e depois abre a sessão. A partir daí, tudo fica registado no livro de atos.</div>';
+    html += '<button class="btn-primary" onclick="abrirSessao()"><i class="ti ti-player-play"></i> Abrir Sessão</button>';
+    html += '</div>';
+  }
+
+  // ABAS: Presenças | Pontos/Votação | Livro de Atos
+  html += '<div style="display:flex;gap:4px;margin-bottom:14px;border-bottom:1px solid var(--b1);">';
+  html += '<button id="salatab-presencas" onclick="salaTab(\'presencas\')" class="salatab" style="padding:8px 14px;background:none;border:none;border-bottom:2px solid var(--cyan);color:var(--cyan);font-size:12px;font-weight:700;cursor:pointer;">Presenças</button>';
+  html += '<button id="salatab-pontos" onclick="salaTab(\'pontos\')" class="salatab" style="padding:8px 14px;background:none;border:none;border-bottom:2px solid transparent;color:var(--t2);font-size:12px;cursor:pointer;">Pontos e Votação</button>';
+  html += '<button id="salatab-livro" onclick="salaTab(\'livro\')" class="salatab" style="padding:8px 14px;background:none;border:none;border-bottom:2px solid transparent;color:var(--t2);font-size:12px;cursor:pointer;">📖 Livro de Atos</button>';
+  html += '</div>';
+
+  html += '<div id="salatab-content"></div>';
+
+  // RODAPÉ: encerrar + gerar ata
+  if (estadoSessao === 'a_decorrer') {
+    html += '<div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end;border-top:1px solid var(--b1);padding-top:14px;">';
+    html += '<button class="btn-ghost" onclick="encerrarSessao()"><i class="ti ti-player-stop"></i> Encerrar Sessão</button>';
+    html += '</div>';
+  } else if (estadoSessao === 'encerrada') {
+    html += '<div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end;border-top:1px solid var(--b1);padding-top:14px;">';
+    html += '<button class="btn-ghost" onclick="verLivroCru()"><i class="ti ti-file-text"></i> Ver Log Cru (prova)</button>';
+    html += '<button class="btn-primary" onclick="gerarAtaDoLivro()" style="background:linear-gradient(135deg,#b48cff,#00d4ff);border:none;"><i class="ti ti-robot"></i> Gerar Ata do Livro</button>';
+    html += '</div>';
+  }
+
+  cont.innerHTML = html;
+  salaTab('presencas');
+}
+
+function salaTab(tab) {
+  document.querySelectorAll('.salatab').forEach(function(b){ b.style.borderBottomColor='transparent'; b.style.color='var(--t2)'; b.style.fontWeight='400'; });
+  var btn = document.getElementById('salatab-'+tab);
+  if (btn) { btn.style.borderBottomColor='var(--cyan)'; btn.style.color='var(--cyan)'; btn.style.fontWeight='700'; }
+  var c = document.getElementById('salatab-content');
+  if (tab === 'presencas') c.innerHTML = renderSalaPresencas();
+  else if (tab === 'pontos') c.innerHTML = renderSalaPontos();
+  else if (tab === 'livro') renderSalaLivro(c);
+}
+
+function renderSalaPresencas() {
+  var html = '<div style="max-height:340px;overflow-y:auto;">';
+  html += '<table class="tbl"><thead><tr><th>Fração</th><th>Condómino</th><th>Permilagem</th><th>Estado</th></tr></thead><tbody>';
+  fracoes.forEach(function(f){
+    var estado = _salaPresencas[f.id] || 'ausente';
+    var bloqueado = (_salaAssembleia.estado_sessao === 'encerrada');
+    html += '<tr>';
+    html += '<td class="apt">' + (f.codigo||'—') + (f.bloco?' <span style="font-size:9px;color:var(--t3)">B'+f.bloco+'</span>':'') + '</td>';
+    html += '<td style="font-size:12px;">' + (f.proprietario_nome||'—') + '</td>';
+    html += '<td class="mn" style="font-size:11px;">' + parseFloat(f.permilagem||0).toFixed(1) + '‰</td>';
+    html += '<td><div style="display:flex;gap:3px;">';
+    [['presente','Presente','var(--green)'],['representado','Repr.','var(--cyan)'],['ausente','Ausente','var(--t3)']].forEach(function(op){
+      var ativo = estado === op[0];
+      html += '<button onclick="marcarPresenca(\'' + f.id + '\',\'' + op[0] + '\')" ' + (bloqueado?'disabled':'') + ' style="font-size:10px;padding:3px 8px;border-radius:5px;cursor:' + (bloqueado?'default':'pointer') + ';border:1px solid ' + (ativo?op[2]:'var(--b1)') + ';background:' + (ativo?op[2]:'transparent') + ';color:' + (ativo?'#04111c':'var(--t2)') + ';font-weight:' + (ativo?'700':'400') + ';">' + op[1] + '</button>';
+    });
+    html += '</div></td>';
+    html += '</tr>';
+  });
+  html += '</tbody></table></div>';
+  return html;
+}
+
+async function marcarPresenca(fracaoId, estado) {
+  _salaPresencas[fracaoId] = estado;
+  var f = fracoes.find(function(x){ return x.id === fracaoId; });
+  var perm = f ? parseFloat(f.permilagem||0) : 0;
+  // Upsert presença
+  await sb.from('assembleia_presencas').upsert({
+    assembleia_id: _salaAssembleia.id, condominio_id: currentCondo.id,
+    fracao_id: fracaoId, estado: estado, permilagem: perm
+  }, { onConflict: 'assembleia_id,fracao_id' });
+  // Atualizar KPIs e a aba
+  renderSala();
+  salaTab('presencas');
+}
+
+// ===== REGISTO DE EVENTOS NO LIVRO DE ATOS (imutável) =====
+async function registarEvento(tipo, texto, pontoNum, dados) {
+  var ev = {
+    assembleia_id: _salaAssembleia.id,
+    condominio_id: currentCondo.id,
+    tipo: tipo,
+    ponto_num: pontoNum != null ? pontoNum : null,
+    texto: texto || null,
+    dados: dados || null
+  };
+  var res = await sb.from('assembleia_eventos').insert(ev);
+  if (res.error) { toast('Erro ao registar no livro: ' + res.error.message, 'err'); console.error(res.error); }
+  return !res.error;
+}
+
+async function abrirSessao() {
+  var q = calcularQuorum();
+  await sb.from('assembleias').update({ estado_sessao: 'a_decorrer', hora_abertura: new Date().toISOString() }).eq('id', _salaAssembleia.id);
+  _salaAssembleia.estado_sessao = 'a_decorrer';
+  await registarEvento('abertura', 'Sessão aberta. Quórum: ' + Math.round(q.presente) + '‰ (' + q.pct.toFixed(1) + '% das permilagens).', null, { quorum_permilagem: Math.round(q.presente), quorum_pct: q.pct.toFixed(1) });
+  toast('✅ Sessão aberta! Tudo fica agora registado no livro.', 'ok');
+  renderSala();
+}
+
+async function encerrarSessao() {
+  if (!await confirmar('Encerrar a sessão? Depois disto, a sessão fica fechada e podes gerar a ata a partir do livro de atos.', {titulo:'Encerrar Sessão', tipo:'aviso', icon:'🛑', okTexto:'Encerrar'})) return;
+  await sb.from('assembleias').update({ estado_sessao: 'encerrada', hora_encerramento: new Date().toISOString(), estado: 'realizada' }).eq('id', _salaAssembleia.id);
+  _salaAssembleia.estado_sessao = 'encerrada';
+  await registarEvento('encerramento', 'Sessão encerrada.', null, null);
+  toast('Sessão encerrada. Já podes gerar a ata.', 'ok');
+  renderSala();
+  loadAssembleias();
+}
+
+function renderSalaPontos() {
+  if (!_salaPontos.length) {
+    return '<div style="padding:24px;text-align:center;color:var(--t2);">Esta assembleia não tem ordem de trabalhos definida.<br><span style="font-size:11px;color:var(--t3);">Edita a assembleia para adicionar os pontos.</span></div>';
+  }
+  var emSessao = _salaAssembleia.estado_sessao === 'a_decorrer';
+  var html = '';
+  _salaPontos.forEach(function(p){
+    var votosP = _salaVotos[p.num] || {};
+    var votado = Object.keys(votosP).length > 0;
+    var resultado = votado ? contarVotos(p.num) : null;
+    html += '<div style="border:1px solid var(--b1);border-radius:8px;padding:12px 14px;margin-bottom:10px;">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">';
+    html += '<div style="flex:1;"><div style="font-size:13px;font-weight:600;color:var(--text);">Ponto ' + p.num + '</div><div style="font-size:12px;color:var(--t2);margin-top:2px;">' + p.texto + '</div></div>';
+    if (emSessao) {
+      html += '<div style="display:flex;gap:6px;flex-shrink:0;">';
+      html += '<button class="btn-ghost" style="font-size:10px;padding:5px 10px;" onclick="abrirPontoDebate(' + p.num + ')"><i class="ti ti-message"></i> Debate</button>';
+      html += '<button class="btn-primary" style="font-size:10px;padding:5px 10px;" onclick="abrirVotacao(' + p.num + ')"><i class="ti ti-checkbox"></i> ' + (votado?'Rever Votação':'Abrir Votação') + '</button>';
+      html += '</div>';
+    }
+    html += '</div>';
+    // Resultado da votação (se houver)
+    if (resultado) {
+      var aprovado = resultado.favorPerm > resultado.contraPerm;
+      html += '<div style="margin-top:10px;padding:10px;background:var(--s2);border-radius:6px;display:flex;gap:14px;align-items:center;flex-wrap:wrap;">';
+      html += '<span style="font-size:11px;color:var(--green);">✓ A favor: <strong>' + Math.round(resultado.favorPerm) + '‰</strong></span>';
+      html += '<span style="font-size:11px;color:var(--red);">✕ Contra: <strong>' + Math.round(resultado.contraPerm) + '‰</strong></span>';
+      html += '<span style="font-size:11px;color:var(--t2);">○ Abstenção: <strong>' + Math.round(resultado.abstencaoPerm) + '‰</strong></span>';
+      html += '<span style="font-size:11px;font-weight:700;color:' + (aprovado?'var(--green)':'var(--red)') + ';margin-left:auto;">' + (aprovado?'APROVADO':'REJEITADO') + '</span>';
+      html += '</div>';
+    }
+    html += '</div>';
+  });
+  return html;
+}
+
+// CONTAGEM DE VOTOS — feita por código (não pela IA!), com base nas permilagens
+function contarVotos(pontoNum) {
+  var votosP = _salaVotos[pontoNum] || {};
+  var favorPerm = 0, contraPerm = 0, abstencaoPerm = 0;
+  var nFavor = 0, nContra = 0, nAbst = 0;
+  Object.keys(votosP).forEach(function(fracaoId){
+    var f = fracoes.find(function(x){ return x.id === fracaoId; });
+    var perm = f ? parseFloat(f.permilagem||0) : 0;
+    var voto = votosP[fracaoId];
+    if (voto === 'favor') { favorPerm += perm; nFavor++; }
+    else if (voto === 'contra') { contraPerm += perm; nContra++; }
+    else if (voto === 'abstencao') { abstencaoPerm += perm; nAbst++; }
+  });
+  return { favorPerm:favorPerm, contraPerm:contraPerm, abstencaoPerm:abstencaoPerm, nFavor:nFavor, nContra:nContra, nAbst:nAbst };
+}
+
+// Debate: registar uma intervenção no livro
+async function abrirPontoDebate(pontoNum) {
+  var ponto = _salaPontos.find(function(p){ return p.num === pontoNum; });
+  // Marcar ponto aberto no livro (se ainda não foi)
+  await registarEvento('ponto_aberto', 'Aberto o Ponto ' + pontoNum + ': ' + (ponto?ponto.texto:''), pontoNum, null);
+  var quem = await pedirValor('Registar intervenção — Ponto ' + pontoNum, 'Quem interveio? (nome ou fração)', '');
+  if (quem === null) return;
+  var oque = await pedirValor('Intervenção de ' + quem, 'Resumo da intervenção', '');
+  if (oque === null) return;
+  await registarEvento('intervencao', quem + ': ' + oque, pontoNum, { autor: quem });
+  toast('Intervenção registada no livro', 'ok');
+}
+
+// Votação: modal para registar voto de cada fração
+var _votacaoPontoAtual = null;
+async function abrirVotacao(pontoNum) {
+  _votacaoPontoAtual = pontoNum;
+  var ponto = _salaPontos.find(function(p){ return p.num === pontoNum; });
+  await registarEvento('votacao_aberta', 'Votação aberta para o Ponto ' + pontoNum + '.', pontoNum, null);
+  renderVotacaoModal(pontoNum, ponto);
+}
+
+function renderVotacaoModal(pontoNum, ponto) {
+  var cont = document.getElementById('sala-conteudo');
+  var votosP = _salaVotos[pontoNum] || {};
+  // Só votam os presentes/representados
+  var elegiveis = fracoes.filter(function(f){ var e=_salaPresencas[f.id]; return e==='presente'||e==='representado'; });
+
+  var html = '<div style="margin-bottom:12px;"><button class="btn-ghost" style="font-size:11px;" onclick="renderSala()"><i class="ti ti-arrow-left"></i> Voltar</button></div>';
+  html += '<div style="background:var(--s2);border-radius:8px;padding:12px 14px;margin-bottom:14px;"><div style="font-size:13px;font-weight:600;">Votação — Ponto ' + pontoNum + '</div><div style="font-size:12px;color:var(--t2);margin-top:2px;">' + (ponto?ponto.texto:'') + '</div></div>';
+  html += '<div style="font-size:11px;color:var(--t3);margin-bottom:8px;">Só votam frações presentes ou representadas (' + elegiveis.length + ').</div>';
+  html += '<div style="max-height:300px;overflow-y:auto;">';
+  html += '<table class="tbl"><thead><tr><th>Fração</th><th>‰</th><th>Voto</th></tr></thead><tbody>';
+  elegiveis.forEach(function(f){
+    var voto = votosP[f.id];
+    html += '<tr><td class="apt">' + (f.codigo||'—') + '</td><td class="mn" style="font-size:11px;">' + parseFloat(f.permilagem||0).toFixed(1) + '</td><td><div style="display:flex;gap:3px;">';
+    [['favor','A favor','var(--green)'],['contra','Contra','var(--red)'],['abstencao','Abst.','var(--t3)']].forEach(function(op){
+      var ativo = voto === op[0];
+      html += '<button onclick="registarVoto(\'' + f.id + '\',\'' + op[0] + '\')" style="font-size:10px;padding:3px 8px;border-radius:5px;cursor:pointer;border:1px solid ' + (ativo?op[2]:'var(--b1)') + ';background:' + (ativo?op[2]:'transparent') + ';color:' + (ativo?'#04111c':'var(--t2)') + ';font-weight:' + (ativo?'700':'400') + ';">' + op[1] + '</button>';
+    });
+    html += '</div></td></tr>';
+  });
+  html += '</tbody></table></div>';
+
+  // Resultado em tempo real
+  var r = contarVotos(pontoNum);
+  html += '<div style="margin-top:14px;padding:12px;background:var(--s2);border-radius:8px;">';
+  html += '<div style="font-size:11px;color:var(--t3);text-transform:uppercase;margin-bottom:8px;">Resultado em tempo real (por permilagem)</div>';
+  html += '<div style="display:flex;gap:16px;flex-wrap:wrap;">';
+  html += '<span style="font-size:13px;color:var(--green);">✓ A favor: <strong>' + Math.round(r.favorPerm) + '‰</strong> (' + r.nFavor + ')</span>';
+  html += '<span style="font-size:13px;color:var(--red);">✕ Contra: <strong>' + Math.round(r.contraPerm) + '‰</strong> (' + r.nContra + ')</span>';
+  html += '<span style="font-size:13px;color:var(--t2);">○ Abstenção: <strong>' + Math.round(r.abstencaoPerm) + '‰</strong> (' + r.nAbst + ')</span>';
+  html += '</div></div>';
+
+  html += '<div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end;">';
+  html += '<button class="btn-primary" onclick="fecharVotacao(' + pontoNum + ')"><i class="ti ti-check"></i> Fechar e Registar Resultado</button>';
+  html += '</div>';
+
+  cont.innerHTML = html;
+}
+
+async function registarVoto(fracaoId, voto) {
+  if (_votacaoPontoAtual == null) return;
+  (_salaVotos[_votacaoPontoAtual] = _salaVotos[_votacaoPontoAtual] || {})[fracaoId] = voto;
+  var f = fracoes.find(function(x){ return x.id === fracaoId; });
+  var perm = f ? parseFloat(f.permilagem||0) : 0;
+  await sb.from('assembleia_votos').upsert({
+    assembleia_id: _salaAssembleia.id, condominio_id: currentCondo.id,
+    fracao_id: fracaoId, ponto_num: _votacaoPontoAtual, voto: voto, permilagem: perm
+  }, { onConflict: 'assembleia_id,fracao_id,ponto_num' });
+  var ponto = _salaPontos.find(function(p){ return p.num === _votacaoPontoAtual; });
+  renderVotacaoModal(_votacaoPontoAtual, ponto);
+}
+
+async function fecharVotacao(pontoNum) {
+  var r = contarVotos(pontoNum);
+  var aprovado = r.favorPerm > r.contraPerm;
+  var ponto = _salaPontos.find(function(p){ return p.num === pontoNum; });
+  await registarEvento('votacao_fechada', 'Votação do Ponto ' + pontoNum + ' encerrada. A favor: ' + Math.round(r.favorPerm) + '‰, Contra: ' + Math.round(r.contraPerm) + '‰, Abstenção: ' + Math.round(r.abstencaoPerm) + '‰.', pontoNum, r);
+  await registarEvento('deliberacao', 'Ponto ' + pontoNum + ' (' + (ponto?ponto.texto:'') + '): ' + (aprovado?'APROVADO':'REJEITADO') + ' por ' + Math.round(aprovado?r.favorPerm:r.contraPerm) + '‰.', pontoNum, { aprovado: aprovado, resultado: r });
+  toast('✅ Resultado registado no livro: ' + (aprovado?'APROVADO':'REJEITADO'), 'ok');
+  renderSala();
+  salaTab('pontos');
+}
+
+// LIVRO DE ATOS — mostrar todos os eventos carimbados
+async function renderSalaLivro(container) {
+  container.innerHTML = '<div style="text-align:center;padding:20px;color:var(--t3);"><div class="spin"></div></div>';
+  var res = await sb.from('assembleia_eventos').select('*').eq('assembleia_id', _salaAssembleia.id).order('registado_em', { ascending: true });
+  var eventos = res.data || [];
+  if (!eventos.length) { container.innerHTML = '<div style="padding:24px;text-align:center;color:var(--t3);">O livro está vazio. Os eventos aparecem aqui à medida que a assembleia decorre.</div>'; return; }
+  var ICO = { abertura:'▶️', quorum:'👥', ponto_aberto:'📌', intervencao:'💬', votacao_aberta:'🗳️', votacao_fechada:'✅', deliberacao:'⚖️', ponto_encerrado:'🔒', suspensao:'⏸️', encerramento:'🛑', nota:'📝' };
+  var html = '<div style="background:var(--s2);border-radius:8px;padding:8px 0;max-height:360px;overflow-y:auto;">';
+  html += '<div style="padding:0 14px 8px;font-size:10px;color:var(--t3);border-bottom:1px solid var(--b1);margin-bottom:6px;">📖 Registo imutável e carimbado. Esta é a testemunha imparcial da assembleia.</div>';
+  eventos.forEach(function(ev){
+    var hora = new Date(ev.registado_em).toLocaleTimeString('pt-PT', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    html += '<div style="display:flex;gap:10px;padding:6px 14px;align-items:flex-start;">';
+    html += '<span style="font-family:var(--mono);font-size:10px;color:var(--cyan);flex-shrink:0;width:58px;">' + hora + '</span>';
+    html += '<span style="flex-shrink:0;">' + (ICO[ev.tipo]||'•') + '</span>';
+    html += '<span style="font-size:12px;color:var(--t2);line-height:1.4;">' + (ev.texto||ev.tipo) + '</span>';
+    html += '</div>';
+  });
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+function fecharSalaAssembleia() {
+  closeModal('mo-sala-assembleia');
+  _salaAssembleia = null;
+}
+
+// GERAR ATA A PARTIR DO LIVRO (a IA lê só os eventos registados — não inventa)
+async function gerarAtaDoLivro() {
+  var res = await sb.from('assembleia_eventos').select('*').eq('assembleia_id', _salaAssembleia.id).order('registado_em', { ascending: true });
+  var eventos = res.data || [];
+  if (!eventos.length) { toast('O livro está vazio — nada para gerar.', 'err'); return; }
+
+  var cont = document.getElementById('sala-conteudo');
+  cont.innerHTML = '<div style="text-align:center;padding:40px;color:var(--t3);"><div class="spin"></div><div style="margin-top:12px;">A IA está a redigir a ata a partir do livro de atos...</div></div>';
+
+  // Montar o "livro" em texto para a IA (factos carimbados)
+  var livroTexto = eventos.map(function(ev){
+    var hora = new Date(ev.registado_em).toLocaleTimeString('pt-PT', {hour:'2-digit',minute:'2-digit'});
+    return hora + ' [' + ev.tipo + '] ' + (ev.texto||'');
+  }).join('\n');
+
+  var nomeCondo = displayNomeCondo(currentCondo.nome||'');
+  var dataAss = _salaAssembleia.data_assembleia ? new Date(_salaAssembleia.data_assembleia).toLocaleDateString('pt-PT') : '';
+
+  var prompt = 'És o secretário de uma assembleia de condóminos em Portugal. Redige a ATA OFICIAL desta assembleia EXCLUSIVAMENTE com base no livro de atos abaixo (registo carimbado e factual). ' +
+    'REGRA ABSOLUTA: usa APENAS os factos que estão no livro. NÃO inventes intervenções, nomes, valores ou deliberações que não estejam registados. Se algo não está no livro, não existe. ' +
+    'Escreve em português de Portugal, tom formal e jurídico adequado a uma ata. Estrutura: cabeçalho (condomínio ' + nomeCondo + ', data ' + dataAss + ', local ' + (_salaAssembleia.local_assembleia||'') + '), quórum verificado, desenvolvimento ponto a ponto com as deliberações e respetivos resultados de votação (em permilagem), e encerramento. ' +
+    'No final acrescenta: "A presente ata foi redigida com auxílio de um sistema de apoio à redação, a partir do registo factual da assembleia, devendo ser validada pelos participantes." ' +
+    'LIVRO DE ATOS (factos carimbados):\n' + livroTexto;
+
+  try {
+    var ata = await callIA(prompt, 'ata');
+    if (!ata || !ata.trim()) throw new Error('A IA não devolveu texto.');
+    // Guardar a ata
+    await sb.from('assembleias').update({ ata_texto: ata, ata_gerada_ia: true }).eq('id', _salaAssembleia.id);
+    _salaAssembleia.ata_texto = ata;
+    renderAtaGerada(ata);
+  } catch(err) {
+    cont.innerHTML = '<div style="padding:30px;text-align:center;color:var(--t2);"><i class="ti ti-alert-circle" style="font-size:28px;color:var(--amber);"></i><div style="margin-top:10px;">Não foi possível gerar a ata agora.</div><div style="font-size:11px;color:var(--t3);margin-top:6px;">' + err.message + '</div><button class="btn-ghost" style="margin-top:14px;" onclick="renderSala()">Voltar</button></div>';
+  }
+}
+
+function renderAtaGerada(ata) {
+  var cont = document.getElementById('sala-conteudo');
+  var html = '<div style="margin-bottom:12px;"><button class="btn-ghost" style="font-size:11px;" onclick="renderSala()"><i class="ti ti-arrow-left"></i> Voltar à sala</button></div>';
+  html += '<div style="background:rgba(180,140,255,.06);border:1px solid rgba(180,140,255,.2);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:11px;color:var(--t2);">📖 Esta ata foi redigida a partir do livro de atos imutável. Os factos são os registados durante a assembleia.</div>';
+  html += '<div style="background:var(--s1);border:1px solid var(--b1);border-radius:8px;padding:18px;max-height:380px;overflow-y:auto;font-size:13px;line-height:1.7;color:var(--text);white-space:pre-wrap;">' + ata + '</div>';
+  html += '<div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end;">';
+  html += '<button class="btn-ghost" onclick="verLivroCru()"><i class="ti ti-file-text"></i> Ver Log Cru</button>';
+  html += '<button class="btn-primary" onclick="imprimirAta()"><i class="ti ti-printer"></i> Imprimir Ata</button>';
+  html += '</div>';
+  cont.innerHTML = html;
+}
+
+// LOG CRU — a prova imutável, exportável
+async function verLivroCru() {
+  var res = await sb.from('assembleia_eventos').select('*').eq('assembleia_id', _salaAssembleia.id).order('registado_em', { ascending: true });
+  var eventos = res.data || [];
+  var nomeCondo = displayNomeCondo(currentCondo.nome||'');
+  var linhas = eventos.map(function(ev){
+    var ts = new Date(ev.registado_em).toLocaleString('pt-PT');
+    return '<tr><td style="padding:6px 10px;border-bottom:1px solid #eee;font-family:monospace;font-size:11px;white-space:nowrap;">' + ts + '</td><td style="padding:6px 10px;border-bottom:1px solid #eee;font-size:11px;color:#888;">' + ev.tipo + '</td><td style="padding:6px 10px;border-bottom:1px solid #eee;font-size:12px;">' + (ev.texto||'') + '</td></tr>';
+  }).join('');
+  var html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Log da Assembleia — ' + nomeCondo + '</title></head><body style="font-family:Arial,sans-serif;padding:30px;">' +
+    '<h2>Registo Factual da Assembleia (Log Imutável)</h2>' +
+    '<p style="color:#666;font-size:12px;">' + nomeCondo + ' · Documento de prova gerado por COND.OS 2059 Pro em ' + new Date().toLocaleString('pt-PT') + '</p>' +
+    '<table style="width:100%;border-collapse:collapse;"><thead><tr style="background:#0d1825;color:#fff;"><th style="padding:8px 10px;text-align:left;">Carimbo temporal</th><th style="padding:8px 10px;text-align:left;">Tipo</th><th style="padding:8px 10px;text-align:left;">Evento registado</th></tr></thead><tbody>' + linhas + '</tbody></table>' +
+    '<p style="font-size:10px;color:#aaa;margin-top:20px;">Este registo é append-only: cada linha foi carimbada no momento em que ocorreu e não foi editada. Serve como prova factual do decurso da assembleia.</p>' +
+    '</body></html>';
+  var w = window.open('', '_blank');
+  w.document.write(html); w.document.close();
+}
+
+function imprimirAta() {
+  if (!_salaAssembleia || !_salaAssembleia.ata_texto) { toast('Gera a ata primeiro','err'); return; }
+  var nomeCondo = displayNomeCondo(currentCondo.nome||'');
+  var dataAss = _salaAssembleia.data_assembleia ? new Date(_salaAssembleia.data_assembleia).toLocaleDateString('pt-PT') : '';
+  var html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Ata — ' + nomeCondo + '</title></head><body style="font-family:Georgia,serif;padding:40px;max-width:800px;margin:0 auto;line-height:1.7;color:#222;">' +
+    '<div style="text-align:center;border-bottom:2px solid #0d1825;padding-bottom:12px;margin-bottom:20px;"><h2 style="margin:0;">' + nomeCondo + '</h2><div style="color:#888;font-size:13px;">Ata de Assembleia · ' + dataAss + '</div></div>' +
+    '<div style="white-space:pre-wrap;font-size:14px;">' + _salaAssembleia.ata_texto + '</div>' +
+    '</body></html>';
+  var w = window.open('', '_blank');
+  w.document.write(html); w.document.close();
+  setTimeout(function(){ w.print(); }, 400);
+}
+
+
 async function loadAssembleias() {
   if (!currentCondo) return;
   const { data } = await sb.from('assembleias').select('*').eq('condominio_id',currentCondo.id).order('data_assembleia',{ascending:false});
@@ -6234,7 +6678,7 @@ async function loadAssembleias() {
   const estadoCls = {agendada:'par',realizada:'ok',cancelada:'pend'};
   document.getElementById('assembleias-list').innerHTML = as.length ?
     `<table class="tbl"><thead><tr><th>Tipo</th><th>Data</th><th>Local</th><th>Estado</th><th>Ata IA</th><th>Ação</th></tr></thead><tbody>`+
-    as.map(a=>`<tr><td>${a.tipo}</td><td class="mn">${a.data_assembleia?(new Date(a.data_assembleia)).toLocaleDateString('pt-PT'):'—'}</td><td style="color:var(--t2);font-size:11px">${a.local_assembleia||'—'}</td><td><span class="pill ${estadoCls[a.estado]||''}">${a.estado}</span></td><td>${a.ata_gerada_ia?'<span class="pill ok">IA</span>':'—'}</td><td><button class="tb-btn" style="font-size:10px;padding:3px 7px;" onclick="gerarAta('${a.id}','${(a.ordem_trabalhos||'').replace(/'/g,'`')}')"><i class="ti ti-robot"></i>Gerar Ata</button></td></tr>`).join('')+`</tbody></table>` :
+    as.map(a=>`<tr><td>${a.tipo}</td><td class="mn">${a.data_assembleia?(new Date(a.data_assembleia)).toLocaleDateString('pt-PT'):'—'}</td><td style="color:var(--t2);font-size:11px">${a.local_assembleia||'—'}</td><td><span class="pill ${estadoCls[a.estado]||''}">${a.estado}</span></td><td>${a.ata_gerada_ia?'<span class="pill ok">IA</span>':'—'}</td><td><div style="display:flex;gap:4px;"><button class="tb-btn" style="font-size:10px;padding:3px 7px;background:rgba(248,113,113,.1);border-color:rgba(248,113,113,.3);color:#f87171;" onclick="abrirSalaAssembleia('${a.id}')"><i class="ti ti-broadcast"></i>Abrir Sala</button><button class="tb-btn" style="font-size:10px;padding:3px 7px;" onclick="gerarAta('${a.id}','${(a.ordem_trabalhos||'').replace(/'/g,'`')}')"><i class="ti ti-robot"></i>Ata IA</button></div></td></tr>`).join('')+`</tbody></table>` :
     emptyState('ti-speakerphone','Sem assembleias','Convoca a primeira assembleia do condomínio.');
 }
 
