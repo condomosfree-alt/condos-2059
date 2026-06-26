@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.06.26-0942</div>
+      <div class="sb-tag">2059 Pro · build v2026.06.26-2129</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -2027,6 +2027,22 @@ textarea.fi{resize:vertical;min-height:60px;}
 </div>
 
 <div class="toast" id="toast"></div>
+
+<div class="mo" id="mo-pedir-valor" style="z-index:10001;">
+  <div class="mo-box" style="width:400px;padding:0;overflow:hidden;">
+    <div style="background:linear-gradient(135deg,#0a1119,#0d1825);padding:18px 22px;border-bottom:1px solid var(--b1);">
+      <div id="pv-titulo" style="font-size:15px;font-weight:700;color:#fff;">Inserir valor</div>
+    </div>
+    <div style="padding:20px 22px;">
+      <label id="pv-label" style="font-size:12px;color:var(--t2);display:block;margin-bottom:8px;line-height:1.5;"></label>
+      <textarea id="pv-input" class="fi" rows="3" style="width:100%;resize:vertical;font-family:inherit;"></textarea>
+    </div>
+    <div style="display:flex;gap:8px;padding:14px 22px;background:var(--s1);border-top:1px solid var(--b1);">
+      <button id="pv-cancel" class="btn-ghost" style="flex:1;">Cancelar</button>
+      <button id="pv-ok" class="btn-primary" style="flex:1;">Confirmar</button>
+    </div>
+  </div>
+</div>
 
 <script>
 
@@ -6595,8 +6611,6 @@ async function abrirPontoDebate(pontoNum) {
   if (intervencao === null || !intervencao.trim()) return;
   await registarEvento('intervencao', intervencao, pontoNum, null);
   toast('✅ Intervenção registada no livro de atos', 'ok');
-  // Atualizar o livro se a aba estiver visível
-  salaTab('pontos');
 }
 
 // Votação: modal para registar voto de cada fração
@@ -9201,27 +9215,23 @@ async function ajustarValorRubrica(idx) {
 // Pedir um valor ao utilizador (modal bonito, substitui prompt())
 function pedirValor(titulo, label, valorInicial) {
   return new Promise(function(resolve) {
-    setTimeout(function(){
     var modal = document.getElementById('mo-pedir-valor');
-    if (!modal) {
-      modal = document.createElement('div');
-      modal.id = 'mo-pedir-valor';
-      modal.className = 'mo';
-      modal.style.zIndex = '10000';
-      modal.innerHTML = '<div class="mo-box" style="width:340px;"><div class="mo-title" id="pv-titulo"></div><div style="padding:6px 2px;"><label id="pv-label" style="font-size:12px;color:var(--t2);display:block;margin-bottom:6px;"></label><input id="pv-input" class="fi" type="text" style="width:100%;"><div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end;"><button class="btn-ghost" id="pv-cancel">Cancelar</button><button class="btn-primary" id="pv-ok">Confirmar</button></div></div></div>';
-      document.body.appendChild(modal);
-    }
     document.getElementById('pv-titulo').textContent = titulo;
     document.getElementById('pv-label').textContent = label;
     var inp = document.getElementById('pv-input');
     inp.value = valorInicial || '';
+    var btnOk = document.getElementById('pv-ok');
+    var btnCancel = document.getElementById('pv-cancel');
     modal.classList.add('open');
-    setTimeout(function(){ try { inp.focus(); if(typeof inp.select==='function') inp.select(); } catch(e){} }, 50);
-    function fechar(val) { modal.classList.remove('open'); document.getElementById('pv-ok').onclick=null; document.getElementById('pv-cancel').onclick=null; inp.onkeydown=null; resolve(val); }
-    document.getElementById('pv-ok').onclick = function(){ fechar(inp.value); };
-    document.getElementById('pv-cancel').onclick = function(){ fechar(null); };
-    inp.onkeydown = function(e){ if(e.key==='Enter'){ fechar(inp.value); } if(e.key==='Escape'){ fechar(null); } };
-    }, 120);
+    setTimeout(function(){ try { inp.focus(); } catch(e){} }, 60);
+    function fechar(val) {
+      modal.classList.remove('open');
+      btnOk.onclick = null; btnCancel.onclick = null; inp.onkeydown = null;
+      resolve(val);
+    }
+    btnOk.onclick = function(){ fechar(inp.value); };
+    btnCancel.onclick = function(){ fechar(null); };
+    inp.onkeydown = function(e){ if(e.key==='Enter' && (e.ctrlKey||e.metaKey)){ fechar(inp.value); } if(e.key==='Escape'){ fechar(null); } };
   });
 }
 
