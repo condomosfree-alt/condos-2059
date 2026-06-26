@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.06.26-0918</div>
+      <div class="sb-tag">2059 Pro · build v2026.06.26-0942</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -6316,11 +6316,11 @@ function renderSala() {
 
   // CABEÇALHO: estado + quórum
   html += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px;">';
-  html += '<div style="background:var(--s2);border-radius:8px;padding:12px;text-align:center;border-top:2px solid var(--green);"><div style="font-size:9px;color:var(--t3);text-transform:uppercase;">Presentes</div><div style="font-size:22px;font-weight:800;font-family:var(--mono);color:var(--green);">' + nPresentes + '</div></div>';
-  html += '<div style="background:var(--s2);border-radius:8px;padding:12px;text-align:center;border-top:2px solid var(--cyan);"><div style="font-size:9px;color:var(--t3);text-transform:uppercase;">Representados</div><div style="font-size:22px;font-weight:800;font-family:var(--mono);color:var(--cyan);">' + nRepresentados + '</div></div>';
-  html += '<div style="background:var(--s2);border-radius:8px;padding:12px;text-align:center;border-top:2px solid var(--t3);"><div style="font-size:9px;color:var(--t3);text-transform:uppercase;">Ausentes</div><div style="font-size:22px;font-weight:800;font-family:var(--mono);color:var(--t2);">' + nAusentes + '</div></div>';
+  html += '<div style="background:var(--s2);border-radius:8px;padding:12px;text-align:center;border-top:2px solid var(--green);"><div style="font-size:9px;color:var(--t3);text-transform:uppercase;">Presentes</div><div id="kpi-presentes" style="font-size:22px;font-weight:800;font-family:var(--mono);color:var(--green);">' + nPresentes + '</div></div>';
+  html += '<div style="background:var(--s2);border-radius:8px;padding:12px;text-align:center;border-top:2px solid var(--cyan);"><div style="font-size:9px;color:var(--t3);text-transform:uppercase;">Representados</div><div id="kpi-representados" style="font-size:22px;font-weight:800;font-family:var(--mono);color:var(--cyan);">' + nRepresentados + '</div></div>';
+  html += '<div style="background:var(--s2);border-radius:8px;padding:12px;text-align:center;border-top:2px solid var(--t3);"><div style="font-size:9px;color:var(--t3);text-transform:uppercase;">Ausentes</div><div id="kpi-ausentes" style="font-size:22px;font-weight:800;font-family:var(--mono);color:var(--t2);">' + nAusentes + '</div></div>';
   var qCor = q.pct >= 50 ? 'var(--green)' : 'var(--amber)';
-  html += '<div style="background:var(--s2);border-radius:8px;padding:12px;text-align:center;border-top:2px solid ' + qCor + ';"><div style="font-size:9px;color:var(--t3);text-transform:uppercase;">Quórum</div><div style="font-size:22px;font-weight:800;font-family:var(--mono);color:' + qCor + ';">' + Math.round(q.presente) + '‰</div></div>';
+  html += '<div style="background:var(--s2);border-radius:8px;padding:12px;text-align:center;border-top:2px solid ' + qCor + ';" id="kpi-quorum-box"><div style="font-size:9px;color:var(--t3);text-transform:uppercase;">Quórum</div><div id="kpi-quorum" style="font-size:22px;font-weight:800;font-family:var(--mono);color:' + qCor + ';">' + Math.round(q.presente) + '‰</div></div>';
   html += '</div>';
 
   // ESTADO DA SESSÃO + controlo
@@ -6406,9 +6406,29 @@ async function marcarPresenca(fracaoId, estado) {
     assembleia_id: _salaAssembleia.id, condominio_id: currentCondo.id,
     fracao_id: fracaoId, estado: estado, permilagem: perm
   }, { onConflict: 'assembleia_id,fracao_id' });
-  // Atualizar KPIs e a aba
-  renderSala();
-  salaTab('presencas');
+  // Atualização CIRÚRGICA: só os KPIs e a aba de presenças (sem reconstruir o modal todo)
+  atualizarKPIsQuorum();
+  var c = document.getElementById('salatab-content');
+  if (c) c.innerHTML = renderSalaPresencas();
+}
+
+// Atualiza só os números do quórum (sem reconstruir o modal — evita o bug removeChild)
+function atualizarKPIsQuorum() {
+  var q = calcularQuorum();
+  var nPresentes = Object.values(_salaPresencas).filter(function(e){ return e==='presente'; }).length;
+  var nRepresentados = Object.values(_salaPresencas).filter(function(e){ return e==='representado'; }).length;
+  var nAusentes = fracoes.length - nPresentes - nRepresentados;
+  var elP = document.getElementById('kpi-presentes'); if (elP) elP.textContent = nPresentes;
+  var elR = document.getElementById('kpi-representados'); if (elR) elR.textContent = nRepresentados;
+  var elA = document.getElementById('kpi-ausentes'); if (elA) elA.textContent = nAusentes;
+  var elQ = document.getElementById('kpi-quorum');
+  var elQB = document.getElementById('kpi-quorum-box');
+  if (elQ) {
+    var qCor = q.pct >= 50 ? 'var(--green)' : 'var(--amber)';
+    elQ.textContent = Math.round(q.presente) + '‰';
+    elQ.style.color = qCor;
+    if (elQB) elQB.style.borderTopColor = qCor;
+  }
 }
 
 // ===== REGISTO DE EVENTOS NO LIVRO DE ATOS (imutável) =====
@@ -9187,6 +9207,7 @@ function pedirValor(titulo, label, valorInicial) {
       modal = document.createElement('div');
       modal.id = 'mo-pedir-valor';
       modal.className = 'mo';
+      modal.style.zIndex = '10000';
       modal.innerHTML = '<div class="mo-box" style="width:340px;"><div class="mo-title" id="pv-titulo"></div><div style="padding:6px 2px;"><label id="pv-label" style="font-size:12px;color:var(--t2);display:block;margin-bottom:6px;"></label><input id="pv-input" class="fi" type="text" style="width:100%;"><div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end;"><button class="btn-ghost" id="pv-cancel">Cancelar</button><button class="btn-primary" id="pv-ok">Confirmar</button></div></div></div>';
       document.body.appendChild(modal);
     }
