@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.06.26-2203</div>
+      <div class="sb-tag">2059 Pro · build v2026.06.26-2219</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -6556,9 +6556,9 @@ async function lavrarAtaNaoRealizacao(q) {
     'Nos termos do artigo 1432.º do Código Civil, a assembleia só pode deliberar, em segunda convocatória, com a presença de condóminos que representem, no mínimo, um quarto (25%) do valor total do prédio. Não tendo sido reunido esse quórum mínimo, a assembleia NÃO SE REALIZOU, não tendo sido tomada qualquer deliberação.\n\n' +
     'A administração deverá proceder a nova convocação da assembleia, nos termos legais.\n\n' +
     'Para constar e produzir os devidos efeitos, se lavrou a presente ata de não realização.';
-  await sb.from('assembleias').update({ ata_texto: ataNR, ata_gerada_ia: false, estado: 'realizada', estado_sessao: 'encerrada' }).eq('id', _salaAssembleia.id);
+  await sb.from('assembleias').update({ ata_texto: ataNR, ata_gerada_ia: false, estado: 'nao_realizada', estado_sessao: 'encerrada' }).eq('id', _salaAssembleia.id);
   _salaAssembleia.ata_texto = ataNR;
-  _salaAssembleia.estado = 'realizada';
+  _salaAssembleia.estado = 'nao_realizada';
   _salaAssembleia.estado_sessao = 'encerrada';
   toast('Ata de não realização lavrada. A assembleia não reuniu quórum.', 'ok');
   renderAtaGerada(ataNR);
@@ -6894,7 +6894,8 @@ async function gerarAtaDoLivro() {
     '2. PRESENÇAS E QUÓRUM: indicar os condóminos presentes/representados e a percentagem do capital representado (quórum de ' + q.pct.toFixed(1) + '%). Lista de presentes:\n' + (presentesLista.length ? presentesLista.join('; ') : 'ver livro') + '\n' +
     '3. MESA: se o livro indicar quem presidiu e secretariou, mencionar; caso contrário, deixar campo para preencher.\n' +
     '4. ORDEM DE TRABALHOS: listar os pontos.\n' +
-    '5. DELIBERAÇÕES: para cada ponto, descrever o que foi discutido (intervenções registadas) e a deliberação tomada, com o resultado da votação em permilagem e se foi APROVADO ou REJEITADO. Indicar a maioria obtida.\n' +
+    '5. DELIBERAÇÕES: para cada ponto, usa o título do ponto em NEGRITO no formato markdown (**Ponto X: ...**). Descreve o que foi discutido e a deliberação tomada, com o resultado da votação em permilagem e se foi APROVADO ou REJEITADO. Indica a maioria obtida.\n' +
+    'REGRA CRÍTICA SOBRE INTERVENÇÕES: todas as intervenções e declarações registadas no livro (tipo intervencao) são DECLARAÇÕES FORMAIS PARA A ATA e têm valor legal. Transcreve-as fielmente e com destaque, identificando quem declarou. Por exemplo, se um condómino declarou que não paga por determinado motivo, que discorda de uma deliberação, ou que se reserva o direito de impugnar, isso DEVE constar expressamente na ata no ponto respetivo, com uma frase como \'Para constar em ata, o condómino da fração X declarou que...\'. Estas declarações nunca podem ser omitidas nem resumidas ao ponto de perderem o sentido — protegem juridicamente quem as fez.\n' +
     '6. ENCERRAMENTO: hora de encerramento e, se aplicável, pontos não votados e respetivo motivo.\n' +
     'No final acrescenta: "A presente ata foi redigida com auxílio de um sistema de apoio à redação, a partir do registo factual da assembleia, devendo ser lida, aprovada e assinada pelos participantes." ' +
     'LIVRO DE ATOS (factos carimbados):\n' + livroTexto;
@@ -6932,10 +6933,11 @@ async function guardarAtaEditada() {
   var txt = document.getElementById('ata-editavel');
   if (!txt) return;
   var novaAta = txt.value;
-  await sb.from('assembleias').update({ ata_texto: novaAta }).eq('id', _salaAssembleia.id);
+  await sb.from('assembleias').update({ ata_texto: novaAta, ata_gerada_ia: false }).eq('id', _salaAssembleia.id);
   _salaAssembleia.ata_texto = novaAta;
-  await registarEvento('nota', 'Ata ajustada manualmente pela administração (correção de redação).', null, null);
-  toast('✅ Alterações guardadas', 'ok');
+  _salaAssembleia.ata_gerada_ia = false;
+  await registarEvento('nota', 'Ata ajustada manualmente pela administração (correção de redação). O conteúdo factual mantém-se conforme o livro de atos imutável.', null, null);
+  toast('✅ Alterações guardadas. A edição ficou registada no log.', 'ok');
 }
 
 // Reescrever a ata com a IA (volta a ler o livro)
@@ -6969,13 +6971,49 @@ function imprimirAta() {
   if (!_salaAssembleia || !_salaAssembleia.ata_texto) { toast('Gera a ata primeiro','err'); return; }
   var nomeCondo = displayNomeCondo(currentCondo.nome||'');
   var dataAss = _salaAssembleia.data_assembleia ? new Date(_salaAssembleia.data_assembleia).toLocaleDateString('pt-PT') : '';
-  var html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Ata — ' + nomeCondo + '</title></head><body style="font-family:Georgia,serif;padding:40px;max-width:800px;margin:0 auto;line-height:1.7;color:#222;">' +
-    '<div style="text-align:center;border-bottom:2px solid #0d1825;padding-bottom:12px;margin-bottom:20px;"><h2 style="margin:0;">' + nomeCondo + '</h2><div style="color:#888;font-size:13px;">Ata de Assembleia · ' + dataAss + '</div></div>' +
-    '<div style="white-space:pre-wrap;font-size:14px;">' + _salaAssembleia.ata_texto + '</div>' +
+  var numAta = _salaAssembleia.numero_ata ? ('N.º ' + _salaAssembleia.numero_ata) : '';
+
+  // Converter markdown simples (**negrito**) e escapar HTML
+  var corpo = (_salaAssembleia.ata_texto||'')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+
+  var html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Ata ' + numAta + ' — ' + nomeCondo + '</title>' +
+    '<style>' +
+    '@import url("https://fonts.googleapis.com/css2?family=Crimson+Text:ital,wght@0,400;0,600;1,400&family=Special+Elite&display=swap");' +
+    'body{font-family:"Crimson Text",Georgia,serif;padding:0;margin:0;background:#d8d4c8;color:#1a1a17;}' +
+    '.folha{max-width:780px;margin:30px auto;background:#f4f1e8;padding:60px 64px;box-shadow:0 4px 24px rgba(0,0,0,.25);position:relative;border:1px solid #c4bfae;}' +
+    '.folha::before{content:"";position:absolute;top:0;left:0;right:0;height:6px;background:repeating-linear-gradient(90deg,#1a1a17 0,#1a1a17 18px,transparent 18px,transparent 26px);}' +
+    '.cabec{text-align:center;border-bottom:3px double #1a1a17;padding-bottom:18px;margin-bottom:8px;}' +
+    '.selo{font-family:"Special Elite",monospace;font-size:10px;letter-spacing:3px;text-transform:uppercase;color:#7a3030;border:2px solid #7a3030;display:inline-block;padding:3px 12px;transform:rotate(-3deg);margin-bottom:14px;opacity:.85;}' +
+    '.titulo{font-family:"Special Elite",monospace;font-size:22px;letter-spacing:2px;text-transform:uppercase;margin:6px 0;}' +
+    '.subtitulo{font-size:14px;color:#555;font-style:italic;}' +
+    '.numata{font-family:"Special Elite",monospace;font-size:13px;letter-spacing:2px;margin-top:8px;color:#7a3030;}' +
+    '.corpo{white-space:pre-wrap;font-size:16px;line-height:1.85;text-align:justify;margin-top:24px;}' +
+    '.corpo strong{font-weight:600;letter-spacing:.3px;}' +
+    '.rodape{margin-top:40px;border-top:1px solid #999;padding-top:14px;font-size:11px;color:#777;font-style:italic;text-align:center;}' +
+    '.assinaturas{display:flex;justify-content:space-around;margin-top:50px;gap:40px;}' +
+    '.assina{flex:1;text-align:center;border-top:1px solid #1a1a17;padding-top:6px;font-size:12px;color:#444;}' +
+    '@media print{body{background:#fff;}.folha{box-shadow:none;margin:0;border:none;background:#fff;}}' +
+    '</style></head><body>' +
+    '<div class="folha">' +
+    '<div class="cabec">' +
+    '<div class="selo">Documento Oficial · Condomínio</div>' +
+    '<div class="titulo">' + nomeCondo + '</div>' +
+    '<div class="subtitulo">Ata de Assembleia de Condóminos · ' + dataAss + '</div>' +
+    (numAta ? '<div class="numata">ATA ' + numAta.toUpperCase() + '</div>' : '') +
+    '</div>' +
+    '<div class="corpo">' + corpo + '</div>' +
+    '<div class="assinaturas">' +
+    '<div class="assina">O Presidente da Mesa</div>' +
+    '<div class="assina">O Secretário</div>' +
+    '</div>' +
+    '<div class="rodape">Documento gerado por COND.OS 2059 Pro · A presente ata deve ser lida, aprovada e assinada pelos participantes.</div>' +
+    '</div>' +
     '</body></html>';
   var w = window.open('', '_blank');
   w.document.write(html); w.document.close();
-  setTimeout(function(){ w.print(); }, 400);
+  setTimeout(function(){ w.print(); }, 600);
 }
 
 
@@ -7041,10 +7079,10 @@ async function loadAssembleias() {
   if (!currentCondo) return;
   const { data } = await sb.from('assembleias').select('*').eq('condominio_id',currentCondo.id).order('data_assembleia',{ascending:false});
   const as = data || [];
-  const estadoCls = {agendada:'par',realizada:'ok',cancelada:'pend'};
+  const estadoCls = {agendada:'par',realizada:'ok',cancelada:'pend',nao_realizada:'warn'};
   document.getElementById('assembleias-list').innerHTML = as.length ?
     `<table class="tbl"><thead><tr><th>Tipo</th><th>Data</th><th>Local</th><th>Estado</th><th>Ata IA</th><th>Ação</th></tr></thead><tbody>`+
-    as.map(a=>`<tr style="${a.estado==='cancelada'?'opacity:.5;':''}"><td>${a.tipo}${a.estado==='cancelada'?' <span style="font-size:9px;color:var(--t3);">(cancelada)</span>':''}</td><td class="mn">${a.data_assembleia?(new Date(a.data_assembleia)).toLocaleDateString('pt-PT'):'—'}</td><td style="color:var(--t2);font-size:11px">${a.local_assembleia||'—'}</td><td><span class="pill ${estadoCls[a.estado]||''}">${a.estado}</span></td><td>${a.ata_gerada_ia?'<span class="pill ok">IA</span>':'—'}</td><td><div style="display:flex;gap:4px;flex-wrap:wrap;">${a.estado!=='cancelada'?`<button class="tb-btn" style="font-size:10px;padding:3px 9px;color:var(--cyan);border-color:rgba(0,212,255,.3);" onclick="reimprimirConvocatoria('${a.id}')" title="Gerar/reimprimir a convocatória em PDF">\u{1F4C4} PDF</button>${(a.estado==='realizada'||a.estado_sessao==='encerrada')?`<button class="tb-btn" style="font-size:10px;padding:3px 9px;color:var(--green);border-color:rgba(16,185,129,.3);" onclick="gerarAta('${a.id}','')" title="Ver/gerar a ata desta assembleia">\u{1F4DC} Ata</button>`:`<button class="tb-btn" style="font-size:10px;padding:3px 7px;background:rgba(248,113,113,.1);border-color:rgba(248,113,113,.3);color:#f87171;" onclick="abrirSalaAssembleia('${a.id}')"><i class="ti ti-broadcast"></i>Abrir Sala</button>`}`:''}<button class="tb-btn" style="font-size:10px;padding:3px 9px;color:#f87171;border-color:rgba(248,113,113,.3);" onclick="removerAssembleia('${a.id}')" title="Apagar (se agendada) ou cancelar (se já realizada)">✕ Remover</button></div></td></tr>`).join('')+`</tbody></table>` :
+    as.map(a=>`<tr style="${a.estado==='cancelada'?'opacity:.5;':''}"><td>${a.tipo}${a.estado==='cancelada'?' <span style="font-size:9px;color:var(--t3);">(cancelada)</span>':''}</td><td class="mn">${a.data_assembleia?(new Date(a.data_assembleia)).toLocaleDateString('pt-PT'):'—'}</td><td style="color:var(--t2);font-size:11px">${a.local_assembleia||'—'}</td><td><span class="pill ${estadoCls[a.estado]||''}">${a.estado==='nao_realizada'?'não realizada':a.estado}</span></td><td>${a.ata_gerada_ia?'<span class="pill ok">IA</span>':'—'}</td><td><div style="display:flex;gap:4px;flex-wrap:wrap;">${a.estado!=='cancelada'?`<button class="tb-btn" style="font-size:10px;padding:3px 9px;color:var(--cyan);border-color:rgba(0,212,255,.3);" onclick="reimprimirConvocatoria('${a.id}')" title="Gerar/reimprimir a convocatória em PDF">\u{1F4C4} PDF</button>${(a.estado==='realizada'||a.estado==='nao_realizada'||a.estado_sessao==='encerrada')?`<button class="tb-btn" style="font-size:10px;padding:3px 9px;color:var(--green);border-color:rgba(16,185,129,.3);" onclick="gerarAta('${a.id}','')" title="Ver/gerar a ata desta assembleia">\u{1F4DC} Ata</button>`:`<button class="tb-btn" style="font-size:10px;padding:3px 7px;background:rgba(248,113,113,.1);border-color:rgba(248,113,113,.3);color:#f87171;" onclick="abrirSalaAssembleia('${a.id}')">📡 Abrir Sala</button>`}`:''}<button class="tb-btn" style="font-size:10px;padding:3px 9px;color:#f87171;border-color:rgba(248,113,113,.3);" onclick="removerAssembleia('${a.id}')" title="Apagar (se agendada) ou cancelar (se já realizada)">✕ Remover</button></div></td></tr>`).join('')+`</tbody></table>` :
     emptyState('ti-speakerphone','Sem assembleias','Convoca a primeira assembleia do condomínio.');
 }
 
