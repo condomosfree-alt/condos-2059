@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.06.26-0910</div>
+      <div class="sb-tag">2059 Pro · build v2026.06.26-0918</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -6567,12 +6567,16 @@ async function abrirPontoDebate(pontoNum) {
   var ponto = _salaPontos.find(function(p){ return p.num === pontoNum; });
   // Marcar ponto aberto no livro (se ainda não foi)
   await registarEvento('ponto_aberto', 'Aberto o Ponto ' + pontoNum + ': ' + (ponto?ponto.texto:''), pontoNum, null);
-  var quem = await pedirValor('Registar intervenção — Ponto ' + pontoNum, 'Quem interveio? (nome ou fração)', '');
-  if (quem === null) return;
-  var oque = await pedirValor('Intervenção de ' + quem, 'Resumo da intervenção', '');
-  if (oque === null) return;
-  await registarEvento('intervencao', quem + ': ' + oque, pontoNum, { autor: quem });
-  toast('Intervenção registada no livro', 'ok');
+  var intervencao = await pedirValor(
+    'Registar intervenção — Ponto ' + pontoNum,
+    'Ex: "Fração C (Sr. Marques) declarou que discorda do valor proposto". Escreve quem interveio e o que ficou registado.',
+    ''
+  );
+  if (intervencao === null || !intervencao.trim()) return;
+  await registarEvento('intervencao', intervencao, pontoNum, null);
+  toast('✅ Intervenção registada no livro de atos', 'ok');
+  // Atualizar o livro se a aba estiver visível
+  salaTab('pontos');
 }
 
 // Votação: modal para registar voto de cada fração
@@ -9177,6 +9181,7 @@ async function ajustarValorRubrica(idx) {
 // Pedir um valor ao utilizador (modal bonito, substitui prompt())
 function pedirValor(titulo, label, valorInicial) {
   return new Promise(function(resolve) {
+    setTimeout(function(){
     var modal = document.getElementById('mo-pedir-valor');
     if (!modal) {
       modal = document.createElement('div');
@@ -9195,6 +9200,7 @@ function pedirValor(titulo, label, valorInicial) {
     document.getElementById('pv-ok').onclick = function(){ fechar(inp.value); };
     document.getElementById('pv-cancel').onclick = function(){ fechar(null); };
     inp.onkeydown = function(e){ if(e.key==='Enter'){ fechar(inp.value); } if(e.key==='Escape'){ fechar(null); } };
+    }, 120);
   });
 }
 
