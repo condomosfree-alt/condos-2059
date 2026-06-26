@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.06.26-2129</div>
+      <div class="sb-tag">2059 Pro · build v2026.06.26-2144</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -6347,7 +6347,7 @@ function renderSala() {
   if (estadoSessao === 'agendada') {
     html += '<div style="background:rgba(0,212,255,.06);border:1px solid rgba(0,212,255,.2);border-radius:8px;padding:14px;margin-bottom:16px;text-align:center;">';
     html += '<div style="font-size:12px;color:var(--t2);margin-bottom:10px;">Marca as presenças e depois abre a sessão. A partir daí, tudo fica registado no livro de atos.</div>';
-    html += '<button class="btn-primary" onclick="abrirSessao()"><i class="ti ti-player-play"></i> Abrir Sessão</button>';
+    html += '<button class="btn-primary" onclick="abrirSessao()">▶ Abrir Sessão</button>';
     html += '</div>';
   } else if (estadoSessao === 'encerrada') {
     html += '<div style="background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.25);border-radius:8px;padding:12px 14px;margin-bottom:16px;text-align:center;">';
@@ -6368,12 +6368,12 @@ function renderSala() {
   // RODAPÉ: encerrar + gerar ata
   if (estadoSessao === 'a_decorrer') {
     html += '<div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end;border-top:1px solid var(--b1);padding-top:14px;">';
-    html += '<button class="btn-ghost" onclick="encerrarSessao()"><i class="ti ti-player-stop"></i> Encerrar Sessão</button>';
+    html += '<button class="btn-ghost" onclick="encerrarSessao()">■ Encerrar Sessão</button>';
     html += '</div>';
   } else if (estadoSessao === 'encerrada') {
     html += '<div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end;border-top:1px solid var(--b1);padding-top:14px;">';
-    html += '<button class="btn-ghost" onclick="verLivroCru()"><i class="ti ti-file-text"></i> Ver Log Cru (prova)</button>';
-    html += '<button class="btn-primary" onclick="gerarAtaDoLivro()" style="background:linear-gradient(135deg,#b48cff,#00d4ff);border:none;"><i class="ti ti-robot"></i> Gerar Ata do Livro</button>';
+    html += '<button class="btn-ghost" onclick="verLivroCru()">📄 Ver Log Cru (prova)</button>';
+    html += '<button class="btn-primary" onclick="gerarAtaDoLivro()" style="background:linear-gradient(135deg,#b48cff,#00d4ff);border:none;">📜 Gerar Ata do Livro</button>';
     html += '</div>';
   }
 
@@ -6562,8 +6562,8 @@ function renderSalaPontos() {
     html += '<div style="flex:1;"><div style="font-size:13px;font-weight:600;color:var(--text);">Ponto ' + p.num + '</div><div style="font-size:12px;color:var(--t2);margin-top:2px;">' + p.texto + '</div></div>';
     if (emSessao) {
       html += '<div style="display:flex;gap:6px;flex-shrink:0;">';
-      html += '<button class="btn-ghost" style="font-size:10px;padding:5px 10px;" onclick="abrirPontoDebate(' + p.num + ')"><i class="ti ti-message"></i> Debate</button>';
-      html += '<button class="btn-primary" style="font-size:10px;padding:5px 10px;" onclick="abrirVotacao(' + p.num + ')"><i class="ti ti-checkbox"></i> ' + (votado?'Rever Votação':'Abrir Votação') + '</button>';
+      html += '<button class="btn-ghost" style="font-size:10px;padding:5px 10px;" onclick="abrirPontoDebate(' + p.num + ')">💬 Debate</button>';
+      html += '<button class="btn-primary" style="font-size:10px;padding:5px 10px;" onclick="abrirVotacao(' + p.num + ')">🗳 ' + (votado?'Rever Votação':'Abrir Votação') + '</button>';
       html += '</div>';
     }
     html += '</div>';
@@ -6601,14 +6601,15 @@ function contarVotos(pontoNum) {
 // Debate: registar uma intervenção no livro
 async function abrirPontoDebate(pontoNum) {
   var ponto = _salaPontos.find(function(p){ return p.num === pontoNum; });
-  // Marcar ponto aberto no livro (se ainda não foi)
-  await registarEvento('ponto_aberto', 'Aberto o Ponto ' + pontoNum + ': ' + (ponto?ponto.texto:''), pontoNum, null);
+  // Mostrar a caixa PRIMEIRO (não depender de nada antes)
   var intervencao = await pedirValor(
     'Registar intervenção — Ponto ' + pontoNum,
     'Ex: "Fração C (Sr. Marques) declarou que discorda do valor proposto". Escreve quem interveio e o que ficou registado.',
     ''
   );
   if (intervencao === null || !intervencao.trim()) return;
+  // Só depois de ter o texto é que gravamos no livro
+  await registarEvento('ponto_aberto', 'Aberto o Ponto ' + pontoNum + ': ' + (ponto?ponto.texto:''), pontoNum, null);
   await registarEvento('intervencao', intervencao, pontoNum, null);
   toast('✅ Intervenção registada no livro de atos', 'ok');
 }
@@ -6628,7 +6629,7 @@ function renderVotacaoModal(pontoNum, ponto) {
   // Só votam os presentes/representados
   var elegiveis = fracoes.filter(function(f){ var e=_salaPresencas[f.id]; return e==='presente'||e==='representado'; });
 
-  var html = '<div style="margin-bottom:12px;"><button class="btn-ghost" style="font-size:11px;" onclick="renderSala()"><i class="ti ti-arrow-left"></i> Voltar</button></div>';
+  var html = '<div style="margin-bottom:12px;"><button class="btn-ghost" style="font-size:11px;" onclick="renderSala()">← Voltar</button></div>';
   html += '<div style="background:var(--s2);border-radius:8px;padding:12px 14px;margin-bottom:14px;"><div style="font-size:13px;font-weight:600;">Votação — Ponto ' + pontoNum + '</div><div style="font-size:12px;color:var(--t2);margin-top:2px;">' + (ponto?ponto.texto:'') + '</div></div>';
   html += '<div style="font-size:11px;color:var(--t3);margin-bottom:8px;">Só votam frações presentes ou representadas (' + elegiveis.length + ').</div>';
   html += '<div style="max-height:300px;overflow-y:auto;">';
@@ -6655,7 +6656,7 @@ function renderVotacaoModal(pontoNum, ponto) {
   html += '</div></div>';
 
   html += '<div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end;">';
-  html += '<button class="btn-primary" onclick="fecharVotacao(' + pontoNum + ')"><i class="ti ti-check"></i> Fechar e Registar Resultado</button>';
+  html += '<button class="btn-primary" onclick="fecharVotacao(' + pontoNum + ')">✓ Fechar e Registar Resultado</button>';
   html += '</div>';
 
   cont.innerHTML = html;
@@ -6853,7 +6854,7 @@ async function gerarAtaDoLivro() {
 
 function renderAtaGerada(ata) {
   var cont = document.getElementById('sala-conteudo');
-  var html = '<div style="margin-bottom:12px;"><button class="btn-ghost" style="font-size:11px;" onclick="renderSala()"><i class="ti ti-arrow-left"></i> Voltar à sala</button></div>';
+  var html = '<div style="margin-bottom:12px;"><button class="btn-ghost" style="font-size:11px;" onclick="renderSala()">← Voltar à sala</button></div>';
   html += '<div style="background:rgba(180,140,255,.06);border:1px solid rgba(180,140,255,.2);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:11px;color:var(--t2);">📖 Esta ata foi redigida a partir do livro de atos imutável. Os factos são os registados durante a assembleia.</div>';
   html += '<div style="background:var(--s1);border:1px solid var(--b1);border-radius:8px;padding:18px;max-height:380px;overflow-y:auto;font-size:13px;line-height:1.7;color:var(--text);white-space:pre-wrap;">' + ata + '</div>';
   html += '<div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end;">';
