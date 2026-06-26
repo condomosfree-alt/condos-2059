@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.06.26-2144</div>
+      <div class="sb-tag">2059 Pro · build v2026.06.26-2203</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -1606,8 +1606,8 @@ textarea.fi{resize:vertical;min-height:60px;}
 <div class="mo" id="mo-sala-assembleia">
   <div class="mo-box" style="width:920px;max-width:97vw;max-height:92vh;overflow-y:auto;">
     <div class="mo-title">
-      <span><i class="ti ti-broadcast" style="color:#f87171;"></i> Sala da Assembleia <span id="sala-estado-badge" style="font-size:10px;background:rgba(248,113,113,.15);color:#f87171;padding:2px 8px;border-radius:6px;margin-left:8px;">AO VIVO</span></span>
-      <span class="mo-close" onclick="fecharSalaAssembleia()"><i class="ti ti-x"></i></span>
+      <span>📋 Sala da Assembleia <span id="sala-estado-badge" style="font-size:10px;background:rgba(248,113,113,.15);color:#f87171;padding:2px 8px;border-radius:6px;margin-left:8px;">AO VIVO</span></span>
+      <span class="mo-close" onclick="fecharSalaAssembleia()" style="cursor:pointer;font-size:18px;">✕</span>
     </div>
     <div id="sala-conteudo" style="padding:4px 2px;">
       <div style="text-align:center;padding:30px;color:var(--t3);"><div class="spin"></div></div>
@@ -6321,6 +6321,28 @@ function calcularQuorum() {
   return { total: totalPerm, presente: presentePerm, pct: totalPerm > 0 ? (presentePerm/totalPerm*100) : 0 };
 }
 
+function atualizarBadgeSala(modo) {
+  var badge = document.getElementById('sala-estado-badge');
+  if (!badge) return;
+  if (modo === 'ata') {
+    badge.textContent = '📜 ATA';
+    badge.style.background = 'rgba(16,185,129,.15)';
+    badge.style.color = 'var(--green)';
+  } else if (modo === 'encerrada') {
+    badge.textContent = '🔒 ENCERRADA';
+    badge.style.background = 'rgba(180,140,255,.15)';
+    badge.style.color = '#b48cff';
+  } else if (modo === 'agendada') {
+    badge.textContent = '📅 AGENDADA';
+    badge.style.background = 'rgba(0,212,255,.15)';
+    badge.style.color = 'var(--cyan)';
+  } else {
+    badge.textContent = 'AO VIVO';
+    badge.style.background = 'rgba(248,113,113,.15)';
+    badge.style.color = '#f87171';
+  }
+}
+
 function renderSala() {
   var cont = document.getElementById('sala-conteudo');
   var q = calcularQuorum();
@@ -6343,6 +6365,8 @@ function renderSala() {
   var estadoSessao = _salaAssembleia.estado_sessao || 'agendada';
   // Se a assembleia está marcada como realizada, a sessão está encerrada (não reabrir)
   if (_salaAssembleia.estado === 'realizada' && estadoSessao !== 'encerrada') estadoSessao = 'encerrada';
+  // Atualizar o badge do cabeçalho conforme o estado
+  atualizarBadgeSala(estadoSessao === 'a_decorrer' ? 'vivo' : estadoSessao);
 
   if (estadoSessao === 'agendada') {
     html += '<div style="background:rgba(0,212,255,.06);border:1px solid rgba(0,212,255,.2);border-radius:8px;padding:14px;margin-bottom:16px;text-align:center;">';
@@ -6479,30 +6503,66 @@ async function abrirSessao() {
   }
 
   var q = calcularQuorum();
-  // Quórum legal (Art. 1432.º CC): 1.ª convocatória exige maioria (>50%); 2.ª convocatória basta 1/4 (25%)
-  var convocatoria = await escolherConvocatoria(q);
-  if (convocatoria === null) return; // cancelou
-
-  var minimo = convocatoria === 1 ? 50 : 25;
-  if (q.pct < minimo) {
-    var forcar = await confirmar(
-      'Quórum insuficiente para a ' + convocatoria + '.ª convocatória.\n\nPresente: ' + q.pct.toFixed(1) + '% do capital (' + Math.round(q.presente) + '‰).\nNecessário: ' + minimo + '% (Art. 1432.º CC).\n\n' +
-      (convocatoria === 1
-        ? 'Sem maioria, a 1.ª convocatória não pode deliberar validamente. O habitual é aguardar a 2.ª convocatória (basta 25%).'
-        : 'Mesmo em 2.ª convocatória falta o mínimo de 25%. As deliberações podem ser anuladas.') +
-      '\n\nAbrir a sessão mesmo assim?',
-      {titulo:'Quórum abaixo do mínimo legal', tipo:'perigo', icon:'⚖️', okTexto:'Abrir mesmo assim'}
+  // LÓGICA AUTOMÁTICA DE QUÓRUM (Art. 1432.º CC) — o programa deduz a convocatória, não pergunta:
+  //  • >= 50% do capital → 1.ª convocatória (pode deliberar)
+  //  • entre 25% e 50%   → 2.ª convocatória (a 1.ª não teve maioria; basta 1/4)
+  //  • < 25%             → não pode deliberar de todo → ata de não realização
+  var convocatoria;
+  if (q.pct >= 50) {
+    convocatoria = 1;
+  } else if (q.pct >= 25) {
+    convocatoria = 2;
+  } else {
+    // Abaixo de 25% — nem em 2.ª convocatória há quórum. NÃO se abre.
+    var fazerAta = await confirmar(
+      'Quórum insuficiente para realizar a assembleia.\n\nPresente: ' + q.pct.toFixed(1) + '% do capital (' + Math.round(q.presente) + '‰).\nMínimo legal: 25% do capital, mesmo em 2.ª convocatória (Art. 1432.º CC).\n\nSem este mínimo, a assembleia NÃO pode deliberar — qualquer decisão seria anulável. O procedimento correto é lavrar uma "ata de não realização", que regista a falta de quórum e protege a administração.\n\nQueres lavrar a ata de não realização?',
+      {titulo:'Assembleia sem quórum', tipo:'perigo', icon:'⚖️', okTexto:'Lavrar ata de não realização', cancelarTexto:'Voltar'}
     );
-    if (!forcar) return;
+    if (fazerAta) await lavrarAtaNaoRealizacao(q);
+    return;
   }
+
+  // Confirmar antes de abrir (mostra a convocatória deduzida)
+  var msgConv = convocatoria === 1
+    ? 'Há quórum de ' + q.pct.toFixed(1) + '% do capital (≥ 50%). A assembleia abre em 1.ª convocatória e pode deliberar sobre todos os pontos.'
+    : 'O quórum é de ' + q.pct.toFixed(1) + '% do capital (entre 25% e 50%). Como não há maioria para a 1.ª convocatória, a assembleia abre em 2.ª convocatória, onde basta 1/4 do capital para deliberar.';
+  var ok = await confirmar(msgConv + '\n\nAbrir a sessão?', {titulo:'Abertura em ' + convocatoria + '.ª convocatória', tipo:'aviso', icon:'⚖️', okTexto:'Abrir sessão'});
+  if (!ok) return;
 
   await sb.from('assembleias').update({ estado_sessao: 'a_decorrer', hora_abertura: new Date().toISOString(), convocatoria_num: convocatoria }).eq('id', _salaAssembleia.id);
   _salaAssembleia.estado_sessao = 'a_decorrer';
   _salaAssembleia.convocatoria_num = convocatoria;
-  var qOk = q.pct >= minimo;
-  await registarEvento('abertura', 'Sessão aberta em ' + convocatoria + '.ª convocatória. Quórum: ' + Math.round(q.presente) + '‰ (' + q.pct.toFixed(1) + '% do capital). ' + (qOk ? 'Quórum suficiente.' : 'Quórum ABAIXO do mínimo de ' + minimo + '% — aberta por decisão da mesa.'), null, { quorum_permilagem: Math.round(q.presente), quorum_pct: q.pct.toFixed(1), convocatoria: convocatoria, quorum_ok: qOk });
-  toast('✅ Sessão aberta! Tudo fica agora registado no livro.', 'ok');
+  await registarEvento('abertura', 'Sessão aberta em ' + convocatoria + '.ª convocatória. Quórum: ' + Math.round(q.presente) + '‰ (' + q.pct.toFixed(1) + '% do capital). Quórum suficiente para deliberar.', null, { quorum_permilagem: Math.round(q.presente), quorum_pct: q.pct.toFixed(1), convocatoria: convocatoria, quorum_ok: true });
+  toast('✅ Sessão aberta em ' + convocatoria + '.ª convocatória!', 'ok');
   renderSala();
+}
+
+// Lavrar "ata de não realização" — quando não há quórum mínimo (protege a administração)
+async function lavrarAtaNaoRealizacao(q) {
+  await registarEvento('abertura', 'Tentativa de abertura da sessão. Quórum presente: ' + Math.round(q.presente) + '‰ (' + q.pct.toFixed(1) + '% do capital), ABAIXO do mínimo legal de 25%. A assembleia não reúne condições para deliberar.', null, { quorum_permilagem: Math.round(q.presente), quorum_pct: q.pct.toFixed(1), nao_realizada: true });
+  var presentesLista = [];
+  fracoes.forEach(function(f){
+    var e = _salaPresencas[f.id];
+    if (e === 'presente' || e === 'representado') presentesLista.push((f.codigo||'?') + ' (' + (f.proprietario_nome||'?') + ') — ' + parseFloat(f.permilagem||0).toFixed(1) + '‰');
+  });
+  var nomeCondo = displayNomeCondo(currentCondo.nome||'');
+  var dataAss = _salaAssembleia.data_assembleia ? new Date(_salaAssembleia.data_assembleia).toLocaleDateString('pt-PT') : '';
+  var ataNR = 'ATA DE NÃO REALIZAÇÃO\n\n' +
+    'Condomínio: ' + nomeCondo + '\n' +
+    'Data: ' + dataAss + '\n' +
+    'Local: ' + (_salaAssembleia.local_assembleia||'') + '\n\n' +
+    'À hora marcada para a assembleia, verificou-se que se encontravam presentes ou representados condóminos correspondentes a apenas ' + Math.round(q.presente) + '‰ (' + q.pct.toFixed(1) + '%) do capital do condomínio.\n\n' +
+    (presentesLista.length ? 'Presenças registadas:\n' + presentesLista.join('\n') + '\n\n' : 'Não se registaram presenças suficientes.\n\n') +
+    'Nos termos do artigo 1432.º do Código Civil, a assembleia só pode deliberar, em segunda convocatória, com a presença de condóminos que representem, no mínimo, um quarto (25%) do valor total do prédio. Não tendo sido reunido esse quórum mínimo, a assembleia NÃO SE REALIZOU, não tendo sido tomada qualquer deliberação.\n\n' +
+    'A administração deverá proceder a nova convocação da assembleia, nos termos legais.\n\n' +
+    'Para constar e produzir os devidos efeitos, se lavrou a presente ata de não realização.';
+  await sb.from('assembleias').update({ ata_texto: ataNR, ata_gerada_ia: false, estado: 'realizada', estado_sessao: 'encerrada' }).eq('id', _salaAssembleia.id);
+  _salaAssembleia.ata_texto = ataNR;
+  _salaAssembleia.estado = 'realizada';
+  _salaAssembleia.estado_sessao = 'encerrada';
+  toast('Ata de não realização lavrada. A assembleia não reuniu quórum.', 'ok');
+  renderAtaGerada(ataNR);
+  loadAssembleias();
 }
 
 // Perguntar se é 1.ª ou 2.ª convocatória (quóruns diferentes)
@@ -6855,13 +6915,35 @@ async function gerarAtaDoLivro() {
 function renderAtaGerada(ata) {
   var cont = document.getElementById('sala-conteudo');
   var html = '<div style="margin-bottom:12px;"><button class="btn-ghost" style="font-size:11px;" onclick="renderSala()">← Voltar à sala</button></div>';
-  html += '<div style="background:rgba(180,140,255,.06);border:1px solid rgba(180,140,255,.2);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:11px;color:var(--t2);">📖 Esta ata foi redigida a partir do livro de atos imutável. Os factos são os registados durante a assembleia.</div>';
-  html += '<div style="background:var(--s1);border:1px solid var(--b1);border-radius:8px;padding:18px;max-height:380px;overflow-y:auto;font-size:13px;line-height:1.7;color:var(--text);white-space:pre-wrap;">' + ata + '</div>';
-  html += '<div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end;">';
-  html += '<button class="btn-ghost" onclick="verLivroCru()"><i class="ti ti-file-text"></i> Ver Log Cru</button>';
-  html += '<button class="btn-primary" onclick="imprimirAta()"><i class="ti ti-printer"></i> Imprimir Ata</button>';
+  html += '<div style="background:rgba(180,140,255,.06);border:1px solid rgba(180,140,255,.2);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:11px;color:var(--t2);">📖 Esta ata foi redigida a partir do livro de atos imutável. Os factos são os registados durante a assembleia. Podes ajustar o texto antes de imprimir (ex: corrigir um nome), mas os factos e votações vêm do registo.</div>';
+  html += '<textarea id="ata-editavel" style="width:100%;min-height:340px;background:var(--s1);border:1px solid var(--b1);border-radius:8px;padding:18px;font-size:13px;line-height:1.7;color:var(--text);font-family:inherit;resize:vertical;">' + (ata||'').replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</textarea>';
+  html += '<div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end;flex-wrap:wrap;">';
+  html += '<button class="btn-ghost" onclick="verLivroCru()">📄 Ver Log Cru</button>';
+  html += '<button class="btn-ghost" onclick="guardarAtaEditada()" style="color:var(--cyan);border-color:rgba(0,212,255,.3);">💾 Guardar alterações</button>';
+  html += '<button class="btn-ghost" onclick="regerarAta()" style="color:#b48cff;border-color:rgba(180,140,255,.3);">↻ Reescrever (IA)</button>';
+  html += '<button class="btn-primary" onclick="imprimirAta()">🖨 Imprimir Ata</button>';
+  html += '<button class="btn-primary" onclick="fecharSalaAssembleia()" style="background:linear-gradient(135deg,#10b981,#059669);border:none;">✓ Concluir e Fechar</button>';
   html += '</div>';
   cont.innerHTML = html;
+}
+
+// Guardar as edições manuais da ata
+async function guardarAtaEditada() {
+  var txt = document.getElementById('ata-editavel');
+  if (!txt) return;
+  var novaAta = txt.value;
+  await sb.from('assembleias').update({ ata_texto: novaAta }).eq('id', _salaAssembleia.id);
+  _salaAssembleia.ata_texto = novaAta;
+  await registarEvento('nota', 'Ata ajustada manualmente pela administração (correção de redação).', null, null);
+  toast('✅ Alterações guardadas', 'ok');
+}
+
+// Reescrever a ata com a IA (volta a ler o livro)
+async function regerarAta() {
+  var ok = await confirmar('Queres que a IA reescreva a ata de novo, a partir do livro de atos? As tuas edições manuais atuais serão substituídas pela nova versão.', {titulo:'Reescrever ata', tipo:'aviso', icon:'↻', okTexto:'Sim, reescrever'});
+  if (!ok) return;
+  _salaAssembleia.ata_texto = null;
+  gerarAtaDoLivro();
 }
 
 // LOG CRU — a prova imutável, exportável
@@ -10187,6 +10269,7 @@ async function gerarAta(asId, ot) {
     // Já tem ata → mostrar para consulta/impressão
     _salaAssembleia = a;
     openModal('mo-sala-assembleia');
+    atualizarBadgeSala('ata');
     renderAtaGerada(a.ata_texto);
     return;
   }
