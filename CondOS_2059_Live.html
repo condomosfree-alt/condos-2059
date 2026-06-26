@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.06.26-0845</div>
+      <div class="sb-tag">2059 Pro · build v2026.06.26-0910</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -6325,10 +6325,18 @@ function renderSala() {
 
   // ESTADO DA SESSÃO + controlo
   var estadoSessao = _salaAssembleia.estado_sessao || 'agendada';
+  // Se a assembleia está marcada como realizada, a sessão está encerrada (não reabrir)
+  if (_salaAssembleia.estado === 'realizada' && estadoSessao !== 'encerrada') estadoSessao = 'encerrada';
+
   if (estadoSessao === 'agendada') {
     html += '<div style="background:rgba(0,212,255,.06);border:1px solid rgba(0,212,255,.2);border-radius:8px;padding:14px;margin-bottom:16px;text-align:center;">';
     html += '<div style="font-size:12px;color:var(--t2);margin-bottom:10px;">Marca as presenças e depois abre a sessão. A partir daí, tudo fica registado no livro de atos.</div>';
     html += '<button class="btn-primary" onclick="abrirSessao()"><i class="ti ti-player-play"></i> Abrir Sessão</button>';
+    html += '</div>';
+  } else if (estadoSessao === 'encerrada') {
+    html += '<div style="background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.25);border-radius:8px;padding:12px 14px;margin-bottom:16px;text-align:center;">';
+    html += '<div style="font-size:12px;color:var(--green);font-weight:600;">🔒 Sessão encerrada' + (_salaAssembleia.numero_ata ? ' — Ata n.º ' + _salaAssembleia.numero_ata : '') + '</div>';
+    html += '<div style="font-size:11px;color:var(--t3);margin-top:3px;">Esta assembleia já foi realizada. O registo é definitivo.</div>';
     html += '</div>';
   }
 
@@ -6419,6 +6427,21 @@ async function registarEvento(tipo, texto, pontoNum, dados) {
 }
 
 async function abrirSessao() {
+  // TRAVA DE DATA: não se pode abrir a sessão antes do dia marcado (evita "realizar" uma assembleia que ainda não aconteceu)
+  var dataMarcada = _salaAssembleia.data_assembleia;
+  if (dataMarcada) {
+    var hoje = new Date(); hoje.setHours(0,0,0,0);
+    var dia = new Date(dataMarcada + 'T00:00:00'); dia.setHours(0,0,0,0);
+    var diasFalta = Math.round((dia - hoje) / (1000*60*60*24));
+    if (diasFalta > 0) {
+      await confirmar(
+        'Esta assembleia está marcada para ' + dia.toLocaleDateString('pt-PT') + ', daqui a ' + diasFalta + ' dia(s).\n\nUma sessão só pode ser aberta no próprio dia da assembleia (ou depois). Abrir antes seria registar uma reunião que ainda não aconteceu — o que é juridicamente inválido.\n\nAguarda pelo dia marcado.',
+        {titulo:'Ainda não é o dia da assembleia', tipo:'perigo', icon:'📅', okTexto:'Entendido', cancelarTexto:''}
+      );
+      return;
+    }
+  }
+
   var q = calcularQuorum();
   // Quórum legal (Art. 1432.º CC): 1.ª convocatória exige maioria (>50%); 2.ª convocatória basta 1/4 (25%)
   var convocatoria = await escolherConvocatoria(q);
@@ -6651,6 +6674,81 @@ function fecharSalaAssembleia() {
 }
 
 // GERAR ATA A PARTIR DO LIVRO (a IA lê só os eventos registados — não inventa)
+
+// ===== NUMERAÇÃO INTELIGENTE DE ATAS =====
+// Estima quantas atas um condomínio já deve ter, com base na idade do edifício
+function estimarAtasEsperadas() {
+  var c = currentCondo;
+  var ano = parseInt(c.ano_construcao) || null;
+  if (!ano) return null;
+  var idade = new Date().getFullYear() - ano;
+  if (idade < 0) idade = 0;
+  // Mínimo legal: 1 assembleia ordinária/ano. Realista: ~1.2-1.5 com extraordinárias.
+  return { idade: idade, minimo: idade, esperado: Math.round(idade * 1.3) };
+}
+
+// Deteta se um número de ata parece um "palpite a martelo"
+function avaliarNumeroAta(numero) {
+  var n = parseInt(numero);
+  if (isNaN(n) || n < 0) return { ok: false, motivo: 'inválido' };
+  // Números "preguiçosos" clássicos
+  var preguicosos = [0, 1, 10, 100, 99, 999, 1000, 50, 500];
+  var ehPreguicoso = preguicosos.indexOf(n) !== -1;
+  var est = estimarAtasEsperadas();
+  if (!est) {
+    // Sem ano de construção não dá para validar pela idade
+    return { ok: true, provisorio: ehPreguicoso, aviso: ehPreguicoso ? 'O número ' + n + ' parece um valor "redondo". Sem o ano de construção no perfil, não consigo confirmar. Será marcado como provisório.' : null };
+  }
+  // Comparar com a estimativa
+  var n_atas_previstas = est.esperado;
+  var desvio = n - n_atas_previstas;
+  var aviso = null, provisorio = false;
+  if (n < est.minimo - 2) {
+    provisorio = true;
+    aviso = 'Um edifício de ' + est.idade + ' anos já deve ter pelo menos ~' + est.minimo + ' atas (1 assembleia ordinária por ano). O número ' + n + ' parece BAIXO. Será marcado como provisório.';
+  } else if (n > n_atas_previstas + Math.max(15, est.idade)) {
+    provisorio = true;
+    aviso = 'O número ' + n + ' parece ALTO para um edifício de ' + est.idade + ' anos (~' + n_atas_previstas + ' atas esperadas). Confirma — será marcado como provisório.';
+  } else if (ehPreguicoso) {
+    provisorio = true;
+    aviso = 'O número ' + n + ' é um valor "redondo" comum em palpites. Será marcado como provisório, para podermos corrigir no futuro ao importar as atas antigas.';
+  }
+  return { ok: true, provisorio: provisorio, aviso: aviso, esperado: n_atas_previstas, idade: est.idade };
+}
+
+// Obtém o próximo número de ata para este condomínio
+async function obterProximoNumeroAta() {
+  var c = currentCondo;
+  // Já existe um número base definido?
+  if (c.atas_num_base != null && c.atas_num_base !== '') {
+    // Contar quantas atas já foram geradas DEPOIS da base
+    var r = await sb.from('assembleias').select('id,numero_ata').eq('condominio_id', c.id).not('numero_ata','is',null);
+    var maxNum = parseInt(c.atas_num_base);
+    (r.data||[]).forEach(function(a){ if (a.numero_ata && parseInt(a.numero_ata) > maxNum) maxNum = parseInt(a.numero_ata); });
+    return { numero: maxNum + 1, provisorio: c.atas_num_provisorio === true };
+  }
+  // Primeira ata — perguntar o número de início
+  var est = estimarAtasEsperadas();
+  var sugestao = est ? '\n\nO teu edifício tem ' + est.idade + ' anos — estimo que já deva ter cerca de ' + est.esperado + ' atas.' : '';
+  var resp = await pedirValor(
+    'Número da primeira ata',
+    'Qual foi o número da ÚLTIMA ata do livro do condomínio? (a próxima será a seguinte). Se não souberes, mete a tua melhor estimativa — o programa marca como provisório e corrige depois.' + sugestao,
+    est ? String(est.esperado) : ''
+  );
+  if (resp === null) return null;
+  var numUltima = parseInt(resp) || 0;
+  var aval = avaliarNumeroAta(numUltima);
+  var provisorio = aval.provisorio || (resp.trim() === '');
+  if (aval.aviso) {
+    await confirmar(aval.aviso, {titulo:'Número a confirmar', tipo:'aviso', icon:'🔍', okTexto:'Entendido'});
+  }
+  // Guardar a base no condomínio
+  await sb.from('condominios').update({ atas_num_base: numUltima, atas_num_provisorio: provisorio }).eq('id', c.id);
+  c.atas_num_base = numUltima;
+  c.atas_num_provisorio = provisorio;
+  return { numero: numUltima + 1, provisorio: provisorio };
+}
+
 async function gerarAtaDoLivro() {
   var res = await sb.from('assembleia_eventos').select('*').eq('assembleia_id', _salaAssembleia.id).order('registado_em', { ascending: true });
   var eventos = res.data || [];
@@ -6668,18 +6766,47 @@ async function gerarAtaDoLivro() {
   var nomeCondo = displayNomeCondo(currentCondo.nome||'');
   var dataAss = _salaAssembleia.data_assembleia ? new Date(_salaAssembleia.data_assembleia).toLocaleDateString('pt-PT') : '';
 
+  // Obter o número da ata (provisório ou confirmado) — só se ainda não tiver
+  var numeroAta = _salaAssembleia.numero_ata;
+  var provisorioAta = currentCondo.atas_num_provisorio === true;
+  if (numeroAta == null) {
+    var num = await obterProximoNumeroAta();
+    if (num === null) { renderSala(); return; } // cancelou
+    numeroAta = num.numero;
+    provisorioAta = num.provisorio;
+  }
+
+  // Montar lista de presenças com permilagens (para a ata legal)
+  var presentesLista = [];
+  fracoes.forEach(function(f){
+    var estado = _salaPresencas[f.id];
+    if (estado === 'presente' || estado === 'representado') {
+      presentesLista.push((f.codigo||'?') + ' (' + (f.proprietario_nome||'?') + ') — ' + parseFloat(f.permilagem||0).toFixed(1) + '‰' + (estado === 'representado' ? ' [representado]' : ''));
+    }
+  });
+  var q = calcularQuorum();
+  var convText = _salaAssembleia.convocatoria_num === 2 ? '2.ª convocatória (basta 1/4 do capital)' : '1.ª convocatória (exige maioria do capital)';
+
   var prompt = 'És o secretário de uma assembleia de condóminos em Portugal. Redige a ATA OFICIAL desta assembleia EXCLUSIVAMENTE com base no livro de atos abaixo (registo carimbado e factual). ' +
     'REGRA ABSOLUTA: usa APENAS os factos que estão no livro. NÃO inventes intervenções, nomes, valores ou deliberações que não estejam registados. Se algo não está no livro, não existe. ' +
-    'Escreve em português de Portugal, tom formal e jurídico adequado a uma ata. Estrutura: cabeçalho (condomínio ' + nomeCondo + ', data ' + dataAss + ', local ' + (_salaAssembleia.local_assembleia||'') + '), quórum verificado, desenvolvimento ponto a ponto com as deliberações e respetivos resultados de votação (em permilagem), e encerramento. ' +
-    'No final acrescenta: "A presente ata foi redigida com auxílio de um sistema de apoio à redação, a partir do registo factual da assembleia, devendo ser validada pelos participantes." ' +
+    'Escreve em português de Portugal, tom formal e jurídico adequado a uma ata, seguindo a estrutura legal (Código Civil e DL 268/94). ' +
+    'ESTRUTURA OBRIGATÓRIA DA ATA:\n' +
+    '1. CABEÇALHO: "ATA NÚMERO ' + numeroAta + '"' + (provisorioAta ? ' (com a nota, em rodapé, de que a numeração é provisória e será confirmada com o livro de atas físico do condomínio)' : '') + '. Identificação do condomínio (' + nomeCondo + '), data (' + dataAss + '), hora e local (' + (_salaAssembleia.local_assembleia||'') + '). Indicar que reuniu em ' + convText + '.\n' +
+    '2. PRESENÇAS E QUÓRUM: indicar os condóminos presentes/representados e a percentagem do capital representado (quórum de ' + q.pct.toFixed(1) + '%). Lista de presentes:\n' + (presentesLista.length ? presentesLista.join('; ') : 'ver livro') + '\n' +
+    '3. MESA: se o livro indicar quem presidiu e secretariou, mencionar; caso contrário, deixar campo para preencher.\n' +
+    '4. ORDEM DE TRABALHOS: listar os pontos.\n' +
+    '5. DELIBERAÇÕES: para cada ponto, descrever o que foi discutido (intervenções registadas) e a deliberação tomada, com o resultado da votação em permilagem e se foi APROVADO ou REJEITADO. Indicar a maioria obtida.\n' +
+    '6. ENCERRAMENTO: hora de encerramento e, se aplicável, pontos não votados e respetivo motivo.\n' +
+    'No final acrescenta: "A presente ata foi redigida com auxílio de um sistema de apoio à redação, a partir do registo factual da assembleia, devendo ser lida, aprovada e assinada pelos participantes." ' +
     'LIVRO DE ATOS (factos carimbados):\n' + livroTexto;
 
   try {
     var ata = await callIA(prompt, 'ata');
     if (!ata || !ata.trim()) throw new Error('A IA não devolveu texto.');
-    // Guardar a ata
-    await sb.from('assembleias').update({ ata_texto: ata, ata_gerada_ia: true }).eq('id', _salaAssembleia.id);
+    // Guardar a ata + o número
+    await sb.from('assembleias').update({ ata_texto: ata, ata_gerada_ia: true, numero_ata: numeroAta }).eq('id', _salaAssembleia.id);
     _salaAssembleia.ata_texto = ata;
+    _salaAssembleia.numero_ata = numeroAta;
     renderAtaGerada(ata);
   } catch(err) {
     cont.innerHTML = '<div style="padding:30px;text-align:center;color:var(--t2);"><i class="ti ti-alert-circle" style="font-size:28px;color:var(--amber);"></i><div style="margin-top:10px;">Não foi possível gerar a ata agora.</div><div style="font-size:11px;color:var(--t3);margin-top:6px;">' + err.message + '</div><button class="btn-ghost" style="margin-top:14px;" onclick="renderSala()">Voltar</button></div>';
@@ -6796,7 +6923,7 @@ async function loadAssembleias() {
   const estadoCls = {agendada:'par',realizada:'ok',cancelada:'pend'};
   document.getElementById('assembleias-list').innerHTML = as.length ?
     `<table class="tbl"><thead><tr><th>Tipo</th><th>Data</th><th>Local</th><th>Estado</th><th>Ata IA</th><th>Ação</th></tr></thead><tbody>`+
-    as.map(a=>`<tr style="${a.estado==='cancelada'?'opacity:.5;':''}"><td>${a.tipo}${a.estado==='cancelada'?' <span style="font-size:9px;color:var(--t3);">(cancelada)</span>':''}</td><td class="mn">${a.data_assembleia?(new Date(a.data_assembleia)).toLocaleDateString('pt-PT'):'—'}</td><td style="color:var(--t2);font-size:11px">${a.local_assembleia||'—'}</td><td><span class="pill ${estadoCls[a.estado]||''}">${a.estado}</span></td><td>${a.ata_gerada_ia?'<span class="pill ok">IA</span>':'—'}</td><td><div style="display:flex;gap:4px;">${a.estado!=='cancelada'?`<button class="tb-btn" style="font-size:10px;padding:3px 9px;color:var(--cyan);border-color:rgba(0,212,255,.3);" onclick="reimprimirConvocatoria('${a.id}')" title="Gerar/reimprimir a convocatória em PDF">\u{1F4C4} PDF</button><button class="tb-btn" style="font-size:10px;padding:3px 7px;background:rgba(248,113,113,.1);border-color:rgba(248,113,113,.3);color:#f87171;" onclick="abrirSalaAssembleia('${a.id}')"><i class="ti ti-broadcast"></i>Abrir Sala</button><button class="tb-btn" style="font-size:10px;padding:3px 7px;" onclick="gerarAta('${a.id}','${(a.ordem_trabalhos||'').replace(/'/g,'`')}')">📄 Ata</button>`:''}<button class="tb-btn" style="font-size:10px;padding:3px 9px;color:#f87171;border-color:rgba(248,113,113,.3);" onclick="removerAssembleia('${a.id}')" title="Apagar (se agendada) ou cancelar (se já realizada)">✕ Remover</button></div></td></tr>`).join('')+`</tbody></table>` :
+    as.map(a=>`<tr style="${a.estado==='cancelada'?'opacity:.5;':''}"><td>${a.tipo}${a.estado==='cancelada'?' <span style="font-size:9px;color:var(--t3);">(cancelada)</span>':''}</td><td class="mn">${a.data_assembleia?(new Date(a.data_assembleia)).toLocaleDateString('pt-PT'):'—'}</td><td style="color:var(--t2);font-size:11px">${a.local_assembleia||'—'}</td><td><span class="pill ${estadoCls[a.estado]||''}">${a.estado}</span></td><td>${a.ata_gerada_ia?'<span class="pill ok">IA</span>':'—'}</td><td><div style="display:flex;gap:4px;flex-wrap:wrap;">${a.estado!=='cancelada'?`<button class="tb-btn" style="font-size:10px;padding:3px 9px;color:var(--cyan);border-color:rgba(0,212,255,.3);" onclick="reimprimirConvocatoria('${a.id}')" title="Gerar/reimprimir a convocatória em PDF">\u{1F4C4} PDF</button>${(a.estado==='realizada'||a.estado_sessao==='encerrada')?`<button class="tb-btn" style="font-size:10px;padding:3px 9px;color:var(--green);border-color:rgba(16,185,129,.3);" onclick="gerarAta('${a.id}','')" title="Ver/gerar a ata desta assembleia">\u{1F4DC} Ata</button>`:`<button class="tb-btn" style="font-size:10px;padding:3px 7px;background:rgba(248,113,113,.1);border-color:rgba(248,113,113,.3);color:#f87171;" onclick="abrirSalaAssembleia('${a.id}')"><i class="ti ti-broadcast"></i>Abrir Sala</button>`}`:''}<button class="tb-btn" style="font-size:10px;padding:3px 9px;color:#f87171;border-color:rgba(248,113,113,.3);" onclick="removerAssembleia('${a.id}')" title="Apagar (se agendada) ou cancelar (se já realizada)">✕ Remover</button></div></td></tr>`).join('')+`</tbody></table>` :
     emptyState('ti-speakerphone','Sem assembleias','Convoca a primeira assembleia do condomínio.');
 }
 
@@ -10238,6 +10365,7 @@ function confirmar(msg, opts) {
     var btnCancel = document.getElementById('confirm-cancelar');
     btnOk.textContent = opts.okTexto || 'Confirmar';
     btnCancel.textContent = opts.cancelarTexto || 'Cancelar';
+    btnCancel.style.display = (opts.cancelarTexto === '') ? 'none' : '';
     btnOk.style.background = tipo === 'perigo' ? '#dc2626' : '';
     modal.classList.add('open');
     function fechar(res) {
