@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.06.26-2219</div>
+      <div class="sb-tag">2059 Pro · build v2026.06.26-2237</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -2027,6 +2027,26 @@ textarea.fi{resize:vertical;min-height:60px;}
 </div>
 
 <div class="toast" id="toast"></div>
+
+<div class="mo" id="mo-debate" style="z-index:10001;">
+  <div class="mo-box" style="width:460px;padding:0;overflow:hidden;">
+    <div style="background:linear-gradient(135deg,#0a1119,#0d1825);padding:18px 22px;border-bottom:1px solid var(--b1);">
+      <div style="font-size:15px;font-weight:700;color:#fff;">💬 Registar declaração para a ata</div>
+      <div id="debate-ponto-label" style="font-size:11px;color:var(--t3);margin-top:4px;"></div>
+    </div>
+    <div style="padding:20px 22px;">
+      <label style="font-size:12px;color:var(--t2);display:block;margin-bottom:6px;">Quem declara?</label>
+      <select id="debate-fracao" class="fi" style="width:100%;margin-bottom:14px;"></select>
+      <label style="font-size:12px;color:var(--t2);display:block;margin-bottom:6px;">O que fica registado em ata?</label>
+      <textarea id="debate-texto" class="fi" rows="4" style="width:100%;resize:vertical;font-family:inherit;" placeholder="Ex: declarou que não concorda com as contas apresentadas e quer que tal fique registado para sua proteção."></textarea>
+      <div style="font-size:10px;color:var(--t3);margin-top:8px;line-height:1.5;">A fração e o nome ficam ligados automaticamente no livro de atos — sem margem para erro de identificação.</div>
+    </div>
+    <div style="display:flex;gap:8px;padding:14px 22px;background:var(--s1);border-top:1px solid var(--b1);">
+      <button class="btn-ghost" style="flex:1;" onclick="document.getElementById('mo-debate').classList.remove('open')">Cancelar</button>
+      <button class="btn-primary" style="flex:1;" onclick="guardarDebate()">Registar na ata</button>
+    </div>
+  </div>
+</div>
 
 <div class="mo" id="mo-pedir-valor" style="z-index:10001;">
   <div class="mo-box" style="width:400px;padding:0;overflow:hidden;">
@@ -6661,17 +6681,48 @@ function contarVotos(pontoNum) {
 // Debate: registar uma intervenção no livro
 async function abrirPontoDebate(pontoNum) {
   var ponto = _salaPontos.find(function(p){ return p.num === pontoNum; });
-  // Mostrar a caixa PRIMEIRO (não depender de nada antes)
-  var intervencao = await pedirValor(
-    'Registar intervenção — Ponto ' + pontoNum,
-    'Ex: "Fração C (Sr. Marques) declarou que discorda do valor proposto". Escreve quem interveio e o que ficou registado.',
-    ''
-  );
-  if (intervencao === null || !intervencao.trim()) return;
-  // Só depois de ter o texto é que gravamos no livro
-  await registarEvento('ponto_aberto', 'Aberto o Ponto ' + pontoNum + ': ' + (ponto?ponto.texto:''), pontoNum, null);
-  await registarEvento('intervencao', intervencao, pontoNum, null);
-  toast('✅ Intervenção registada no livro de atos', 'ok');
+  // Mostrar o modal de debate (escolher fração + declaração)
+  _debatePonto = pontoNum;
+  var modal = document.getElementById('mo-debate');
+  // Preencher o dropdown de frações (só presentes/representadas podem declarar formalmente, mas deixamos todas para flexibilidade)
+  var sel = document.getElementById('debate-fracao');
+  var opts = '<option value="">— Selecciona a fração —</option>';
+  opts += '<option value="__geral__">Assembleia / geral (sem fração específica)</option>';
+  fracoes.forEach(function(f){
+    var estado = _salaPresencas[f.id];
+    var marca = (estado === 'presente' || estado === 'representado') ? '' : ' (ausente)';
+    opts += '<option value="' + f.id + '">' + (f.codigo||'?') + ' — ' + (f.proprietario_nome||'?') + marca + '</option>';
+  });
+  sel.innerHTML = opts;
+  document.getElementById('debate-texto').value = '';
+  document.getElementById('debate-ponto-label').textContent = 'Ponto ' + pontoNum + (ponto ? ': ' + ponto.texto : '');
+  modal.classList.add('open');
+}
+
+var _debatePonto = null;
+async function guardarDebate() {
+  var sel = document.getElementById('debate-fracao');
+  var texto = document.getElementById('debate-texto').value;
+  if (!texto.trim()) { toast('Escreve a declaração','err'); return; }
+
+  var quemTexto = '';
+  if (sel.value === '__geral__' || !sel.value) {
+    quemTexto = texto;
+  } else {
+    var f = fracoes.find(function(x){ return x.id === sel.value; });
+    if (f) {
+      // Ligação fração↔nome GARANTIDA aqui (não depende da IA)
+      quemTexto = 'Fração ' + (f.codigo||'?') + ' (' + (f.proprietario_nome||'?') + '): ' + texto;
+    } else {
+      quemTexto = texto;
+    }
+  }
+
+  var ponto = _salaPontos.find(function(p){ return p.num === _debatePonto; });
+  await registarEvento('ponto_aberto', 'Aberto o Ponto ' + _debatePonto + ': ' + (ponto?ponto.texto:''), _debatePonto, null);
+  await registarEvento('intervencao', quemTexto, _debatePonto, sel.value && sel.value !== '__geral__' ? { fracao_id: sel.value } : null);
+  document.getElementById('mo-debate').classList.remove('open');
+  toast('✅ Declaração registada no livro de atos', 'ok');
 }
 
 // Votação: modal para registar voto de cada fração
@@ -6886,6 +6937,11 @@ async function gerarAtaDoLivro() {
   var q = calcularQuorum();
   var convText = _salaAssembleia.convocatoria_num === 2 ? '2.ª convocatória (basta 1/4 do capital)' : '1.ª convocatória (exige maioria do capital)';
 
+  // TABELA DE CORRESPONDÊNCIA fração ↔ nome (para a IA NUNCA adivinhar nomes)
+  var tabelaFracoes = fracoes.map(function(f){
+    return (f.codigo||'?') + ' = ' + (f.proprietario_nome||'(sem nome registado)');
+  }).join('\n');
+
   var prompt = 'És o secretário de uma assembleia de condóminos em Portugal. Redige a ATA OFICIAL desta assembleia EXCLUSIVAMENTE com base no livro de atos abaixo (registo carimbado e factual). ' +
     'REGRA ABSOLUTA: usa APENAS os factos que estão no livro. NÃO inventes intervenções, nomes, valores ou deliberações que não estejam registados. Se algo não está no livro, não existe. ' +
     'Escreve em português de Portugal, tom formal e jurídico adequado a uma ata, seguindo a estrutura legal (Código Civil e DL 268/94). ' +
@@ -6895,9 +6951,10 @@ async function gerarAtaDoLivro() {
     '3. MESA: se o livro indicar quem presidiu e secretariou, mencionar; caso contrário, deixar campo para preencher.\n' +
     '4. ORDEM DE TRABALHOS: listar os pontos.\n' +
     '5. DELIBERAÇÕES: para cada ponto, usa o título do ponto em NEGRITO no formato markdown (**Ponto X: ...**). Descreve o que foi discutido e a deliberação tomada, com o resultado da votação em permilagem e se foi APROVADO ou REJEITADO. Indica a maioria obtida.\n' +
-    'REGRA CRÍTICA SOBRE INTERVENÇÕES: todas as intervenções e declarações registadas no livro (tipo intervencao) são DECLARAÇÕES FORMAIS PARA A ATA e têm valor legal. Transcreve-as fielmente e com destaque, identificando quem declarou. Por exemplo, se um condómino declarou que não paga por determinado motivo, que discorda de uma deliberação, ou que se reserva o direito de impugnar, isso DEVE constar expressamente na ata no ponto respetivo, com uma frase como \'Para constar em ata, o condómino da fração X declarou que...\'. Estas declarações nunca podem ser omitidas nem resumidas ao ponto de perderem o sentido — protegem juridicamente quem as fez.\n' +
+    'REGRA CRÍTICA SOBRE INTERVENÇÕES: todas as intervenções e declarações registadas no livro (tipo intervencao) são DECLARAÇÕES FORMAIS PARA A ATA e têm valor legal. Transcreve-as fielmente e com destaque. Ao identificar quem declarou, usa SEMPRE o código da fração seguido do nome entre parênteses, EXATAMENTE como consta na TABELA DE FRAÇÕES abaixo (ex: \'a fração R/c Esquerdo (Maria Santos)\'). NUNCA inventes, troques ou adivinhes a correspondência entre fração e nome — se o livro menciona uma fração, vai à tabela buscar o nome certo; se o livro menciona um nome, confirma na tabela. Se houver qualquer dúvida sobre a identidade, escreve apenas o que está no livro sem acrescentar. Por exemplo, se um condómino declarou que não paga por determinado motivo, que discorda de uma deliberação, ou que se reserva o direito de impugnar, isso DEVE constar expressamente na ata no ponto respetivo, com uma frase como \'Para constar em ata, a fração X (Nome) declarou que...\'. Estas declarações nunca podem ser omitidas nem resumidas ao ponto de perderem o sentido — protegem juridicamente quem as fez.\n' +
     '6. ENCERRAMENTO: hora de encerramento e, se aplicável, pontos não votados e respetivo motivo.\n' +
     'No final acrescenta: "A presente ata foi redigida com auxílio de um sistema de apoio à redação, a partir do registo factual da assembleia, devendo ser lida, aprovada e assinada pelos participantes." ' +
+    'TABELA DE FRAÇÕES (correspondência oficial fração = proprietário, usa-a para identificar quem fala, NUNCA inventes):\n' + tabelaFracoes + '\n\n' +
     'LIVRO DE ATOS (factos carimbados):\n' + livroTexto;
 
   try {
@@ -6985,8 +7042,8 @@ function imprimirAta() {
     '.folha{max-width:780px;margin:30px auto;background:#f4f1e8;padding:60px 64px;box-shadow:0 4px 24px rgba(0,0,0,.25);position:relative;border:1px solid #c4bfae;}' +
     '.folha::before{content:"";position:absolute;top:0;left:0;right:0;height:6px;background:repeating-linear-gradient(90deg,#1a1a17 0,#1a1a17 18px,transparent 18px,transparent 26px);}' +
     '.cabec{text-align:center;border-bottom:3px double #1a1a17;padding-bottom:18px;margin-bottom:8px;}' +
-    '.selo{font-family:"Special Elite",monospace;font-size:10px;letter-spacing:3px;text-transform:uppercase;color:#7a3030;border:2px solid #7a3030;display:inline-block;padding:3px 12px;transform:rotate(-3deg);margin-bottom:14px;opacity:.85;}' +
-    '.titulo{font-family:"Special Elite",monospace;font-size:22px;letter-spacing:2px;text-transform:uppercase;margin:6px 0;}' +
+    '.selo{font-family:"Special Elite",monospace;font-size:10px;letter-spacing:3px;text-transform:uppercase;color:#7a3030;border:2px solid #7a3030;display:inline-block;padding:3px 12px;margin-bottom:14px;opacity:.85;}' +
+    '.titulo{font-family:"Crimson Text",Georgia,serif;font-size:24px;font-weight:600;letter-spacing:1px;text-transform:uppercase;margin:6px 0;}' +
     '.subtitulo{font-size:14px;color:#555;font-style:italic;}' +
     '.numata{font-family:"Special Elite",monospace;font-size:13px;letter-spacing:2px;margin-top:8px;color:#7a3030;}' +
     '.corpo{white-space:pre-wrap;font-size:16px;line-height:1.85;text-align:justify;margin-top:24px;}' +
