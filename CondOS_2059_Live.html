@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.06.25-2307</div>
+      <div class="sb-tag">2059 Pro · build v2026.06.26-0822</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -1592,9 +1592,10 @@ textarea.fi{resize:vertical;min-height:60px;}
     <div class="mo-title">Convocar Assembleia <span class="mo-close" onclick="closeModal('mo-assembleia')"><i class="ti ti-x"></i></span></div>
     <div class="fl"><label>Tipo</label><select class="fi" id="as-tipo"><option>Ordinária</option><option>Extraordinária</option><option>Urgente</option></select></div>
     <div class="form-row">
-      <div class="fl"><label>Data</label><input class="fi" id="as-data" type="date"></div>
+      <div class="fl"><label>Data</label><input class="fi" id="as-data" type="date" onchange="validarDataConvocatoria()"></div>
       <div class="fl"><label>Hora</label><input class="fi" id="as-hora" type="time" value="20:00"></div>
     </div>
+    <div id="as-data-aviso" style="display:none;font-size:11px;line-height:1.5;border-radius:6px;padding:8px 11px;margin:-4px 0 4px;"></div>
     <div class="fl"><label>Local</label><input class="fi" id="as-local" placeholder="Ex: Sala do condomínio"></div>
     <div class="fl"><label style="display:flex;justify-content:space-between;align-items:center;">Ordem de Trabalhos <button class="btn-ghost" onclick="sugerirOrdemTrabalhos()" style="font-size:10px;padding:3px 10px;background:linear-gradient(135deg,rgba(0,212,255,.15),rgba(180,140,255,.15));border-color:rgba(0,212,255,.4);color:var(--cyan);font-weight:600;"><i class="ti ti-sparkles"></i> Sugerir Pontos (IA)</button></label><textarea class="fi" id="as-ot" rows="6" placeholder="1. Aprovação do orçamento 2026&#10;2. Eleição da administração&#10;3. Diversos"></textarea></div>
     <div class="btn-row"><button class="btn-ghost" onclick="closeModal('mo-assembleia')">Cancelar</button><button class="btn-ghost" onclick="gerarConvocatoriaDoModal()"><i class="ti ti-printer"></i>Gerar PDF</button><button class="btn-primary" onclick="saveAssembleia()"><i class="ti ti-send"></i>Convocar</button></div>
@@ -6789,10 +6790,14 @@ function abrirConvocatoria() {
     var localCompleto = montarLocalCompleto(currentCondo);
     if (localCompleto) localEl.value = localCompleto;
   }
-  // Data por defeito: hoje
+  // Data por defeito: hoje + 15 dias (folga legal confortável para qualquer meio)
   var dataEl = document.getElementById('as-data');
-  if (dataEl && !dataEl.value) dataEl.value = new Date().toISOString().split('T')[0];
+  if (dataEl && !dataEl.value) {
+    var sugerida = new Date(); sugerida.setDate(sugerida.getDate() + 15);
+    dataEl.value = sugerida.toISOString().split('T')[0];
+  }
   openModal('mo-assembleia');
+  validarDataConvocatoria();
 }
 
 // ===== GERAR PDF DA CONVOCATÓRIA (para imprimir/email/carta) + guardar nos Documentos =====
@@ -6988,8 +6993,57 @@ function gerarConvocatoriaDoModal() {
   gerarConvocatoriaPDF(dados);
 }
 
+// Calcula dias de antecedência entre hoje e a data da assembleia
+function diasAntecedenciaAssembleia(dataStr) {
+  if (!dataStr) return null;
+  var hoje = new Date(); hoje.setHours(0,0,0,0);
+  var dataAss = new Date(dataStr + 'T00:00:00'); dataAss.setHours(0,0,0,0);
+  return Math.round((dataAss - hoje) / (1000*60*60*24));
+}
+
+// Valida a data da convocatória em tempo real e mostra aviso (Art. 1432.º CC)
+function validarDataConvocatoria() {
+  var aviso = document.getElementById('as-data-aviso');
+  if (!aviso) return true;
+  var dias = diasAntecedenciaAssembleia(document.getElementById('as-data').value);
+  if (dias === null) { aviso.style.display = 'none'; return true; }
+
+  if (dias < 10) {
+    aviso.style.display = 'block';
+    aviso.style.background = 'rgba(248,113,113,.1)';
+    aviso.style.border = '1px solid rgba(248,113,113,.35)';
+    aviso.style.color = '#f87171';
+    aviso.innerHTML = '⚠️ <strong>Antecedência insuficiente (' + (dias < 0 ? 'data no passado' : dias + ' dias') + ').</strong> A lei exige 10 dias de antecedência mínima (Art. 1432.º CC). Uma assembleia convocada com menos pode ser anulada.';
+    return false;
+  } else if (dias < 15) {
+    aviso.style.display = 'block';
+    aviso.style.background = 'rgba(245,180,80,.1)';
+    aviso.style.border = '1px solid rgba(245,180,80,.35)';
+    aviso.style.color = '#e0a830';
+    aviso.innerHTML = '🟡 <strong>' + dias + ' dias de antecedência</strong> — cumpre o mínimo legal (10 dias). Mas se vais notificar algum condómino por <strong>carta registada</strong>, considera 15 dias: a lei conta a partir do envio da carta, e precisas de tempo para a expedir nos CTT.';
+    return true;
+  } else {
+    aviso.style.display = 'block';
+    aviso.style.background = 'rgba(16,185,129,.08)';
+    aviso.style.border = '1px solid rgba(16,185,129,.3)';
+    aviso.style.color = 'var(--green)';
+    aviso.innerHTML = '✅ <strong>' + dias + ' dias de antecedência</strong> — folga suficiente para qualquer meio de notificação (carta, email ou aviso com recibo).';
+    return true;
+  }
+}
+
 async function saveAssembleia() {
-  const { error } = await sb.from('assembleias').insert({condominio_id:currentCondo.id,tipo:document.getElementById('as-tipo').value,data_assembleia:document.getElementById('as-data').value,local_assembleia:document.getElementById('as-local').value,ordem_trabalhos:document.getElementById('as-ot').value,total_fracoes:fracoes.length,estado:'agendada'});
+  var dataVal = document.getElementById('as-data').value;
+  if (!dataVal) { toast('Define a data da assembleia','err'); return; }
+  var dias = diasAntecedenciaAssembleia(dataVal);
+  if (dias !== null && dias < 10) {
+    var forcar = await confirmar(
+      'Esta assembleia tem apenas ' + (dias < 0 ? 'uma data no passado' : dias + ' dias') + ' de antecedência.\n\nA lei (Art. 1432.º CC) exige no mínimo 10 dias. Uma assembleia convocada com menos antecedência pode ser ANULADA por qualquer condómino.\n\nTens a certeza que queres convocar mesmo assim?',
+      {titulo:'Antecedência abaixo do mínimo legal', tipo:'perigo', icon:'⚠️', okTexto:'Convocar mesmo assim'}
+    );
+    if (!forcar) return;
+  }
+  const { error } = await sb.from('assembleias').insert({condominio_id:currentCondo.id,tipo:document.getElementById('as-tipo').value,data_assembleia:dataVal,local_assembleia:document.getElementById('as-local').value,ordem_trabalhos:document.getElementById('as-ot').value,total_fracoes:fracoes.length,estado:'agendada'});
   if (error) { toast('Erro: '+error.message,'err'); return; }
   closeModal('mo-assembleia'); toast('Assembleia convocada!','ok');
   loadAssembleias();
