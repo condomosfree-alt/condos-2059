@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.06.27-2135</div>
+      <div class="sb-tag">2059 Pro · build v2026.06.27-2154</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -1413,6 +1413,13 @@ textarea.fi{resize:vertical;min-height:60px;}
       <div class="fl"><label>Telefone *</label><input class="fi" id="f-ptel" placeholder="9XX XXX XXX"></div>
     </div>
     <div class="fl"><label>Email *</label><input class="fi" id="f-pemail" type="email" placeholder="email@exemplo.pt"></div>
+    <div class="fl" style="background:rgba(0,212,255,.05);border:1px solid rgba(0,212,255,.2);border-radius:8px;padding:10px 12px;margin-bottom:8px;">
+      <label style="display:flex;align-items:flex-start;gap:9px;cursor:pointer;font-size:12px;color:var(--text);">
+        <input type="checkbox" id="f-autoriza-email" style="margin-top:2px;width:16px;height:16px;cursor:pointer;flex-shrink:0;">
+        <span>Autorizou receber <strong>convocatórias por email</strong> (manifestado em assembleia e lavrado em ata)
+        <span style="display:block;font-size:10px;color:var(--t3);margin-top:3px;line-height:1.5;">Art. 1432.º CC: sem esta autorização, a convocatória tem de ser enviada por carta registada, mesmo que haja email.</span></span>
+      </label>
+    </div>
     <div class="fl"><label>Morada (se diferente do imóvel) *</label>
       <input class="fi" id="f-pmorada" placeholder="Rua, nº, andar — deixa vazio se igual ao imóvel">
       <div style="font-size:10px;color:var(--t3);margin-top:4px;">Se vazio, usa a morada do condomínio + fracção como morada legal.</div>
@@ -3804,6 +3811,8 @@ function editFracao(id) {
   document.getElementById('f-tipo').value = f.tipo || 'Habitação';
   document.getElementById('f-pnome').value = f.proprietario_nome || '';
   document.getElementById('f-pemail').value = f.proprietario_email || '';
+  var autEl = document.getElementById('f-autoriza-email');
+  if (autEl) autEl.checked = f.autoriza_email_convocatoria === true;
   document.getElementById('f-ptel').value = f.proprietario_tel || '';
   document.getElementById('f-nif').value = f.proprietario_nif || '';
   document.getElementById('f-pmorada').value = f.proprietario_morada || '';
@@ -5058,6 +5067,7 @@ async function saveFracao() {
     quota_mensal: parseFloat(gv('f-quota'))||currentCondo.quota_base||0,
     proprietario_nome: gv('f-pnome'),
     proprietario_email: gv('f-pemail'),
+    autoriza_email_convocatoria: document.getElementById('f-autoriza-email') ? document.getElementById('f-autoriza-email').checked : false,
     proprietario_tel: gv('f-ptel'),
     proprietario_nif: gv('f-nif'),
     proprietario_morada: gv('f-pmorada'),
@@ -7296,7 +7306,7 @@ async function loadAssembleias() {
   const estadoCls = {agendada:'par',realizada:'ok',cancelada:'pend',nao_realizada:'warn'};
   document.getElementById('assembleias-list').innerHTML = as.length ?
     `<table class="tbl"><thead><tr><th>Tipo</th><th>Data</th><th>Local</th><th>Estado</th><th>Ata IA</th><th>Ação</th></tr></thead><tbody>`+
-    as.map(a=>`<tr style="${a.estado==='cancelada'?'opacity:.5;':''}"><td>${a.tipo}${a.estado==='cancelada'?' <span style="font-size:9px;color:var(--t3);">(cancelada)</span>':''}</td><td class="mn">${a.data_assembleia?(new Date(a.data_assembleia)).toLocaleDateString('pt-PT'):'—'}</td><td style="color:var(--t2);font-size:11px">${a.local_assembleia||'—'}</td><td><span class="pill ${estadoCls[a.estado]||''}">${a.estado==='nao_realizada'?'não realizada':a.estado}</span></td><td>${a.ata_gerada_ia?'<span class="pill ok">IA</span>':(a.ata_texto?'<span class="pill" style="background:rgba(0,212,255,.15);color:var(--cyan);">revista</span>':'—')}</td><td><div style="display:flex;gap:4px;flex-wrap:wrap;">${a.estado!=='cancelada'?`<button class="tb-btn" style="font-size:10px;padding:3px 9px;color:var(--cyan);border-color:rgba(0,212,255,.3);" onclick="reimprimirConvocatoria('${a.id}')" title="Gerar/reimprimir a convocatória em PDF">\u{1F4C4} PDF</button>${(a.estado==='realizada'||a.estado==='nao_realizada'||a.estado_sessao==='encerrada')?`<button class="tb-btn" style="font-size:10px;padding:3px 9px;color:var(--green);border-color:rgba(16,185,129,.3);" onclick="gerarAta('${a.id}','')" title="Ver/gerar a ata desta assembleia">\u{1F4DC} Ata</button>`:`<button class="tb-btn" style="font-size:10px;padding:3px 7px;background:rgba(248,113,113,.1);border-color:rgba(248,113,113,.3);color:#f87171;" onclick="abrirSalaAssembleia('${a.id}')">📡 Abrir Sala</button>`}`:''}<button class="tb-btn" style="font-size:10px;padding:3px 9px;color:#f87171;border-color:rgba(248,113,113,.3);" onclick="removerAssembleia('${a.id}')" title="Apagar (se agendada) ou cancelar (se já realizada)">✕ Remover</button></div></td></tr>`).join('')+`</tbody></table>` :
+    as.map(a=>`<tr style="${a.estado==='cancelada'?'opacity:.5;':''}"><td>${a.tipo}${a.estado==='cancelada'?' <span style="font-size:9px;color:var(--t3);">(cancelada)</span>':''}</td><td class="mn">${a.data_assembleia?(new Date(a.data_assembleia)).toLocaleDateString('pt-PT'):'—'}</td><td style="color:var(--t2);font-size:11px">${a.local_assembleia||'—'}</td><td><span class="pill ${estadoCls[a.estado]||''}">${a.estado==='nao_realizada'?'não realizada':a.estado}</span></td><td>${a.ata_gerada_ia?'<span class="pill ok">IA</span>':(a.ata_texto?'<span class="pill" style="background:rgba(0,212,255,.15);color:var(--cyan);">revista</span>':'—')}</td><td><div style="display:flex;gap:4px;flex-wrap:wrap;">${a.estado!=='cancelada'?`<button class="tb-btn" style="font-size:10px;padding:3px 9px;color:var(--cyan);border-color:rgba(0,212,255,.3);" onclick="reimprimirConvocatoria('${a.id}')" title="Gerar/reimprimir a convocatória em PDF">\u{1F4C4} PDF</button>${(a.estado!=='realizada'&&a.estado!=='nao_realizada'&&a.estado_sessao!=='encerrada')?`<button class="tb-btn" style="font-size:10px;padding:3px 9px;color:var(--green);border-color:rgba(16,185,129,.3);" onclick="enviarConvocatoriaTodos('${a.id}')" title="Enviar a convocatória por email (autorizados) e preparar cartas registadas">\u{1F4E4} Enviar</button>`:''}${(a.estado==='realizada'||a.estado==='nao_realizada'||a.estado_sessao==='encerrada')?`<button class="tb-btn" style="font-size:10px;padding:3px 9px;color:var(--green);border-color:rgba(16,185,129,.3);" onclick="gerarAta('${a.id}','')" title="Ver/gerar a ata desta assembleia">\u{1F4DC} Ata</button>`:`<button class="tb-btn" style="font-size:10px;padding:3px 7px;background:rgba(248,113,113,.1);border-color:rgba(248,113,113,.3);color:#f87171;" onclick="abrirSalaAssembleia('${a.id}')">📡 Abrir Sala</button>`}`:''}<button class="tb-btn" style="font-size:10px;padding:3px 9px;color:#f87171;border-color:rgba(248,113,113,.3);" onclick="removerAssembleia('${a.id}')" title="Apagar (se agendada) ou cancelar (se já realizada)">✕ Remover</button></div></td></tr>`).join('')+`</tbody></table>` :
     emptyState('ti-speakerphone','Sem assembleias','Convoca a primeira assembleia do condomínio.');
 }
 
@@ -7429,6 +7439,10 @@ async function gerarConvocatoriaPDF(dados, assembleiaId) {
   doc.text('Documento gerado por COND.OS 2059 Pro · ' + new Date().toLocaleDateString('pt-PT'), W/2, 290, {align:'center'});
 
   var nomeFich = 'Convocatoria_' + (dados.data||'') + '_' + condoNome.replace(/\s+/g,'_') + '.pdf';
+  if (dados._retornarDoc) {
+    // Modo envio: devolver o PDF em base64 sem descarregar
+    return { doc: doc, nomeFich: nomeFich, base64: doc.output('datauristring').split(',')[1] };
+  }
   doc.save(nomeFich);
 
   // Registar nos Documentos
@@ -7513,6 +7527,102 @@ async function sugerirOrdemTrabalhos() {
   } finally {
     if (btnOriginal) { btnOriginal.disabled = false; btnOriginal.innerHTML = '<i class="ti ti-sparkles"></i> Sugerir Pontos (IA)'; }
   }
+}
+
+// ===== ENVIO DA CONVOCATÓRIA A TODOS (email autorizado + cartas registadas) =====
+async function enviarConvocatoriaTodos(assembleiaId) {
+  if (!currentCondo) return;
+  var aRes = await sb.from('assembleias').select('*').eq('id', assembleiaId).single();
+  if (aRes.error || !aRes.data) { toast('Erro ao carregar a assembleia','err'); return; }
+  var a = aRes.data;
+  if (!a.ordem_trabalhos || !a.ordem_trabalhos.trim()) { toast('Esta assembleia não tem ordem de trabalhos','err'); return; }
+
+  // Separar os condóminos em 3 grupos (regra legal Art. 1432.º)
+  var porEmail = [], porCarta = [], semContacto = [];
+  fracoes.forEach(function(f){
+    if (f.proprietario_email && f.autoriza_email_convocatoria === true) {
+      porEmail.push(f);
+    } else if (f.proprietario_email) {
+      porCarta.push(f); // tem email mas não autorizou → carta registada obrigatória
+    } else {
+      semContacto.push(f); // sem email → carta registada
+    }
+  });
+  var totalCartas = porCarta.length + semContacto.length;
+  var custoCartas = totalCartas * 5.54; // Reg+AR (prova legal de entrega)
+
+  // Resumo prévio
+  var msg = '📋 Envio da convocatória:\n\n';
+  msg += '✅ ' + porEmail.length + ' por email (autorizado em ata)\n';
+  msg += '✉️ ' + totalCartas + ' por carta registada+AR';
+  if (porCarta.length) msg += ' (' + porCarta.length + ' têm email mas não autorizaram)';
+  msg += '\n💰 Custo estimado das cartas: ' + custoCartas.toFixed(2).replace('.',',') + '€ (' + totalCartas + ' × 5,54€)\n\n';
+  if (porEmail.length && !_gmailToken) {
+    msg += '⚠️ O Gmail não está ligado — os emails não serão enviados agora.\n\n';
+  }
+  msg += 'Continuar?';
+
+  if (!await confirmar(msg, {titulo:'Enviar convocatória', tipo:'info', icon:'📤', okTexto:'Enviar / preparar'})) return;
+
+  // Gerar o PDF da convocatória (uma vez, para anexar)
+  var dados = { tipo:a.tipo, data:a.data_assembleia, hora:a.hora_assembleia||'20:00', local:a.local_assembleia, ordem:a.ordem_trabalhos, _retornarDoc:true };
+  var pdfRes = await gerarConvocatoriaPDF(dados, assembleiaId);
+  if (!pdfRes || !pdfRes.base64) { toast('Não foi possível gerar o PDF da convocatória','err'); return; }
+
+  var condoNome = displayNomeCondo(currentCondo.nome||'');
+  var dataFmt = a.data_assembleia ? new Date(a.data_assembleia).toLocaleDateString('pt-PT') : '';
+
+  // 1) Enviar emails (aos autorizados)
+  var enviados = 0, falhas = 0;
+  if (porEmail.length && _gmailToken) {
+    toast('A enviar ' + porEmail.length + ' emails...', '');
+    for (var i = 0; i < porEmail.length; i++) {
+      var f = porEmail[i];
+      var assunto = '📋 Convocatória de Assembleia ' + (a.tipo||'') + ' — ' + condoNome + ' — ' + dataFmt;
+      var corpo =
+        '<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#f4f6f8;">'+
+        '<div style="background:linear-gradient(135deg,#0a1119,#0d1825);padding:24px 28px;border-radius:10px 10px 0 0;">'+
+          '<div style="color:#00d4ff;font-family:monospace;font-size:19px;font-weight:700;letter-spacing:2px;">COND.OS</div>'+
+          '<div style="color:#fff;font-size:13px;font-weight:600;margin-top:4px;">'+condoNome+'</div>'+
+        '</div>'+
+        '<div style="background:#fff;padding:26px 28px;">'+
+          '<p style="font-size:14px;color:#333;margin:0 0 16px;">Caro(a) <strong>'+(f.proprietario_nome||'condómino')+'</strong>,</p>'+
+          '<p style="font-size:13px;color:#555;line-height:1.6;margin:0 0 16px;">Junto se envia a <strong>convocatória</strong> para a Assembleia '+(a.tipo||'')+' de condóminos, a realizar em <strong>'+dataFmt+'</strong>, pelas '+(a.hora_assembleia||'20:00')+', em '+(a.local_assembleia||'')+'.</p>'+
+          '<p style="font-size:13px;color:#555;line-height:1.6;margin:0 0 16px;">A convocatória completa, com a ordem de trabalhos, segue em <strong>anexo (PDF)</strong>.</p>'+
+          '<div style="background:#fff8e8;border:1px solid #f0d090;border-radius:8px;padding:12px 14px;margin:18px 0;font-size:12px;color:#7a5c10;">⚠️ Por favor, confirme a receção desta convocatória respondendo a este email. A sua confirmação serve como recibo de receção, nos termos do Art. 1432.º do Código Civil.</div>'+
+          '<div style="border-top:1px solid #eee;padding-top:14px;"><p style="font-size:12px;color:#555;margin:0;">Com os melhores cumprimentos,</p><p style="font-size:13px;color:#222;font-weight:700;margin:6px 0 0;">'+(currentCondo.gestor_nome||currentCondo.administrador_nome||'A Administração')+'</p></div>'+
+        '</div>'+
+        '<div style="background:#0d1825;padding:12px 28px;text-align:center;border-radius:0 0 10px 10px;"><div style="color:#5a6a79;font-size:10px;">COND.OS 2059 Pro · '+new Date().toLocaleDateString('pt-PT')+'</div></div></div>';
+      var ok = await enviarEmailGmailComAnexo(f.proprietario_email, assunto, corpo, pdfRes.base64, pdfRes.nomeFich);
+      if (ok) enviados++; else falhas++;
+      await new Promise(function(r){ setTimeout(r, 400); });
+    }
+  }
+
+  // 2) Registar no histórico da assembleia
+  await sb.from('assembleias').update({ convocatoria_enviada: new Date().toISOString() }).eq('id', assembleiaId);
+
+  // 3) Resumo final + cartas para imprimir
+  var resumo = '<div style="font-size:13px;line-height:1.8;color:var(--text);">';
+  resumo += '<div style="margin-bottom:12px;font-weight:700;color:var(--cyan);">📊 Resumo do envio</div>';
+  if (porEmail.length) resumo += '✅ <strong>' + enviados + '</strong> convocatória(s) enviada(s) por email' + (falhas?' (' + falhas + ' falha(s))':'') + '<br>';
+  if (totalCartas > 0) {
+    resumo += '✉️ <strong>' + totalCartas + '</strong> carta(s) registada(s) para imprimir e enviar:<br>';
+    resumo += '<div style="font-size:11px;color:var(--t2);margin:6px 0 6px 18px;">';
+    porCarta.concat(semContacto).forEach(function(f){
+      resumo += '• ' + (f.codigo||'?') + ' — ' + (f.proprietario_nome||'?') + (f.proprietario_email?' <span style="color:var(--amber);">(tem email mas não autorizou)</span>':'') + '<br>';
+    });
+    resumo += '</div>';
+    resumo += '💰 Custo estimado: <strong>' + custoCartas.toFixed(2).replace('.',',') + '€</strong> (' + totalCartas + ' × 5,54€ Reg+AR)<br>';
+  }
+  resumo += '<div style="font-size:11px;color:var(--t3);margin-top:12px;padding-top:10px;border-top:1px solid var(--b1);">A convocatória foi descarregada em PDF — imprime as cópias necessárias para as cartas registadas. Guarda os comprovativos de envio dos CTT.</div>';
+  resumo += '</div>';
+
+  // Descarregar o PDF para imprimir as cartas
+  if (totalCartas > 0) { pdfRes.doc.save(pdfRes.nomeFich); }
+
+  await confirmar(resumo, {titulo:'Convocatória enviada', tipo:'success', icon:'✅', okTexto:'Concluir', cancelarTexto:''});
+  loadAssembleias();
 }
 
 // Reimprimir a convocatória de uma assembleia já criada
