@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.06.27-0921</div>
+      <div class="sb-tag">2059 Pro · build v2026.06.27-2135</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -1615,7 +1615,7 @@ textarea.fi{resize:vertical;min-height:60px;}
     <div id="as-data-aviso" style="display:none;font-size:11px;line-height:1.5;border-radius:6px;padding:8px 11px;margin:-4px 0 4px;"></div>
     <div class="fl"><label>Local</label><input class="fi" id="as-local" placeholder="Ex: Sala do condomínio"></div>
     <div class="fl"><label style="display:flex;justify-content:space-between;align-items:center;">Ordem de Trabalhos <button class="btn-ghost" onclick="sugerirOrdemTrabalhos()" style="font-size:10px;padding:3px 10px;background:linear-gradient(135deg,rgba(0,212,255,.15),rgba(180,140,255,.15));border-color:rgba(0,212,255,.4);color:var(--cyan);font-weight:600;"><i class="ti ti-sparkles"></i> Sugerir Pontos (IA)</button></label><textarea class="fi" id="as-ot" rows="6" placeholder="1. Aprovação do orçamento 2026&#10;2. Eleição da administração&#10;3. Diversos"></textarea></div>
-    <div class="btn-row"><button class="btn-ghost" onclick="closeModal('mo-assembleia')">Cancelar</button><button class="btn-ghost" onclick="gerarConvocatoriaDoModal()"><i class="ti ti-printer"></i>Gerar PDF</button><button class="btn-primary" onclick="saveAssembleia()"><i class="ti ti-send"></i>Convocar</button></div>
+    <div class="btn-row"><button class="btn-ghost" onclick="closeModal('mo-assembleia')">Cancelar</button><button class="btn-ghost" onclick="gerarConvocatoriaDoModal()">📄 Gerar PDF</button><button class="btn-primary" onclick="saveAssembleia()">📨 Convocar</button></div>
   </div>
 </div>
 
@@ -3118,6 +3118,8 @@ async function loadCondData() {
 async function loadFracoes() {
   const { data } = await sb.from('fracoes').select('*').eq('condominio_id', currentCondo.id).order('bloco').order('codigo');
   fracoes = data || [];
+  // Se o orçamento anual está a zero, tentar recuperá-lo das rubricas guardadas (corrige valores a zero)
+  await sincronizarOrcamentoDeRubricas();
   renderFracoes();
   populateQpFracao();
   // Verificar incompatibilidades com orçamento
@@ -3285,7 +3287,13 @@ async function sincronizarOrcamentoDeRubricas() {
   // Se não tem orcamento_anual definido, vai buscar às rubricas
   if (!currentCondo || parseFloat(currentCondo.orcamento_anual||0) > 0) return;
   var ano = new Date().getFullYear();
-  var { data: rubricas } = await sb.from('orcamentos').select('valor_total,bloco').eq('condominio_id', currentCondo.id).eq('ano', ano);
+  // Ler da tabela CORRETA (orcamento_rubricas, usada pelo módulo Orçamento Inteligente)
+  var { data: rubricas } = await sb.from('orcamento_rubricas').select('valor_total,bloco').eq('condominio_id', currentCondo.id).eq('ano', ano);
+  // Se não há rubricas para este ano, tentar o ano anterior (orçamento ainda do ano passado)
+  if (!rubricas || !rubricas.length) {
+    var r2 = await sb.from('orcamento_rubricas').select('valor_total,bloco').eq('condominio_id', currentCondo.id).eq('ano', ano-1);
+    rubricas = r2.data;
+  }
   if (!rubricas || !rubricas.length) return;
   var totalGeral = 0;
   var totalA = 0, totalB = 0, totalC = 0;
