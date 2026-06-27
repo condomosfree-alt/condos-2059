@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.06.27-2154</div>
+      <div class="sb-tag">2059 Pro · build v2026.06.27-2205</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -2052,6 +2052,35 @@ textarea.fi{resize:vertical;min-height:60px;}
 
 <div class="toast" id="toast"></div>
 
+<div class="mo" id="mo-tarifas-ctt" style="z-index:10001;">
+  <div class="mo-box" style="width:440px;padding:0;overflow:hidden;">
+    <div style="background:linear-gradient(135deg,#0a1119,#0d1825);padding:18px 22px;border-bottom:1px solid var(--b1);">
+      <div style="font-size:15px;font-weight:700;color:#fff;">✉️ Tarifas CTT</div>
+      <div style="font-size:11px;color:var(--t3);margin-top:4px;">Os CTT atualizam preços anualmente (em fevereiro). Atualiza aqui quando mudarem.</div>
+    </div>
+    <div style="padding:20px 22px;">
+      <div class="form-row">
+        <div class="fl"><label>Correio Normal (€)</label><input class="fi" id="tar-normal" type="number" step="0.01"></div>
+        <div class="fl"><label>Registado Simples (€)</label><input class="fi" id="tar-reg-simples" type="number" step="0.01"></div>
+      </div>
+      <div class="form-row">
+        <div class="fl"><label>Carta Registada (€)</label><input class="fi" id="tar-registado" type="number" step="0.01"></div>
+        <div class="fl"><label>Aviso de Receção (€)</label><input class="fi" id="tar-ar" type="number" step="0.01"></div>
+      </div>
+      <div style="background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.25);border-radius:8px;padding:10px 13px;margin-top:8px;font-size:12px;color:var(--green);">
+        Registada + AR (prova legal): <strong id="tar-total-ar">—</strong>
+        <div style="font-size:10px;color:var(--t3);margin-top:3px;">É esta a tarifa usada nas convocatórias (exige prova de receção).</div>
+      </div>
+      <div style="font-size:10px;color:var(--t3);margin-top:10px;line-height:1.5;">💡 Valores oficiais 2026: Normal 0,73€ · Reg. Simples 3,20€ · Registada 3,75€ · AR 1,79€. Confirma em ctt.pt se mudaram.</div>
+    </div>
+    <div style="display:flex;gap:8px;padding:14px 22px;background:var(--s1);border-top:1px solid var(--b1);">
+      <button class="btn-ghost" style="flex:1;" onclick="document.getElementById('mo-tarifas-ctt').classList.remove('open')">Cancelar</button>
+      <button class="btn-ghost" style="flex:1;color:var(--amber);border-color:rgba(255,179,0,.3);" onclick="reporTarifasCTT()">Repor 2026</button>
+      <button class="btn-primary" style="flex:1;" onclick="guardarTarifasCTT()">Guardar</button>
+    </div>
+  </div>
+</div>
+
 <div class="mo" id="mo-mesa" style="z-index:10001;">
   <div class="mo-box" style="width:460px;padding:0;overflow:hidden;">
     <div style="background:linear-gradient(135deg,#0a1119,#0d1825);padding:18px 22px;border-bottom:1px solid var(--b1);">
@@ -2121,6 +2150,58 @@ const sb = supabase.createClient(SB_URL, SB_KEY);
 let currentUser = null;
 let condominios = [];
 let currentCondo = null;
+
+// ===== TARIFAS CTT (centralizadas e editáveis) =====
+// Valores oficiais 2026. O utilizador pode atualizá-los (guardado em localStorage).
+var CTT_TARIFAS_DEFAULT = { correio_normal: 0.73, registado_simples: 3.20, registado: 3.75, ar: 1.79, ano: 2026 };
+function getTarifasCTT() {
+  try {
+    var saved = localStorage.getItem('condos_ctt_tarifas');
+    if (saved) return JSON.parse(saved);
+  } catch(e) {}
+  return Object.assign({}, CTT_TARIFAS_DEFAULT);
+}
+function tarifaCartaRegistadaAR() {
+  var t = getTarifasCTT();
+  return (parseFloat(t.registado)||3.75) + (parseFloat(t.ar)||1.79);
+}
+function abrirTarifasCTT() {
+  var t = getTarifasCTT();
+  document.getElementById('tar-normal').value = t.correio_normal;
+  document.getElementById('tar-reg-simples').value = t.registado_simples;
+  document.getElementById('tar-registado').value = t.registado;
+  document.getElementById('tar-ar').value = t.ar;
+  atualizarTotalAR();
+  ['tar-registado','tar-ar'].forEach(function(id){
+    var el = document.getElementById(id);
+    if (el) el.oninput = atualizarTotalAR;
+  });
+  document.getElementById('mo-tarifas-ctt').classList.add('open');
+}
+function atualizarTotalAR() {
+  var reg = parseFloat(document.getElementById('tar-registado').value)||0;
+  var ar = parseFloat(document.getElementById('tar-ar').value)||0;
+  document.getElementById('tar-total-ar').textContent = (reg+ar).toFixed(2).replace('.',',') + '€';
+}
+function guardarTarifasCTT() {
+  var t = {
+    correio_normal: parseFloat(document.getElementById('tar-normal').value)||0.73,
+    registado_simples: parseFloat(document.getElementById('tar-reg-simples').value)||3.20,
+    registado: parseFloat(document.getElementById('tar-registado').value)||3.75,
+    ar: parseFloat(document.getElementById('tar-ar').value)||1.79,
+    ano: new Date().getFullYear()
+  };
+  try { localStorage.setItem('condos_ctt_tarifas', JSON.stringify(t)); } catch(e) {}
+  document.getElementById('mo-tarifas-ctt').classList.remove('open');
+  toast('✅ Tarifas CTT atualizadas', 'ok');
+}
+function reporTarifasCTT() {
+  document.getElementById('tar-normal').value = CTT_TARIFAS_DEFAULT.correio_normal;
+  document.getElementById('tar-reg-simples').value = CTT_TARIFAS_DEFAULT.registado_simples;
+  document.getElementById('tar-registado').value = CTT_TARIFAS_DEFAULT.registado;
+  document.getElementById('tar-ar').value = CTT_TARIFAS_DEFAULT.ar;
+  atualizarTotalAR();
+}
 let fracoes = [];
 const PROXY_URL = SB_URL + '/functions/v1/hyper-task';
 const PROXY_HEADERS = { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + SB_KEY };
@@ -3755,7 +3836,8 @@ function gerarCodigo() {
 
 function calcularCustosPostais() {
   if (!fracoes.length) return;
-  var TARIFAS = { email:0, whatsapp:0, carta_simples:0.73, carta_registada:3.75, carta_ar:5.54 };
+  var _t = getTarifasCTT();
+  var TARIFAS = { email:0, whatsapp:0, carta_simples:parseFloat(_t.correio_normal)||0.73, carta_registada:parseFloat(_t.registado)||3.75, carta_ar:tarifaCartaRegistadaAR() };
   var LABELS = { email:'Email', whatsapp:'WhatsApp', carta_simples:'Carta Simples', carta_registada:'Carta Registada', carta_ar:'Carta Reg. + AR' };
   // Prioridade de CUSTO: se a fração tem qualquer carta selecionada, conta a mais cara
   // (a carta é sempre enviada na prática). Só digital = grátis.
@@ -3784,7 +3866,7 @@ function calcularCustosPostais() {
     '<div style="background:var(--s1);border:1px solid var(--b1);border-radius:10px;padding:14px;margin-bottom:16px;">' +
     '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">' +
     '<div style="font-size:12px;font-weight:700;color:var(--cyan);letter-spacing:.5px;">📮 Custos de Correspondência — Calculados Automaticamente</div>' +
-    '<div style="font-size:10px;color:var(--t3);">Tarifas CTT Portugal 2026</div>' +
+    '<div style="font-size:10px;color:var(--cyan);cursor:pointer;text-decoration:underline;" onclick="abrirTarifasCTT()" title="Atualizar as tarifas dos CTT">Tarifas CTT ' + (getTarifasCTT().ano||2026) + ' ✎</div>' +
     '</div>' +
     '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px;">' +
     '<div style="background:var(--s2);border-radius:8px;padding:10px;text-align:center;"><div style="font-size:10px;color:var(--t2);margin-bottom:4px;">Por Evento</div><div style="font-family:var(--mono);font-size:16px;font-weight:700;color:var(--text)">' + totalPorEvento.toFixed(2) + '€</div><div style="font-size:9px;color:var(--t3)">conv. ou ata</div></div>' +
@@ -7549,14 +7631,15 @@ async function enviarConvocatoriaTodos(assembleiaId) {
     }
   });
   var totalCartas = porCarta.length + semContacto.length;
-  var custoCartas = totalCartas * 5.54; // Reg+AR (prova legal de entrega)
+  var tarifaAR = tarifaCartaRegistadaAR(); // Reg+AR (prova legal de entrega)
+  var custoCartas = totalCartas * tarifaAR;
 
   // Resumo prévio
   var msg = '📋 Envio da convocatória:\n\n';
   msg += '✅ ' + porEmail.length + ' por email (autorizado em ata)\n';
   msg += '✉️ ' + totalCartas + ' por carta registada+AR';
   if (porCarta.length) msg += ' (' + porCarta.length + ' têm email mas não autorizaram)';
-  msg += '\n💰 Custo estimado das cartas: ' + custoCartas.toFixed(2).replace('.',',') + '€ (' + totalCartas + ' × 5,54€)\n\n';
+  msg += '\n💰 Custo estimado das cartas: ' + custoCartas.toFixed(2).replace('.',',') + '€ (' + totalCartas + ' × ' + tarifaAR.toFixed(2).replace('.',',') + '€)\n\n';
   if (porEmail.length && !_gmailToken) {
     msg += '⚠️ O Gmail não está ligado — os emails não serão enviados agora.\n\n';
   }
@@ -7613,7 +7696,7 @@ async function enviarConvocatoriaTodos(assembleiaId) {
       resumo += '• ' + (f.codigo||'?') + ' — ' + (f.proprietario_nome||'?') + (f.proprietario_email?' <span style="color:var(--amber);">(tem email mas não autorizou)</span>':'') + '<br>';
     });
     resumo += '</div>';
-    resumo += '💰 Custo estimado: <strong>' + custoCartas.toFixed(2).replace('.',',') + '€</strong> (' + totalCartas + ' × 5,54€ Reg+AR)<br>';
+    resumo += '💰 Custo estimado: <strong>' + custoCartas.toFixed(2).replace('.',',') + '€</strong> (' + totalCartas + ' × ' + tarifaAR.toFixed(2).replace('.',',') + '€ Reg+AR)<br>';
   }
   resumo += '<div style="font-size:11px;color:var(--t3);margin-top:12px;padding-top:10px;border-top:1px solid var(--b1);">A convocatória foi descarregada em PDF — imprime as cópias necessárias para as cartas registadas. Guarda os comprovativos de envio dos CTT.</div>';
   resumo += '</div>';
