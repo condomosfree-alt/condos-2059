@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.06.27-2205</div>
+      <div class="sb-tag">2059 Pro · build v2026.06.27-2231</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -2051,6 +2051,42 @@ textarea.fi{resize:vertical;min-height:60px;}
 </div>
 
 <div class="toast" id="toast"></div>
+
+<div class="mo" id="mo-tipo-envio" style="z-index:10002;">
+  <div class="mo-box" style="width:480px;padding:0;overflow:hidden;">
+    <div style="background:linear-gradient(135deg,#0a1119,#0d1825);padding:18px 22px;border-bottom:1px solid var(--b1);">
+      <div style="font-size:15px;font-weight:700;color:#fff;">✉️ Tipo de envio das cartas</div>
+      <div id="tipo-envio-info" style="font-size:11px;color:var(--t3);margin-top:4px;"></div>
+    </div>
+    <div style="padding:18px 22px;">
+      <label style="display:block;border:2px solid var(--green);border-radius:9px;padding:13px 15px;margin-bottom:10px;cursor:pointer;background:rgba(16,185,129,.06);" id="lbl-envio-ar">
+        <div style="display:flex;align-items:flex-start;gap:10px;">
+          <input type="radio" name="tipo-envio" value="ar" checked style="margin-top:3px;width:16px;height:16px;cursor:pointer;flex-shrink:0;">
+          <div>
+            <div style="font-size:13px;font-weight:700;color:var(--green);">Carta Registada + AR <span style="font-size:10px;background:var(--green);color:#04111c;padding:1px 7px;border-radius:4px;margin-left:4px;">RECOMENDADO</span></div>
+            <div style="font-size:11px;color:var(--t2);margin-top:4px;line-height:1.5;">Prova de receção (talão assinado que regressa). Protege-te se houver impugnação — sem isto, podes ficar sem prova de que o condómino recebeu.</div>
+            <div style="font-size:12px;color:var(--green);font-weight:700;margin-top:5px;" id="preco-ar">5,54€/carta</div>
+          </div>
+        </div>
+      </label>
+      <label style="display:block;border:2px solid var(--b1);border-radius:9px;padding:13px 15px;cursor:pointer;" id="lbl-envio-simples">
+        <div style="display:flex;align-items:flex-start;gap:10px;">
+          <input type="radio" name="tipo-envio" value="registado" style="margin-top:3px;width:16px;height:16px;cursor:pointer;flex-shrink:0;">
+          <div>
+            <div style="font-size:13px;font-weight:700;color:var(--text);">Carta Registada (sem AR)</div>
+            <div style="font-size:11px;color:var(--t2);margin-top:4px;line-height:1.5;">Prova de envio, mas NÃO de receção. Mais barata. A lei aceita-a na convocatória, mas não te protege se o condómino disser que não recebeu.</div>
+            <div style="font-size:12px;color:var(--amber);font-weight:700;margin-top:5px;" id="preco-registado">3,75€/carta</div>
+          </div>
+        </div>
+      </label>
+      <div style="background:rgba(255,179,0,.06);border:1px solid rgba(255,179,0,.25);border-radius:8px;padding:10px 13px;margin-top:12px;font-size:11px;color:var(--amber);line-height:1.5;">⚖️ Recomendação: usa sempre o AR. A diferença é pequena e a proteção legal é enorme. A comunicação da ata aos ausentes usa sempre AR (exigência da lei).</div>
+    </div>
+    <div style="display:flex;gap:8px;padding:14px 22px;background:var(--s1);border-top:1px solid var(--b1);">
+      <button class="btn-ghost" style="flex:1;" onclick="window._resolveTipoEnvio&&window._resolveTipoEnvio(null)">Cancelar</button>
+      <button class="btn-primary" style="flex:1;" onclick="window._resolveTipoEnvio&&window._resolveTipoEnvio(document.querySelector('input[name=\'tipo-envio\']:checked').value)">Continuar</button>
+    </div>
+  </div>
+</div>
 
 <div class="mo" id="mo-tarifas-ctt" style="z-index:10001;">
   <div class="mo-box" style="width:440px;padding:0;overflow:hidden;">
@@ -7611,7 +7647,28 @@ async function sugerirOrdemTrabalhos() {
   }
 }
 
-// ===== ENVIO DA CONVOCATÓRIA A TODOS (email autorizado + cartas registadas) =====
+// Escolher o tipo de envio das cartas (modal com recomendação)
+function escolherTipoEnvioCarta(nCartas) {
+  return new Promise(function(resolve) {
+    var t = getTarifasCTT();
+    var precoAR = tarifaCartaRegistadaAR();
+    var precoReg = parseFloat(t.registado)||3.75;
+    document.getElementById('tipo-envio-info').textContent = nCartas + ' carta(s) a enviar. Escolhe o nível de prova:';
+    document.getElementById('preco-ar').textContent = precoAR.toFixed(2).replace('.',',') + '€/carta · total ' + (precoAR*nCartas).toFixed(2).replace('.',',') + '€';
+    document.getElementById('preco-registado').textContent = precoReg.toFixed(2).replace('.',',') + '€/carta · total ' + (precoReg*nCartas).toFixed(2).replace('.',',') + '€';
+    // Pré-selecionar AR (seguro)
+    var radios = document.getElementsByName('tipo-envio');
+    for (var i=0;i<radios.length;i++) radios[i].checked = (radios[i].value === 'ar');
+    document.getElementById('mo-tipo-envio').classList.add('open');
+    window._resolveTipoEnvio = function(valor) {
+      document.getElementById('mo-tipo-envio').classList.remove('open');
+      resolve(valor);
+      delete window._resolveTipoEnvio;
+    };
+  });
+}
+
+// ===== ENVIO DA CONVOCATÓRIA A TODOS =====
 async function enviarConvocatoriaTodos(assembleiaId) {
   if (!currentCondo) return;
   var aRes = await sb.from('assembleias').select('*').eq('id', assembleiaId).single();
@@ -7631,15 +7688,24 @@ async function enviarConvocatoriaTodos(assembleiaId) {
     }
   });
   var totalCartas = porCarta.length + semContacto.length;
-  var tarifaAR = tarifaCartaRegistadaAR(); // Reg+AR (prova legal de entrega)
-  var custoCartas = totalCartas * tarifaAR;
+
+  // Escolher o tipo de envio das cartas (recomendado: Reg+AR)
+  var tipoEnvio = 'ar';
+  if (totalCartas > 0) {
+    tipoEnvio = await escolherTipoEnvioCarta(totalCartas);
+    if (tipoEnvio === null) return; // cancelou
+  }
+  var t = getTarifasCTT();
+  var tarifaCarta = tipoEnvio === 'ar' ? tarifaCartaRegistadaAR() : (parseFloat(t.registado)||3.75);
+  var tipoLabel = tipoEnvio === 'ar' ? 'registada + AR' : 'registada';
+  var custoCartas = totalCartas * tarifaCarta;
 
   // Resumo prévio
   var msg = '📋 Envio da convocatória:\n\n';
   msg += '✅ ' + porEmail.length + ' por email (autorizado em ata)\n';
-  msg += '✉️ ' + totalCartas + ' por carta registada+AR';
+  msg += '✉️ ' + totalCartas + ' por carta ' + tipoLabel;
   if (porCarta.length) msg += ' (' + porCarta.length + ' têm email mas não autorizaram)';
-  msg += '\n💰 Custo estimado das cartas: ' + custoCartas.toFixed(2).replace('.',',') + '€ (' + totalCartas + ' × ' + tarifaAR.toFixed(2).replace('.',',') + '€)\n\n';
+  msg += '\n💰 Custo estimado das cartas: ' + custoCartas.toFixed(2).replace('.',',') + '€ (' + totalCartas + ' × ' + tarifaCarta.toFixed(2).replace('.',',') + '€)\n\n';
   if (porEmail.length && !_gmailToken) {
     msg += '⚠️ O Gmail não está ligado — os emails não serão enviados agora.\n\n';
   }
@@ -7696,7 +7762,7 @@ async function enviarConvocatoriaTodos(assembleiaId) {
       resumo += '• ' + (f.codigo||'?') + ' — ' + (f.proprietario_nome||'?') + (f.proprietario_email?' <span style="color:var(--amber);">(tem email mas não autorizou)</span>':'') + '<br>';
     });
     resumo += '</div>';
-    resumo += '💰 Custo estimado: <strong>' + custoCartas.toFixed(2).replace('.',',') + '€</strong> (' + totalCartas + ' × ' + tarifaAR.toFixed(2).replace('.',',') + '€ Reg+AR)<br>';
+    resumo += '💰 Custo estimado: <strong>' + custoCartas.toFixed(2).replace('.',',') + '€</strong> (' + totalCartas + ' × ' + tarifaCarta.toFixed(2).replace('.',',') + '€ carta ' + tipoLabel + ')<br>';
   }
   resumo += '<div style="font-size:11px;color:var(--t3);margin-top:12px;padding-top:10px;border-top:1px solid var(--b1);">A convocatória foi descarregada em PDF — imprime as cópias necessárias para as cartas registadas. Guarda os comprovativos de envio dos CTT.</div>';
   resumo += '</div>';
@@ -7704,7 +7770,7 @@ async function enviarConvocatoriaTodos(assembleiaId) {
   // Descarregar o PDF para imprimir as cartas
   if (totalCartas > 0) { pdfRes.doc.save(pdfRes.nomeFich); }
 
-  await confirmar(resumo, {titulo:'Convocatória enviada', tipo:'success', icon:'✅', okTexto:'Concluir', cancelarTexto:''});
+  await confirmar(resumo, {titulo:'Convocatória enviada', tipo:'success', icon:'✅', okTexto:'Concluir', cancelarTexto:'', html:true});
   loadAssembleias();
 }
 
@@ -10926,7 +10992,8 @@ function confirmar(msg, opts) {
   return new Promise(function(resolve) {
     var modal = document.getElementById('mo-confirm');
     document.getElementById('confirm-titulo').textContent = opts.titulo || 'Confirmar';
-    document.getElementById('confirm-msg').textContent = msg;
+    var msgEl = document.getElementById('confirm-msg');
+    if (opts.html) { msgEl.innerHTML = msg; } else { msgEl.textContent = msg; }
     var icon = document.getElementById('confirm-icon');
     icon.textContent = opts.icon || '❓';
     var tipo = opts.tipo || 'info';
