@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.06.27-0856</div>
+      <div class="sb-tag">2059 Pro · build v2026.06.27-0904</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -3952,6 +3952,25 @@ function renderCondominos(lista) {
         if (criticas > 0) html += '<div style="background:var(--rdim);border:1px solid rgba(255,68,68,.3);border-radius:8px;padding:8px 14px;font-size:11px;color:var(--red);">🔴 '+criticas+' ficha(s) com +24 meses sem atualizar</div>';
         if (desatualizadas > criticas) html += '<div style="background:var(--adim);border:1px solid rgba(255,179,0,.3);border-radius:8px;padding:8px 14px;font-size:11px;color:var(--amber);">🟡 '+(desatualizadas-criticas)+' ficha(s) com +12 meses sem atualizar</div>';
         return html;
+      })() +
+      (function() {
+        // ALERTA DE DIVERGÊNCIA DE CARGOS: ficha de condómino marcada como cargo vs perfil (fonte oficial)
+        var c = currentCondo; if (!c) return '';
+        function norm(s){ return (s||'').trim().toLowerCase(); }
+        var cargosPerfil = [norm(c.gestor_nome), norm(c.administrador_nome), norm(c.presidente_nome), norm(c.secretario_nome), norm(c.vogal_nome)].filter(Boolean);
+        var divergentes = [];
+        lista.forEach(function(f){
+          var papel = f.papel_legal;
+          if (papel === 'administrador' || papel === 'vice_administrador' || papel === 'coadjuvante') {
+            var nome = norm(f.proprietario_nome);
+            // Se o nome da ficha NÃO está entre os cargos do perfil → divergência
+            if (nome && cargosPerfil.indexOf(nome) === -1) {
+              divergentes.push((f.codigo||'?') + ' (' + (f.proprietario_nome||'?') + ') marcado como ' + ({administrador:'Administrador',vice_administrador:'Vice-Administrador',coadjuvante:'Coadjuvante'}[papel]) + ')');
+            }
+          }
+        });
+        if (!divergentes.length) return '';
+        return '<div style="background:var(--rdim);border:1px solid rgba(255,68,68,.3);border-radius:8px;padding:8px 14px;font-size:11px;color:var(--red);cursor:help;" title="' + divergentes.join('&#10;').replace(/"/g,'') + '&#10;&#10;Os cargos oficiais definem-se no Perfil do Edifício. Verifica se estão corretos.">⚠️ ' + divergentes.length + ' ficha(s) com cargo que não corresponde ao Perfil — verifica</div>';
       })() +
       '</div>';
   }
