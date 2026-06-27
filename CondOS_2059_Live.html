@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.06.26-2237</div>
+      <div class="sb-tag">2059 Pro · build v2026.06.27-0823</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -2027,6 +2027,28 @@ textarea.fi{resize:vertical;min-height:60px;}
 </div>
 
 <div class="toast" id="toast"></div>
+
+<div class="mo" id="mo-mesa" style="z-index:10001;">
+  <div class="mo-box" style="width:460px;padding:0;overflow:hidden;">
+    <div style="background:linear-gradient(135deg,#0a1119,#0d1825);padding:18px 22px;border-bottom:1px solid var(--b1);">
+      <div style="font-size:15px;font-weight:700;color:#fff;">⚖️ Constituir a Mesa da Assembleia</div>
+      <div style="font-size:11px;color:var(--t3);margin-top:4px;">A mesa dirige a assembleia e assina a ata. Pode ser um condómino ou o administrador (mesmo empresa externa).</div>
+    </div>
+    <div style="padding:20px 22px;">
+      <div id="mesa-gestor-info" style="font-size:11px;color:var(--cyan);margin-bottom:14px;padding:8px 11px;background:rgba(0,212,255,.06);border-radius:6px;"></div>
+      <label style="font-size:12px;color:var(--t2);display:block;margin-bottom:6px;">Presidente da Mesa</label>
+      <select id="mesa-presidente" class="fi" style="width:100%;margin-bottom:6px;" onchange="mesaOutroToggle('presidente')"></select>
+      <input id="mesa-presidente-outro" class="fi" style="width:100%;margin-bottom:14px;display:none;" placeholder="Nome do presidente">
+      <label style="font-size:12px;color:var(--t2);display:block;margin-bottom:6px;">Secretário</label>
+      <select id="mesa-secretario" class="fi" style="width:100%;margin-bottom:6px;" onchange="mesaOutroToggle('secretario')"></select>
+      <input id="mesa-secretario-outro" class="fi" style="width:100%;display:none;" placeholder="Nome do secretário">
+    </div>
+    <div style="display:flex;gap:8px;padding:14px 22px;background:var(--s1);border-top:1px solid var(--b1);">
+      <button class="btn-ghost" style="flex:1;" onclick="window._resolveMesa&&window._resolveMesa(false)">Cancelar</button>
+      <button class="btn-primary" style="flex:1;" onclick="window._resolveMesa&&window._resolveMesa(true)">Abrir sessão</button>
+    </div>
+  </div>
+</div>
 
 <div class="mo" id="mo-debate" style="z-index:10001;">
   <div class="mo-box" style="width:460px;padding:0;overflow:hidden;">
@@ -6546,18 +6568,69 @@ async function abrirSessao() {
   var msgConv = convocatoria === 1
     ? 'Há quórum de ' + q.pct.toFixed(1) + '% do capital (≥ 50%). A assembleia abre em 1.ª convocatória e pode deliberar sobre todos os pontos.'
     : 'O quórum é de ' + q.pct.toFixed(1) + '% do capital (entre 25% e 50%). Como não há maioria para a 1.ª convocatória, a assembleia abre em 2.ª convocatória, onde basta 1/4 do capital para deliberar.';
-  var ok = await confirmar(msgConv + '\n\nAbrir a sessão?', {titulo:'Abertura em ' + convocatoria + '.ª convocatória', tipo:'aviso', icon:'⚖️', okTexto:'Abrir sessão'});
+  var ok = await confirmar(msgConv + '\n\nAbrir a sessão?', {titulo:'Abertura em ' + convocatoria + '.ª convocatória', tipo:'aviso', icon:'⚖️', okTexto:'Continuar para a mesa'});
   if (!ok) return;
 
-  await sb.from('assembleias').update({ estado_sessao: 'a_decorrer', hora_abertura: new Date().toISOString(), convocatoria_num: convocatoria }).eq('id', _salaAssembleia.id);
+  // CONSTITUIR A MESA (obrigatório) — Presidente e Secretário
+  var mesa = await definirMesa();
+  if (mesa === null) return; // cancelou
+
+  await sb.from('assembleias').update({ estado_sessao: 'a_decorrer', hora_abertura: new Date().toISOString(), convocatoria_num: convocatoria, mesa_presidente: mesa.presidente, mesa_secretario: mesa.secretario }).eq('id', _salaAssembleia.id);
   _salaAssembleia.estado_sessao = 'a_decorrer';
   _salaAssembleia.convocatoria_num = convocatoria;
-  await registarEvento('abertura', 'Sessão aberta em ' + convocatoria + '.ª convocatória. Quórum: ' + Math.round(q.presente) + '‰ (' + q.pct.toFixed(1) + '% do capital). Quórum suficiente para deliberar.', null, { quorum_permilagem: Math.round(q.presente), quorum_pct: q.pct.toFixed(1), convocatoria: convocatoria, quorum_ok: true });
+  _salaAssembleia.mesa_presidente = mesa.presidente;
+  _salaAssembleia.mesa_secretario = mesa.secretario;
+  await registarEvento('abertura', 'Sessão aberta em ' + convocatoria + '.ª convocatória. Quórum: ' + Math.round(q.presente) + '‰ (' + q.pct.toFixed(1) + '% do capital). Mesa: Presidente ' + mesa.presidente + ', Secretário ' + mesa.secretario + '.', null, { quorum_permilagem: Math.round(q.presente), quorum_pct: q.pct.toFixed(1), convocatoria: convocatoria, quorum_ok: true, presidente: mesa.presidente, secretario: mesa.secretario });
   toast('✅ Sessão aberta em ' + convocatoria + '.ª convocatória!', 'ok');
   renderSala();
 }
 
 // Lavrar "ata de não realização" — quando não há quórum mínimo (protege a administração)
+// Constituir a mesa da assembleia (Presidente + Secretário)
+function definirMesa() {
+  return new Promise(function(resolve) {
+    var gestor = currentCondo.gestor_nome || currentCondo.administrador_nome || '';
+    // Lista de presentes para os dropdowns
+    var presentes = [];
+    fracoes.forEach(function(f){
+      var e = _salaPresencas[f.id];
+      if (e === 'presente' || e === 'representado') presentes.push((f.codigo||'?') + ' — ' + (f.proprietario_nome||'?'));
+    });
+
+    var opcoes = '';
+    if (gestor) opcoes += '<option value="' + gestor.replace(/"/g,'&quot;') + '">' + gestor + ' (administrador)</option>';
+    presentes.forEach(function(p){ opcoes += '<option value="' + p.replace(/"/g,'&quot;') + '">' + p + '</option>'; });
+    opcoes += '<option value="__outro__">Outra pessoa (escrever)…</option>';
+
+    var modal = document.getElementById('mo-mesa');
+    document.getElementById('mesa-presidente').innerHTML = '<option value="">— Presidente —</option>' + opcoes;
+    document.getElementById('mesa-secretario').innerHTML = '<option value="">— Secretário —</option>' + opcoes;
+    document.getElementById('mesa-gestor-info').textContent = gestor ? ('Administrador registado: ' + gestor) : 'Sem administrador registado no perfil.';
+    // Pré-selecionar o gestor como presidente (sugestão, editável)
+    if (gestor) document.getElementById('mesa-presidente').value = gestor;
+    modal.classList.add('open');
+
+    window._resolveMesa = function(confirmado) {
+      if (!confirmado) { modal.classList.remove('open'); resolve(null); delete window._resolveMesa; return; }
+      var pres = document.getElementById('mesa-presidente').value;
+      var secr = document.getElementById('mesa-secretario').value;
+      if (pres === '__outro__') pres = document.getElementById('mesa-presidente-outro').value.trim();
+      if (secr === '__outro__') secr = document.getElementById('mesa-secretario-outro').value.trim();
+      if (!pres || !secr) { toast('Define o Presidente e o Secretário da mesa','err'); return; }
+      modal.classList.remove('open');
+      resolve({ presidente: pres, secretario: secr });
+      delete window._resolveMesa;
+    };
+  });
+}
+
+// Mostrar/esconder caixa "outro" nos dropdowns da mesa
+function mesaOutroToggle(qual) {
+  var sel = document.getElementById('mesa-' + qual);
+  var inp = document.getElementById('mesa-' + qual + '-outro');
+  if (inp) inp.style.display = (sel.value === '__outro__') ? 'block' : 'none';
+}
+
 async function lavrarAtaNaoRealizacao(q) {
   await registarEvento('abertura', 'Tentativa de abertura da sessão. Quórum presente: ' + Math.round(q.presente) + '‰ (' + q.pct.toFixed(1) + '% do capital), ABAIXO do mínimo legal de 25%. A assembleia não reúne condições para deliberar.', null, { quorum_permilagem: Math.round(q.presente), quorum_pct: q.pct.toFixed(1), nao_realizada: true });
   var presentesLista = [];
@@ -6948,7 +7021,7 @@ async function gerarAtaDoLivro() {
     'ESTRUTURA OBRIGATÓRIA DA ATA:\n' +
     '1. CABEÇALHO: "ATA NÚMERO ' + numeroAta + '"' + (provisorioAta ? ' (com a nota, em rodapé, de que a numeração é provisória e será confirmada com o livro de atas físico do condomínio)' : '') + '. Identificação do condomínio (' + nomeCondo + '), data (' + dataAss + '), hora e local (' + (_salaAssembleia.local_assembleia||'') + '). Indicar que reuniu em ' + convText + '.\n' +
     '2. PRESENÇAS E QUÓRUM: indicar os condóminos presentes/representados e a percentagem do capital representado (quórum de ' + q.pct.toFixed(1) + '%). Lista de presentes:\n' + (presentesLista.length ? presentesLista.join('; ') : 'ver livro') + '\n' +
-    '3. MESA: se o livro indicar quem presidiu e secretariou, mencionar; caso contrário, deixar campo para preencher.\n' +
+    '3. MESA: a assembleia foi dirigida por uma mesa constituída por Presidente: ' + (_salaAssembleia.mesa_presidente||'(a indicar)') + ' e Secretário: ' + (_salaAssembleia.mesa_secretario||'(a indicar)') + '. Menciona-os nesta secção.\n' +
     '4. ORDEM DE TRABALHOS: listar os pontos.\n' +
     '5. DELIBERAÇÕES: para cada ponto, usa o título do ponto em NEGRITO no formato markdown (**Ponto X: ...**). Descreve o que foi discutido e a deliberação tomada, com o resultado da votação em permilagem e se foi APROVADO ou REJEITADO. Indica a maioria obtida.\n' +
     'REGRA CRÍTICA SOBRE INTERVENÇÕES: todas as intervenções e declarações registadas no livro (tipo intervencao) são DECLARAÇÕES FORMAIS PARA A ATA e têm valor legal. Transcreve-as fielmente e com destaque. Ao identificar quem declarou, usa SEMPRE o código da fração seguido do nome entre parênteses, EXATAMENTE como consta na TABELA DE FRAÇÕES abaixo (ex: \'a fração R/c Esquerdo (Maria Santos)\'). NUNCA inventes, troques ou adivinhes a correspondência entre fração e nome — se o livro menciona uma fração, vai à tabela buscar o nome certo; se o livro menciona um nome, confirma na tabela. Se houver qualquer dúvida sobre a identidade, escreve apenas o que está no livro sem acrescentar. Por exemplo, se um condómino declarou que não paga por determinado motivo, que discorda de uma deliberação, ou que se reserva o direito de impugnar, isso DEVE constar expressamente na ata no ponto respetivo, com uma frase como \'Para constar em ata, a fração X (Nome) declarou que...\'. Estas declarações nunca podem ser omitidas nem resumidas ao ponto de perderem o sentido — protegem juridicamente quem as fez.\n' +
@@ -7062,8 +7135,8 @@ function imprimirAta() {
     '</div>' +
     '<div class="corpo">' + corpo + '</div>' +
     '<div class="assinaturas">' +
-    '<div class="assina">O Presidente da Mesa</div>' +
-    '<div class="assina">O Secretário</div>' +
+    '<div class="assina">' + (_salaAssembleia.mesa_presidente ? _salaAssembleia.mesa_presidente + '<br><span style="font-size:10px;color:#888;">Presidente da Mesa</span>' : 'O Presidente da Mesa') + '</div>' +
+    '<div class="assina">' + (_salaAssembleia.mesa_secretario ? _salaAssembleia.mesa_secretario + '<br><span style="font-size:10px;color:#888;">Secretário</span>' : 'O Secretário') + '</div>' +
     '</div>' +
     '<div class="rodape">Documento gerado por COND.OS 2059 Pro · A presente ata deve ser lida, aprovada e assinada pelos participantes.</div>' +
     '</div>' +
