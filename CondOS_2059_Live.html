@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.06.27-0904</div>
+      <div class="sb-tag">2059 Pro · build v2026.06.27-0911</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -1475,8 +1475,9 @@ textarea.fi{resize:vertical;min-height:60px;}
           <option value="arrendatario">Arrendatário</option>
           <option value="representante">Representante de Proprietário</option>
           <option value="administrador">Administrador</option>
-          <option value="vice_administrador">Vice-Administrador</option>
-          <option value="coadjuvante">Coadjuvante do Administrador</option>
+          <option value="presidente">Presidente da Mesa</option>
+          <option value="secretario">Secretário</option>
+          <option value="vogal">Vogal / Coadjuvante</option>
         </select>
       </div>
       <div class="fl">
@@ -3961,11 +3962,11 @@ function renderCondominos(lista) {
         var divergentes = [];
         lista.forEach(function(f){
           var papel = f.papel_legal;
-          if (papel === 'administrador' || papel === 'vice_administrador' || papel === 'coadjuvante') {
+          if (papel === 'administrador' || papel === 'presidente' || papel === 'secretario' || papel === 'vogal') {
             var nome = norm(f.proprietario_nome);
             // Se o nome da ficha NÃO está entre os cargos do perfil → divergência
             if (nome && cargosPerfil.indexOf(nome) === -1) {
-              divergentes.push((f.codigo||'?') + ' (' + (f.proprietario_nome||'?') + ') marcado como ' + ({administrador:'Administrador',vice_administrador:'Vice-Administrador',coadjuvante:'Coadjuvante'}[papel]) + ')');
+              divergentes.push((f.codigo||'?') + ' (' + (f.proprietario_nome||'?') + ') marcado como ' + ({administrador:'Administrador',presidente:'Presidente',secretario:'Secretário',vogal:'Vogal'}[papel]) + ')');
             }
           }
         });
@@ -4083,8 +4084,8 @@ function exportarCondominosPDF() {
       }).filter(Boolean).join(', ');
       var papel = {
         proprietario: 'Proprietário', arrendatario: 'Arrendatário',
-        administrador: 'Administrador', vice_administrador: 'Vice-Admin.',
-        coadjuvante: 'Coadjuvante', representante: 'Representante'
+        administrador: 'Administrador', presidente: 'Presidente',
+        secretario: 'Secretário', vogal: 'Vogal', representante: 'Representante'
       }[f.papel_legal] || '—';
       return [
         (f.codigo || '—') + (f.bloco ? ' Bloco ' + f.bloco : ''),
