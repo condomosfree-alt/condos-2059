@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.06.27-0911</div>
+      <div class="sb-tag">2059 Pro · build v2026.06.27-0921</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -1468,28 +1468,34 @@ textarea.fi{resize:vertical;min-height:60px;}
     <div style="font-size:10px;color:var(--cyan);letter-spacing:1.5px;text-transform:uppercase;margin:16px 0 10px;font-weight:700;border-top:1px solid var(--b1);padding-top:14px;">🏛️ Papel Legal e Função</div>
     <div class="form-row">
       <div class="fl">
-        <label>Papel Legal <span style="font-size:9px;color:var(--t3)">(DL 268/94)</span></label>
+        <label>Papel (posse) <span style="font-size:9px;color:var(--t3)">(DL 268/94)</span></label>
         <select class="fi" id="f-papel-legal">
           <option value="">— Seleccionar —</option>
           <option value="proprietario">Proprietário</option>
           <option value="arrendatario">Arrendatário</option>
           <option value="representante">Representante de Proprietário</option>
+        </select>
+      </div>
+      <div class="fl">
+        <label>Cargo de Gestão <span style="font-size:9px;color:var(--t3)">(opcional)</span></label>
+        <select class="fi" id="f-cargo-gestao">
+          <option value="">— Nenhum —</option>
           <option value="administrador">Administrador</option>
           <option value="presidente">Presidente da Mesa</option>
           <option value="secretario">Secretário</option>
           <option value="vogal">Vogal / Coadjuvante</option>
         </select>
       </div>
-      <div class="fl">
-        <label>Função Operacional <span style="font-size:9px;color:var(--t3)">(opcional)</span></label>
-        <select class="fi" id="f-funcao-operacional">
-          <option value="">— Nenhuma —</option>
-          <option value="manutencao">Responsável de Manutenção</option>
-          <option value="limpeza">Responsável de Limpeza</option>
-          <option value="jardim">Responsável de Jardim</option>
-          <option value="outro">Outra função</option>
-        </select>
-      </div>
+    </div>
+    <div class="fl">
+      <label>Função Operacional <span style="font-size:9px;color:var(--t3)">(opcional)</span></label>
+      <select class="fi" id="f-funcao-operacional">
+        <option value="">— Nenhuma —</option>
+        <option value="manutencao">Responsável de Manutenção</option>
+        <option value="limpeza">Responsável de Limpeza</option>
+        <option value="jardim">Responsável de Jardim</option>
+        <option value="outro">Outra função</option>
+      </select>
     </div>
 
     <!-- NIB / IBAN -->
@@ -3812,6 +3818,8 @@ function editFracao(id) {
   // Campos novos
   var papelEl = document.getElementById('f-papel-legal');
   if (papelEl) papelEl.value = f.papel_legal || '';
+  var cargoEl = document.getElementById('f-cargo-gestao');
+  if (cargoEl) cargoEl.value = f.cargo_gestao || '';
   var funcaoEl = document.getElementById('f-funcao-operacional');
   if (funcaoEl) funcaoEl.value = f.funcao_operacional || '';
   var nibEl = document.getElementById('f-nib-proprio');
@@ -3955,23 +3963,39 @@ function renderCondominos(lista) {
         return html;
       })() +
       (function() {
-        // ALERTA DE DIVERGÊNCIA DE CARGOS: ficha de condómino marcada como cargo vs perfil (fonte oficial)
+        // ALERTA DE DIVERGÊNCIA DE CARGOS: ficha vs perfil (fonte oficial) + acumulação de cargos
         var c = currentCondo; if (!c) return '';
         function norm(s){ return (s||'').trim().toLowerCase(); }
         var cargosPerfil = [norm(c.gestor_nome), norm(c.administrador_nome), norm(c.presidente_nome), norm(c.secretario_nome), norm(c.vogal_nome)].filter(Boolean);
         var divergentes = [];
+        var porPessoa = {}; // nome → lista de cargos (para detetar acumulação)
         lista.forEach(function(f){
-          var papel = f.papel_legal;
-          if (papel === 'administrador' || papel === 'presidente' || papel === 'secretario' || papel === 'vogal') {
+          var cargo = f.cargo_gestao;
+          if (cargo === 'administrador' || cargo === 'presidente' || cargo === 'secretario' || cargo === 'vogal') {
             var nome = norm(f.proprietario_nome);
-            // Se o nome da ficha NÃO está entre os cargos do perfil → divergência
+            var cargoLabel = {administrador:'Administrador',presidente:'Presidente',secretario:'Secretário',vogal:'Vogal'}[cargo];
+            // Divergência com o perfil
             if (nome && cargosPerfil.indexOf(nome) === -1) {
-              divergentes.push((f.codigo||'?') + ' (' + (f.proprietario_nome||'?') + ') marcado como ' + ({administrador:'Administrador',presidente:'Presidente',secretario:'Secretário',vogal:'Vogal'}[papel]) + ')');
+              divergentes.push((f.codigo||'?') + ' (' + (f.proprietario_nome||'?') + ') marcado como ' + cargoLabel);
             }
+            // Acumulação: registar cargos por pessoa
+            if (nome) { (porPessoa[nome] = porPessoa[nome] || []).push(cargoLabel); }
           }
         });
-        if (!divergentes.length) return '';
-        return '<div style="background:var(--rdim);border:1px solid rgba(255,68,68,.3);border-radius:8px;padding:8px 14px;font-size:11px;color:var(--red);cursor:help;" title="' + divergentes.join('&#10;').replace(/"/g,'') + '&#10;&#10;Os cargos oficiais definem-se no Perfil do Edifício. Verifica se estão corretos.">⚠️ ' + divergentes.length + ' ficha(s) com cargo que não corresponde ao Perfil — verifica</div>';
+        var html = '';
+        if (divergentes.length) {
+          html += '<div style="background:var(--rdim);border:1px solid rgba(255,68,68,.3);border-radius:8px;padding:8px 14px;font-size:11px;color:var(--red);cursor:help;" title="' + divergentes.join('&#10;').replace(/"/g,'') + '&#10;&#10;Os cargos oficiais definem-se no Perfil do Edifício. Verifica se estão corretos.">⚠️ ' + divergentes.length + ' ficha(s) com cargo que não corresponde ao Perfil — verifica</div>';
+        }
+        // Acumulação de cargos na mesma pessoa
+        var acumuladores = Object.keys(porPessoa).filter(function(n){ return porPessoa[n].length >= 2; });
+        if (acumuladores.length) {
+          var detalhe = acumuladores.map(function(n){
+            var f = lista.find(function(x){ return norm(x.proprietario_nome) === n; });
+            return (f ? f.proprietario_nome : n) + ': ' + porPessoa[n].join(' + ');
+          }).join('&#10;');
+          html += '<div style="background:var(--adim);border:1px solid rgba(255,179,0,.35);border-radius:8px;padding:8px 14px;font-size:11px;color:var(--amber);cursor:help;" title="' + detalhe.replace(/"/g,'') + '&#10;&#10;Concentrar vários cargos na mesma pessoa reduz a transparência. A lei permite, mas convém verificar.">⚖️ ' + acumuladores.length + ' pessoa(s) acumula(m) vários cargos — verifica</div>';
+        }
+        return html;
       })() +
       '</div>';
   }
@@ -4082,11 +4106,14 @@ function exportarCondominosPDF() {
       var metodos = (f.metodo_notificacao || '').split(',').map(function(m) {
         return metodoLabel[m.trim()] || m.trim();
       }).filter(Boolean).join(', ');
-      var papel = {
-        proprietario: 'Proprietário', arrendatario: 'Arrendatário',
+      var posseLabel = {
+        proprietario: 'Proprietário', arrendatario: 'Arrendatário', representante: 'Representante'
+      }[f.papel_legal] || '';
+      var cargoLabel = {
         administrador: 'Administrador', presidente: 'Presidente',
-        secretario: 'Secretário', vogal: 'Vogal', representante: 'Representante'
-      }[f.papel_legal] || '—';
+        secretario: 'Secretário', vogal: 'Vogal'
+      }[f.cargo_gestao] || '';
+      var papel = [posseLabel, cargoLabel].filter(Boolean).join(' · ') || '—';
       return [
         (f.codigo || '—') + (f.bloco ? ' Bloco ' + f.bloco : ''),
         f.proprietario_nome || '—',
@@ -5036,6 +5063,7 @@ async function saveFracao() {
     notificacao_digital_aceite: document.getElementById('f-notif-aceite') ? document.getElementById('f-notif-aceite').checked : false,
     notificacao_digital_data: document.getElementById('f-notif-data') ? (document.getElementById('f-notif-data').value||null) : null,
     papel_legal: gv('f-papel-legal')||null,
+    cargo_gestao: gv('f-cargo-gestao')||null,
     funcao_operacional: gv('f-funcao-operacional')||null,
     nib_proprio: (gv('f-nib-proprio')||'').trim()||null,
     seguro_cobre_partes_comuns: document.getElementById('f-seguro-cobre') && gv('f-seguro-cobre')!=='' ? gv('f-seguro-cobre')==='true' : null,
