@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.06.28-2219</div>
+      <div class="sb-tag">2059 Pro · build v2026.06.28-2228</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -7995,20 +7995,22 @@ async function registarCustoPostal(tipo, nCartas, custo, assembleiaId, custoImpr
   var payload = {
     condominio_id: currentCondo.id,
     descricao: descricao,
-    tipo: 'administrativa',
+    tipo: 'outro',
     valor_total: parseFloat(custoTotal.toFixed(2)),
     data_despesa: hoje,
     estado: 'aprovada',
     distribuicao: 'permilagem',
     origem_tipo: 'assembleia',
     assembleia_id: assembleiaId,
+    ocorrencia_id: null,
+    parceiro_id: null,
     motivo: 'Custos postais CTT (correio registado)',
     forma_pagamento: 'transferencia',
     notas: 'Registado automaticamente pelo envio de ' + (tipo === 'convocatoria' ? 'convocatórias' : 'ata') + '. ' + nCartas + ' × correio registado.' + notaExtra,
     quota_gerada: false
   };
   var res = await sb.from('despesas').insert(payload);
-  if (res.error) { console.error('Erro ao registar custo postal:', res.error); return false; }
+  if (res.error) { console.error('Erro ao registar custo postal:', res.error); toast('Erro ao registar: ' + res.error.message, 'err'); return false; }
   return true;
 }
 
