@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.06.28-1007</div>
+      <div class="sb-tag">2059 Pro · build v2026.06.28-1018</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -575,7 +575,7 @@ textarea.fi{resize:vertical;min-height:60px;}
       <div class="ni" onclick="nav('ocorrencias')"><i class="ti ti-alert-triangle"></i><span>Ocorrências</span><span class="nb" id="nb-oc"></span></div>
       <div class="ni" onclick="nav('parceiros')"><i class="ti ti-tool"></i><span>Parceiros</span></div>
       <div class="ni" onclick="nav('documentos')"><i class="ti ti-file-text"></i><span>Documentos</span></div>
-      <div class="ni" onclick="nav('assembleias')"><i class="ti ti-speakerphone"></i><span>Assembleias</span></div>
+      <div class="ni" onclick="nav('assembleias')"><i class="ti ti-speakerphone"></i><span>Assembleias</span><span id="badge-assembleias" style="display:none;margin-left:auto;background:#f87171;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;line-height:16px;text-align:center;border-radius:8px;padding:0 4px;"></span></div>
       <div class="nav-section">IA</div>
       <div class="ni" onclick="nav('assistente')"><i class="ti ti-robot"></i><span>Assistente IA</span><span class="nb" id="nb-ia">IA</span></div>
       <div class="nav-section">Sistema</div>
@@ -1283,6 +1283,7 @@ textarea.fi{resize:vertical;min-height:60px;}
           </div>
           <div style="margin-top:10px;font-size:11px;color:var(--t3);line-height:1.6;">FCR mínimo 10%, seguro obrigatório e prazo de 30 dias para atas são regras <strong style="color:var(--amber)">imperativas</strong> — não podem ser alteradas por ninguém.</div>
         </div>
+        <div id="alerta-acoes-assembleias" style="margin-bottom:16px;"></div>
         <div class="panel" style="margin-bottom:16px;">
           <div class="ph"><span class="pt">Deliberações com Impacto nos Cálculos</span><span class="pm">Extraídas das atas por IA</span></div>
           <div id="deliberacoes-list"><div style="text-align:center;padding:20px;color:var(--t3);font-size:12px;">Sem deliberações registadas. Importa uma ata para extrair automaticamente.</div></div>
@@ -7419,10 +7420,66 @@ async function removerAssembleia(assembleiaId) {
   }
 }
 
+function verificarAcoesPendentes(assembleias) {
+  var pendentes = [];
+  var hoje = new Date();
+  (assembleias || []).forEach(function(a){
+    if ((a.estado === 'realizada' || a.estado_sessao === 'encerrada') && a.ata_texto && a.ata_texto.trim() && !a.ata_enviada_ausentes) {
+      var dataAss = a.data_assembleia ? new Date(a.data_assembleia) : hoje;
+      var dataLimite = new Date(dataAss.getTime() + 30*24*60*60*1000);
+      var diasRestantes = Math.ceil((dataLimite - hoje) / (24*60*60*1000));
+      pendentes.push({ id: a.id, data: a.data_assembleia, dataLimite: dataLimite, diasRestantes: diasRestantes, numero: a.numero_ata });
+    }
+  });
+  var badge = document.getElementById('badge-assembleias');
+  if (badge) {
+    if (pendentes.length > 0) {
+      badge.style.display = 'inline-block';
+      badge.textContent = pendentes.length;
+      var algumUrgente = pendentes.some(function(p){ return p.diasRestantes <= 12; });
+      badge.style.background = algumUrgente ? '#f87171' : '#ffb300';
+    } else {
+      badge.style.display = 'none';
+    }
+  }
+  _acoesPendentesAssembleias = pendentes;
+  renderAlertaAcoesPendentes();
+}
+
+var _acoesPendentesAssembleias = [];
+function renderAlertaAcoesPendentes() {
+  var cont = document.getElementById('alerta-acoes-assembleias');
+  if (!cont) return;
+  if (!_acoesPendentesAssembleias.length) { cont.innerHTML = ''; return; }
+  var html = '';
+  _acoesPendentesAssembleias.forEach(function(p){
+    var dataFmt = p.data ? new Date(p.data).toLocaleDateString('pt-PT') : '';
+    var limiteFmt = p.dataLimite.toLocaleDateString('pt-PT');
+    var cor, icon, txt;
+    if (p.diasRestantes < 0) {
+      cor = 'rgba(248,113,113,.12)'; icon = '🔴';
+      txt = 'PRAZO ULTRAPASSADO há ' + Math.abs(p.diasRestantes) + ' dia(s)! A ata da assembleia de ' + dataFmt + ' devia ter sido comunicada aos ausentes até ' + limiteFmt + '.';
+    } else if (p.diasRestantes <= 12) {
+      cor = 'rgba(255,179,0,.12)'; icon = '🟠';
+      txt = 'URGENTE: a ata da assembleia de ' + dataFmt + ' tem de ser enviada aos ausentes até ' + limiteFmt + ' (faltam ' + p.diasRestantes + ' dias). Conta com a demora do correio — envia já.';
+    } else {
+      cor = 'rgba(0,212,255,.10)'; icon = '🔵';
+      txt = 'Tens a ata da assembleia de ' + dataFmt + ' por comunicar aos ausentes. Prazo legal: ' + limiteFmt + ' (' + p.diasRestantes + ' dias).';
+    }
+    html += '<div style="background:' + cor + ';border:1px solid rgba(255,255,255,.08);border-radius:9px;padding:11px 15px;margin-bottom:8px;display:flex;align-items:center;gap:11px;font-size:12px;color:var(--text);">' +
+      '<span style="font-size:16px;">' + icon + '</span>' +
+      '<span style="flex:1;">' + txt + '</span>' +
+      '<button class="btn-ghost" style="font-size:11px;padding:4px 12px;white-space:nowrap;color:#b48cff;border-color:rgba(180,140,255,.3);" onclick="enviarAtaAusentes(\'' + p.id + '\')">📨 Enviar Ata</button>' +
+      '</div>';
+  });
+  cont.innerHTML = html;
+}
+
 async function loadAssembleias() {
   if (!currentCondo) return;
   const { data } = await sb.from('assembleias').select('*').eq('condominio_id',currentCondo.id).order('data_assembleia',{ascending:false});
   const as = data || [];
+  verificarAcoesPendentes(as);
   const estadoCls = {agendada:'par',realizada:'ok',cancelada:'pend',nao_realizada:'warn'};
   document.getElementById('assembleias-list').innerHTML = as.length ?
     `<table class="tbl"><thead><tr><th>Tipo</th><th>Data</th><th>Local</th><th>Estado</th><th>Ata IA</th><th>Ação</th></tr></thead><tbody>`+
@@ -7774,14 +7831,8 @@ async function enviarConvocatoriaTodos(assembleiaId) {
 
   await confirmar(resumo, {titulo:'Convocatória enviada', tipo:'success', icon:'✅', okTexto:'Concluir', cancelarTexto:'', html:true});
 
-  // Registar o custo postal nas despesas (para os relatórios/contas)
-  if (custoCartas > 0) {
-    var reg = await confirmar('Queres registar o custo postal de ' + custoCartas.toFixed(2).replace('.',',') + '€ como despesa do condomínio?\n\nAssim fica nas contas e nos relatórios de gastos do ano.', {titulo:'Registar custo nas contas', tipo:'info', icon:'💰', okTexto:'Sim, registar', cancelarTexto:'Não'});
-    if (reg) {
-      var ok = await registarCustoPostal('convocatoria', totalCartas, custoCartas, assembleiaId);
-      toast(ok ? '✅ Custo postal registado nas despesas' : 'Não foi possível registar o custo', ok?'ok':'err');
-    }
-  }
+  // Registar o custo postal + impressão nas despesas (para os relatórios/contas)
+  await fluxoRegistarCustos('convocatoria', totalCartas, custoCartas, assembleiaId);
   loadAssembleias();
 }
 
@@ -7901,27 +7952,23 @@ async function enviarAtaAusentes(assembleiaId) {
 
   await confirmar(resumo, {titulo:'Ata comunicada aos ausentes', tipo:'success', icon:'✅', okTexto:'Concluir', cancelarTexto:'', html:true});
 
-  // Registar o custo postal nas despesas (para os relatórios/contas)
-  if (custoCartas > 0) {
-    var reg = await confirmar('Queres registar o custo postal de ' + custoCartas.toFixed(2).replace('.',',') + '€ como despesa do condomínio?\n\nAssim fica nas contas e nos relatórios de gastos do ano.', {titulo:'Registar custo nas contas', tipo:'info', icon:'💰', okTexto:'Sim, registar', cancelarTexto:'Não'});
-    if (reg) {
-      var ok = await registarCustoPostal('ata', porCarta.length, custoCartas, assembleiaId);
-      toast(ok ? '✅ Custo postal registado nas despesas' : 'Não foi possível registar o custo', ok?'ok':'err');
-    }
-  }
+  // Registar o custo postal + impressão nas despesas (para os relatórios/contas)
+  await fluxoRegistarCustos('ata', porCarta.length, custoCartas, assembleiaId);
   loadAssembleias();
 }
 
 // Registar o custo postal de um envio como despesa (para os relatórios/contas)
-async function registarCustoPostal(tipo, nCartas, custo, assembleiaId) {
-  if (custo <= 0) return;
+async function registarCustoPostal(tipo, nCartas, custo, assembleiaId, custoImpressao) {
+  var custoTotal = custo + (custoImpressao || 0);
+  if (custoTotal <= 0) return;
   var hoje = new Date().toISOString().split('T')[0];
   var descricao = (tipo === 'convocatoria' ? 'Envio de convocatórias' : 'Comunicação de ata aos ausentes') + ' — ' + nCartas + ' carta(s) registada(s)';
+  var notaExtra = custoImpressao > 0 ? ' Inclui ' + custoImpressao.toFixed(2).replace('.',',') + '€ de impressão (tinta/folhas).' : '';
   var payload = {
     condominio_id: currentCondo.id,
     descricao: descricao,
     tipo: 'administrativa',
-    valor_total: parseFloat(custo.toFixed(2)),
+    valor_total: parseFloat(custoTotal.toFixed(2)),
     data_despesa: hoje,
     estado: 'aprovada',
     distribuicao: 'permilagem',
@@ -7929,12 +7976,25 @@ async function registarCustoPostal(tipo, nCartas, custo, assembleiaId) {
     assembleia_id: assembleiaId,
     motivo: 'Custos postais CTT (correio registado)',
     forma_pagamento: 'transferencia',
-    notas: 'Registado automaticamente pelo envio de ' + (tipo === 'convocatoria' ? 'convocatórias' : 'ata') + '. ' + nCartas + ' × correio registado.',
+    notas: 'Registado automaticamente pelo envio de ' + (tipo === 'convocatoria' ? 'convocatórias' : 'ata') + '. ' + nCartas + ' × correio registado.' + notaExtra,
     quota_gerada: false
   };
   var res = await sb.from('despesas').insert(payload);
   if (res.error) { console.error('Erro ao registar custo postal:', res.error); return false; }
   return true;
+}
+
+// Perguntar e registar o custo de um envio (postal + impressão opcional)
+async function fluxoRegistarCustos(tipo, nCartas, custoCartas, assembleiaId) {
+  if (custoCartas <= 0) return;
+  var reg = await confirmar('Queres registar o custo postal de ' + custoCartas.toFixed(2).replace('.',',') + '€ como despesa do condomínio?\n\nAssim fica nas contas e nos relatórios de gastos do ano.', {titulo:'Registar custo nas contas', tipo:'info', icon:'💰', okTexto:'Sim, registar', cancelarTexto:'Não'});
+  if (!reg) return;
+  // Perguntar sobre custo de impressão (tinta + folhas)
+  var custoImpressao = 0;
+  var querImpressao = await confirmar('Queres incluir o custo de impressão (tinta + folhas) das ' + nCartas + ' carta(s)?\n\nEstimativa: ~0,10€ por folha = ' + (nCartas*0.10).toFixed(2).replace('.',',') + '€.\n\nSe és tu a "oferecer" a impressão, escolhe Não.', {titulo:'Custo de impressão', tipo:'info', icon:'🖨', okTexto:'Sim, incluir', cancelarTexto:'Não, eu ofereço'});
+  if (querImpressao) custoImpressao = nCartas * 0.10;
+  var ok = await registarCustoPostal(tipo, nCartas, custoCartas, assembleiaId, custoImpressao);
+  toast(ok ? '✅ Custo registado nas despesas' + (custoImpressao>0?' (postal + impressão)':'') : 'Não foi possível registar o custo', ok?'ok':'err');
 }
 
 // Gerar PDF para IMPRESSÃO das cartas de CONVOCATÓRIA aos condóminos:
