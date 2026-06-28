@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.06.28-0935</div>
+      <div class="sb-tag">2059 Pro · build v2026.06.28-0953</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -7426,7 +7426,7 @@ async function loadAssembleias() {
   const estadoCls = {agendada:'par',realizada:'ok',cancelada:'pend',nao_realizada:'warn'};
   document.getElementById('assembleias-list').innerHTML = as.length ?
     `<table class="tbl"><thead><tr><th>Tipo</th><th>Data</th><th>Local</th><th>Estado</th><th>Ata IA</th><th>Ação</th></tr></thead><tbody>`+
-    as.map(a=>`<tr style="${a.estado==='cancelada'?'opacity:.5;':''}"><td>${a.tipo}${a.estado==='cancelada'?' <span style="font-size:9px;color:var(--t3);">(cancelada)</span>':''}</td><td class="mn">${a.data_assembleia?(new Date(a.data_assembleia)).toLocaleDateString('pt-PT'):'—'}</td><td style="color:var(--t2);font-size:11px">${a.local_assembleia||'—'}</td><td><span class="pill ${estadoCls[a.estado]||''}">${a.estado==='nao_realizada'?'não realizada':a.estado}</span></td><td>${a.ata_gerada_ia?'<span class="pill ok">IA</span>':(a.ata_texto?'<span class="pill" style="background:rgba(0,212,255,.15);color:var(--cyan);">revista</span>':'—')}</td><td><div style="display:flex;gap:4px;flex-wrap:wrap;">${a.estado!=='cancelada'?`<button class="tb-btn" style="font-size:10px;padding:3px 9px;color:var(--cyan);border-color:rgba(0,212,255,.3);" onclick="reimprimirConvocatoria('${a.id}')" title="Gerar/reimprimir a convocatória em PDF">\u{1F4C4} PDF</button>${(a.estado!=='realizada'&&a.estado!=='nao_realizada'&&a.estado_sessao!=='encerrada')?`<button class="tb-btn" style="font-size:10px;padding:3px 9px;color:var(--green);border-color:rgba(16,185,129,.3);" onclick="enviarConvocatoriaTodos('${a.id}')" title="Enviar a convocatória por email (autorizados) e preparar cartas registadas">\u{1F4E4} Enviar</button>`:''}${(a.estado==='realizada'||a.estado==='nao_realizada'||a.estado_sessao==='encerrada')?`<button class="tb-btn" style="font-size:10px;padding:3px 9px;color:var(--green);border-color:rgba(16,185,129,.3);" onclick="gerarAta('${a.id}','')" title="Ver/gerar a ata desta assembleia">\u{1F4DC} Ata</button>`:`<button class="tb-btn" style="font-size:10px;padding:3px 7px;background:rgba(248,113,113,.1);border-color:rgba(248,113,113,.3);color:#f87171;" onclick="abrirSalaAssembleia('${a.id}')">📡 Abrir Sala</button>`}`:''}<button class="tb-btn" style="font-size:10px;padding:3px 9px;color:#f87171;border-color:rgba(248,113,113,.3);" onclick="removerAssembleia('${a.id}')" title="Apagar (se agendada) ou cancelar (se já realizada)">✕ Remover</button></div></td></tr>`).join('')+`</tbody></table>` :
+    as.map(a=>`<tr style="${a.estado==='cancelada'?'opacity:.5;':''}"><td>${a.tipo}${a.estado==='cancelada'?' <span style="font-size:9px;color:var(--t3);">(cancelada)</span>':''}</td><td class="mn">${a.data_assembleia?(new Date(a.data_assembleia)).toLocaleDateString('pt-PT'):'—'}</td><td style="color:var(--t2);font-size:11px">${a.local_assembleia||'—'}</td><td><span class="pill ${estadoCls[a.estado]||''}">${a.estado==='nao_realizada'?'não realizada':a.estado}</span></td><td>${a.ata_gerada_ia?'<span class="pill ok">IA</span>':(a.ata_texto?'<span class="pill" style="background:rgba(0,212,255,.15);color:var(--cyan);">revista</span>':'—')}</td><td><div style="display:flex;gap:4px;flex-wrap:wrap;">${a.estado!=='cancelada'?`<button class="tb-btn" style="font-size:10px;padding:3px 9px;color:var(--cyan);border-color:rgba(0,212,255,.3);" onclick="reimprimirConvocatoria('${a.id}')" title="Gerar/reimprimir a convocatória em PDF">\u{1F4C4} PDF</button>${(a.estado!=='realizada'&&a.estado!=='nao_realizada'&&a.estado_sessao!=='encerrada')?`<button class="tb-btn" style="font-size:10px;padding:3px 9px;color:var(--green);border-color:rgba(16,185,129,.3);" onclick="enviarConvocatoriaTodos('${a.id}')" title="Enviar a convocatória por email (autorizados) e preparar cartas registadas">\u{1F4E4} Enviar</button>`:''}${(a.estado==='realizada'||a.estado==='nao_realizada'||a.estado_sessao==='encerrada')?`<button class="tb-btn" style="font-size:10px;padding:3px 9px;color:var(--green);border-color:rgba(16,185,129,.3);" onclick="gerarAta('${a.id}','')" title="Ver/gerar a ata desta assembleia">\u{1F4DC} Ata</button>${a.ata_texto?`<button class="tb-btn" style="font-size:10px;padding:3px 9px;color:#b48cff;border-color:rgba(180,140,255,.3);" onclick="enviarAtaAusentes('${a.id}')" title="Enviar a ata aos condóminos ausentes (prazo legal de 30 dias)">\u{1F4E8} Enviar Ata</button>`:''}`:`<button class="tb-btn" style="font-size:10px;padding:3px 7px;background:rgba(248,113,113,.1);border-color:rgba(248,113,113,.3);color:#f87171;" onclick="abrirSalaAssembleia('${a.id}')">📡 Abrir Sala</button>`}`:''}<button class="tb-btn" style="font-size:10px;padding:3px 9px;color:#f87171;border-color:rgba(248,113,113,.3);" onclick="removerAssembleia('${a.id}')" title="Apagar (se agendada) ou cancelar (se já realizada)">✕ Remover</button></div></td></tr>`).join('')+`</tbody></table>` :
     emptyState('ti-speakerphone','Sem assembleias','Convoca a primeira assembleia do condomínio.');
 }
 
@@ -7774,6 +7774,163 @@ async function enviarConvocatoriaTodos(assembleiaId) {
 
   await confirmar(resumo, {titulo:'Convocatória enviada', tipo:'success', icon:'✅', okTexto:'Concluir', cancelarTexto:'', html:true});
   loadAssembleias();
+}
+
+// ===== ENVIO DA ATA AOS AUSENTES (prazo legal 30 dias, sempre Reg+AR) =====
+async function enviarAtaAusentes(assembleiaId) {
+  if (!currentCondo) return;
+  var aRes = await sb.from('assembleias').select('*').eq('id', assembleiaId).single();
+  if (aRes.error || !aRes.data) { toast('Erro ao carregar a assembleia','err'); return; }
+  var a = aRes.data;
+  if (!a.ata_texto || !a.ata_texto.trim()) { toast('Esta assembleia ainda não tem ata gerada','err'); return; }
+
+  // Calcular o prazo legal: 30 dias a contar da data da assembleia
+  var dataAss = a.data_assembleia ? new Date(a.data_assembleia) : new Date();
+  var dataLimite = new Date(dataAss.getTime() + 30*24*60*60*1000);
+  var hoje = new Date();
+  var diasRestantes = Math.ceil((dataLimite - hoje) / (24*60*60*1000));
+
+  // Buscar as presenças desta assembleia (só os AUSENTES precisam de ser notificados)
+  var presRes = await sb.from('assembleia_presencas').select('*').eq('assembleia_id', assembleiaId);
+  var presencas = {};
+  (presRes.data || []).forEach(function(p){ presencas[p.fracao_id] = p.estado; });
+
+  // Ausentes = quem NÃO esteve presente nem representado
+  var ausentes = fracoes.filter(function(f){
+    var est = presencas[f.id];
+    return est !== 'presente' && est !== 'representado';
+  });
+
+  if (!ausentes.length) {
+    await confirmar('Todos os condóminos estiveram presentes ou representados nesta assembleia.\n\nNão é necessário notificar ninguém — os presentes tomaram conhecimento das deliberações na própria reunião (Art. 1432.º CC).', {titulo:'Sem ausentes a notificar', tipo:'success', icon:'✅', okTexto:'Entendido', cancelarTexto:''});
+    return;
+  }
+
+  // Separar ausentes: email autorizado vs carta (a ata aos ausentes é SEMPRE Reg+AR)
+  var porEmail = [], porCarta = [];
+  ausentes.forEach(function(f){
+    if (f.proprietario_email && f.autoriza_email_convocatoria === true) porEmail.push(f);
+    else porCarta.push(f);
+  });
+  var tarifaAR = tarifaCartaRegistadaAR();
+  var custoCartas = porCarta.length * tarifaAR;
+
+  // Aviso do prazo
+  var prazoTxt;
+  if (diasRestantes < 0) prazoTxt = '🔴 PRAZO ULTRAPASSADO há ' + Math.abs(diasRestantes) + ' dia(s)! A comunicação devia ter sido feita até ' + dataLimite.toLocaleDateString('pt-PT') + '.';
+  else if (diasRestantes <= 7) prazoTxt = '🟠 URGENTE: faltam ' + diasRestantes + ' dia(s) para o limite legal (' + dataLimite.toLocaleDateString('pt-PT') + ').';
+  else prazoTxt = '🟢 Prazo legal: até ' + dataLimite.toLocaleDateString('pt-PT') + ' (' + diasRestantes + ' dias). ';
+
+  // Resumo prévio
+  var msg = '📋 Comunicação da ata aos ausentes:\n\n';
+  msg += prazoTxt + '\n\n';
+  msg += '👥 ' + ausentes.length + ' ausente(s) a notificar (os presentes não precisam)\n';
+  msg += '✅ ' + porEmail.length + ' por email (autorizado)\n';
+  msg += '✉️ ' + porCarta.length + ' por carta registada + AR (obrigatório por lei)\n';
+  msg += '💰 Custo estimado: ' + custoCartas.toFixed(2).replace('.',',') + '€ (' + porCarta.length + ' × ' + tarifaAR.toFixed(2).replace('.',',') + '€)\n\n';
+  if (porEmail.length && !_gmailToken) msg += '⚠️ O Gmail não está ligado — os emails não serão enviados agora.\n\n';
+  msg += 'A lei dá depois 90 dias aos ausentes para se pronunciarem (silêncio = aprovação).\n\nContinuar?';
+
+  if (!await confirmar(msg, {titulo:'Enviar ata aos ausentes', tipo:'info', icon:'📨', okTexto:'Enviar / preparar'})) return;
+
+  // Gerar o PDF da ata (estilo documento oficial, reutilizando o gerador de impressão como base)
+  var pdfBase64 = await gerarAtaPDFBase64(a);
+  if (!pdfBase64) { toast('Não foi possível gerar o PDF da ata','err'); return; }
+
+  var condoNome = displayNomeCondo(currentCondo.nome||'');
+  var dataFmt = dataAss.toLocaleDateString('pt-PT');
+  var numAta = a.numero_ata ? ('n.º ' + a.numero_ata) : '';
+  var nomePdf = 'Ata_' + (numAta||dataFmt).replace(/\s+/g,'_') + '_' + condoNome.replace(/\s+/g,'_') + '.pdf';
+
+  // Enviar emails
+  var enviados = 0, falhas = 0;
+  if (porEmail.length && _gmailToken) {
+    toast('A enviar ' + porEmail.length + ' emails...', '');
+    for (var i = 0; i < porEmail.length; i++) {
+      var f = porEmail[i];
+      var assunto = '📜 Ata ' + numAta + ' — Assembleia de ' + dataFmt + ' — ' + condoNome;
+      var corpo =
+        '<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#f4f6f8;">'+
+        '<div style="background:linear-gradient(135deg,#0a1119,#0d1825);padding:24px 28px;border-radius:10px 10px 0 0;">'+
+          '<div style="color:#00d4ff;font-family:monospace;font-size:19px;font-weight:700;letter-spacing:2px;">COND.OS</div>'+
+          '<div style="color:#fff;font-size:13px;font-weight:600;margin-top:4px;">'+condoNome+'</div>'+
+        '</div>'+
+        '<div style="background:#fff;padding:26px 28px;">'+
+          '<p style="font-size:14px;color:#333;margin:0 0 16px;">Caro(a) <strong>'+(f.proprietario_nome||'condómino')+'</strong>,</p>'+
+          '<p style="font-size:13px;color:#555;line-height:1.6;margin:0 0 16px;">Na qualidade de condómino que não esteve presente na Assembleia '+(a.tipo||'')+' realizada em <strong>'+dataFmt+'</strong>, comunica-se em anexo a <strong>ata '+numAta+'</strong> com as deliberações tomadas, nos termos do Art. 1432.º do Código Civil.</p>'+
+          '<div style="background:#eef6ff;border:1px solid #b8d8f0;border-radius:8px;padding:12px 14px;margin:18px 0;font-size:12px;color:#1a5276;">⏱️ Dispõe de <strong>90 dias</strong> a contar desta comunicação para, querendo, manifestar por escrito a sua discordância das deliberações. A ausência de resposta vale como aprovação.</div>'+
+          '<div style="background:#fff8e8;border:1px solid #f0d090;border-radius:8px;padding:12px 14px;margin:18px 0;font-size:12px;color:#7a5c10;">Por favor, confirme a receção respondendo a este email (serve como recibo de receção).</div>'+
+          '<div style="border-top:1px solid #eee;padding-top:14px;"><p style="font-size:12px;color:#555;margin:0;">Com os melhores cumprimentos,</p><p style="font-size:13px;color:#222;font-weight:700;margin:6px 0 0;">'+(currentCondo.gestor_nome||currentCondo.administrador_nome||'A Administração')+'</p></div>'+
+        '</div>'+
+        '<div style="background:#0d1825;padding:12px 28px;text-align:center;border-radius:0 0 10px 10px;"><div style="color:#5a6a79;font-size:10px;">COND.OS 2059 Pro · '+new Date().toLocaleDateString('pt-PT')+'</div></div></div>';
+      var ok = await enviarEmailGmailComAnexo(f.proprietario_email, assunto, corpo, pdfBase64, nomePdf);
+      if (ok) enviados++; else falhas++;
+      await new Promise(function(r){ setTimeout(r, 400); });
+    }
+  }
+
+  // Registar o envio da ata
+  await sb.from('assembleias').update({ ata_enviada_ausentes: new Date().toISOString() }).eq('id', assembleiaId);
+
+  // Resumo final
+  var resumo = '<div style="font-size:13px;line-height:1.8;color:var(--text);">';
+  resumo += '<div style="margin-bottom:12px;font-weight:700;color:#b48cff;">📊 Resumo da comunicação</div>';
+  resumo += '<div style="background:rgba(180,140,255,.08);border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:12px;">Data-limite legal: <strong>' + dataLimite.toLocaleDateString('pt-PT') + '</strong></div>';
+  if (porEmail.length) resumo += '✅ <strong>' + enviados + '</strong> ata(s) enviada(s) por email' + (falhas?' (' + falhas + ' falha(s))':'') + '<br>';
+  if (porCarta.length) {
+    resumo += '✉️ <strong>' + porCarta.length + '</strong> carta(s) registada(s)+AR para imprimir:<br>';
+    resumo += '<div style="font-size:11px;color:var(--t2);margin:6px 0 6px 18px;">';
+    porCarta.forEach(function(f){ resumo += '• ' + (f.codigo||'?') + ' — ' + (f.proprietario_nome||'?') + '<br>'; });
+    resumo += '</div>';
+    resumo += '💰 Custo estimado: <strong>' + custoCartas.toFixed(2).replace('.',',') + '€</strong><br>';
+  }
+  resumo += '<div style="font-size:11px;color:var(--t3);margin-top:12px;padding-top:10px;border-top:1px solid var(--b1);">A ata foi descarregada em PDF para imprimir as cartas. Guarda os comprovativos dos CTT como prova do cumprimento do prazo.</div>';
+  resumo += '</div>';
+
+  await confirmar(resumo, {titulo:'Ata comunicada aos ausentes', tipo:'success', icon:'✅', okTexto:'Concluir', cancelarTexto:'', html:true});
+  loadAssembleias();
+}
+
+// Gerar o PDF da ata em base64 (para anexar a emails) — estilo documento oficial
+async function gerarAtaPDFBase64(a) {
+  if (!window.jspdf || !window.jspdf.jsPDF) { toast('Biblioteca PDF não carregada','err'); return null; }
+  var { jsPDF } = window.jspdf;
+  var doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+  var W = 210, M = 22, y = 26;
+  var condoNome = displayNomeCondo(currentCondo.nome||'');
+  var dataFmt = a.data_assembleia ? new Date(a.data_assembleia).toLocaleDateString('pt-PT') : '';
+
+  // Cabeçalho
+  doc.setFillColor(244,241,232); doc.rect(0,0,W,40,'F');
+  doc.setDrawColor(26,26,23); doc.setLineWidth(0.8); doc.line(M,38,W-M,38);
+  doc.setTextColor(122,48,48); doc.setFontSize(8); doc.setFont('helvetica','bold');
+  doc.text('DOCUMENTO OFICIAL · CONDOMÍNIO', W/2, 14, {align:'center'});
+  doc.setTextColor(26,26,23); doc.setFontSize(16);
+  doc.text(condoNome.toUpperCase(), W/2, 24, {align:'center'});
+  doc.setFont('helvetica','italic'); doc.setFontSize(11); doc.setTextColor(90,90,90);
+  doc.text('Ata de Assembleia de Condóminos · ' + dataFmt, W/2, 32, {align:'center'});
+  if (a.numero_ata) { doc.setFont('helvetica','bold'); doc.setTextColor(122,48,48); doc.setFontSize(10); doc.text('ATA N.º ' + a.numero_ata, W/2, 37, {align:'center'}); }
+
+  // Corpo (limpar markdown ** para texto simples no PDF)
+  y = 50;
+  var corpo = (a.ata_texto||'').replace(/\*\*(.+?)\*\*/g, '$1');
+  doc.setTextColor(26,26,23); doc.setFont('times','normal'); doc.setFontSize(11);
+  var linhas = doc.splitTextToSize(corpo, W - 2*M);
+  for (var i = 0; i < linhas.length; i++) {
+    if (y > 270) { doc.addPage(); y = 24; }
+    doc.text(linhas[i], M, y);
+    y += 6;
+  }
+
+  // Assinaturas
+  if (y > 240) { doc.addPage(); y = 30; } else { y += 16; }
+  doc.setDrawColor(26,26,23); doc.setLineWidth(0.3);
+  doc.line(M, y, M+60, y); doc.line(W-M-60, y, W-M, y);
+  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(70,70,70);
+  doc.text(a.mesa_presidente || 'O Presidente da Mesa', M, y+5);
+  doc.text(a.mesa_secretario || 'O Secretário', W-M-60, y+5);
+
+  return doc.output('datauristring').split(',')[1];
 }
 
 // Reimprimir a convocatória de uma assembleia já criada
