@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.06.28-1018</div>
+      <div class="sb-tag">2059 Pro · build v2026.06.28-2156</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -7735,6 +7735,9 @@ async function enviarConvocatoriaTodos(assembleiaId) {
   var a = aRes.data;
   if (!a.ordem_trabalhos || !a.ordem_trabalhos.trim()) { toast('Esta assembleia não tem ordem de trabalhos','err'); return; }
 
+  // Perguntar se quer anexar a procuração pré-preenchida (para quem não pode comparecer)
+  var anexarProcuracao = await confirmar('Queres anexar uma PROCURAÇÃO pré-preenchida a cada convocatória?\n\nÉ um documento já com os dados da assembleia (data, hora, local), pronto a usar caso o condómino não possa comparecer e queira fazer-se representar. Só falta assinar (proprietário + representante).', {titulo:'Anexar procuração?', tipo:'info', icon:'📜', okTexto:'Sim, anexar', cancelarTexto:'Não, só convocatória'});
+
   // Separar os condóminos em 3 grupos (regra legal Art. 1432.º)
   var porEmail = [], porCarta = [], semContacto = [];
   fracoes.forEach(function(f){
@@ -7797,11 +7800,18 @@ async function enviarConvocatoriaTodos(assembleiaId) {
           '<p style="font-size:14px;color:#333;margin:0 0 16px;">Caro(a) <strong>'+(f.proprietario_nome||'condómino')+'</strong>,</p>'+
           '<p style="font-size:13px;color:#555;line-height:1.6;margin:0 0 16px;">Junto se envia a <strong>convocatória</strong> para a Assembleia '+(a.tipo||'')+' de condóminos, a realizar em <strong>'+dataFmt+'</strong>, pelas '+(a.hora_assembleia||'20:00')+', em '+(a.local_assembleia||'')+'.</p>'+
           '<p style="font-size:13px;color:#555;line-height:1.6;margin:0 0 16px;">A convocatória completa, com a ordem de trabalhos, segue em <strong>anexo (PDF)</strong>.</p>'+
+          (anexarProcuracao ? '<div style="background:#eef6ff;border:1px solid #b8d8f0;border-radius:8px;padding:12px 14px;margin:18px 0;font-size:12px;color:#1a5276;">📜 Segue também, em anexo, uma <strong>procuração pré-preenchida</strong>. Caso não possa comparecer, pode usá-la para se fazer representar — basta preencher o nome do representante e assinarem ambos.</div>' : '')+
           '<div style="background:#fff8e8;border:1px solid #f0d090;border-radius:8px;padding:12px 14px;margin:18px 0;font-size:12px;color:#7a5c10;">⚠️ Por favor, confirme a receção desta convocatória respondendo a este email. A sua confirmação serve como recibo de receção, nos termos do Art. 1432.º do Código Civil.</div>'+
           '<div style="border-top:1px solid #eee;padding-top:14px;"><p style="font-size:12px;color:#555;margin:0;">Com os melhores cumprimentos,</p><p style="font-size:13px;color:#222;font-weight:700;margin:6px 0 0;">'+(currentCondo.gestor_nome||currentCondo.administrador_nome||'A Administração')+'</p></div>'+
         '</div>'+
         '<div style="background:#0d1825;padding:12px 28px;text-align:center;border-radius:0 0 10px 10px;"><div style="color:#5a6a79;font-size:10px;">COND.OS 2059 Pro · '+new Date().toLocaleDateString('pt-PT')+'</div></div></div>';
-      var ok = await enviarEmailGmailComAnexo(f.proprietario_email, assunto, corpo, pdfRes.base64, pdfRes.nomeFich);
+      // Anexo: convocatória (+ procuração combinada, se pedido)
+      var anexoBase64 = pdfRes.base64, anexoNome = pdfRes.nomeFich;
+      if (anexarProcuracao) {
+        var combinado = await combinarConvocatoriaProcuracao(a, f, dados);
+        if (combinado) { anexoBase64 = combinado; anexoNome = 'Convocatoria_e_Procuracao_' + (f.codigo||'') + '.pdf'; }
+      }
+      var ok = await enviarEmailGmailComAnexo(f.proprietario_email, assunto, corpo, anexoBase64, anexoNome);
       if (ok) enviados++; else falhas++;
       await new Promise(function(r){ setTimeout(r, 400); });
     }
@@ -7827,7 +7837,7 @@ async function enviarConvocatoriaTodos(assembleiaId) {
   resumo += '</div>';
 
   // Descarregar o PDF das cartas personalizadas (folha de rosto + 1 convocatória por destinatário)
-  if (totalCartas > 0) { gerarPDFCartasConvocatoria(a, porCarta.concat(semContacto), dados); }
+  if (totalCartas > 0) { gerarPDFCartasConvocatoria(a, porCarta.concat(semContacto), dados, anexarProcuracao); }
 
   await confirmar(resumo, {titulo:'Convocatória enviada', tipo:'success', icon:'✅', okTexto:'Concluir', cancelarTexto:'', html:true});
 
@@ -7997,9 +8007,156 @@ async function fluxoRegistarCustos(tipo, nCartas, custoCartas, assembleiaId) {
   toast(ok ? '✅ Custo registado nas despesas' + (custoImpressao>0?' (postal + impressão)':'') : 'Não foi possível registar o custo', ok?'ok':'err');
 }
 
+// Combinar a convocatória + a procuração de um condómino, num único PDF base64
+async function combinarConvocatoriaProcuracao(a, f, dadosConv) {
+  try {
+    // Gerar uma convocatória FRESCA (para não acumular no mesmo doc entre condóminos)
+    var dadosFresh = Object.assign({}, dadosConv, { _retornarDoc: true });
+    var convRes = await gerarConvocatoriaPDF(dadosFresh, a.id);
+    if (!convRes || !convRes.doc) return null;
+    // Acrescentar a procuração a esse doc fresco
+    var combinado = gerarProcuracaoNoDoc(convRes.doc, a, f);
+    return combinado.output('datauristring').split(',')[1];
+  } catch(e) {
+    console.error('Erro ao combinar convocatória + procuração:', e);
+    return null;
+  }
+}
+
+// Acrescentar a procuração a um doc existente (nova página) e devolver o doc
+function gerarProcuracaoNoDoc(doc, a, f) {
+  doc.addPage();
+  var W = 210, M = 24;
+  var condoNome = displayNomeCondo(currentCondo.nome||'');
+  var moradaCondo = [currentCondo.morada, [currentCondo.codigo_postal, currentCondo.cidade].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+  var dataFmt = a.data_assembleia ? new Date(a.data_assembleia).toLocaleDateString('pt-PT') : '____/____/______';
+  var horaFmt = a.hora_assembleia || '____:____';
+  var localFmt = a.local_assembleia || '________________________';
+  var tipoFmt = a.tipo || 'de condóminos';
+
+  doc.setFillColor(244,241,232); doc.rect(0,0,W,34,'F');
+  doc.setDrawColor(26,26,23); doc.setLineWidth(0.8); doc.line(M,32,W-M,32);
+  doc.setTextColor(122,48,48); doc.setFont('helvetica','bold'); doc.setFontSize(8);
+  doc.text('DOCUMENTO PARA ASSINATURA', W/2, 13, {align:'center'});
+  doc.setTextColor(26,26,23); doc.setFontSize(17);
+  doc.text('PROCURAÇÃO', W/2, 24, {align:'center'});
+
+  var y = 48;
+  doc.setTextColor(40,40,40); doc.setFont('helvetica','normal'); doc.setFontSize(11);
+  var p1 = 'Eu, ___________________________________________________ (nome do proprietário), na qualidade de proprietário(a) da fração "' + (f.codigo||'____') + '" do ' + condoNome + ', sito em ' + moradaCondo + ', portador(a) do NIF ' + (f.proprietario_nif || '________________') + ',';
+  var l1 = doc.splitTextToSize(p1, W-2*M); doc.text(l1, M, y); y += l1.length*6 + 4;
+  var p2 = 'pela presente, constituo meu(minha) bastante procurador(a) o(a) Senhor(a) ___________________________________________________ (nome do representante), portador(a) do NIF ________________,';
+  var l2 = doc.splitTextToSize(p2, W-2*M); doc.text(l2, M, y); y += l2.length*6 + 4;
+  var p3 = 'a quem confiro poderes para me representar, com direito a usar da palavra, discutir e VOTAR em meu nome sobre todos os pontos da ordem de trabalhos, na Assembleia ' + tipoFmt + ' de condóminos abaixo identificada:';
+  var l3 = doc.splitTextToSize(p3, W-2*M); doc.text(l3, M, y); y += l3.length*6 + 8;
+
+  doc.setFillColor(248,246,238); doc.setDrawColor(200,190,170); doc.setLineWidth(0.4);
+  doc.roundedRect(M, y, W-2*M, 30, 2, 2, 'FD');
+  doc.setFont('helvetica','bold'); doc.setFontSize(10.5); doc.setTextColor(26,26,23);
+  doc.text('Data: ' + dataFmt + '          Hora: ' + horaFmt, M+6, y+10);
+  doc.text('Local: ' + localFmt, M+6, y+19);
+  doc.setFont('helvetica','italic'); doc.setFontSize(9); doc.setTextColor(110,100,80);
+  doc.text('(e respetiva 2.ª convocatória, caso se realize)', M+6, y+26);
+  y += 42;
+
+  doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(60,60,60);
+  var lv = doc.splitTextToSize('A presente procuração é válida exclusivamente para a assembleia acima identificada. Por ser verdade, vai assinada por ambos.', W-2*M);
+  doc.text(lv, M, y); y += lv.length*6 + 18;
+  doc.text('______________________, ______ de ____________________ de 20______', M, y); y += 20;
+
+  doc.setDrawColor(26,26,23); doc.setLineWidth(0.3);
+  doc.line(M, y, M+70, y); doc.line(W-M-70, y, W-M, y);
+  doc.setFontSize(9); doc.setTextColor(70,70,70);
+  doc.text('O(A) Proprietário(a)', M, y+5);
+  doc.text('O(A) Representante', W-M-70, y+5);
+  doc.setFontSize(8); doc.setTextColor(120,120,120);
+  doc.text('(assinatura conforme documento de identificação)', M, y+10);
+  return doc;
+}
+
+// Gerar PROCURAÇÃO pré-preenchida (uma por condómino) — só falta assinar (dono + representante)
+// Devolve o doc jsPDF (para anexar/juntar) ou descarrega se _download=true
+function gerarProcuracaoDoc(a, f) {
+  if (!window.jspdf || !window.jspdf.jsPDF) { toast('Biblioteca PDF não carregada','err'); return null; }
+  var { jsPDF } = window.jspdf;
+  var doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+  var W = 210, M = 24;
+  var condoNome = displayNomeCondo(currentCondo.nome||'');
+  var moradaCondo = [currentCondo.morada, [currentCondo.codigo_postal, currentCondo.cidade].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+  var dataFmt = a.data_assembleia ? new Date(a.data_assembleia).toLocaleDateString('pt-PT') : '____/____/______';
+  var horaFmt = a.hora_assembleia || '____:____';
+  var localFmt = a.local_assembleia || '________________________';
+  var tipoFmt = a.tipo || 'de condóminos';
+
+  // Cabeçalho
+  doc.setFillColor(244,241,232); doc.rect(0,0,W,34,'F');
+  doc.setDrawColor(26,26,23); doc.setLineWidth(0.8); doc.line(M,32,W-M,32);
+  doc.setTextColor(122,48,48); doc.setFont('helvetica','bold'); doc.setFontSize(8);
+  doc.text('DOCUMENTO PARA ASSINATURA', W/2, 13, {align:'center'});
+  doc.setTextColor(26,26,23); doc.setFontSize(17);
+  doc.text('PROCURAÇÃO', W/2, 24, {align:'center'});
+
+  var y = 48;
+  doc.setTextColor(40,40,40); doc.setFont('helvetica','normal'); doc.setFontSize(11);
+
+  // Texto da procuração com campos preenchidos e espaços a assinar
+  var p1 = 'Eu, ___________________________________________________ (nome do proprietário), ' +
+    'na qualidade de proprietário(a) da fração "' + (f.codigo||'____') + '" do ' + condoNome + ', ' +
+    'sito em ' + moradaCondo + ', portador(a) do NIF ' + (f.proprietario_nif || '________________') + ',';
+  var l1 = doc.splitTextToSize(p1, W-2*M);
+  doc.text(l1, M, y); y += l1.length*6 + 4;
+
+  var p2 = 'pela presente, constituo meu(minha) bastante procurador(a) o(a) Senhor(a) ' +
+    '___________________________________________________ (nome do representante), ' +
+    'portador(a) do NIF ________________,';
+  var l2 = doc.splitTextToSize(p2, W-2*M);
+  doc.text(l2, M, y); y += l2.length*6 + 4;
+
+  var p3 = 'a quem confiro poderes para me representar, com direito a usar da palavra, discutir e VOTAR em meu nome ' +
+    'sobre todos os pontos da ordem de trabalhos, na Assembleia ' + tipoFmt + ' de condóminos abaixo identificada:';
+  var l3 = doc.splitTextToSize(p3, W-2*M);
+  doc.text(l3, M, y); y += l3.length*6 + 8;
+
+  // Caixa com os dados da assembleia (pré-preenchidos)
+  doc.setFillColor(248,246,238); doc.setDrawColor(200,190,170); doc.setLineWidth(0.4);
+  doc.roundedRect(M, y, W-2*M, 30, 2, 2, 'FD');
+  doc.setFont('helvetica','bold'); doc.setFontSize(10.5); doc.setTextColor(26,26,23);
+  doc.text('Data: ' + dataFmt + '          Hora: ' + horaFmt, M+6, y+10);
+  doc.text('Local: ' + localFmt, M+6, y+19);
+  doc.setFont('helvetica','italic'); doc.setFontSize(9); doc.setTextColor(110,100,80);
+  doc.text('(e respetiva 2.ª convocatória, caso se realize)', M+6, y+26);
+  y += 42;
+
+  // Validade
+  doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(60,60,60);
+  var pv = 'A presente procuração é válida exclusivamente para a assembleia acima identificada. ' +
+    'Por ser verdade, vai assinada por ambos.';
+  var lv = doc.splitTextToSize(pv, W-2*M);
+  doc.text(lv, M, y); y += lv.length*6 + 18;
+
+  // Local e data de assinatura
+  doc.text('______________________, ______ de ____________________ de 20______', M, y); y += 20;
+
+  // Assinaturas
+  doc.setDrawColor(26,26,23); doc.setLineWidth(0.3);
+  doc.line(M, y, M+70, y);
+  doc.line(W-M-70, y, W-M, y);
+  doc.setFontSize(9); doc.setTextColor(70,70,70);
+  doc.text('O(A) Proprietário(a)', M, y+5);
+  doc.text('O(A) Representante', W-M-70, y+5);
+  doc.setFontSize(8); doc.setTextColor(120,120,120);
+  doc.text('(assinatura conforme documento de identificação)', M, y+10);
+
+  // Rodapé
+  doc.setTextColor(150,150,150); doc.setFontSize(7);
+  doc.text('Documento gerado por COND.OS 2059 Pro · Procuração para assembleia de ' + dataFmt, W/2, 285, {align:'center'});
+
+  return doc;
+}
+
 // Gerar PDF para IMPRESSÃO das cartas de CONVOCATÓRIA aos condóminos:
 // folha de rosto "IMPRIMIR X CARTAS" + uma convocatória por destinatário (nome/morada no topo)
-function gerarPDFCartasConvocatoria(a, listaCartas, dadosConv) {
+function gerarPDFCartasConvocatoria(a, listaCartas, dadosConv, comProcuracao) {
   if (!window.jspdf || !window.jspdf.jsPDF) { toast('Biblioteca PDF não carregada','err'); return; }
   var { jsPDF } = window.jspdf;
   var doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
@@ -8097,6 +8254,8 @@ function gerarPDFCartasConvocatoria(a, listaCartas, dadosConv) {
     doc.text(currentCondo.gestor_nome || currentCondo.administrador_nome || '_______________', M, yc);
     doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(120,120,120);
     doc.text(dataFmt, W-M, yc, {align:'right'});
+    // Se pedido, juntar a procuração deste condómino logo a seguir à sua carta
+    if (comProcuracao) { gerarProcuracaoNoDoc(doc, a, f); }
   });
 
   var nomeFich = 'Cartas_Convocatoria_' + dataFmt.replace(/[\s\/\.]+/g,'_') + '.pdf';
