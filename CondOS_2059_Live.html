@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.06.27-2231</div>
+      <div class="sb-tag">2059 Pro · build v2026.06.28-0935</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -7106,6 +7106,7 @@ async function renderSalaLivro(container) {
 function fecharSalaAssembleia() {
   closeModal('mo-sala-assembleia');
   _salaAssembleia = null;
+  loadAssembleias(); // recarregar para refletir o estado/ata atualizados
 }
 
 // GERAR ATA A PARTIR DO LIVRO (a IA lê só os eventos registados — não inventa)
@@ -7248,6 +7249,7 @@ async function gerarAtaDoLivro() {
     // Guardar a ata + o número
     await sb.from('assembleias').update({ ata_texto: ata, ata_gerada_ia: true, numero_ata: numeroAta }).eq('id', _salaAssembleia.id);
     _salaAssembleia.ata_texto = ata;
+    _salaAssembleia.ata_gerada_ia = true;
     _salaAssembleia.numero_ata = numeroAta;
     renderAtaGerada(ata);
   } catch(err) {
