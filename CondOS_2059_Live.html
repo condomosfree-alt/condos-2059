@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.06.28-2156</div>
+      <div class="sb-tag">2059 Pro · build v2026.06.28-2219</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -2052,6 +2052,24 @@ textarea.fi{resize:vertical;min-height:60px;}
 </div>
 
 <div class="toast" id="toast"></div>
+
+<div class="mo" id="mo-reenvio" style="z-index:10002;">
+  <div class="mo-box" style="width:440px;padding:0;overflow:hidden;">
+    <div style="background:linear-gradient(135deg,#0a1119,#0d1825);padding:18px 22px;border-bottom:1px solid var(--b1);">
+      <div style="font-size:15px;font-weight:700;color:#fff;">📨 Reenviar convocatória (2.ª via)</div>
+      <div id="reenvio-info" style="font-size:11px;color:var(--t3);margin-top:4px;"></div>
+    </div>
+    <div style="padding:20px 22px;">
+      <label style="font-size:12px;color:var(--t2);display:block;margin-bottom:6px;">A quem reenviar?</label>
+      <select id="reenvio-fracao" class="fi" style="width:100%;"></select>
+      <div style="font-size:10px;color:var(--t3);margin-top:8px;line-height:1.5;">Reenvia a convocatória por email só a este condómino (ex: pediu segunda via). O PDF segue em anexo.</div>
+    </div>
+    <div style="display:flex;gap:8px;padding:14px 22px;background:var(--s1);border-top:1px solid var(--b1);">
+      <button class="btn-ghost" style="flex:1;" onclick="document.getElementById('mo-reenvio').classList.remove('open')">Cancelar</button>
+      <button class="btn-primary" style="flex:1;" onclick="confirmarReenvioUm()">Reenviar</button>
+    </div>
+  </div>
+</div>
 
 <div class="mo" id="mo-tipo-envio" style="z-index:10002;">
   <div class="mo-box" style="width:480px;padding:0;overflow:hidden;">
@@ -7483,7 +7501,7 @@ async function loadAssembleias() {
   const estadoCls = {agendada:'par',realizada:'ok',cancelada:'pend',nao_realizada:'warn'};
   document.getElementById('assembleias-list').innerHTML = as.length ?
     `<table class="tbl"><thead><tr><th>Tipo</th><th>Data</th><th>Local</th><th>Estado</th><th>Ata IA</th><th>Ação</th></tr></thead><tbody>`+
-    as.map(a=>`<tr style="${a.estado==='cancelada'?'opacity:.5;':''}"><td>${a.tipo}${a.estado==='cancelada'?' <span style="font-size:9px;color:var(--t3);">(cancelada)</span>':''}</td><td class="mn">${a.data_assembleia?(new Date(a.data_assembleia)).toLocaleDateString('pt-PT'):'—'}</td><td style="color:var(--t2);font-size:11px">${a.local_assembleia||'—'}</td><td><span class="pill ${estadoCls[a.estado]||''}">${a.estado==='nao_realizada'?'não realizada':a.estado}</span></td><td>${a.ata_gerada_ia?'<span class="pill ok">IA</span>':(a.ata_texto?'<span class="pill" style="background:rgba(0,212,255,.15);color:var(--cyan);">revista</span>':'—')}</td><td><div style="display:flex;gap:4px;flex-wrap:wrap;">${a.estado!=='cancelada'?`<button class="tb-btn" style="font-size:10px;padding:3px 9px;color:var(--cyan);border-color:rgba(0,212,255,.3);" onclick="reimprimirConvocatoria('${a.id}')" title="Gerar/reimprimir a convocatória em PDF">\u{1F4C4} PDF</button>${(a.estado!=='realizada'&&a.estado!=='nao_realizada'&&a.estado_sessao!=='encerrada')?`<button class="tb-btn" style="font-size:10px;padding:3px 9px;color:var(--green);border-color:rgba(16,185,129,.3);" onclick="enviarConvocatoriaTodos('${a.id}')" title="Enviar a convocatória por email (autorizados) e preparar cartas registadas">\u{1F4E4} Enviar Convocatória</button>`:''}${(a.estado==='realizada'||a.estado==='nao_realizada'||a.estado_sessao==='encerrada')?`<button class="tb-btn" style="font-size:10px;padding:3px 9px;color:var(--green);border-color:rgba(16,185,129,.3);" onclick="gerarAta('${a.id}','')" title="Ver/gerar a ata desta assembleia">\u{1F4DC} Ata</button>${a.ata_texto?`<button class="tb-btn" style="font-size:10px;padding:3px 9px;color:#b48cff;border-color:rgba(180,140,255,.3);" onclick="enviarAtaAusentes('${a.id}')" title="Enviar a ata aos condóminos ausentes (prazo legal de 30 dias)">\u{1F4E8} Enviar Ata</button>`:''}`:`<button class="tb-btn" style="font-size:10px;padding:3px 7px;background:rgba(248,113,113,.1);border-color:rgba(248,113,113,.3);color:#f87171;" onclick="abrirSalaAssembleia('${a.id}')">📡 Abrir Sala</button>`}`:''}<button class="tb-btn" style="font-size:10px;padding:3px 9px;color:#f87171;border-color:rgba(248,113,113,.3);" onclick="removerAssembleia('${a.id}')" title="Apagar (se agendada) ou cancelar (se já realizada)">✕ Remover</button></div></td></tr>`).join('')+`</tbody></table>` :
+    as.map(a=>`<tr style="${a.estado==='cancelada'?'opacity:.5;':''}"><td>${a.tipo}${a.estado==='cancelada'?' <span style="font-size:9px;color:var(--t3);">(cancelada)</span>':''}</td><td class="mn">${a.data_assembleia?(new Date(a.data_assembleia)).toLocaleDateString('pt-PT'):'—'}</td><td style="color:var(--t2);font-size:11px">${a.local_assembleia||'—'}</td><td><span class="pill ${estadoCls[a.estado]||''}">${a.estado==='nao_realizada'?'não realizada':a.estado}</span></td><td>${a.ata_gerada_ia?'<span class="pill ok">IA</span>':(a.ata_texto?'<span class="pill" style="background:rgba(0,212,255,.15);color:var(--cyan);">revista</span>':'—')}</td><td><div style="display:flex;gap:4px;flex-wrap:wrap;">${a.estado!=='cancelada'?`<button class="tb-btn" style="font-size:10px;padding:3px 9px;color:var(--cyan);border-color:rgba(0,212,255,.3);" onclick="reimprimirConvocatoria('${a.id}')" title="Gerar/reimprimir a convocatória em PDF">\u{1F4C4} PDF</button>${(a.estado!=='realizada'&&a.estado!=='nao_realizada'&&a.estado_sessao!=='encerrada')?`<button class="tb-btn" style="font-size:10px;padding:3px 9px;color:var(--green);border-color:rgba(16,185,129,.3);" onclick="enviarConvocatoriaTodos('${a.id}')" title="Enviar a convocatória por email (autorizados) e preparar cartas registadas">\u{1F4E4} Enviar Convocatória</button><button class="tb-btn" style="font-size:10px;padding:3px 9px;color:var(--t2);border-color:rgba(255,255,255,.12);" onclick="reenviarConvocatoriaUm('${a.id}')" title="Reenviar a convocatória por email a um condómino específico (2.ª via)">\u{1F501} 2.ª via</button>`:''}${(a.estado==='realizada'||a.estado==='nao_realizada'||a.estado_sessao==='encerrada')?`<button class="tb-btn" style="font-size:10px;padding:3px 9px;color:var(--green);border-color:rgba(16,185,129,.3);" onclick="gerarAta('${a.id}','')" title="Ver/gerar a ata desta assembleia">\u{1F4DC} Ata</button>${a.ata_texto?`<button class="tb-btn" style="font-size:10px;padding:3px 9px;color:#b48cff;border-color:rgba(180,140,255,.3);" onclick="enviarAtaAusentes('${a.id}')" title="Enviar a ata aos condóminos ausentes (prazo legal de 30 dias)">\u{1F4E8} Enviar Ata</button>`:''}`:`<button class="tb-btn" style="font-size:10px;padding:3px 7px;background:rgba(248,113,113,.1);border-color:rgba(248,113,113,.3);color:#f87171;" onclick="abrirSalaAssembleia('${a.id}')">📡 Abrir Sala</button>`}`:''}<button class="tb-btn" style="font-size:10px;padding:3px 9px;color:#f87171;border-color:rgba(248,113,113,.3);" onclick="removerAssembleia('${a.id}')" title="Apagar (se agendada) ou cancelar (se já realizada)">✕ Remover</button></div></td></tr>`).join('')+`</tbody></table>` :
     emptyState('ti-speakerphone','Sem assembleias','Convoca a primeira assembleia do condomínio.');
 }
 
@@ -8405,6 +8423,60 @@ async function gerarAtaPDFBase64(a) {
 }
 
 // Reimprimir a convocatória de uma assembleia já criada
+// Reenviar a convocatória por email a UM condómino específico (segunda via)
+async function reenviarConvocatoriaUm(assembleiaId) {
+  var aRes = await sb.from('assembleias').select('*').eq('id', assembleiaId).single();
+  if (aRes.error || !aRes.data) { toast('Erro ao carregar a assembleia','err'); return; }
+  var a = aRes.data;
+  if (!a.ordem_trabalhos || !a.ordem_trabalhos.trim()) { toast('Esta assembleia não tem ordem de trabalhos','err'); return; }
+  var comEmail = fracoes.filter(function(f){ return f.proprietario_email; });
+  if (!comEmail.length) { toast('Nenhum condómino tem email registado','err'); return; }
+  if (!_gmailToken) { toast('Liga o Gmail nas Definições para reenviar por email','err'); return; }
+  _reenvioAssembleia = a;
+  var sel = document.getElementById('reenvio-fracao');
+  var opts = '<option value="">— Escolhe o condómino —</option>';
+  comEmail.forEach(function(f){
+    var marca = f.autoriza_email_convocatoria ? '' : ' (não autorizou email — só por cortesia)';
+    opts += '<option value="' + f.id + '">' + (f.codigo||'?') + ' — ' + (f.proprietario_nome||'?') + marca + '</option>';
+  });
+  sel.innerHTML = opts;
+  document.getElementById('reenvio-info').textContent = 'Assembleia de ' + (a.data_assembleia ? new Date(a.data_assembleia).toLocaleDateString('pt-PT') : '');
+  document.getElementById('mo-reenvio').classList.add('open');
+}
+
+var _reenvioAssembleia = null;
+async function confirmarReenvioUm() {
+  var sel = document.getElementById('reenvio-fracao');
+  var fid = sel.value;
+  if (!fid) { toast('Escolhe um condómino','err'); return; }
+  var f = fracoes.find(function(x){ return x.id === fid; });
+  var a = _reenvioAssembleia;
+  if (!f || !a) return;
+  document.getElementById('mo-reenvio').classList.remove('open');
+  var condoNome = displayNomeCondo(currentCondo.nome||'');
+  var dataFmt = a.data_assembleia ? new Date(a.data_assembleia).toLocaleDateString('pt-PT') : '';
+  var dados = { tipo:a.tipo, data:a.data_assembleia, hora:a.hora_assembleia||'20:00', local:a.local_assembleia, ordem:a.ordem_trabalhos, _retornarDoc:true };
+  var pdfRes = await gerarConvocatoriaPDF(dados, a.id);
+  if (!pdfRes || !pdfRes.base64) { toast('Não foi possível gerar o PDF','err'); return; }
+  var assunto = '📋 (2.ª via) Convocatória de Assembleia ' + (a.tipo||'') + ' — ' + condoNome + ' — ' + dataFmt;
+  var corpo =
+    '<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#f4f6f8;">'+
+    '<div style="background:linear-gradient(135deg,#0a1119,#0d1825);padding:24px 28px;border-radius:10px 10px 0 0;">'+
+      '<div style="color:#00d4ff;font-family:monospace;font-size:19px;font-weight:700;letter-spacing:2px;">COND.OS</div>'+
+      '<div style="color:#fff;font-size:13px;font-weight:600;margin-top:4px;">'+condoNome+'</div>'+
+    '</div>'+
+    '<div style="background:#fff;padding:26px 28px;">'+
+      '<p style="font-size:14px;color:#333;margin:0 0 16px;">Caro(a) <strong>'+(f.proprietario_nome||'condómino')+'</strong>,</p>'+
+      '<p style="font-size:13px;color:#555;line-height:1.6;margin:0 0 16px;">Conforme solicitado, reenviamos a <strong>convocatória</strong> (segunda via) para a Assembleia '+(a.tipo||'')+' de condóminos, a realizar em <strong>'+dataFmt+'</strong>, pelas '+(a.hora_assembleia||'20:00')+', em '+(a.local_assembleia||'')+'.</p>'+
+      '<p style="font-size:13px;color:#555;line-height:1.6;margin:0 0 16px;">A convocatória completa segue em <strong>anexo (PDF)</strong>.</p>'+
+      '<div style="border-top:1px solid #eee;padding-top:14px;"><p style="font-size:12px;color:#555;margin:0;">Com os melhores cumprimentos,</p><p style="font-size:13px;color:#222;font-weight:700;margin:6px 0 0;">'+(currentCondo.gestor_nome||currentCondo.administrador_nome||'A Administração')+'</p></div>'+
+    '</div>'+
+    '<div style="background:#0d1825;padding:12px 28px;text-align:center;border-radius:0 0 10px 10px;"><div style="color:#5a6a79;font-size:10px;">COND.OS 2059 Pro · '+new Date().toLocaleDateString('pt-PT')+'</div></div></div>';
+  toast('A reenviar...', '');
+  var ok = await enviarEmailGmailComAnexo(f.proprietario_email, assunto, corpo, pdfRes.base64, 'Convocatoria_2via_' + (f.codigo||'') + '.pdf');
+  toast(ok ? '✅ Convocatória reenviada a ' + (f.proprietario_nome||'') : 'Não foi possível reenviar', ok?'ok':'err');
+}
+
 async function reimprimirConvocatoria(assembleiaId) {
   var aRes = await sb.from('assembleias').select('*').eq('id', assembleiaId).single();
   if (aRes.error || !aRes.data) { toast('Erro ao carregar a assembleia','err'); return; }
@@ -8417,6 +8489,19 @@ async function reimprimirConvocatoria(assembleiaId) {
     ordem: a.ordem_trabalhos
   };
   if (!dados.ordem || !dados.ordem.trim()) { toast('Esta assembleia não tem ordem de trabalhos','err'); return; }
+
+  // Ver quem precisaria de carta (sem email ou sem autorização)
+  var porCarta = fracoes.filter(function(f){ return !(f.proprietario_email && f.autoriza_email_convocatoria === true); });
+
+  if (porCarta.length > 0) {
+    var escolha = await confirmar('O que queres gerar?\n\n• Convocatória simples: 1 cópia genérica, para reencaminhar ou consultar.\n• Pacote para imprimir: folha de rosto com "IMPRIMIR ' + porCarta.length + ' CARTAS" + uma carta personalizada por destinatário (com nome e morada).', {titulo:'Gerar convocatória', tipo:'info', icon:'📄', okTexto:'Pacote para imprimir', cancelarTexto:'Convocatória simples'});
+    if (escolha) {
+      // Pacote completo com folha de rosto
+      gerarPDFCartasConvocatoria(a, porCarta, dados, false);
+      return;
+    }
+  }
+  // Convocatória simples
   gerarConvocatoriaPDF(dados, assembleiaId);
 }
 
