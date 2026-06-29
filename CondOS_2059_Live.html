@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.06.29-2339</div>
+      <div class="sb-tag">2059 Pro · build v2026.06.29-2358</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -1244,6 +1244,9 @@ textarea.fi{resize:vertical;min-height:60px;}
 
         <!-- Resultados -->
         <div id="auditoria-resultados" style="display:none;">
+          <div id="auditoria-btn-relatorio" style="display:none;margin-bottom:14px;">
+            <button class="btn-primary" style="width:100%;padding:12px;" onclick="auditoriaGerarRelatorio()">📄 Gerar Relatório de Auditoria (PDF para imprimir)</button>
+          </div>
           <!-- KPIs -->
           <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;">
             <div class="kpi" style="border-top:2px solid var(--green);">
@@ -12009,16 +12012,51 @@ function renderContasMapa(quotas, despesas, ano) {
 // ===== RAIO-X DAS CONTAS (auditoria / passagem de gestão) =====
 var _auditoriaTransacoes = [];
 var _auditoriaFicheiros = [];
+var _auditoriaRecorrentes = [];
+var _auditoriaResultado = null;
 
 function auditoriaCarregarExtratos(input) {
   var files = Array.from(input.files || []);
   if (!files.length) return;
-  _auditoriaFicheiros = files;
+
+  // Detetar e remover ficheiros repetidos (mesmo nome + tamanho) para não duplicar a análise
+  var unicos = [];
+  var repetidos = [];
+  var jaCarregados = _auditoriaFicheiros.map(function(f){ return f.name + '|' + f.size; });
+  files.forEach(function(f){
+    var assinatura = f.name + '|' + f.size;
+    if (jaCarregados.indexOf(assinatura) > -1 || unicos.some(function(u){ return (u.name+'|'+u.size) === assinatura; })) {
+      repetidos.push(f.name);
+    } else {
+      unicos.push(f);
+    }
+  });
+
+  if (repetidos.length) {
+    toast('⚠️ ' + repetidos.length + ' ficheiro(s) repetido(s) ignorado(s) para não duplicar a análise: ' + repetidos.join(', '), 'warn');
+  }
+  if (!unicos.length) { input.value = ''; return; }
+
+  // Juntar aos já carregados (permite acrescentar mais extratos em vários cliques)
+  _auditoriaFicheiros = _auditoriaFicheiros.concat(unicos);
+
   var cont = document.getElementById('auditoria-ficheiros');
-  cont.innerHTML = files.map(function(f){
-    return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:12px;color:var(--t2);"><span>📄</span><span style="flex:1;">' + f.name + '</span><span style="color:var(--t3);font-size:11px;">' + (f.size/1024).toFixed(0) + ' KB</span></div>';
-  }).join('') + '<button class="btn-primary" style="margin-top:10px;width:100%;" onclick="auditoriaAnalisarTudo()">🔍 Analisar ' + files.length + ' extrato' + (files.length>1?'s':'') + '</button>';
+  cont.innerHTML = _auditoriaFicheiros.map(function(f, idx){
+    return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:12px;color:var(--t2);"><span>📄</span><span style="flex:1;">' + f.name + '</span><span style="color:var(--t3);font-size:11px;">' + (f.size/1024).toFixed(0) + ' KB</span><span style="cursor:pointer;color:var(--red);font-size:14px;" onclick="auditoriaRemoverFicheiro(' + idx + ')" title="Remover">✕</span></div>';
+  }).join('') + '<button class="btn-primary" style="margin-top:10px;width:100%;" onclick="auditoriaAnalisarTudo()">🔍 Analisar ' + _auditoriaFicheiros.length + ' extrato' + (_auditoriaFicheiros.length>1?'s':'') + '</button>';
   input.value = '';
+}
+
+function auditoriaRemoverFicheiro(idx) {
+  _auditoriaFicheiros.splice(idx, 1);
+  if (!_auditoriaFicheiros.length) {
+    document.getElementById('auditoria-ficheiros').innerHTML = '';
+    return;
+  }
+  var cont = document.getElementById('auditoria-ficheiros');
+  cont.innerHTML = _auditoriaFicheiros.map(function(f, i){
+    return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:12px;color:var(--t2);"><span>📄</span><span style="flex:1;">' + f.name + '</span><span style="color:var(--t3);font-size:11px;">' + (f.size/1024).toFixed(0) + ' KB</span><span style="cursor:pointer;color:var(--red);font-size:14px;" onclick="auditoriaRemoverFicheiro(' + i + ')" title="Remover">✕</span></div>';
+  }).join('') + '<button class="btn-primary" style="margin-top:10px;width:100%;" onclick="auditoriaAnalisarTudo()">🔍 Analisar ' + _auditoriaFicheiros.length + ' extrato' + (_auditoriaFicheiros.length>1?'s':'') + '</button>';
 }
 
 async function auditoriaAnalisarTudo() {
@@ -12105,31 +12143,96 @@ function auditoriaProcessarResultados() {
   }
 
   auditoriaRenderAnomalias(anomalias);
+  auditoriaRenderRecorrentes();
   auditoriaRenderMovimentos(trans);
   document.getElementById('auditoria-resultados').style.display = 'block';
+
+  // Guardar para o relatório PDF
+  _auditoriaResultado = {
+    anomalias: anomalias,
+    totalEnt: totalEnt, totalSai: totalSai,
+    nTrans: trans.length,
+    periodo: datas.length ? (datas[0] + ' a ' + datas[datas.length-1]) : '',
+    ficheiros: _auditoriaFicheiros.map(function(f){ return f.name; })
+  };
+  // Mostrar botão de relatório
+  var btnZona = document.getElementById('auditoria-btn-relatorio');
+  if (btnZona) btnZona.style.display = 'block';
+}
+
+function auditoriaRenderRecorrentes() {
+  var cont = document.getElementById('auditoria-anomalias');
+  if (!_auditoriaRecorrentes.length) return;
+  _auditoriaRecorrentes.sort(function(a,b){ return b.valor - a.valor; });
+  var totalMensal = _auditoriaRecorrentes.reduce(function(s,r){ return s + r.valor; }, 0);
+  var html = '<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--b1);">';
+  html += '<div style="font-size:12px;font-weight:700;color:var(--cyan);margin-bottom:4px;">💡 Despesas fixas detetadas (pagamentos recorrentes)</div>';
+  html += '<div style="font-size:11px;color:var(--t3);margin-bottom:10px;">Estes pagamentos repetem-se regularmente — são as despesas correntes do condomínio, não duplicados.</div>';
+  _auditoriaRecorrentes.forEach(function(r){
+    html += '<div style="display:flex;align-items:center;gap:10px;padding:7px 12px;background:var(--s2);border-radius:7px;margin-bottom:6px;">';
+    html += '<span style="font-size:14px;">🔁</span>';
+    html += '<span style="flex:1;font-size:12px;color:var(--t2);">' + (r.descricao||'').substring(0,45) + '</span>';
+    html += '<span style="font-size:11px;color:var(--t3);">' + r.vezes + '× / ano</span>';
+    html += '<span style="font-size:12px;font-weight:700;color:var(--text);min-width:70px;text-align:right;">' + r.valor.toFixed(2) + '€</span>';
+    html += '</div>';
+  });
+  html += '<div style="display:flex;justify-content:space-between;padding:8px 12px;margin-top:4px;font-size:12px;font-weight:700;color:var(--cyan);">';
+  html += '<span>Total de despesas fixas (por ocorrência)</span><span>' + totalMensal.toFixed(2) + '€</span></div>';
+  html += '</div>';
+  cont.innerHTML += html;
 }
 
 function auditoriaDetetarAnomalias(trans, saidas) {
   var anomalias = [];
 
-  // 1. Pagamentos duplicados (mesmo valor + descrição parecida no espaço de 45 dias)
+  // Primeiro: identificar FORNECEDORES RECORRENTES (pagamentos mensais legítimos)
+  // Agrupar saídas por "assinatura" (fornecedor + valor) e ver quantas vezes aparecem
+  var grupos = {};
+  saidas.forEach(function(t){
+    var chave = auditoriaNormalizar(t.descricao||'') + '|' + parseFloat(t.valor||0).toFixed(2);
+    if (!grupos[chave]) grupos[chave] = [];
+    grupos[chave].push(t);
+  });
+
+  // Um fornecedor é "recorrente" se aparece 3+ vezes com intervalos regulares (~mensais)
+  var recorrentes = {};
+  Object.keys(grupos).forEach(function(chave){
+    var lista = grupos[chave];
+    if (lista.length >= 3) {
+      // Verificar se os intervalos são regulares (~28-32 dias)
+      lista.sort(function(a,b){ return (a.data||'').localeCompare(b.data||''); });
+      var intervalosMensais = 0;
+      for (var k = 1; k < lista.length; k++) {
+        var dif = Math.abs((new Date(lista[k].data) - new Date(lista[k-1].data)) / (24*60*60*1000));
+        if (dif >= 25 && dif <= 35) intervalosMensais++;
+      }
+      // Se a maioria dos intervalos é mensal, é um pagamento recorrente legítimo
+      if (intervalosMensais >= Math.floor((lista.length-1) * 0.6)) {
+        recorrentes[chave] = true;
+      }
+    }
+  });
+
+  // 1. Pagamentos duplicados REAIS: mesmo valor + descrição parecida em ATÉ 10 dias
+  //    (e que NÃO seja apenas o ritmo normal de um fornecedor recorrente)
   for (var i = 0; i < saidas.length; i++) {
     for (var j = i+1; j < saidas.length; j++) {
       var a = saidas[i], b = saidas[j];
       var mesmoValor = Math.abs(parseFloat(a.valor||0) - parseFloat(b.valor||0)) < 0.01;
+      if (!mesmoValor || parseFloat(a.valor||0) <= 0) continue;
       var descSimilar = auditoriaTextoParecido(a.descricao||'', b.descricao||'');
-      if (mesmoValor && descSimilar && parseFloat(a.valor||0) > 0) {
-        var d1 = new Date(a.data||0), d2 = new Date(b.data||0);
-        var difDias = Math.abs((d2-d1)/(24*60*60*1000));
-        if (difDias <= 45) {
-          anomalias.push({
-            tipo: 'duplicado',
-            severidade: 'alta',
-            titulo: 'Possível pagamento duplicado',
-            detalhe: 'Dois pagamentos de ' + parseFloat(a.valor||0).toFixed(2) + '€ a "' + (a.descricao||'').substring(0,40) + '" em ' + (a.data||'') + ' e ' + (b.data||'') + ' (' + Math.round(difDias) + ' dias de diferença).',
-            valor: parseFloat(a.valor||0)
-          });
-        }
+      if (!descSimilar) continue;
+      var d1 = new Date(a.data||0), d2 = new Date(b.data||0);
+      var difDias = Math.abs((d2-d1)/(24*60*60*1000));
+      // Duplicado verdadeiro: muito próximo no tempo (≤10 dias). Recorrência mensal não conta.
+      if (difDias <= 10) {
+        anomalias.push({
+          tipo: 'duplicado',
+          severidade: 'alta',
+          titulo: 'Possível pagamento duplicado',
+          detalhe: 'Dois pagamentos de ' + parseFloat(a.valor||0).toFixed(2) + '€ a "' + (a.descricao||'').substring(0,40) + '" muito próximos: ' + (a.data||'') + ' e ' + (b.data||'') + ' (' + Math.round(difDias) + ' dias). Confirma se não foi cobrado duas vezes.',
+          valor: parseFloat(a.valor||0)
+        });
       }
     }
   }
@@ -12137,25 +12240,47 @@ function auditoriaDetetarAnomalias(trans, saidas) {
   // 2. Valores redondos altos (possíveis levantamentos/transferências a verificar)
   saidas.forEach(function(t){
     var v = parseFloat(t.valor||0);
-    if (v >= 500 && v % 100 === 0) {
+    var chave = auditoriaNormalizar(t.descricao||'') + '|' + v.toFixed(2);
+    if (recorrentes[chave]) return; // não marcar despesas fixas recorrentes
+    if (v >= 500 && v % 50 === 0) {
       anomalias.push({
         tipo: 'valor_alto',
         severidade: 'media',
         titulo: 'Saída de valor redondo elevado',
-        detalhe: 'Pagamento de ' + v.toFixed(2) + '€ em ' + (t.data||'') + ': "' + (t.descricao||'').substring(0,50) + '". Confirma a que se refere.',
+        detalhe: 'Pagamento de ' + v.toFixed(2) + '€ em ' + (t.data||'') + ': "' + (t.descricao||'').substring(0,50) + '". Valor redondo e elevado — confirma a que se refere.',
         valor: v
       });
     }
   });
 
-  // Limitar duplicados repetidos (não mostrar o mesmo par duas vezes)
+  // Remover duplicados repetidos da própria lista de anomalias
   var vistos = {};
-  return anomalias.filter(function(a){
+  var anomFiltradas = anomalias.filter(function(a){
     var chave = a.tipo + '|' + a.detalhe;
     if (vistos[chave]) return false;
     vistos[chave] = true;
     return true;
   });
+  // Guardar recorrentes detetados para mostrar como "despesas fixas"
+  _auditoriaRecorrentes = [];
+  Object.keys(recorrentes).forEach(function(chave){
+    var lista = grupos[chave];
+    _auditoriaRecorrentes.push({
+      descricao: lista[0].descricao,
+      valor: parseFloat(lista[0].valor||0),
+      vezes: lista.length
+    });
+  });
+  return anomFiltradas;
+}
+
+// Normalizar texto para agrupar fornecedores (remove números, datas, ruído)
+function auditoriaNormalizar(s) {
+  return (s||'').toLowerCase()
+    .replace(/deb direto|trf|sepa|transferencia|debito direto|pagamento|2via|2.ª via/g,'')
+    .replace(/[^a-z ]/g,'')
+    .replace(/\s+/g,' ')
+    .trim();
 }
 
 function auditoriaTextoParecido(a, b) {
@@ -12204,6 +12329,101 @@ function auditoriaRenderMovimentos(trans) {
   });
   html += '</tbody></table>';
   cont.innerHTML = html;
+}
+
+// Gerar relatório de auditoria em PDF (para imprimir e investigar com os documentos reais)
+function auditoriaGerarRelatorio() {
+  if (!_auditoriaResultado) { toast('Faz primeiro a análise','err'); return; }
+  if (!window.jspdf || !window.jspdf.jsPDF) { toast('Biblioteca PDF não carregada','err'); return; }
+  var r = _auditoriaResultado;
+  var { jsPDF } = window.jspdf;
+  var doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+  var W = 210, M = 16, y = 0;
+  var condoNome = displayNomeCondo(currentCondo.nome||'');
+  var hoje = new Date().toLocaleDateString('pt-PT');
+
+  // Cabeçalho
+  doc.setFillColor(13,24,37); doc.rect(0,0,W,34,'F');
+  doc.setFillColor(0,212,255); doc.rect(0,34,W,1,'F');
+  doc.setTextColor(0,212,255); doc.setFont('helvetica','bold'); doc.setFontSize(9);
+  doc.text('RAIO-X DAS CONTAS · RELATÓRIO DE AUDITORIA', W/2, 13, {align:'center'});
+  doc.setTextColor(255,255,255); doc.setFontSize(14);
+  doc.text(condoNome, W/2, 23, {align:'center'});
+  doc.setTextColor(180,190,200); doc.setFont('helvetica','normal'); doc.setFontSize(9);
+  doc.text('Período analisado: ' + (r.periodo||'—') + '  ·  Gerado em ' + hoje, W/2, 30, {align:'center'});
+
+  y = 44;
+  // Resumo
+  doc.setTextColor(40,40,40); doc.setFont('helvetica','bold'); doc.setFontSize(11);
+  doc.text('Resumo da análise', M, y); y += 7;
+  doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(60,60,60);
+  doc.text('• Total de entradas: ' + r.totalEnt.toFixed(2) + '€', M+2, y); y += 6;
+  doc.text('• Total de saídas: ' + r.totalSai.toFixed(2) + '€', M+2, y); y += 6;
+  doc.text('• Transações analisadas: ' + r.nTrans, M+2, y); y += 6;
+  doc.text('• Anomalias a verificar: ' + r.anomalias.length, M+2, y); y += 6;
+  doc.setFontSize(8); doc.setTextColor(120,120,120);
+  doc.text('Extratos: ' + (r.ficheiros.join(', ')||'—'), M+2, y); y += 10;
+
+  // Anomalias
+  doc.setTextColor(180,40,40); doc.setFont('helvetica','bold'); doc.setFontSize(12);
+  doc.text('Anomalias a verificar', M, y); y += 5;
+  doc.setFont('helvetica','italic'); doc.setFontSize(8); doc.setTextColor(120,120,120);
+  doc.text('Suspeitas levantadas automaticamente. Confirma cada uma com os documentos originais. Usa a coluna ao lado para anotar.', M, y); y += 8;
+
+  if (!r.anomalias.length) {
+    doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(20,140,60);
+    doc.text('Não foram detetadas anomalias automáticas. Verifica sempre os movimentos manualmente.', M+2, y); y += 10;
+  } else {
+    r.anomalias.forEach(function(a, idx){
+      if (y > 250) { doc.addPage(); y = 24; }
+      // Caixa de anotação à esquerda
+      doc.setDrawColor(180,180,180); doc.setLineWidth(0.3);
+      doc.rect(M, y-4, 5, 5, 'S');
+      // Texto da anomalia
+      doc.setFont('helvetica','bold'); doc.setFontSize(9.5);
+      doc.setTextColor(a.severidade==='alta'?180:200, a.severidade==='alta'?40:120, 40);
+      doc.text((idx+1) + '. ' + a.titulo, M+8, y); y += 5;
+      doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(60,60,60);
+      var linhas = doc.splitTextToSize(a.detalhe, W-2*M-8);
+      doc.text(linhas, M+8, y); y += linhas.length*4.5 + 2;
+      // Linha para anotar
+      doc.setDrawColor(220,220,220); doc.line(M+8, y, W-M, y);
+      doc.setFontSize(7); doc.setTextColor(160,160,160);
+      doc.text('Verificação: ___________________________________________', M+8, y+4);
+      y += 9;
+    });
+  }
+
+  // Despesas fixas
+  if (_auditoriaRecorrentes && _auditoriaRecorrentes.length) {
+    if (y > 240) { doc.addPage(); y = 24; }
+    y += 4;
+    doc.setTextColor(0,130,160); doc.setFont('helvetica','bold'); doc.setFontSize(12);
+    doc.text('Despesas fixas detetadas', M, y); y += 5;
+    doc.setFont('helvetica','italic'); doc.setFontSize(8); doc.setTextColor(120,120,120);
+    doc.text('Pagamentos recorrentes — as despesas correntes do condomínio.', M, y); y += 7;
+    doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(60,60,60);
+    _auditoriaRecorrentes.forEach(function(rec){
+      if (y > 270) { doc.addPage(); y = 24; }
+      doc.text('• ' + (rec.descricao||'').substring(0,55) + '  (' + rec.vezes + '×)', M+2, y);
+      doc.text(rec.valor.toFixed(2) + '€', W-M, y, {align:'right'});
+      y += 5.5;
+    });
+  }
+
+  // Rodapé legal
+  doc.addPage(); y = 24;
+  doc.setTextColor(40,40,40); doc.setFont('helvetica','bold'); doc.setFontSize(11);
+  doc.text('Nota importante', M, y); y += 8;
+  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(80,80,80);
+  var nota = 'Este relatório foi gerado automaticamente a partir da leitura dos extratos bancários. As anomalias indicadas são SUSPEITAS levantadas por análise de padrões — não constituem prova de irregularidade. Cada situação deve ser confirmada com os documentos originais (faturas, recibos, comprovativos) antes de qualquer conclusão ou ação. Este documento serve como ponto de partida para a verificação das contas, nomeadamente em situações de passagem de gestão.';
+  var notaLinhas = doc.splitTextToSize(nota, W-2*M);
+  doc.text(notaLinhas, M, y);
+
+  doc.setTextColor(150,150,150); doc.setFontSize(7);
+  doc.text('Documento gerado por COND.OS 2059 Pro · Raio-X das Contas · ' + hoje, W/2, 285, {align:'center'});
+
+  doc.save('Relatorio_Auditoria_' + condoNome.replace(/\s+/g,'_') + '_' + hoje.replace(/\//g,'-') + '.pdf');
 }
 
 function nav(p) {
