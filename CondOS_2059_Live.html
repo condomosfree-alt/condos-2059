@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.06.29-0841</div>
+      <div class="sb-tag">2059 Pro · build v2026.06.29-0858</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -570,6 +570,7 @@ textarea.fi{resize:vertical;min-height:60px;}
       <div class="ni" onclick="nav('financeiro')"><i class="ti ti-cash"></i><span>Financeiro</span></div>
       <div class="ni" onclick="nav('orcamento')"><i class="ti ti-calculator"></i><span>Orçamento</span></div>
       <div class="ni" onclick="nav('despesas')"><i class="ti ti-tools"></i><span>Despesas</span><span class="nb" id="nb-despesas"></span></div>
+      <div class="ni" onclick="nav('contas')"><i class="ti ti-report-money"></i><span>Contas</span></div>
       <div class="nav-section">Gestão</div>
       <div class="ni" onclick="nav('condominos')"><i class="ti ti-users"></i><span>Condóminos</span><span class="nb" id="nb-cond"></span></div>
       <div class="ni" onclick="nav('ocorrencias')"><i class="ti ti-alert-triangle"></i><span>Ocorrências</span><span class="nb" id="nb-oc"></span></div>
@@ -1160,7 +1161,51 @@ textarea.fi{resize:vertical;min-height:60px;}
         </div>
       </div>
 
-      <!-- ORÇAMENTO -->
+      <!-- CONTAS -->
+      <div class="page" id="page-contas">
+        <div class="sec-hdr">
+          <span class="sec-t">Contas</span>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <button class="btn-ghost" onclick="mudarAnoContas(-1)" style="padding:6px 10px;">‹</button>
+            <span id="contas-ano" style="font-weight:700;font-size:15px;color:var(--cyan);min-width:54px;text-align:center;">—</span>
+            <button class="btn-ghost" onclick="mudarAnoContas(1)" style="padding:6px 10px;">›</button>
+          </div>
+        </div>
+
+        <!-- KPIs do ano -->
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;">
+          <div class="kpi" style="border-top:2px solid var(--green);">
+            <div class="kpi-label">Receitas (quotas pagas)</div>
+            <div class="kpi-val" id="c-receitas">0<span>€</span></div>
+          </div>
+          <div class="kpi" style="border-top:2px solid var(--red);">
+            <div class="kpi-label">Despesas pagas</div>
+            <div class="kpi-val" id="c-despesas">0<span>€</span></div>
+          </div>
+          <div class="kpi" style="border-top:2px solid var(--cyan);">
+            <div class="kpi-label">Saldo do ano</div>
+            <div class="kpi-val" id="c-saldo">0<span>€</span></div>
+          </div>
+          <div class="kpi" style="border-top:2px solid var(--amber);">
+            <div class="kpi-label">Por cobrar (quotas)</div>
+            <div class="kpi-val" id="c-divida">0<span>€</span></div>
+          </div>
+        </div>
+
+        <!-- Orçado vs Real -->
+        <div class="panel" style="margin-bottom:16px;">
+          <div class="ph"><span class="pt">Orçado vs Real</span><span class="pm" id="c-ovr-resumo">—</span></div>
+          <div id="contas-ovr" style="padding:16px;"><div class="loading"><div class="spin"></div>A carregar...</div></div>
+        </div>
+
+        <!-- Mapa mensal -->
+        <div class="panel">
+          <div class="ph"><span class="pt">Mapa do Ano</span><span class="pm">Receitas e despesas mês a mês</span></div>
+          <div id="contas-mapa" style="padding:16px;overflow-x:auto;"></div>
+        </div>
+      </div>
+
+
       <div class="page" id="page-orcamento">
         <div class="sec-hdr">
           <span class="sec-t">Orçamento</span>
@@ -11752,8 +11797,142 @@ async function importarFracoesIA() {
 }
 
 // ===== NAVIGATION =====
-const pageMap={dashboard:'Dashboard',edificio:'Edifício',fracoes:'Frações',quotas:'Quotas',financeiro:'Financeiro',ocorrencias:'Ocorrências',parceiros:'Parceiros',documentos:'Documentos',assembleias:'Assembleias',ia:'Assistente IA',definicoes:'Definições'};
-const pathMap={dashboard:'Visão Geral',fracoes:'Moradores & Frações',quotas:'Gestão de Quotas',financeiro:'Contas & Movimentos',ocorrencias:'Gestão de Problemas',parceiros:'Base de Manutenção',documentos:'Arquivo Digital',assembleias:'Reuniões',ia:'IA Gratuita · Gemini',definicoes:'Configuração'};
+const pageMap={dashboard:'Dashboard',edificio:'Edifício',fracoes:'Frações',quotas:'Quotas',financeiro:'Financeiro',contas:'Contas',ocorrencias:'Ocorrências',parceiros:'Parceiros',documentos:'Documentos',assembleias:'Assembleias',ia:'Assistente IA',definicoes:'Definições'};
+const pathMap={dashboard:'Visão Geral',fracoes:'Moradores & Frações',quotas:'Gestão de Quotas',financeiro:'Contas & Movimentos',contas:'Mapa do Ano & Fecho de Contas',ocorrencias:'Gestão de Problemas',parceiros:'Base de Manutenção',documentos:'Arquivo Digital',assembleias:'Reuniões',ia:'IA Gratuita · Gemini',definicoes:'Configuração'};
+
+// ===== MÓDULO CONTAS (mapa do ano + orçado vs real) =====
+var _contasAno = new Date().getFullYear();
+function mudarAnoContas(delta) {
+  _contasAno += delta;
+  loadContas();
+}
+async function loadContas() {
+  if (!currentCondo) return;
+  document.getElementById('contas-ano').textContent = _contasAno;
+  var ano = _contasAno;
+
+  // Carregar quotas, despesas e rubricas do ano em paralelo
+  var [qRes, dRes, rRes] = await Promise.all([
+    sb.from('quotas').select('*').eq('condominio_id', currentCondo.id).eq('ano', ano),
+    sb.from('despesas').select('*').eq('condominio_id', currentCondo.id),
+    sb.from('orcamento_rubricas').select('*').eq('condominio_id', currentCondo.id).eq('ano', ano)
+  ]);
+  var quotas = qRes.data || [];
+  var despesas = (dRes.data || []).filter(function(d){
+    if (!d.data_despesa) return false;
+    return new Date(d.data_despesa).getFullYear() === ano;
+  });
+  var rubricas = rRes.data || [];
+
+  // KPIs
+  var receitas = quotas.reduce(function(s,q){ return s + parseFloat(q.valor_pago||0); }, 0);
+  var emitido = quotas.reduce(function(s,q){ return s + parseFloat(q.valor||0); }, 0);
+  var porCobrar = emitido - receitas;
+  var despPagas = despesas.filter(function(d){ return d.estado==='paga'||d.estado==='pago'; }).reduce(function(s,d){ return s + parseFloat(d.valor_total||0); }, 0);
+  var despTodas = despesas.reduce(function(s,d){ return s + parseFloat(d.valor_total||0); }, 0);
+  var saldo = receitas - despPagas;
+
+  document.getElementById('c-receitas').innerHTML = receitas.toFixed(2) + '<span>€</span>';
+  document.getElementById('c-despesas').innerHTML = despPagas.toFixed(2) + '<span>€</span>';
+  document.getElementById('c-saldo').innerHTML = saldo.toFixed(2) + '<span>€</span>';
+  document.getElementById('c-saldo').style.color = saldo >= 0 ? 'var(--green)' : 'var(--red)';
+  document.getElementById('c-divida').innerHTML = porCobrar.toFixed(2) + '<span>€</span>';
+
+  renderContasOVR(rubricas, despesas, emitido, receitas, despTodas);
+  renderContasMapa(quotas, despesas, ano);
+}
+
+function renderContasOVR(rubricas, despesas, orcamentoReceita, receitaReal, despReal) {
+  var cont = document.getElementById('contas-ovr');
+  var orcamentoTotal = rubricas.reduce(function(s,r){ return s + parseFloat(r.valor_total||0); }, 0);
+
+  if (!rubricas.length && !despesas.length) {
+    cont.innerHTML = '<div style="text-align:center;color:var(--t3);font-size:12px;padding:20px;">Sem orçamento nem despesas para ' + _contasAno + '. Cria um orçamento para comparar.</div>';
+    document.getElementById('c-ovr-resumo').textContent = '—';
+    return;
+  }
+
+  // Comparação global: orçamento de despesa vs despesa real
+  var pctGasto = orcamentoTotal > 0 ? (despReal / orcamentoTotal * 100) : 0;
+  var dentro = despReal <= orcamentoTotal;
+  document.getElementById('c-ovr-resumo').textContent = orcamentoTotal > 0 ? (pctGasto.toFixed(0) + '% do orçamento usado') : 'sem orçamento';
+
+  var html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px;">';
+  // Cartão orçamento
+  html += '<div style="background:var(--s2);border-radius:10px;padding:14px;border:1px solid var(--b1);">';
+  html += '<div style="font-size:11px;color:var(--t3);margin-bottom:4px;">ORÇAMENTO ANUAL (previsto)</div>';
+  html += '<div style="font-size:22px;font-weight:700;color:var(--cyan);">' + orcamentoTotal.toFixed(2) + '€</div>';
+  html += '</div>';
+  // Cartão real
+  html += '<div style="background:var(--s2);border-radius:10px;padding:14px;border:1px solid var(--b1);">';
+  html += '<div style="font-size:11px;color:var(--t3);margin-bottom:4px;">DESPESA REAL (até agora)</div>';
+  html += '<div style="font-size:22px;font-weight:700;color:' + (dentro?'var(--green)':'var(--red)') + ';">' + despReal.toFixed(2) + '€</div>';
+  html += '</div></div>';
+
+  // Barra de progresso
+  if (orcamentoTotal > 0) {
+    var pctBarra = Math.min(pctGasto, 100);
+    var corBarra = pctGasto > 100 ? 'var(--red)' : (pctGasto > 85 ? 'var(--amber)' : 'var(--green)');
+    html += '<div style="margin-bottom:6px;display:flex;justify-content:space-between;font-size:11px;color:var(--t2);"><span>Despesa vs orçamento</span><span style="color:' + corBarra + ';font-weight:700;">' + pctGasto.toFixed(0) + '%</span></div>';
+    html += '<div style="background:var(--s1);border-radius:6px;height:12px;overflow:hidden;">';
+    html += '<div style="width:' + pctBarra + '%;height:100%;background:' + corBarra + ';transition:width .4s;"></div></div>';
+    if (pctGasto > 100) html += '<div style="font-size:11px;color:var(--red);margin-top:6px;">⚠️ A despesa ultrapassou o orçamento em ' + (despReal-orcamentoTotal).toFixed(2) + '€.</div>';
+    else html += '<div style="font-size:11px;color:var(--t3);margin-top:6px;">Margem disponível: ' + (orcamentoTotal-despReal).toFixed(2) + '€.</div>';
+  }
+
+  cont.innerHTML = html;
+}
+
+function renderContasMapa(quotas, despesas, ano) {
+  var cont = document.getElementById('contas-mapa');
+  var meses = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  var recPorMes = new Array(12).fill(0);
+  var despPorMes = new Array(12).fill(0);
+
+  quotas.forEach(function(q){
+    if (q.data_pagamento) {
+      var m = new Date(q.data_pagamento).getMonth();
+      recPorMes[m] += parseFloat(q.valor_pago||0);
+    } else if (parseFloat(q.valor_pago||0) > 0 && q.mes) {
+      recPorMes[(q.mes-1)] += parseFloat(q.valor_pago||0);
+    }
+  });
+  despesas.forEach(function(d){
+    if (d.data_despesa) {
+      var m = new Date(d.data_despesa).getMonth();
+      despPorMes[m] += parseFloat(d.valor_total||0);
+    }
+  });
+
+  var maxVal = Math.max(1, Math.max.apply(null, recPorMes.concat(despPorMes)));
+  var html = '<table style="width:100%;border-collapse:collapse;font-size:12px;min-width:560px;">';
+  html += '<thead><tr style="border-bottom:1px solid var(--b1);color:var(--t3);font-size:11px;">';
+  html += '<th style="text-align:left;padding:6px;">Mês</th><th style="text-align:right;padding:6px;color:var(--green);">Receitas</th><th style="text-align:right;padding:6px;color:var(--red);">Despesas</th><th style="text-align:right;padding:6px;">Saldo</th><th style="width:120px;padding:6px;">Balanço</th></tr></thead><tbody>';
+
+  var totR=0, totD=0;
+  for (var i=0;i<12;i++){
+    var r=recPorMes[i], d=despPorMes[i], s=r-d;
+    totR+=r; totD+=d;
+    var temDados = r>0||d>0;
+    html += '<tr style="border-bottom:1px solid var(--b1);' + (temDados?'':'opacity:.4;') + '">';
+    html += '<td style="padding:7px 6px;font-weight:600;">' + meses[i] + '</td>';
+    html += '<td style="text-align:right;padding:7px 6px;color:var(--green);">' + (r>0?r.toFixed(2)+'€':'—') + '</td>';
+    html += '<td style="text-align:right;padding:7px 6px;color:var(--red);">' + (d>0?d.toFixed(2)+'€':'—') + '</td>';
+    html += '<td style="text-align:right;padding:7px 6px;font-weight:600;color:' + (s>=0?'var(--cyan)':'var(--red)') + ';">' + (temDados?s.toFixed(2)+'€':'—') + '</td>';
+    // mini-barras
+    html += '<td style="padding:7px 6px;"><div style="display:flex;flex-direction:column;gap:2px;">';
+    html += '<div style="height:5px;background:var(--green);width:' + (r/maxVal*100) + '%;border-radius:2px;min-width:' + (r>0?'2px':'0') + ';"></div>';
+    html += '<div style="height:5px;background:var(--red);width:' + (d/maxVal*100) + '%;border-radius:2px;min-width:' + (d>0?'2px':'0') + ';"></div>';
+    html += '</div></td></tr>';
+  }
+  html += '</tbody><tfoot><tr style="border-top:2px solid var(--b1);font-weight:700;">';
+  html += '<td style="padding:8px 6px;">Total</td>';
+  html += '<td style="text-align:right;padding:8px 6px;color:var(--green);">' + totR.toFixed(2) + '€</td>';
+  html += '<td style="text-align:right;padding:8px 6px;color:var(--red);">' + totD.toFixed(2) + '€</td>';
+  html += '<td style="text-align:right;padding:8px 6px;color:' + ((totR-totD)>=0?'var(--cyan)':'var(--red)') + ';">' + (totR-totD).toFixed(2) + '€</td><td></td>';
+  html += '</tr></tfoot></table>';
+  cont.innerHTML = html;
+}
 
 function nav(p) {
   document.querySelectorAll('.page').forEach(el=>el.classList.remove('active'));
@@ -11781,6 +11960,7 @@ function nav(p) {
   if(p==='edificio'){ loadEdificio(); }
   if(p==='quotas'){ initQuotasMesSel(); loadQuotas(); }
   if(p==='despesas') loadDespesas();
+  if(p==='contas'){ _contasAno = new Date().getFullYear(); loadContas(); }
   if(p==='definicoes')loadDefForm();
 }
 
