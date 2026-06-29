@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.06.29-0900</div>
+      <div class="sb-tag">2059 Pro · build v2026.06.29-2339</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -571,6 +571,7 @@ textarea.fi{resize:vertical;min-height:60px;}
       <div class="ni" onclick="nav('orcamento')"><i class="ti ti-calculator"></i><span>Orçamento</span></div>
       <div class="ni" onclick="nav('despesas')"><i class="ti ti-tools"></i><span>Despesas</span><span class="nb" id="nb-despesas"></span></div>
       <div class="ni" onclick="nav('contas')"><i class="ti ti-report-money"></i><span>Contas</span></div>
+      <div class="ni" onclick="nav('auditoria')"><i class="ti ti-zoom-money"></i><span>Raio-X das Contas</span></div>
       <div class="nav-section">Gestão</div>
       <div class="ni" onclick="nav('condominos')"><i class="ti ti-users"></i><span>Condóminos</span><span class="nb" id="nb-cond"></span></div>
       <div class="ni" onclick="nav('ocorrencias')"><i class="ti ti-alert-triangle"></i><span>Ocorrências</span><span class="nb" id="nb-oc"></span></div>
@@ -1205,6 +1206,77 @@ textarea.fi{resize:vertical;min-height:60px;}
         </div>
       </div>
 
+      <!-- RAIO-X DAS CONTAS (auditoria / passagem de gestão) -->
+      <div class="page" id="page-auditoria">
+        <div class="sec-hdr">
+          <span class="sec-t">Raio-X das Contas</span>
+          <span style="font-size:11px;color:var(--t3);">Auditoria & passagem de gestão</span>
+        </div>
+
+        <div class="panel" style="margin-bottom:16px;">
+          <div style="padding:16px;">
+            <div style="display:flex;gap:12px;align-items:flex-start;background:rgba(0,212,255,.05);border:1px solid rgba(0,212,255,.2);border-radius:10px;padding:14px 16px;">
+              <span style="font-size:24px;">🔍</span>
+              <div style="font-size:12px;color:var(--t2);line-height:1.6;">
+                <strong style="color:var(--cyan);">Para quem herda um condomínio.</strong> Carrega os extratos bancários dos últimos anos. O programa lê <strong>tudo o que entrou e saiu</strong> da conta, cruza com quem devia pagar, e mostra-te onde estão os buracos — quotas sem rasto de pagamento, pagamentos a fornecedores repetidos, valores que não batem certo.
+                <div style="margin-top:8px;color:var(--t3);font-size:11px;">⚠️ O programa <strong>levanta suspeitas e mostra provas</strong> — não decreta dívidas. A confirmação final é sempre tua, com os documentos à frente.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Carregar extratos -->
+        <div class="panel" style="margin-bottom:16px;">
+          <div class="ph"><span class="pt">1 · Carregar Extratos Bancários</span><span class="pm">PDF ou imagem · vários ficheiros / anos</span></div>
+          <div style="padding:16px;">
+            <label style="display:flex;align-items:center;justify-content:center;gap:10px;border:2px dashed var(--b2);border-radius:12px;padding:26px;cursor:pointer;transition:.2s;" onmouseover="this.style.borderColor='var(--cyan)'" onmouseout="this.style.borderColor='var(--b2)'">
+              <input type="file" accept=".pdf,image/*" multiple style="display:none;" onchange="auditoriaCarregarExtratos(this)">
+              <span style="font-size:28px;">📑</span>
+              <div>
+                <div style="font-size:13px;font-weight:600;color:var(--text);">Escolher extratos (podes selecionar vários)</div>
+                <div style="font-size:11px;color:var(--t3);margin-top:2px;">Carrega 1, 2 ou 3 anos de extratos de uma vez</div>
+              </div>
+            </label>
+            <div id="auditoria-ficheiros" style="margin-top:12px;"></div>
+            <div id="auditoria-progresso" style="margin-top:12px;display:none;"></div>
+          </div>
+        </div>
+
+        <!-- Resultados -->
+        <div id="auditoria-resultados" style="display:none;">
+          <!-- KPIs -->
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;">
+            <div class="kpi" style="border-top:2px solid var(--green);">
+              <div class="kpi-label">Total de entradas</div>
+              <div class="kpi-val" id="aud-entradas">0<span>€</span></div>
+            </div>
+            <div class="kpi" style="border-top:2px solid var(--red);">
+              <div class="kpi-label">Total de saídas</div>
+              <div class="kpi-val" id="aud-saidas">0<span>€</span></div>
+            </div>
+            <div class="kpi" style="border-top:2px solid var(--cyan);">
+              <div class="kpi-label">Transações lidas</div>
+              <div class="kpi-val" id="aud-ntrans">0</div>
+            </div>
+            <div class="kpi" style="border-top:2px solid var(--amber);">
+              <div class="kpi-label">Anomalias a verificar</div>
+              <div class="kpi-val" id="aud-anomalias">0</div>
+            </div>
+          </div>
+
+          <!-- Anomalias detetadas -->
+          <div class="panel" style="margin-bottom:16px;">
+            <div class="ph"><span class="pt">⚠️ Anomalias a Verificar</span><span class="pm">suspeitas levantadas pelo programa</span></div>
+            <div id="auditoria-anomalias" style="padding:16px;"></div>
+          </div>
+
+          <!-- Movimentos lidos -->
+          <div class="panel">
+            <div class="ph"><span class="pt">Movimentos Lidos dos Extratos</span><span class="pm" id="aud-periodo">—</span></div>
+            <div id="auditoria-movimentos" style="padding:16px;overflow-x:auto;max-height:500px;overflow-y:auto;"></div>
+          </div>
+        </div>
+      </div>
 
       <div class="page" id="page-orcamento">
         <div class="sec-hdr">
@@ -11797,8 +11869,8 @@ async function importarFracoesIA() {
 }
 
 // ===== NAVIGATION =====
-const pageMap={dashboard:'Dashboard',edificio:'Edifício',fracoes:'Frações',quotas:'Quotas',financeiro:'Financeiro',contas:'Contas',ocorrencias:'Ocorrências',parceiros:'Parceiros',documentos:'Documentos',assembleias:'Assembleias',ia:'Assistente IA',definicoes:'Definições'};
-const pathMap={dashboard:'Visão Geral',fracoes:'Moradores & Frações',quotas:'Gestão de Quotas',financeiro:'Contas & Movimentos',contas:'Mapa do Ano & Fecho de Contas',ocorrencias:'Gestão de Problemas',parceiros:'Base de Manutenção',documentos:'Arquivo Digital',assembleias:'Reuniões',ia:'IA Gratuita · Gemini',definicoes:'Configuração'};
+const pageMap={dashboard:'Dashboard',edificio:'Edifício',fracoes:'Frações',quotas:'Quotas',financeiro:'Financeiro',contas:'Contas',auditoria:'Raio-X das Contas',ocorrencias:'Ocorrências',parceiros:'Parceiros',documentos:'Documentos',assembleias:'Assembleias',ia:'Assistente IA',definicoes:'Definições'};
+const pathMap={dashboard:'Visão Geral',fracoes:'Moradores & Frações',quotas:'Gestão de Quotas',financeiro:'Contas & Movimentos',contas:'Mapa do Ano & Fecho de Contas',auditoria:'Auditoria & Passagem de Gestão',ocorrencias:'Gestão de Problemas',parceiros:'Base de Manutenção',documentos:'Arquivo Digital',assembleias:'Reuniões',ia:'IA Gratuita · Gemini',definicoes:'Configuração'};
 
 // ===== MÓDULO CONTAS (mapa do ano + orçado vs real) =====
 var _contasAno = new Date().getFullYear();
@@ -11931,6 +12003,206 @@ function renderContasMapa(quotas, despesas, ano) {
   html += '<td style="text-align:right;padding:8px 6px;color:var(--red);">' + totD.toFixed(2) + '€</td>';
   html += '<td style="text-align:right;padding:8px 6px;color:' + ((totR-totD)>=0?'var(--cyan)':'var(--red)') + ';">' + (totR-totD).toFixed(2) + '€</td><td></td>';
   html += '</tr></tfoot></table>';
+  cont.innerHTML = html;
+}
+
+// ===== RAIO-X DAS CONTAS (auditoria / passagem de gestão) =====
+var _auditoriaTransacoes = [];
+var _auditoriaFicheiros = [];
+
+function auditoriaCarregarExtratos(input) {
+  var files = Array.from(input.files || []);
+  if (!files.length) return;
+  _auditoriaFicheiros = files;
+  var cont = document.getElementById('auditoria-ficheiros');
+  cont.innerHTML = files.map(function(f){
+    return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:12px;color:var(--t2);"><span>📄</span><span style="flex:1;">' + f.name + '</span><span style="color:var(--t3);font-size:11px;">' + (f.size/1024).toFixed(0) + ' KB</span></div>';
+  }).join('') + '<button class="btn-primary" style="margin-top:10px;width:100%;" onclick="auditoriaAnalisarTudo()">🔍 Analisar ' + files.length + ' extrato' + (files.length>1?'s':'') + '</button>';
+  input.value = '';
+}
+
+async function auditoriaAnalisarTudo() {
+  if (!_auditoriaFicheiros.length) { toast('Carrega pelo menos um extrato','err'); return; }
+  var prog = document.getElementById('auditoria-progresso');
+  prog.style.display = 'block';
+  _auditoriaTransacoes = [];
+
+  var totalFich = _auditoriaFicheiros.length;
+  for (var fi = 0; fi < totalFich; fi++) {
+    var file = _auditoriaFicheiros[fi];
+    prog.innerHTML = '<div style="font-size:12px;color:var(--cyan);margin-bottom:6px;">A analisar ficheiro ' + (fi+1) + ' de ' + totalFich + ': ' + file.name + '</div><div style="background:var(--s1);border-radius:6px;height:8px;overflow:hidden;"><div style="width:' + ((fi/totalFich)*100) + '%;height:100%;background:var(--cyan);transition:width .3s;"></div></div>';
+
+    // Ler PDF/imagem (até 8 páginas por ficheiro, para extratos longos)
+    var imagens;
+    try { imagens = await pdfParaImagemBase64(file, 8); }
+    catch(e) {
+      imagens = await new Promise(function(res,rej){
+        var r = new FileReader();
+        r.onload = function(ev){ res([ev.target.result.split(',')[1]]); };
+        r.onerror = rej;
+        r.readAsDataURL(file);
+      });
+    }
+
+    // Extrair TODAS as transações (créditos E débitos) com IA
+    for (var pi = 0; pi < imagens.length; pi++) {
+      var prompt = 'Analisa este extrato bancário português. Extrai TODAS as transações, tanto ENTRADAS (créditos/recebimentos) como SAÍDAS (débitos/pagamentos). Para cada uma: data (YYYY-MM-DD), descricao (texto completo do movimento), valor (número decimal positivo), tipo ("entrada" ou "saida"), referencia (se existir). Devolve APENAS JSON válido sem texto antes ou depois: {"transacoes":[{"data":"","descricao":"","valor":0,"tipo":"entrada","referencia":""}]}';
+      try {
+        var res = await fetch(PROXY_URL, {
+          method:'POST', headers:PROXY_HEADERS,
+          body: JSON.stringify({ prompt, foto: imagens[pi], tipo: 'documento_import' })
+        });
+        var data = await res.json();
+        var text = (data.text||'').trim();
+        var start = text.indexOf('{'); var end = text.lastIndexOf('}');
+        if (start > -1) {
+          var json = JSON.parse(text.slice(start, end+1));
+          if (json.transacoes) {
+            json.transacoes.forEach(function(t){
+              t._ficheiro = file.name;
+              _auditoriaTransacoes.push(t);
+            });
+          }
+        }
+      } catch(e) { console.error('Erro a analisar página', e); }
+    }
+  }
+
+  prog.innerHTML = '<div style="font-size:12px;color:var(--green);">✅ Análise concluída: ' + _auditoriaTransacoes.length + ' transações lidas.</div>';
+  setTimeout(function(){ prog.style.display='none'; }, 2500);
+
+  if (!_auditoriaTransacoes.length) {
+    toast('Não consegui extrair transações dos extratos','warn');
+    return;
+  }
+  auditoriaProcessarResultados();
+}
+
+function auditoriaProcessarResultados() {
+  var trans = _auditoriaTransacoes;
+  // Ordenar por data
+  trans.sort(function(a,b){ return (a.data||'').localeCompare(b.data||''); });
+
+  var entradas = trans.filter(function(t){ return t.tipo==='entrada'; });
+  var saidas = trans.filter(function(t){ return t.tipo==='saida'; });
+  var totalEnt = entradas.reduce(function(s,t){ return s + parseFloat(t.valor||0); }, 0);
+  var totalSai = saidas.reduce(function(s,t){ return s + parseFloat(t.valor||0); }, 0);
+
+  // Detetar anomalias
+  var anomalias = auditoriaDetetarAnomalias(trans, saidas);
+
+  // KPIs
+  document.getElementById('aud-entradas').innerHTML = totalEnt.toFixed(2) + '<span>€</span>';
+  document.getElementById('aud-saidas').innerHTML = totalSai.toFixed(2) + '<span>€</span>';
+  document.getElementById('aud-ntrans').textContent = trans.length;
+  document.getElementById('aud-anomalias').textContent = anomalias.length;
+  document.getElementById('aud-anomalias').style.color = anomalias.length > 0 ? 'var(--amber)' : 'var(--green)';
+
+  // Período
+  var datas = trans.map(function(t){ return t.data; }).filter(Boolean).sort();
+  if (datas.length) {
+    document.getElementById('aud-periodo').textContent = 'de ' + datas[0] + ' a ' + datas[datas.length-1];
+  }
+
+  auditoriaRenderAnomalias(anomalias);
+  auditoriaRenderMovimentos(trans);
+  document.getElementById('auditoria-resultados').style.display = 'block';
+}
+
+function auditoriaDetetarAnomalias(trans, saidas) {
+  var anomalias = [];
+
+  // 1. Pagamentos duplicados (mesmo valor + descrição parecida no espaço de 45 dias)
+  for (var i = 0; i < saidas.length; i++) {
+    for (var j = i+1; j < saidas.length; j++) {
+      var a = saidas[i], b = saidas[j];
+      var mesmoValor = Math.abs(parseFloat(a.valor||0) - parseFloat(b.valor||0)) < 0.01;
+      var descSimilar = auditoriaTextoParecido(a.descricao||'', b.descricao||'');
+      if (mesmoValor && descSimilar && parseFloat(a.valor||0) > 0) {
+        var d1 = new Date(a.data||0), d2 = new Date(b.data||0);
+        var difDias = Math.abs((d2-d1)/(24*60*60*1000));
+        if (difDias <= 45) {
+          anomalias.push({
+            tipo: 'duplicado',
+            severidade: 'alta',
+            titulo: 'Possível pagamento duplicado',
+            detalhe: 'Dois pagamentos de ' + parseFloat(a.valor||0).toFixed(2) + '€ a "' + (a.descricao||'').substring(0,40) + '" em ' + (a.data||'') + ' e ' + (b.data||'') + ' (' + Math.round(difDias) + ' dias de diferença).',
+            valor: parseFloat(a.valor||0)
+          });
+        }
+      }
+    }
+  }
+
+  // 2. Valores redondos altos (possíveis levantamentos/transferências a verificar)
+  saidas.forEach(function(t){
+    var v = parseFloat(t.valor||0);
+    if (v >= 500 && v % 100 === 0) {
+      anomalias.push({
+        tipo: 'valor_alto',
+        severidade: 'media',
+        titulo: 'Saída de valor redondo elevado',
+        detalhe: 'Pagamento de ' + v.toFixed(2) + '€ em ' + (t.data||'') + ': "' + (t.descricao||'').substring(0,50) + '". Confirma a que se refere.',
+        valor: v
+      });
+    }
+  });
+
+  // Limitar duplicados repetidos (não mostrar o mesmo par duas vezes)
+  var vistos = {};
+  return anomalias.filter(function(a){
+    var chave = a.tipo + '|' + a.detalhe;
+    if (vistos[chave]) return false;
+    vistos[chave] = true;
+    return true;
+  });
+}
+
+function auditoriaTextoParecido(a, b) {
+  a = a.toLowerCase().replace(/[^a-z0-9 ]/g,'').trim();
+  b = b.toLowerCase().replace(/[^a-z0-9 ]/g,'').trim();
+  if (!a || !b) return false;
+  if (a === b) return true;
+  // Partilham uma palavra significativa (>4 letras)?
+  var palavrasA = a.split(/\s+/).filter(function(w){ return w.length > 4; });
+  var palavrasB = b.split(/\s+/).filter(function(w){ return w.length > 4; });
+  return palavrasA.some(function(w){ return palavrasB.indexOf(w) > -1; });
+}
+
+function auditoriaRenderAnomalias(anomalias) {
+  var cont = document.getElementById('auditoria-anomalias');
+  if (!anomalias.length) {
+    cont.innerHTML = '<div style="text-align:center;color:var(--green);font-size:13px;padding:20px;">✅ Não foram detetadas anomalias óbvias nos extratos carregados.<div style="font-size:11px;color:var(--t3);margin-top:6px;">Isto não garante que está tudo certo — apenas que o programa não encontrou padrões suspeitos automáticos. Verifica sempre os movimentos.</div></div>';
+    return;
+  }
+  var cores = { alta:'var(--red)', media:'var(--amber)', baixa:'var(--cyan)' };
+  var html = '';
+  anomalias.forEach(function(a){
+    var cor = cores[a.severidade] || 'var(--amber)';
+    html += '<div style="border-left:3px solid ' + cor + ';background:var(--s2);border-radius:0 8px 8px 0;padding:11px 14px;margin-bottom:8px;">';
+    html += '<div style="font-size:12px;font-weight:700;color:' + cor + ';margin-bottom:3px;">' + a.titulo + '</div>';
+    html += '<div style="font-size:12px;color:var(--t2);line-height:1.5;">' + a.detalhe + '</div>';
+    html += '</div>';
+  });
+  html += '<div style="font-size:11px;color:var(--t3);margin-top:10px;padding-top:10px;border-top:1px solid var(--b1);">⚠️ Estas são <strong>suspeitas</strong> levantadas automaticamente. Confirma cada uma com os documentos originais antes de tomar qualquer decisão.</div>';
+  cont.innerHTML = html;
+}
+
+function auditoriaRenderMovimentos(trans) {
+  var cont = document.getElementById('auditoria-movimentos');
+  var html = '<table style="width:100%;border-collapse:collapse;font-size:11.5px;min-width:560px;">';
+  html += '<thead><tr style="border-bottom:1px solid var(--b1);color:var(--t3);font-size:11px;position:sticky;top:0;background:var(--s1);">';
+  html += '<th style="text-align:left;padding:7px 6px;">Data</th><th style="text-align:left;padding:7px 6px;">Descrição</th><th style="text-align:center;padding:7px 6px;">Tipo</th><th style="text-align:right;padding:7px 6px;">Valor</th></tr></thead><tbody>';
+  trans.forEach(function(t){
+    var ent = t.tipo === 'entrada';
+    html += '<tr style="border-bottom:1px solid var(--b1);">';
+    html += '<td style="padding:6px;color:var(--t3);white-space:nowrap;">' + (t.data||'—') + '</td>';
+    html += '<td style="padding:6px;color:var(--t2);">' + (t.descricao||'—').substring(0,60) + '</td>';
+    html += '<td style="padding:6px;text-align:center;"><span style="font-size:10px;padding:2px 7px;border-radius:4px;background:' + (ent?'rgba(16,185,129,.15)':'rgba(248,113,113,.15)') + ';color:' + (ent?'var(--green)':'var(--red)') + ';">' + (ent?'entrada':'saída') + '</span></td>';
+    html += '<td style="padding:6px;text-align:right;font-weight:600;color:' + (ent?'var(--green)':'var(--red)') + ';white-space:nowrap;">' + (ent?'+':'−') + parseFloat(t.valor||0).toFixed(2) + '€</td>';
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
   cont.innerHTML = html;
 }
 
