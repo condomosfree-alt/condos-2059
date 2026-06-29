@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.06.29-0858</div>
+      <div class="sb-tag">2059 Pro · build v2026.06.29-0900</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -8550,10 +8550,10 @@ async function gerarFolhaPresencas(assembleiaId) {
   doc.setFillColor(240,240,240); doc.rect(M, y, W-2*M, 9, 'F');
   doc.setTextColor(40,40,40); doc.setFont('helvetica','bold'); doc.setFontSize(8.5);
   doc.text('Fração', M+2, y+6);
-  doc.text('Proprietário', M+24, y+6);
-  doc.text('Perm.', M+96, y+6);
-  doc.text('P/R', M+114, y+6);
-  doc.text('Assinatura', M+130, y+6);
+  doc.text('Proprietário', M+54, y+6);
+  doc.text('Perm.', M+104, y+6);
+  doc.text('P/R', M+120, y+6);
+  doc.text('Assinatura', M+134, y+6);
   y += 9;
 
   // Ordenar frações por bloco/código
@@ -8567,25 +8567,25 @@ async function gerarFolhaPresencas(assembleiaId) {
       doc.addPage(); y = 20;
       doc.setFillColor(240,240,240); doc.rect(M, y, W-2*M, 9, 'F');
       doc.setFont('helvetica','bold'); doc.setTextColor(40,40,40);
-      doc.text('Fração', M+2, y+6); doc.text('Proprietário', M+24, y+6);
-      doc.text('Perm.', M+96, y+6); doc.text('P/R', M+114, y+6); doc.text('Assinatura', M+130, y+6);
+      doc.text('Fração', M+2, y+6); doc.text('Proprietário', M+54, y+6);
+      doc.text('Perm.', M+104, y+6); doc.text('P/R', M+120, y+6); doc.text('Assinatura', M+134, y+6);
       y += 9; doc.setFont('helvetica','normal');
     }
     // Linha alternada
     if (i % 2 === 0) { doc.setFillColor(249,250,251); doc.rect(M, y, W-2*M, 9, 'F'); }
     doc.setDrawColor(225,228,232); doc.setLineWidth(0.2); doc.line(M, y+9, W-M, y+9);
     doc.setTextColor(30,30,30);
-    var codigo = (f.codigo||'') + (f.bloco?(' '+f.bloco):'');
+    var codigo = ((f.codigo||'') + (f.bloco?(' '+f.bloco):'')).substring(0,28);
     doc.text(codigo, M+2, y+6);
-    var nome = (f.proprietario_nome||'').substring(0,42);
-    doc.text(nome, M+24, y+6);
+    var nome = (f.proprietario_nome||'').substring(0,30);
+    doc.text(nome, M+54, y+6);
     doc.setTextColor(110,110,110);
-    doc.text((parseFloat(f.permilagem||0)).toFixed(2), M+96, y+6);
+    doc.text((parseFloat(f.permilagem||0)).toFixed(2), M+104, y+6);
     // Caixa P/R (Presente/Representado) — para marcar à mão
     doc.setDrawColor(150,150,150); doc.setLineWidth(0.3);
-    doc.rect(M+113, y+2, 4, 4, 'S');
+    doc.rect(M+119, y+2, 4, 4, 'S');
     // Linha de assinatura
-    doc.setDrawColor(200,200,200); doc.line(M+130, y+7, W-M-2, y+7);
+    doc.setDrawColor(200,200,200); doc.line(M+134, y+7, W-M-2, y+7);
     y += 9;
   });
 
