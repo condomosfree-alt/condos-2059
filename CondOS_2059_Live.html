@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.06.29-2358</div>
+      <div class="sb-tag">2059 Pro · build v2026.06.30-0003</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -2803,6 +2803,40 @@ async function wizImportCaderneta(input) {
 }
 
 // ===== PDF → IMAGEM (para IA) =====
+// Extrair TEXTO de um PDF diretamente (sem IA, sem gastar créditos)
+// Devolve o texto completo ou null se o PDF não tiver texto (for digitalização/imagem)
+async function pdfParaTexto(file) {
+  return new Promise(function(resolve) {
+    var reader = new FileReader();
+    reader.onload = async function(e) {
+      try {
+        if (!window.pdfjsLib) { resolve(null); return; }
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+        var pdf = await pdfjsLib.getDocument({ data: new Uint8Array(e.target.result) }).promise;
+        var textoTotal = '';
+        for (var i = 1; i <= pdf.numPages; i++) {
+          var page = await pdf.getPage(i);
+          var content = await page.getTextContent();
+          // Reconstruir linhas pela posição vertical
+          var linhas = {};
+          content.items.forEach(function(item){
+            var y = Math.round(item.transform[5]);
+            if (!linhas[y]) linhas[y] = [];
+            linhas[y].push({ x: item.transform[4], s: item.str });
+          });
+          Object.keys(linhas).sort(function(a,b){ return b-a; }).forEach(function(y){
+            var linha = linhas[y].sort(function(a,b){ return a.x-b.x; }).map(function(o){ return o.s; }).join(' ');
+            if (linha.trim()) textoTotal += linha + '\n';
+          });
+        }
+        resolve(textoTotal.trim().length > 50 ? textoTotal : null);
+      } catch(err) { resolve(null); }
+    };
+    reader.onerror = function(){ resolve(null); };
+    reader.readAsArrayBuffer(file);
+  });
+}
+
 async function pdfParaImagemBase64(file, numPaginas) {
   numPaginas = numPaginas || 2;
   return new Promise(function(resolve, reject) {
@@ -12070,39 +12104,55 @@ async function auditoriaAnalisarTudo() {
     var file = _auditoriaFicheiros[fi];
     prog.innerHTML = '<div style="font-size:12px;color:var(--cyan);margin-bottom:6px;">A analisar ficheiro ' + (fi+1) + ' de ' + totalFich + ': ' + file.name + '</div><div style="background:var(--s1);border-radius:6px;height:8px;overflow:hidden;"><div style="width:' + ((fi/totalFich)*100) + '%;height:100%;background:var(--cyan);transition:width .3s;"></div></div>';
 
-    // Ler PDF/imagem (até 8 páginas por ficheiro, para extratos longos)
-    var imagens;
-    try { imagens = await pdfParaImagemBase64(file, 8); }
-    catch(e) {
-      imagens = await new Promise(function(res,rej){
-        var r = new FileReader();
-        r.onload = function(ev){ res([ev.target.result.split(',')[1]]); };
-        r.onerror = rej;
-        r.readAsDataURL(file);
-      });
+    var promptBase = 'És um extrator de dados de extratos bancários portugueses. Extrai TODAS as transações, tanto ENTRADAS (créditos/recebimentos) como SAÍDAS (débitos/pagamentos). Para cada uma: data (YYYY-MM-DD), descricao (texto completo do movimento), valor (número decimal positivo), tipo ("entrada" ou "saida"), referencia (se existir). Devolve APENAS JSON válido sem texto antes ou depois: {"transacoes":[{"data":"","descricao":"","valor":0,"tipo":"entrada","referencia":""}]}';
+
+    // PASSO 1: tentar extrair TEXTO do PDF (grátis, sem IA)
+    var textoPdf = null;
+    var ehPdf = (file.name||'').toLowerCase().endsWith('.pdf');
+    if (ehPdf) {
+      try { textoPdf = await pdfParaTexto(file); } catch(e) { textoPdf = null; }
     }
 
-    // Extrair TODAS as transações (créditos E débitos) com IA
-    for (var pi = 0; pi < imagens.length; pi++) {
-      var prompt = 'Analisa este extrato bancário português. Extrai TODAS as transações, tanto ENTRADAS (créditos/recebimentos) como SAÍDAS (débitos/pagamentos). Para cada uma: data (YYYY-MM-DD), descricao (texto completo do movimento), valor (número decimal positivo), tipo ("entrada" ou "saida"), referencia (se existir). Devolve APENAS JSON válido sem texto antes ou depois: {"transacoes":[{"data":"","descricao":"","valor":0,"tipo":"entrada","referencia":""}]}';
+    if (textoPdf) {
+      // Temos texto — mandar UMA chamada de texto à IA (muito mais barato que imagens)
+      prog.innerHTML += '<div style="font-size:11px;color:var(--t3);margin-top:4px;">📝 Lido como texto (sem gastar análise de imagem)</div>';
       try {
-        var res = await fetch(PROXY_URL, {
-          method:'POST', headers:PROXY_HEADERS,
-          body: JSON.stringify({ prompt, foto: imagens[pi], tipo: 'documento_import' })
-        });
-        var data = await res.json();
-        var text = (data.text||'').trim();
+        var text = await callIA(promptBase + '\n\nEXTRATO:\n' + textoPdf, 'extrato_texto');
+        text = (text||'').trim();
         var start = text.indexOf('{'); var end = text.lastIndexOf('}');
         if (start > -1) {
           var json = JSON.parse(text.slice(start, end+1));
-          if (json.transacoes) {
-            json.transacoes.forEach(function(t){
-              t._ficheiro = file.name;
-              _auditoriaTransacoes.push(t);
-            });
-          }
+          if (json.transacoes) json.transacoes.forEach(function(t){ t._ficheiro = file.name; _auditoriaTransacoes.push(t); });
         }
-      } catch(e) { console.error('Erro a analisar página', e); }
+      } catch(e) { console.error('Erro a analisar texto', e); }
+    } else {
+      // PASSO 2: sem texto (digitalização/imagem) — usar IA com imagens
+      var imagens;
+      try { imagens = await pdfParaImagemBase64(file, 8); }
+      catch(e) {
+        imagens = await new Promise(function(res,rej){
+          var r = new FileReader();
+          r.onload = function(ev){ res([ev.target.result.split(',')[1]]); };
+          r.onerror = rej;
+          r.readAsDataURL(file);
+        });
+      }
+      prog.innerHTML += '<div style="font-size:11px;color:var(--t3);margin-top:4px;">🖼️ Lido como imagem (' + imagens.length + ' pág.)</div>';
+      for (var pi = 0; pi < imagens.length; pi++) {
+        try {
+          var res2 = await fetch(PROXY_URL, {
+            method:'POST', headers:PROXY_HEADERS,
+            body: JSON.stringify({ prompt: promptBase, foto: imagens[pi], tipo: 'documento_import' })
+          });
+          var data2 = await res2.json();
+          var text2 = (data2.text||'').trim();
+          var s2 = text2.indexOf('{'); var e2 = text2.lastIndexOf('}');
+          if (s2 > -1) {
+            var json2 = JSON.parse(text2.slice(s2, e2+1));
+            if (json2.transacoes) json2.transacoes.forEach(function(t){ t._ficheiro = file.name; _auditoriaTransacoes.push(t); });
+          }
+        } catch(e) { console.error('Erro a analisar página', e); }
+      }
     }
   }
 
