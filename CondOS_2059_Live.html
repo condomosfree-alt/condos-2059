@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.06.30-0905</div>
+      <div class="sb-tag">2059 Pro · build v2026.06.30-0925</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -1245,7 +1245,10 @@ textarea.fi{resize:vertical;min-height:60px;}
         <!-- Resultados -->
         <div id="auditoria-resultados" style="display:none;">
           <div id="auditoria-btn-relatorio" style="display:none;margin-bottom:14px;">
-            <button class="btn-primary" style="width:100%;padding:12px;" onclick="auditoriaGerarRelatorio()">📄 Gerar Relatório de Auditoria (PDF para imprimir)</button>
+            <div style="display:flex;gap:10px;">
+              <button class="btn-primary" style="flex:1;padding:12px;" onclick="auditoriaGerarRelatorio()">📄 Gerar Relatório (PDF)</button>
+              <button class="btn-ghost" style="flex:1;padding:12px;color:var(--green);border-color:rgba(16,185,129,.3);" onclick="auditoriaGuardar()">💾 Guardar Auditoria</button>
+            </div>
           </div>
           <!-- KPIs -->
           <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;">
@@ -1273,11 +1276,23 @@ textarea.fi{resize:vertical;min-height:60px;}
             <div id="auditoria-anomalias" style="padding:16px;"></div>
           </div>
 
+          <!-- Mapa de pagamentos por condómino -->
+          <div class="panel" style="margin-bottom:16px;">
+            <div class="ph"><span class="pt">💳 Mapa de Pagamentos por Condómino</span><span class="pm">quem pagou, quem deve</span></div>
+            <div id="auditoria-mapa-pagamentos" style="padding:16px;overflow-x:auto;"></div>
+          </div>
+
           <!-- Movimentos lidos -->
           <div class="panel">
             <div class="ph"><span class="pt">Movimentos Lidos dos Extratos</span><span class="pm" id="aud-periodo">—</span></div>
             <div id="auditoria-movimentos" style="padding:16px;overflow-x:auto;max-height:500px;overflow-y:auto;"></div>
           </div>
+        </div>
+
+        <!-- Histórico de auditorias guardadas -->
+        <div class="panel" style="margin-top:16px;">
+          <div class="ph"><span class="pt">📚 Auditorias Guardadas</span><span class="pm">histórico de análises</span></div>
+          <div id="auditoria-historico" style="padding:16px;"></div>
         </div>
       </div>
 
@@ -12173,6 +12188,7 @@ function auditoriaProcessarResultados() {
 
   auditoriaRenderAnomalias(anomalias);
   auditoriaRenderRecorrentes();
+  auditoriaMapaPagamentos(entradas, datas);
   auditoriaRenderMovimentos(trans);
   document.getElementById('auditoria-resultados').style.display = 'block';
 
@@ -12455,6 +12471,187 @@ function auditoriaGerarRelatorio() {
   doc.save('Relatorio_Auditoria_' + condoNome.replace(/\s+/g,'_') + '_' + hoje.replace(/\//g,'-') + '.pdf');
 }
 
+// Guardar a auditoria no programa (Supabase) para consulta futura
+async function auditoriaGuardar() {
+  if (!_auditoriaResultado || !currentCondo) { toast('Faz primeiro a análise','err'); return; }
+  var r = _auditoriaResultado;
+  var payload = {
+    condominio_id: currentCondo.id,
+    periodo: r.periodo || '',
+    total_entradas: parseFloat(r.totalEnt.toFixed(2)),
+    total_saidas: parseFloat(r.totalSai.toFixed(2)),
+    num_transacoes: r.nTrans,
+    num_anomalias: r.anomalias.length,
+    anomalias: r.anomalias,
+    recorrentes: _auditoriaRecorrentes || [],
+    ficheiros: (r.ficheiros||[]).join(', ')
+  };
+  var res = await sb.from('auditorias').insert(payload);
+  if (res.error) { toast('Erro ao guardar: ' + res.error.message, 'err'); console.error(res.error); return; }
+  toast('✅ Auditoria guardada no histórico','ok');
+  auditoriaCarregarHistorico();
+}
+
+// Carregar e mostrar o histórico de auditorias guardadas
+async function auditoriaCarregarHistorico() {
+  if (!currentCondo) return;
+  var cont = document.getElementById('auditoria-historico');
+  if (!cont) return;
+  var res = await sb.from('auditorias').select('*').eq('condominio_id', currentCondo.id).order('data_auditoria', {ascending:false});
+  if (res.error) { cont.innerHTML = '<div style="font-size:11px;color:var(--t3);padding:10px;">Corre o SQL sql_auditorias.sql para ativar o histórico.</div>'; return; }
+  var lista = res.data || [];
+  if (!lista.length) {
+    cont.innerHTML = '<div style="text-align:center;color:var(--t3);font-size:12px;padding:16px;">Ainda não há auditorias guardadas. Depois de analisares, clica em "Guardar Auditoria".</div>';
+    return;
+  }
+  var html = '';
+  lista.forEach(function(a){
+    var d = new Date(a.data_auditoria).toLocaleDateString('pt-PT');
+    var h = new Date(a.data_auditoria).toLocaleTimeString('pt-PT', {hour:'2-digit',minute:'2-digit'});
+    var corAnom = a.num_anomalias > 0 ? 'var(--amber)' : 'var(--green)';
+    html += '<div style="display:flex;align-items:center;gap:12px;padding:11px 14px;background:var(--s2);border-radius:9px;margin-bottom:8px;">';
+    html += '<div style="flex:1;">';
+    html += '<div style="font-size:12px;font-weight:600;color:var(--text);">Auditoria de ' + d + ' às ' + h + '</div>';
+    html += '<div style="font-size:11px;color:var(--t3);margin-top:2px;">Período: ' + (a.periodo||'—') + ' · ' + a.num_transacoes + ' transações</div>';
+    html += '</div>';
+    html += '<div style="text-align:right;"><div style="font-size:13px;font-weight:700;color:' + corAnom + ';">' + a.num_anomalias + ' anomalia' + (a.num_anomalias!==1?'s':'') + '</div>';
+    html += '<div style="font-size:10px;color:var(--t3);">' + parseFloat(a.total_entradas||0).toFixed(0) + '€ ent · ' + parseFloat(a.total_saidas||0).toFixed(0) + '€ saí</div></div>';
+    html += '<button class="btn-ghost" style="font-size:11px;padding:5px 10px;" onclick="auditoriaVerGuardada(\'' + a.id + '\')">Ver</button>';
+    html += '<span style="cursor:pointer;color:var(--red);font-size:14px;" onclick="auditoriaApagar(\'' + a.id + '\')" title="Apagar">✕</span>';
+    html += '</div>';
+  });
+  cont.innerHTML = html;
+}
+
+async function auditoriaVerGuardada(id) {
+  var res = await sb.from('auditorias').select('*').eq('id', id).single();
+  if (res.error || !res.data) { toast('Erro ao carregar','err'); return; }
+  var a = res.data;
+  // Reconstruir a vista a partir do guardado
+  _auditoriaResultado = {
+    anomalias: a.anomalias || [],
+    totalEnt: parseFloat(a.total_entradas||0),
+    totalSai: parseFloat(a.total_saidas||0),
+    nTrans: a.num_transacoes,
+    periodo: a.periodo || '',
+    ficheiros: (a.ficheiros||'').split(', ')
+  };
+  _auditoriaRecorrentes = a.recorrentes || [];
+  // Mostrar KPIs
+  document.getElementById('aud-entradas').innerHTML = parseFloat(a.total_entradas||0).toFixed(2) + '<span>€</span>';
+  document.getElementById('aud-saidas').innerHTML = parseFloat(a.total_saidas||0).toFixed(2) + '<span>€</span>';
+  document.getElementById('aud-ntrans').textContent = a.num_transacoes;
+  document.getElementById('aud-anomalias').textContent = a.num_anomalias;
+  document.getElementById('aud-anomalias').style.color = a.num_anomalias > 0 ? 'var(--amber)' : 'var(--green)';
+  document.getElementById('aud-periodo').textContent = a.periodo || '—';
+  auditoriaRenderAnomalias(a.anomalias || []);
+  auditoriaRenderRecorrentes();
+  document.getElementById('auditoria-movimentos').innerHTML = '<div style="text-align:center;color:var(--t3);font-size:12px;padding:16px;">Os movimentos detalhados não são guardados (só o resumo e as anomalias). Para ver os movimentos, analisa o extrato de novo.</div>';
+  document.getElementById('auditoria-resultados').style.display = 'block';
+  document.getElementById('auditoria-btn-relatorio').style.display = 'block';
+  toast('Auditoria carregada do histórico','ok');
+}
+
+async function auditoriaApagar(id) {
+  if (!await confirmar('Apagar esta auditoria do histórico?', {titulo:'Apagar auditoria', tipo:'aviso', icon:'🗑', okTexto:'Apagar', cancelarTexto:'Cancelar'})) return;
+  var res = await sb.from('auditorias').delete().eq('id', id);
+  if (res.error) { toast('Erro ao apagar','err'); return; }
+  toast('Auditoria apagada','ok');
+  auditoriaCarregarHistorico();
+}
+
+// ===== CAMADA 2: Mapa de pagamentos por condómino (devedores reais) =====
+function auditoriaMapaPagamentos(entradas, datas) {
+  var cont = document.getElementById('auditoria-mapa-pagamentos');
+  if (!cont) return;
+  if (!fracoes || !fracoes.length) {
+    cont.innerHTML = '<div style="text-align:center;color:var(--t3);font-size:12px;padding:16px;">Não há condóminos carregados neste condomínio para cruzar.</div>';
+    return;
+  }
+
+  // Calcular nº de meses do período (para estimar o esperado)
+  var nMeses = 12;
+  if (datas.length >= 2) {
+    var d1 = new Date(datas[0]), d2 = new Date(datas[datas.length-1]);
+    nMeses = Math.max(1, Math.round((d2 - d1) / (30.44*24*60*60*1000)) + 1);
+  }
+
+  // Para cada entrada, tentar associar a um condómino pelo nome na descrição
+  var pagoPorFracao = {};
+  var entradasNaoAssociadas = [];
+  fracoes.forEach(function(f){ pagoPorFracao[f.id] = { frac: f, total: 0, nPagamentos: 0 }; });
+
+  entradas.forEach(function(t){
+    var desc = auditoriaNormalizar(t.descricao||'');
+    var melhorFrac = null, melhorScore = 0;
+    fracoes.forEach(function(f){
+      var nome = auditoriaNormalizar(f.proprietario_nome||'');
+      if (!nome) return;
+      // Quantas palavras do nome (>2 letras) aparecem na descrição?
+      var palavras = nome.split(' ').filter(function(w){ return w.length > 2; });
+      if (!palavras.length) return;
+      var acertos = palavras.filter(function(w){ return desc.indexOf(w) > -1; }).length;
+      var score = acertos / palavras.length;
+      if (score > melhorScore) { melhorScore = score; melhorFrac = f; }
+    });
+    // Associar só se pelo menos metade do nome bate (evita falsos)
+    if (melhorFrac && melhorScore >= 0.5) {
+      pagoPorFracao[melhorFrac.id].total += parseFloat(t.valor||0);
+      pagoPorFracao[melhorFrac.id].nPagamentos++;
+    } else {
+      entradasNaoAssociadas.push(t);
+    }
+  });
+
+  // Construir a tabela com o estado de cada condómino
+  var html = '<div style="font-size:11px;color:var(--t3);margin-bottom:12px;">Período analisado: ~' + nMeses + ' meses. O esperado é uma estimativa (quota mensal × meses). Confirma sempre com os documentos.</div>';
+  html += '<table style="width:100%;border-collapse:collapse;font-size:12px;min-width:560px;">';
+  html += '<thead><tr style="border-bottom:1px solid var(--b1);color:var(--t3);font-size:11px;">';
+  html += '<th style="text-align:left;padding:7px 6px;">Fração / Proprietário</th><th style="text-align:right;padding:7px 6px;">Pago (banco)</th><th style="text-align:center;padding:7px 6px;">Nº pag.</th><th style="text-align:right;padding:7px 6px;">Esperado ~</th><th style="text-align:center;padding:7px 6px;">Estado</th></tr></thead><tbody>';
+
+  var lista = fracoes.slice().sort(function(a,b){ return (a.codigo||'').localeCompare(b.codigo||''); });
+  lista.forEach(function(f){
+    var dados = pagoPorFracao[f.id];
+    var pago = dados.total;
+    var quotaMensal = parseFloat(f.quota_mensal||0) || parseFloat(f.nova_quota||0) || 0;
+    var esperado = quotaMensal * nMeses;
+    var estado, cor, icon;
+    if (dados.nPagamentos === 0) {
+      estado = 'SEM RASTO'; cor = 'var(--red)'; icon = '🔴';
+    } else if (esperado > 0 && pago < esperado * 0.9) {
+      estado = 'EM FALTA'; cor = 'var(--amber)'; icon = '🟠';
+    } else {
+      estado = 'OK'; cor = 'var(--green)'; icon = '🟢';
+    }
+    html += '<tr style="border-bottom:1px solid var(--b1);">';
+    html += '<td style="padding:7px 6px;"><span style="font-weight:600;">' + (f.codigo||'?') + '</span> · ' + (f.proprietario_nome||'—').substring(0,30) + '</td>';
+    html += '<td style="text-align:right;padding:7px 6px;font-weight:600;color:var(--green);">' + pago.toFixed(2) + '€</td>';
+    html += '<td style="text-align:center;padding:7px 6px;color:var(--t3);">' + dados.nPagamentos + '</td>';
+    html += '<td style="text-align:right;padding:7px 6px;color:var(--t3);">' + (esperado>0?esperado.toFixed(2)+'€':'—') + '</td>';
+    html += '<td style="text-align:center;padding:7px 6px;"><span style="font-size:11px;color:' + cor + ';font-weight:700;">' + icon + ' ' + estado + '</span></td>';
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+
+  // Aviso sobre entradas não associadas
+  if (entradasNaoAssociadas.length) {
+    var totalNaoAssoc = entradasNaoAssociadas.reduce(function(s,t){ return s + parseFloat(t.valor||0); }, 0);
+    html += '<div style="margin-top:14px;background:rgba(255,179,0,.08);border:1px solid rgba(255,179,0,.25);border-radius:8px;padding:11px 14px;">';
+    html += '<div style="font-size:12px;font-weight:700;color:var(--amber);margin-bottom:4px;">⚠️ ' + entradasNaoAssociadas.length + ' entrada(s) não associada(s) a nenhum condómino (' + totalNaoAssoc.toFixed(2) + '€)</div>';
+    html += '<div style="font-size:11px;color:var(--t2);line-height:1.5;">Podem ser pagamentos por MB Way, transferências sem nome claro, ou de pessoas que já não constam. Verifica manualmente:</div>';
+    html += '<div style="font-size:11px;color:var(--t3);margin-top:6px;max-height:150px;overflow-y:auto;">';
+    entradasNaoAssociadas.slice(0,30).forEach(function(t){
+      html += '• ' + (t.data||'') + ' · ' + (t.descricao||'').substring(0,50) + ' · <strong>' + parseFloat(t.valor||0).toFixed(2) + '€</strong><br>';
+    });
+    if (entradasNaoAssociadas.length > 30) html += '<em>... e mais ' + (entradasNaoAssociadas.length-30) + '</em>';
+    html += '</div></div>';
+  }
+
+  html += '<div style="font-size:10px;color:var(--t3);margin-top:10px;padding-top:10px;border-top:1px solid var(--b1);">⚠️ Este mapa cruza os nomes dos condóminos com as descrições do extrato. Nem todos os pagamentos têm o nome identificável — os que não foram associados aparecem em cima. Um "SEM RASTO" pode significar que pagou por outro meio (numerário, outra conta) ou que mudou de proprietário. Confirma sempre antes de cobrar.</div>';
+
+  cont.innerHTML = html;
+}
+
 function nav(p) {
   document.querySelectorAll('.page').forEach(el=>el.classList.remove('active'));
   document.querySelectorAll('.ni').forEach(el=>el.classList.remove('active'));
@@ -12482,6 +12679,7 @@ function nav(p) {
   if(p==='quotas'){ initQuotasMesSel(); loadQuotas(); }
   if(p==='despesas') loadDespesas();
   if(p==='contas'){ _contasAno = new Date().getFullYear(); loadContas(); }
+  if(p==='auditoria') auditoriaCarregarHistorico();
   if(p==='definicoes')loadDefForm();
 }
 
