@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.06.30-0925</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.01-1019</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -1280,6 +1280,12 @@ textarea.fi{resize:vertical;min-height:60px;}
           <div class="panel" style="margin-bottom:16px;">
             <div class="ph"><span class="pt">💳 Mapa de Pagamentos por Condómino</span><span class="pm">quem pagou, quem deve</span></div>
             <div id="auditoria-mapa-pagamentos" style="padding:16px;overflow-x:auto;"></div>
+          </div>
+
+          <!-- Orçamento credível a partir das despesas reais -->
+          <div class="panel" style="margin-bottom:16px;">
+            <div class="ph"><span class="pt">📊 Orçamento Credível (base real)</span><span class="pm">do que o prédio gastou mesmo</span></div>
+            <div id="auditoria-orcamento" style="padding:16px;overflow-x:auto;"></div>
           </div>
 
           <!-- Movimentos lidos -->
@@ -12189,6 +12195,7 @@ function auditoriaProcessarResultados() {
   auditoriaRenderAnomalias(anomalias);
   auditoriaRenderRecorrentes();
   auditoriaMapaPagamentos(entradas, datas);
+  auditoriaOrcamentoSugerido(saidas, datas);
   auditoriaRenderMovimentos(trans);
   document.getElementById('auditoria-resultados').style.display = 'block';
 
@@ -12650,6 +12657,95 @@ function auditoriaMapaPagamentos(entradas, datas) {
   html += '<div style="font-size:10px;color:var(--t3);margin-top:10px;padding-top:10px;border-top:1px solid var(--b1);">⚠️ Este mapa cruza os nomes dos condóminos com as descrições do extrato. Nem todos os pagamentos têm o nome identificável — os que não foram associados aparecem em cima. Um "SEM RASTO" pode significar que pagou por outro meio (numerário, outra conta) ou que mudou de proprietário. Confirma sempre antes de cobrar.</div>';
 
   cont.innerHTML = html;
+}
+
+// ===== CAMADA 3: Orçamento credível a partir das despesas reais =====
+var _auditoriaOrcamentoSugerido = [];
+function auditoriaOrcamentoSugerido(saidas, datas) {
+  var cont = document.getElementById('auditoria-orcamento');
+  if (!cont) return;
+  if (!saidas.length) { cont.innerHTML = '<div style="text-align:center;color:var(--t3);font-size:12px;padding:16px;">Sem saídas para estimar o orçamento.</div>'; return; }
+
+  // Nº de anos cobertos pelos extratos (para dividir e obter média anual)
+  var nAnos = 1;
+  if (datas.length >= 2) {
+    var anos = {};
+    datas.forEach(function(d){ if(d) anos[new Date(d).getFullYear()] = true; });
+    nAnos = Math.max(1, Object.keys(anos).length);
+  }
+
+  // Agrupar saídas por fornecedor (nome normalizado), somar e calcular média anual
+  var grupos = {};
+  saidas.forEach(function(t){
+    var nome = auditoriaNormalizar(t.descricao||'') || 'outros';
+    if (!grupos[nome]) grupos[nome] = { nomeOriginal: t.descricao||'—', total: 0, n: 0 };
+    grupos[nome].total += parseFloat(t.valor||0);
+    grupos[nome].n++;
+  });
+
+  // Construir sugestões: gasto real médio anual por fornecedor
+  _auditoriaOrcamentoSugerido = [];
+  Object.keys(grupos).forEach(function(k){
+    var g = grupos[k];
+    var mediaAnual = g.total / nAnos;
+    if (mediaAnual < 1) return;
+    _auditoriaOrcamentoSugerido.push({
+      nome: (g.nomeOriginal||'').replace(/DEB DIRETO|TRF|SEPA|2VIA/gi,'').trim().substring(0,40) || 'Despesa',
+      totalReal: g.total,
+      mediaAnual: mediaAnual,
+      nPagamentos: g.n
+    });
+  });
+  _auditoriaOrcamentoSugerido.sort(function(a,b){ return b.mediaAnual - a.mediaAnual; });
+
+  // Só mostrar as despesas com peso (top, para não poluir com micro-gastos)
+  var relevantes = _auditoriaOrcamentoSugerido.filter(function(r){ return r.mediaAnual >= 20; });
+  var totalSugerido = relevantes.reduce(function(s,r){ return s + r.mediaAnual; }, 0);
+
+  var html = '<div style="font-size:11px;color:var(--t3);margin-bottom:12px;">Com base no que o prédio gastou mesmo (' + nAnos + ' ano' + (nAnos>1?'s':'') + ' de extratos), aqui está uma base REAL para o orçamento do próximo ano. Números do banco, não estimativas.</div>';
+  html += '<table style="width:100%;border-collapse:collapse;font-size:12px;min-width:520px;">';
+  html += '<thead><tr style="border-bottom:1px solid var(--b1);color:var(--t3);font-size:11px;">';
+  html += '<th style="text-align:left;padding:7px 6px;">Despesa (do extrato)</th><th style="text-align:center;padding:7px 6px;">Nº/período</th><th style="text-align:right;padding:7px 6px;">Média anual real</th></tr></thead><tbody>';
+  relevantes.forEach(function(r){
+    html += '<tr style="border-bottom:1px solid var(--b1);">';
+    html += '<td style="padding:7px 6px;color:var(--t2);">' + r.nome + '</td>';
+    html += '<td style="text-align:center;padding:7px 6px;color:var(--t3);">' + r.nPagamentos + '×</td>';
+    html += '<td style="text-align:right;padding:7px 6px;font-weight:600;color:var(--cyan);">' + r.mediaAnual.toFixed(2) + '€</td>';
+    html += '</tr>';
+  });
+  html += '</tbody><tfoot><tr style="border-top:2px solid var(--b1);font-weight:700;">';
+  html += '<td colspan="2" style="padding:8px 6px;">Total anual estimado (base real)</td>';
+  html += '<td style="text-align:right;padding:8px 6px;color:var(--cyan);">' + totalSugerido.toFixed(2) + '€</td>';
+  html += '</tr></tfoot></table>';
+
+  // Botão para enviar ao módulo de Orçamento
+  html += '<button class="btn-primary" style="width:100%;margin-top:14px;padding:11px;" onclick="auditoriaCriarOrcamento()">📊 Usar isto como base do orçamento do próximo ano</button>';
+  html += '<div style="font-size:10px;color:var(--t3);margin-top:8px;">Cria rubricas no módulo Orçamento com estes valores reais. Podes ajustar tudo lá depois (ex: prever aumentos, adicionar obras previstas).</div>';
+
+  cont.innerHTML = html;
+}
+
+async function auditoriaCriarOrcamento() {
+  if (!_auditoriaOrcamentoSugerido.length || !currentCondo) { toast('Faz primeiro a análise','err'); return; }
+  var anoProx = new Date().getFullYear() + 1;
+  var relevantes = _auditoriaOrcamentoSugerido.filter(function(r){ return r.mediaAnual >= 20; });
+
+  if (!await confirmar('Vou criar ' + relevantes.length + ' rubricas no orçamento de ' + anoProx + ', com base nas despesas reais dos extratos.\n\nPoderás ajustar tudo depois no módulo Orçamento. Continuar?', {titulo:'Criar orçamento base', tipo:'info', icon:'📊', okTexto:'Criar rubricas', cancelarTexto:'Cancelar'})) return;
+
+  var payloads = relevantes.map(function(r){
+    return {
+      condominio_id: currentCondo.id,
+      ano: anoProx,
+      nome: r.nome,
+      valor_total: parseFloat(r.mediaAnual.toFixed(2)),
+      categoria: 'comum',
+      tipo_distribuicao: 'permilagem'
+    };
+  });
+
+  var res = await sb.from('orcamento_rubricas').insert(payloads);
+  if (res.error) { toast('Erro ao criar orçamento: ' + res.error.message, 'err'); return; }
+  toast('✅ ' + payloads.length + ' rubricas criadas no orçamento de ' + anoProx, 'ok');
 }
 
 function nav(p) {
