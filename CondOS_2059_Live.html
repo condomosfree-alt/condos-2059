@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.01-1019</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.01-1043</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -1213,6 +1213,15 @@ textarea.fi{resize:vertical;min-height:60px;}
           <span style="font-size:11px;color:var(--t3);">Auditoria & passagem de gestão</span>
         </div>
 
+        <!-- Abas -->
+        <div style="display:flex;gap:6px;margin-bottom:16px;border-bottom:1px solid var(--b1);">
+          <button class="aud-tab aud-tab-on" id="tab-banco" onclick="auditoriaMudarAba('banco')" style="background:none;border:none;padding:10px 16px;font-size:13px;font-weight:600;color:var(--cyan);border-bottom:2px solid var(--cyan);cursor:pointer;">🏦 Análise do Banco</button>
+          <button class="aud-tab" id="tab-software" onclick="auditoriaMudarAba('software')" style="background:none;border:none;padding:10px 16px;font-size:13px;font-weight:600;color:var(--t3);border-bottom:2px solid transparent;cursor:pointer;">📋 Análise de Outro Programa</button>
+          <button class="aud-tab" id="tab-cruzar" onclick="auditoriaMudarAba('cruzar')" style="background:none;border:none;padding:10px 16px;font-size:13px;font-weight:600;color:var(--t3);border-bottom:2px solid transparent;cursor:pointer;">🔗 Cruzar as Duas</button>
+        </div>
+
+        <!-- ABA BANCO -->
+        <div id="aud-aba-banco">
         <div class="panel" style="margin-bottom:16px;">
           <div style="padding:16px;">
             <div style="display:flex;gap:12px;align-items:flex-start;background:rgba(0,212,255,.05);border:1px solid rgba(0,212,255,.2);border-radius:10px;padding:14px 16px;">
@@ -1299,6 +1308,67 @@ textarea.fi{resize:vertical;min-height:60px;}
         <div class="panel" style="margin-top:16px;">
           <div class="ph"><span class="pt">📚 Auditorias Guardadas</span><span class="pm">histórico de análises</span></div>
           <div id="auditoria-historico" style="padding:16px;"></div>
+        </div>
+        </div>
+        <!-- FIM ABA BANCO -->
+
+        <!-- ABA SOFTWARE EXTERNO -->
+        <div id="aud-aba-software" style="display:none;">
+          <div class="panel" style="margin-bottom:16px;">
+            <div style="padding:16px;">
+              <div style="display:flex;gap:12px;align-items:flex-start;background:rgba(167,139,250,.06);border:1px solid rgba(167,139,250,.25);border-radius:10px;padding:14px 16px;">
+                <span style="font-size:24px;">📋</span>
+                <div style="font-size:12px;color:var(--t2);line-height:1.6;">
+                  <strong style="color:#a78bfa;">Migração de outro programa.</strong> Carrega o mapa de "valores em dívida" que a gestão anterior tinha (Gecond, Multifracção, etc.). O programa lê a dívida de cada fração e assinala automaticamente as que podem já estar <strong>prescritas</strong> (quotas com mais de 5 anos).
+                  <div style="margin-top:8px;color:var(--t3);font-size:11px;">⚠️ Valores negativos = crédito a favor do condómino (adiantado). Valores positivos = dívida real.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel" style="margin-bottom:16px;">
+            <div class="ph"><span class="pt">Carregar Mapa de Dívidas (outro programa)</span><span class="pm">PDF do mapa de devedores</span></div>
+            <div style="padding:16px;">
+              <label style="display:flex;align-items:center;justify-content:center;gap:10px;border:2px dashed var(--b2);border-radius:12px;padding:26px;cursor:pointer;" onmouseover="this.style.borderColor='#a78bfa'" onmouseout="this.style.borderColor='var(--b2)'">
+                <input type="file" accept=".pdf,image/*" multiple style="display:none;" onchange="softwareCarregarMapa(this)">
+                <span style="font-size:28px;">📄</span>
+                <div>
+                  <div style="font-size:13px;font-weight:600;color:var(--text);">Escolher mapa de dívidas</div>
+                  <div style="font-size:11px;color:var(--t3);margin-top:2px;">PDF do relatório de valores por liquidar</div>
+                </div>
+              </label>
+              <div id="software-ficheiros" style="margin-top:12px;"></div>
+              <div id="software-progresso" style="margin-top:12px;display:none;"></div>
+            </div>
+          </div>
+
+          <div id="software-resultados" style="display:none;">
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px;">
+              <div class="kpi" style="border-top:2px solid var(--red);"><div class="kpi-label">Dívida total</div><div class="kpi-val" id="sw-total">0<span>€</span></div></div>
+              <div class="kpi" style="border-top:2px solid var(--amber);"><div class="kpi-label">Frações com dívida</div><div class="kpi-val" id="sw-ndevedores">0</div></div>
+              <div class="kpi" style="border-top:2px solid #a78bfa;"><div class="kpi-label">Possivelmente prescritas</div><div class="kpi-val" id="sw-prescritas">0</div></div>
+            </div>
+            <div id="software-btn-relatorio" style="display:none;margin-bottom:14px;">
+              <button class="btn-primary" style="width:100%;padding:12px;" onclick="softwareGerarRelatorio()">📄 Gerar Relatório de Dívidas (PDF)</button>
+            </div>
+            <div class="panel">
+              <div class="ph"><span class="pt">Dívida por Fração</span><span class="pm">do mapa do outro programa</span></div>
+              <div id="software-devedores" style="padding:16px;overflow-x:auto;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ABA CRUZAR -->
+        <div id="aud-aba-cruzar" style="display:none;">
+          <div class="panel">
+            <div style="padding:24px;text-align:center;color:var(--t3);font-size:13px;">
+              <div style="font-size:32px;margin-bottom:10px;">🔗</div>
+              <div style="font-weight:600;color:var(--text);margin-bottom:6px;">Cruzar Banco × Outro Programa</div>
+              <div style="font-size:12px;max-width:440px;margin:0 auto;line-height:1.6;">Precisas de ter feito as duas análises primeiro: carregar os extratos do banco (aba 1) e o mapa do outro programa (aba 2). Depois, aqui, o programa compara se a dívida que o outro programa diz bate certo com o que o banco mostra.</div>
+              <button class="btn-primary" style="margin-top:16px;padding:11px 22px;" onclick="auditoriaCruzar()">🔗 Cruzar as análises</button>
+            </div>
+          </div>
+          <div id="cruzar-resultados" style="margin-top:16px;"></div>
         </div>
       </div>
 
@@ -12746,6 +12816,259 @@ async function auditoriaCriarOrcamento() {
   var res = await sb.from('orcamento_rubricas').insert(payloads);
   if (res.error) { toast('Erro ao criar orçamento: ' + res.error.message, 'err'); return; }
   toast('✅ ' + payloads.length + ' rubricas criadas no orçamento de ' + anoProx, 'ok');
+}
+
+// ===== ABAS DO RAIO-X =====
+function auditoriaMudarAba(aba) {
+  ['banco','software','cruzar'].forEach(function(a){
+    var painel = document.getElementById('aud-aba-'+a);
+    var tab = document.getElementById('tab-'+a);
+    if (painel) painel.style.display = (a===aba)?'block':'none';
+    if (tab) {
+      tab.style.color = (a===aba)?'var(--cyan)':'var(--t3)';
+      tab.style.borderBottomColor = (a===aba)?'var(--cyan)':'transparent';
+    }
+  });
+}
+
+// ===== ABA 2: Ler mapa de dívidas de OUTRO PROGRAMA (Gecond/Multifracção) =====
+var _softwareFicheiros = [];
+var _softwareDevedores = [];
+
+function softwareCarregarMapa(input) {
+  var files = Array.from(input.files || []);
+  if (!files.length) return;
+  _softwareFicheiros = files;
+  var cont = document.getElementById('software-ficheiros');
+  cont.innerHTML = files.map(function(f){
+    return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:12px;color:var(--t2);"><span>📄</span><span style="flex:1;">' + f.name + '</span><span style="color:var(--t3);font-size:11px;">' + (f.size/1024).toFixed(0) + ' KB</span></div>';
+  }).join('') + '<button class="btn-primary" style="margin-top:10px;width:100%;" onclick="softwareAnalisar()">📋 Analisar mapa de dívidas</button>';
+  input.value = '';
+}
+
+async function softwareAnalisar() {
+  if (!_softwareFicheiros.length) { toast('Carrega o mapa primeiro','err'); return; }
+  var prog = document.getElementById('software-progresso');
+  prog.style.display = 'block';
+  _softwareDevedores = [];
+
+  for (var fi = 0; fi < _softwareFicheiros.length; fi++) {
+    var file = _softwareFicheiros[fi];
+    prog.innerHTML = '<div style="font-size:12px;color:#a78bfa;margin-bottom:6px;">A ler o mapa (' + (fi+1) + '/' + _softwareFicheiros.length + ')...</div>';
+    var imagens;
+    try { imagens = await pdfParaImagemBase64(file, 15); }
+    catch(e) {
+      imagens = await new Promise(function(res,rej){
+        var r = new FileReader(); r.onload = function(ev){ res([ev.target.result.split(',')[1]]); }; r.onerror = rej; r.readAsDataURL(file);
+      });
+    }
+    for (var pi = 0; pi < imagens.length; pi++) {
+      prog.innerHTML = '<div style="font-size:12px;color:#a78bfa;margin-bottom:6px;">A ler página ' + (pi+1) + ' de ' + imagens.length + '...</div><div style="background:var(--s1);border-radius:6px;height:8px;overflow:hidden;"><div style="width:' + ((pi/imagens.length)*100) + '%;height:100%;background:#a78bfa;"></div></div>';
+      var prompt = 'Este é um mapa de "valores por liquidar por fração" de um programa de gestão de condomínios português (tipo Gecond/Multifracção). Cada fração tem um código, o nome do proprietário, e linhas de dívida com: data de vencimento, descrição, e valor em débito. Extrai para cada linha: fracao (código curto ex "AQ", "K"), proprietario (nome), data (YYYY-MM-DD da coluna vencimento, ou null se vazia), descricao, valor (número decimal, MANTÉM o sinal negativo se for crédito). Devolve APENAS JSON válido: {"linhas":[{"fracao":"","proprietario":"","data":"","descricao":"","valor":0}]}';
+      try {
+        var res = await fetch(PROXY_URL, {
+          method:'POST', headers:PROXY_HEADERS,
+          body: JSON.stringify({ prompt, foto: imagens[pi], tipo: 'documento_import' })
+        });
+        var data = await res.json();
+        var text = (data.text||'').trim();
+        var s = text.indexOf('{'), e = text.lastIndexOf('}');
+        if (s > -1) {
+          var json = JSON.parse(text.slice(s, e+1));
+          if (json.linhas) json.linhas.forEach(function(l){ _softwareDevedores.push(l); });
+        }
+      } catch(err) { console.error('Erro a ler mapa', err); }
+    }
+  }
+
+  prog.innerHTML = '<div style="font-size:12px;color:var(--green);">✅ Lidas ' + _softwareDevedores.length + ' linhas.</div>';
+  setTimeout(function(){ prog.style.display='none'; }, 2500);
+  if (!_softwareDevedores.length) { toast('Não consegui ler o mapa','warn'); return; }
+  softwareProcessar();
+}
+
+function softwareProcessar() {
+  // Agrupar por fração
+  var porFracao = {};
+  _softwareDevedores.forEach(function(l){
+    var codigo = (l.fracao||'?').trim();
+    if (!porFracao[codigo]) porFracao[codigo] = { fracao: codigo, proprietario: l.proprietario||'', linhas: [], total: 0 };
+    if (l.proprietario && !porFracao[codigo].proprietario) porFracao[codigo].proprietario = l.proprietario;
+    porFracao[codigo].linhas.push(l);
+    porFracao[codigo].total += parseFloat(l.valor||0);
+  });
+
+  var hoje = new Date();
+  var limitePrescricao = new Date(hoje.getFullYear()-5, hoje.getMonth(), hoje.getDate());
+
+  var fracoesArr = Object.values(porFracao);
+  var totalDivida = 0, nDevedores = 0, nPrescritas = 0;
+
+  fracoesArr.forEach(function(f){
+    // Só conta como devedor se o total for POSITIVO (deve mesmo)
+    f.ehDevedor = f.total > 0.01;
+    if (f.ehDevedor) { nDevedores++; totalDivida += f.total; }
+    // Verificar linhas de quota antigas (>5 anos) — potencialmente prescritas
+    f.linhasPrescritas = f.linhas.filter(function(l){
+      if (!l.data || parseFloat(l.valor||0) <= 0) return false;
+      var ehQuota = /quota|fundo comum|fundo de reserva/i.test(l.descricao||'');
+      return ehQuota && new Date(l.data) < limitePrescricao;
+    });
+    if (f.linhasPrescritas.length > 0 && f.ehDevedor) nPrescritas++;
+  });
+
+  document.getElementById('sw-total').innerHTML = totalDivida.toFixed(2) + '<span>€</span>';
+  document.getElementById('sw-ndevedores').textContent = nDevedores;
+  document.getElementById('sw-prescritas').textContent = nPrescritas;
+  document.getElementById('sw-prescritas').style.color = nPrescritas>0?'#a78bfa':'var(--green)';
+
+  _softwareResultado = { fracoes: fracoesArr, totalDivida: totalDivida, nDevedores: nDevedores, nPrescritas: nPrescritas };
+  softwareRenderDevedores(fracoesArr);
+  document.getElementById('software-resultados').style.display = 'block';
+  document.getElementById('software-btn-relatorio').style.display = 'block';
+}
+
+var _softwareResultado = null;
+
+function softwareRenderDevedores(fracoesArr) {
+  // Ordenar: devedores primeiro (maior dívida), depois os que têm crédito
+  fracoesArr.sort(function(a,b){ return b.total - a.total; });
+  var cont = document.getElementById('software-devedores');
+  var html = '';
+
+  fracoesArr.forEach(function(f){
+    var temPrescricao = f.linhasPrescritas && f.linhasPrescritas.length > 0 && f.ehDevedor;
+    var corTotal = f.total > 0.01 ? 'var(--red)' : (f.total < -0.01 ? 'var(--green)' : 'var(--t3)');
+    var etiqueta = f.total > 0.01 ? 'DEVE' : (f.total < -0.01 ? 'crédito' : 'saldado');
+
+    html += '<div style="border:1px solid var(--b1);border-radius:9px;margin-bottom:10px;overflow:hidden;">';
+    html += '<div style="display:flex;align-items:center;gap:10px;padding:11px 14px;background:var(--s2);">';
+    html += '<span style="font-weight:700;font-size:13px;color:var(--text);min-width:36px;">' + f.fracao + '</span>';
+    html += '<span style="flex:1;font-size:12px;color:var(--t2);">' + (f.proprietario||'—') + '</span>';
+    if (temPrescricao) html += '<span style="font-size:10px;background:rgba(167,139,250,.15);color:#a78bfa;padding:2px 8px;border-radius:4px;">⏳ pode estar prescrita</span>';
+    html += '<span style="font-size:10px;color:var(--t3);">' + etiqueta + '</span>';
+    html += '<span style="font-weight:700;font-size:13px;color:' + corTotal + ';min-width:80px;text-align:right;">' + f.total.toFixed(2) + '€</span>';
+    html += '</div>';
+
+    // Detalhe das linhas (colapsável simples — mostra sempre)
+    if (f.ehDevedor) {
+      html += '<div style="padding:8px 14px;font-size:11px;">';
+      f.linhas.filter(function(l){ return parseFloat(l.valor||0) > 0; }).slice(0,40).forEach(function(l){
+        var prescrita = temPrescricao && f.linhasPrescritas.indexOf(l) > -1;
+        html += '<div style="display:flex;gap:8px;padding:3px 0;color:var(--t3);' + (prescrita?'opacity:.7;':'') + '">';
+        html += '<span style="min-width:70px;">' + (l.data||'—') + '</span>';
+        html += '<span style="flex:1;">' + (l.descricao||'').substring(0,45) + (prescrita?' <span style="color:#a78bfa;">⏳</span>':'') + '</span>';
+        html += '<span style="font-weight:600;color:var(--t2);">' + parseFloat(l.valor||0).toFixed(2) + '€</span>';
+        html += '</div>';
+      });
+      html += '</div>';
+    }
+    html += '</div>';
+  });
+
+  // Nota legal sobre prescrição
+  html += '<div style="margin-top:12px;background:rgba(167,139,250,.06);border:1px solid rgba(167,139,250,.2);border-radius:8px;padding:12px 14px;font-size:11px;color:var(--t2);line-height:1.6;">';
+  html += '<strong style="color:#a78bfa;">⏳ Sobre as dívidas "possivelmente prescritas":</strong> as quotas ordinárias (mensais + fundo de reserva) prescrevem em 5 anos. As marcadas têm mais de 5 anos e <strong>podem</strong> já não ser exigíveis — MAS só se o condómino invocar a prescrição, e desde que não tenha havido acordo de pagamento ou reconhecimento da dívida (que reiniciam o prazo). Confirma sempre com um advogado antes de desistir de uma cobrança.';
+  html += '</div>';
+
+  cont.innerHTML = html;
+}
+
+function softwareGerarRelatorio() {
+  if (!_softwareResultado) { toast('Faz primeiro a análise','err'); return; }
+  if (!window.jspdf || !window.jspdf.jsPDF) { toast('Biblioteca PDF não carregada','err'); return; }
+  var r = _softwareResultado;
+  var { jsPDF } = window.jspdf;
+  var doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+  var W = 210, M = 16, y = 0;
+  var condoNome = displayNomeCondo(currentCondo.nome||'');
+  var hoje = new Date().toLocaleDateString('pt-PT');
+
+  doc.setFillColor(30,20,50); doc.rect(0,0,W,32,'F');
+  doc.setFillColor(167,139,250); doc.rect(0,32,W,1,'F');
+  doc.setTextColor(167,139,250); doc.setFont('helvetica','bold'); doc.setFontSize(9);
+  doc.text('MAPA DE DÍVIDAS · IMPORTADO DE OUTRO PROGRAMA', W/2, 13, {align:'center'});
+  doc.setTextColor(255,255,255); doc.setFontSize(13);
+  doc.text(condoNome, W/2, 23, {align:'center'});
+  doc.setTextColor(180,180,190); doc.setFont('helvetica','normal'); doc.setFontSize(8);
+  doc.text('Gerado em ' + hoje, W/2, 29, {align:'center'});
+
+  y = 44;
+  doc.setTextColor(40,40,40); doc.setFont('helvetica','bold'); doc.setFontSize(11);
+  doc.text('Resumo', M, y); y += 7;
+  doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(60,60,60);
+  doc.text('• Dívida total: ' + r.totalDivida.toFixed(2) + '€', M+2, y); y += 6;
+  doc.text('• Frações com dívida: ' + r.nDevedores, M+2, y); y += 6;
+  doc.text('• Possivelmente prescritas (>5 anos): ' + r.nPrescritas, M+2, y); y += 10;
+
+  doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(150,40,40);
+  doc.text('Dívida por fração', M, y); y += 8;
+
+  var devedores = r.fracoes.filter(function(f){ return f.ehDevedor; }).sort(function(a,b){ return b.total-a.total; });
+  devedores.forEach(function(f){
+    if (y > 265) { doc.addPage(); y = 24; }
+    doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(30,30,30);
+    doc.text(f.fracao + ' · ' + (f.proprietario||'').substring(0,40), M, y);
+    doc.setTextColor(150,40,40);
+    doc.text(f.total.toFixed(2) + '€', W-M, y, {align:'right'});
+    y += 5;
+    if (f.linhasPrescritas && f.linhasPrescritas.length) {
+      doc.setFont('helvetica','italic'); doc.setFontSize(8); doc.setTextColor(120,90,180);
+      doc.text('⏳ ' + f.linhasPrescritas.length + ' linha(s) de quota com mais de 5 anos — potencialmente prescritas se invocadas.', M+4, y);
+      y += 5;
+    }
+    y += 2;
+  });
+
+  doc.addPage(); y = 24;
+  doc.setTextColor(40,40,40); doc.setFont('helvetica','bold'); doc.setFontSize(11);
+  doc.text('Nota legal', M, y); y += 8;
+  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(80,80,80);
+  var nota = 'As quotas ordinárias (mensais e fundo de reserva) prescrevem em 5 anos; as contribuições extraordinárias (obras) em 20 anos. A prescrição NÃO é automática: só produz efeito se o devedor a invocar. Além disso, um acordo de pagamento ou reconhecimento da dívida INTERROMPE a prescrição, reiniciando o prazo. As dívidas assinaladas como "potencialmente prescritas" devem ser confirmadas com um advogado antes de qualquer decisão. Este relatório resulta da leitura automática de um documento de outro programa e serve como ponto de partida para verificação.';
+  doc.text(doc.splitTextToSize(nota, W-2*M), M, y);
+
+  doc.setTextColor(150,150,150); doc.setFontSize(7);
+  doc.text('Documento gerado por COND.OS 2059 Pro · ' + hoje, W/2, 285, {align:'center'});
+  doc.save('Mapa_Dividas_' + condoNome.replace(/\s+/g,'_') + '_' + hoje.replace(/\//g,'-') + '.pdf');
+}
+
+function auditoriaCruzar() {
+  var cont = document.getElementById('cruzar-resultados');
+  var temBanco = _auditoriaResultado && _auditoriaResultado.anomalias !== undefined;
+  var temSoftware = _softwareResultado && _softwareResultado.fracoes;
+
+  if (!temSoftware) { cont.innerHTML = '<div style="padding:16px;color:var(--amber);font-size:12px;text-align:center;">Falta a análise do outro programa (aba 2).</div>'; return; }
+  if (!_auditoriaTransacoes || !_auditoriaTransacoes.length) { cont.innerHTML = '<div style="padding:16px;color:var(--amber);font-size:12px;text-align:center;">Falta a análise do banco (aba 1) — carrega e analisa os extratos.</div>'; return; }
+
+  // Cruzar: para cada devedor do software, ver se há pagamentos no banco associados
+  var entradas = _auditoriaTransacoes.filter(function(t){ return t.tipo==='entrada'; });
+  var html = '<div class="panel"><div class="ph"><span class="pt">🔗 Cruzamento Banco × Outro Programa</span></div><div style="padding:16px;">';
+  html += '<div style="font-size:11px;color:var(--t3);margin-bottom:12px;">Para cada fração que o outro programa diz ter dívida, vemos se o banco mostra pagamentos dessa pessoa. Se o software diz que deve E o banco não mostra pagamentos → confirma-se a dívida.</div>';
+
+  var devedores = _softwareResultado.fracoes.filter(function(f){ return f.ehDevedor; });
+  devedores.forEach(function(f){
+    var nome = auditoriaNormalizar(f.proprietario||'');
+    var palavras = nome.split(' ').filter(function(w){ return w.length>2; });
+    var pagamentosBanco = entradas.filter(function(t){
+      var desc = auditoriaNormalizar(t.descricao||'');
+      var acertos = palavras.filter(function(w){ return desc.indexOf(w)>-1; }).length;
+      return palavras.length && (acertos/palavras.length) >= 0.5;
+    });
+    var totalPagoBanco = pagamentosBanco.reduce(function(s,t){ return s+parseFloat(t.valor||0); }, 0);
+    var confirma = pagamentosBanco.length === 0;
+    var cor = confirma ? 'var(--red)' : 'var(--amber)';
+    var icon = confirma ? '🔴' : '🟠';
+    var msg = confirma ? 'Software diz que deve e o BANCO NÃO mostra pagamentos → dívida confirmada' : 'Software diz que deve MAS o banco mostra ' + pagamentosBanco.length + ' pagamento(s) (' + totalPagoBanco.toFixed(2) + '€) → verificar';
+
+    html += '<div style="border-left:3px solid ' + cor + ';background:var(--s2);border-radius:0 8px 8px 0;padding:10px 14px;margin-bottom:8px;">';
+    html += '<div style="display:flex;gap:8px;"><span style="font-weight:700;">' + f.fracao + ' · ' + (f.proprietario||'').substring(0,28) + '</span><span style="margin-left:auto;font-weight:700;color:var(--red);">deve ' + f.total.toFixed(2) + '€</span></div>';
+    html += '<div style="font-size:11px;color:var(--t2);margin-top:4px;">' + icon + ' ' + msg + '</div>';
+    html += '</div>';
+  });
+
+  html += '<div style="font-size:10px;color:var(--t3);margin-top:10px;">⚠️ O cruzamento associa pagamentos pelo nome. Pode não apanhar pagamentos por MB Way ou sem nome. Confirma sempre.</div>';
+  html += '</div></div>';
+  cont.innerHTML = html;
 }
 
 function nav(p) {
