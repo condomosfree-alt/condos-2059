@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.01-1709</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.02-0948</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -6772,6 +6772,14 @@ var _salaPontos = [];         // ordem de trabalhos parseada
 var _salaPontoAtual = 0;
 var _salaPresencas = {};      // fracao_id -> estado
 var _salaVotos = {};          // ponto -> { fracao_id -> voto }
+var _salaTiposMaioria = {};   // ponto -> 'simples' | 'dois_tercos' | 'unanimidade'
+async function definirTipoMaioria(pontoNum, tipo) {
+  _salaTiposMaioria[pontoNum] = tipo;
+  var nomes = { simples:'maioria simples', dois_tercos:'2/3 do valor total do prédio (Art. 1425.º)', unanimidade:'unanimidade (Art. 1419.º)' };
+  await registarEvento('nota', 'Ponto ' + pontoNum + ': definida a maioria exigida — ' + (nomes[tipo]||tipo) + '.', pontoNum, { tipoMaioria: tipo });
+  var ponto = _salaPontos.find(function(p){ return p.num === pontoNum; });
+  renderVotacaoModal(pontoNum, ponto);
+}
 
 // Parsear ordem de trabalhos (texto livre numerado) em array de pontos
 function parsearOrdemTrabalhos(texto) {
@@ -7291,6 +7299,20 @@ function renderVotacaoModal(pontoNum, ponto) {
 
   var html = '<div style="margin-bottom:12px;"><button class="btn-ghost" style="font-size:11px;" onclick="renderSala()">← Voltar</button></div>';
   html += '<div style="background:var(--s2);border-radius:8px;padding:12px 14px;margin-bottom:14px;"><div style="font-size:13px;font-weight:600;">Votação — Ponto ' + pontoNum + '</div><div style="font-size:12px;color:var(--t2);margin-top:2px;">' + (ponto?ponto.texto:'') + '</div></div>';
+
+  // TIPO DE MAIORIA EXIGIDA (Art. 1425, 1432 CC)
+  var tipoAtual = _salaTiposMaioria[pontoNum] || 'simples';
+  html += '<div style="background:rgba(0,212,255,.04);border:1px solid rgba(0,212,255,.18);border-radius:8px;padding:11px 14px;margin-bottom:14px;">';
+  html += '<div style="font-size:11px;font-weight:700;color:var(--cyan);margin-bottom:6px;">⚖️ MAIORIA EXIGIDA POR LEI para este ponto</div>';
+  html += '<select class="fi" style="width:100%;" onchange="definirTipoMaioria(' + pontoNum + ', this.value)">';
+  html += '<option value="simples"' + (tipoAtual==='simples'?' selected':'') + '>Maioria simples — assuntos correntes (mais votos a favor que contra)</option>';
+  html += '<option value="dois_tercos"' + (tipoAtual==='dois_tercos'?' selected':'') + '>2/3 do prédio — obras de inovação, regulamento (Art. 1425.º)</option>';
+  html += '<option value="unanimidade"' + (tipoAtual==='unanimidade'?' selected':'') + '>Unanimidade — alterar título constitutivo (Art. 1419.º)</option>';
+  html += '</select>';
+  if (tipoAtual === 'dois_tercos') html += '<div style="font-size:10px;color:var(--t3);margin-top:6px;">Exige votos a favor ≥ 666,7‰ do valor TOTAL do prédio (não só dos presentes).</div>';
+  if (tipoAtual === 'unanimidade') html += '<div style="font-size:10px;color:var(--t3);margin-top:6px;">Exige TODOS a favor. Se os presentes (≥2/3 do prédio) aprovarem por unanimidade, fica "aprovada sob condição" — os ausentes têm 90 dias (o silêncio vale aprovação, com aviso obrigatório na carta).</div>';
+  html += '</div>';
+
   html += '<div style="font-size:11px;color:var(--t3);margin-bottom:8px;">Só votam frações presentes ou representadas (' + elegiveis.length + ').</div>';
   html += '<div style="max-height:300px;overflow-y:auto;">';
   html += '<table class="tbl"><thead><tr><th>Fração</th><th>‰</th><th>Voto</th></tr></thead><tbody>';
@@ -7337,11 +7359,55 @@ async function registarVoto(fracaoId, voto) {
 
 async function fecharVotacao(pontoNum) {
   var r = contarVotos(pontoNum);
-  var aprovado = r.favorPerm > r.contraPerm;
   var ponto = _salaPontos.find(function(p){ return p.num === pontoNum; });
-  await registarEvento('votacao_fechada', 'Votação do Ponto ' + pontoNum + ' encerrada. A favor: ' + Math.round(r.favorPerm) + '‰, Contra: ' + Math.round(r.contraPerm) + '‰, Abstenção: ' + Math.round(r.abstencaoPerm) + '‰.', pontoNum, r);
-  await registarEvento('deliberacao', 'Ponto ' + pontoNum + ' (' + (ponto?ponto.texto:'') + '): ' + (aprovado?'APROVADO':'REJEITADO') + ' por ' + Math.round(aprovado?r.favorPerm:r.contraPerm) + '‰.', pontoNum, { aprovado: aprovado, resultado: r });
-  toast('✅ Resultado registado no livro: ' + (aprovado?'APROVADO':'REJEITADO'), 'ok');
+  var tipoMaioria = _salaTiposMaioria[pontoNum] || 'simples';
+  var permTotalPredio = fracoes.reduce(function(s,f){ return s + parseFloat(f.permilagem||0); }, 0) || 1000;
+  var doisTercos = permTotalPredio * (2/3);
+
+  // Permilagem presente/representada (para o caso da unanimidade sob condição)
+  var permPresente = fracoes.reduce(function(s,f){
+    var e = _salaPresencas[f.id];
+    return s + ((e==='presente'||e==='representado') ? parseFloat(f.permilagem||0) : 0);
+  }, 0);
+
+  var aprovado = false, sobCondicao = false, motivoLegal = '';
+
+  if (tipoMaioria === 'simples') {
+    aprovado = r.favorPerm > r.contraPerm;
+    motivoLegal = aprovado
+      ? 'por maioria simples (' + Math.round(r.favorPerm) + '‰ a favor contra ' + Math.round(r.contraPerm) + '‰)'
+      : 'por não obter maioria simples (' + Math.round(r.favorPerm) + '‰ a favor, ' + Math.round(r.contraPerm) + '‰ contra)';
+  } else if (tipoMaioria === 'dois_tercos') {
+    aprovado = r.favorPerm >= doisTercos;
+    motivoLegal = aprovado
+      ? 'por maioria qualificada de 2/3 do valor total do prédio — Art. 1425.º CC (' + Math.round(r.favorPerm) + '‰ ≥ ' + Math.round(doisTercos) + '‰ exigidos)'
+      : 'por NÃO atingir os 2/3 do valor total do prédio exigidos pelo Art. 1425.º CC (' + Math.round(r.favorPerm) + '‰ a favor; eram precisos ' + Math.round(doisTercos) + '‰)';
+  } else if (tipoMaioria === 'unanimidade') {
+    var todosFavor = r.nContra === 0 && r.nAbst === 0 && r.nFavor > 0;
+    if (!todosFavor) {
+      aprovado = false;
+      motivoLegal = 'por não haver unanimidade (a alteração exige o acordo de TODOS os condóminos — Art. 1419.º CC)';
+    } else if (Math.abs(permPresente - permTotalPredio) < 1) {
+      // Todos os condóminos do prédio presentes e todos a favor: unanimidade plena
+      aprovado = true;
+      motivoLegal = 'por UNANIMIDADE de todos os condóminos (Art. 1419.º CC)';
+    } else if (permPresente >= doisTercos) {
+      // Unanimidade dos presentes (≥2/3 do prédio): aprovada SOB CONDIÇÃO dos ausentes (Art. 1432.º n.º 8)
+      aprovado = true; sobCondicao = true;
+      motivoLegal = 'por unanimidade dos presentes (' + Math.round(permPresente) + '‰ ≥ 2/3 do prédio), ficando APROVADA SOB CONDIÇÃO de aprovação dos condóminos ausentes — Art. 1432.º n.º 8 CC. Os ausentes devem ser notificados por carta registada e têm 90 dias para comunicar por escrito o seu assentimento ou discordância; o silêncio vale como aprovação (a comunicação deve conter essa advertência).';
+    } else {
+      aprovado = false;
+      motivoLegal = 'porque, exigindo unanimidade, os presentes representam menos de 2/3 do prédio (' + Math.round(permPresente) + '‰) — nem sequer é possível a aprovação sob condição do Art. 1432.º n.º 8 CC';
+    }
+  }
+
+  var nomesTipo = { simples:'maioria simples', dois_tercos:'2/3 (Art. 1425.º)', unanimidade:'unanimidade (Art. 1419.º)' };
+  await registarEvento('votacao_fechada', 'Votação do Ponto ' + pontoNum + ' encerrada (maioria exigida: ' + (nomesTipo[tipoMaioria]||tipoMaioria) + '). A favor: ' + Math.round(r.favorPerm) + '‰, Contra: ' + Math.round(r.contraPerm) + '‰, Abstenção: ' + Math.round(r.abstencaoPerm) + '‰.', pontoNum, r);
+
+  var estadoTxt = sobCondicao ? 'APROVADO SOB CONDIÇÃO' : (aprovado ? 'APROVADO' : 'REJEITADO');
+  await registarEvento('deliberacao', 'Ponto ' + pontoNum + ' (' + (ponto?ponto.texto:'') + '): ' + estadoTxt + ' ' + motivoLegal + '.', pontoNum, { aprovado: aprovado, sobCondicao: sobCondicao, tipoMaioria: tipoMaioria, resultado: r });
+
+  toast(sobCondicao ? '⏳ APROVADO SOB CONDIÇÃO — os ausentes têm 90 dias (aviso obrigatório na carta)' : ('✅ Resultado registado no livro: ' + estadoTxt), 'ok');
   renderSala();
   salaTab('pontos');
 }
@@ -8117,6 +8183,28 @@ async function enviarAtaAusentes(assembleiaId) {
   var a = aRes.data;
   if (!a.ata_texto || !a.ata_texto.trim()) { toast('Esta assembleia ainda não tem ata gerada','err'); return; }
 
+  // Verificar se há deliberações APROVADAS SOB CONDIÇÃO (unanimidade por 2/3 — Art. 1432.º n.º 8)
+  // Só nesse caso é que o "silêncio = aprovação" em 90 dias se aplica (e a advertência é OBRIGATÓRIA — TR Lisboa 2024)
+  var temSobCondicao = false, pontosSobCondicao = [];
+  try {
+    var evRes = await sb.from('assembleia_eventos').select('ponto_num,texto,dados').eq('assembleia_id', assembleiaId).eq('tipo','deliberacao');
+    (evRes.data||[]).forEach(function(ev){
+      if (ev.dados && ev.dados.sobCondicao) { temSobCondicao = true; pontosSobCondicao.push(ev.ponto_num); }
+    });
+  } catch(e) { console.error(e); }
+
+  // Bloco de aviso legal certo consoante o caso
+  var avisoEmailHtml, avisoCartaTxt;
+  if (temSobCondicao) {
+    avisoEmailHtml = '<div style="background:#fdf2f8;border:2px solid #d946ef;border-radius:8px;padding:12px 14px;margin:18px 0;font-size:12px;color:#86198f;"><strong>⚠️ ADVERTÊNCIA LEGAL IMPORTANTE (Art. 1432.º n.º 8 e 9 CC):</strong> a(s) deliberação(ões) do(s) ponto(s) ' + pontosSobCondicao.join(', ') + ' foi(ram) aprovada(s) SOB CONDIÇÃO da sua aprovação. Dispõe de <strong>90 dias</strong> a contar da receção desta comunicação para comunicar, por escrito, o seu assentimento ou a sua discordância. <strong>Se nada disser nesse prazo, o seu silêncio vale como APROVAÇÃO da(s) deliberação(ões).</strong></div>';
+    avisoCartaTxt = 'ADVERTÊNCIA LEGAL (Art. 1432.º n.º 8 e 9 CC): a(s) deliberação(ões) do(s) ponto(s) ' + pontosSobCondicao.join(', ') + ' foi(ram) aprovada(s) sob condição da aprovação dos condóminos ausentes. Dispõe de 90 dias a contar da receção desta carta para comunicar por escrito o seu assentimento ou discordância. Se nada disser nesse prazo, o seu silêncio vale como APROVAÇÃO.';
+  } else {
+    avisoEmailHtml = '<div style="background:#eef6ff;border:1px solid #b8d8f0;border-radius:8px;padding:12px 14px;margin:18px 0;font-size:12px;color:#1a5276;">ℹ️ Esta comunicação destina-se a dar-lhe conhecimento das deliberações tomadas. Caso pretenda impugnar alguma deliberação, dispõe de <strong>60 dias</strong> para ação judicial (Art. 1433.º CC) ou de <strong>20 dias</strong> para exigir a convocação de assembleia extraordinária.</div>';
+    avisoCartaTxt = 'Esta comunicação destina-se a dar conhecimento das deliberações tomadas. Caso pretenda impugnar alguma deliberação, dispõe de 60 dias para ação judicial (Art. 1433.º CC) ou de 20 dias para exigir assembleia extraordinária.';
+  }
+  window._ataAvisoEmailHtml = avisoEmailHtml;
+  window._ataAvisoCartaTxt = avisoCartaTxt;
+
   // Calcular o prazo legal: 30 dias a contar da data da assembleia
   var dataAss = a.data_assembleia ? new Date(a.data_assembleia) : new Date();
   var dataLimite = new Date(dataAss.getTime() + 30*24*60*60*1000);
@@ -8162,7 +8250,7 @@ async function enviarAtaAusentes(assembleiaId) {
   msg += '✉️ ' + porCarta.length + ' por carta registada + AR (obrigatório por lei)\n';
   msg += '💰 Custo estimado: ' + custoCartas.toFixed(2).replace('.',',') + '€ (' + porCarta.length + ' × ' + tarifaAR.toFixed(2).replace('.',',') + '€)\n\n';
   if (porEmail.length && !_gmailToken) msg += '⚠️ O Gmail não está ligado — os emails não serão enviados agora.\n\n';
-  msg += 'A lei dá depois 90 dias aos ausentes para se pronunciarem (silêncio = aprovação).\n\nContinuar?';
+  msg += temSobCondicao ? 'Há deliberação(ões) APROVADA(S) SOB CONDIÇÃO: a carta incluirá a advertência legal obrigatória (90 dias, silêncio = aprovação).\n\nContinuar?' : 'As cartas incluirão a informação legal de impugnação (60 dias tribunal / 20 dias assembleia extraordinária).\n\nContinuar?';
 
   if (!await confirmar(msg, {titulo:'Enviar ata aos ausentes', tipo:'info', icon:'📨', okTexto:'Enviar / preparar'})) return;
 
@@ -8191,7 +8279,7 @@ async function enviarAtaAusentes(assembleiaId) {
         '<div style="background:#fff;padding:26px 28px;">'+
           '<p style="font-size:14px;color:#333;margin:0 0 16px;">Caro(a) <strong>'+(f.proprietario_nome||'condómino')+'</strong>,</p>'+
           '<p style="font-size:13px;color:#555;line-height:1.6;margin:0 0 16px;">Na qualidade de condómino que não esteve presente na Assembleia '+(a.tipo||'')+' realizada em <strong>'+dataFmt+'</strong>, comunica-se em anexo a <strong>ata '+numAta+'</strong> com as deliberações tomadas, nos termos do Art. 1432.º do Código Civil.</p>'+
-          '<div style="background:#eef6ff;border:1px solid #b8d8f0;border-radius:8px;padding:12px 14px;margin:18px 0;font-size:12px;color:#1a5276;">⏱️ Dispõe de <strong>90 dias</strong> a contar desta comunicação para, querendo, manifestar por escrito a sua discordância das deliberações. A ausência de resposta vale como aprovação.</div>'+
+          (window._ataAvisoEmailHtml||'')+
           '<div style="background:#fff8e8;border:1px solid #f0d090;border-radius:8px;padding:12px 14px;margin:18px 0;font-size:12px;color:#7a5c10;">Por favor, confirme a receção respondendo a este email (serve como recibo de receção).</div>'+
           '<div style="border-top:1px solid #eee;padding-top:14px;"><p style="font-size:12px;color:#555;margin:0;">Com os melhores cumprimentos,</p><p style="font-size:13px;color:#222;font-weight:700;margin:6px 0 0;">'+(currentCondo.gestor_nome||currentCondo.administrador_nome||'A Administração')+'</p></div>'+
         '</div>'+
@@ -8602,7 +8690,7 @@ function gerarPDFCartasAusentes(a, listaCartas) {
     doc.text('Comunicação de deliberações — Ata ' + numAta, M, yc);
     doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(90,90,90);
     yc += 6;
-    var intro = 'Na qualidade de condómino que não esteve presente na Assembleia ' + (a.tipo||'') + ' realizada em ' + dataFmt + ', comunica-se a ata com as deliberações tomadas (Art. 1432.º CC). Dispõe de 90 dias para manifestar, por escrito, eventual discordância; o silêncio vale como aprovação.';
+    var intro = 'Na qualidade de condómino que não esteve presente na Assembleia ' + (a.tipo||'') + ' realizada em ' + dataFmt + ', comunica-se a ata com as deliberações tomadas (Art. 1432.º CC). ' + (window._ataAvisoCartaTxt||'');
     doc.text(doc.splitTextToSize(intro, W-2*M), M, yc);
     yc += 16;
 
