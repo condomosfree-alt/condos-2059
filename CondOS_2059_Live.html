@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.02-0948</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.02-2147</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -8067,6 +8067,12 @@ async function enviarConvocatoriaTodos(assembleiaId) {
   // Perguntar se quer anexar a procuração pré-preenchida (para quem não pode comparecer)
   var anexarProcuracao = await confirmar('Queres anexar uma PROCURAÇÃO pré-preenchida a cada convocatória?\n\nÉ um documento já com os dados da assembleia (data, hora, local), pronto a usar caso o condómino não possa comparecer e queira fazer-se representar. Só falta assinar (proprietário + representante).', {titulo:'Anexar procuração?', tipo:'info', icon:'📜', okTexto:'Sim, anexar', cancelarTexto:'Não, só convocatória'});
 
+  // Se a ordem de trabalhos fala de dívidas/cobrança, sugerir a nota informativa legal
+  var anexarNota = false;
+  if (/d[íi]vida|cobran[çc]|quotas em atraso|devedor|em d[ée]bito|valores em atraso/i.test(a.ordem_trabalhos||'')) {
+    anexarNota = await confirmar('A ordem de trabalhos fala de DÍVIDAS/COBRANÇA.\n\nQueres anexar uma NOTA INFORMATIVA legal? Explica em linguagem simples o que a lei diz sobre quotas em atraso (juros automáticos, prazos de prescrição, força legal da ata, como se vota) — para os condóminos chegarem informados à assembleia.\n\nA nota explica a lei em geral e NÃO identifica ninguém.', {titulo:'Anexar nota informativa?', tipo:'info', icon:'📄', okTexto:'Sim, anexar', cancelarTexto:'Não'});
+  }
+
   // Separar os condóminos em 3 grupos (regra legal Art. 1432.º)
   var porEmail = [], porCarta = [], semContacto = [];
   fracoes.forEach(function(f){
@@ -8130,15 +8136,16 @@ async function enviarConvocatoriaTodos(assembleiaId) {
           '<p style="font-size:13px;color:#555;line-height:1.6;margin:0 0 16px;">Junto se envia a <strong>convocatória</strong> para a Assembleia '+(a.tipo||'')+' de condóminos, a realizar em <strong>'+dataFmt+'</strong>, pelas '+(a.hora_assembleia||'20:00')+', em '+(a.local_assembleia||'')+'.</p>'+
           '<p style="font-size:13px;color:#555;line-height:1.6;margin:0 0 16px;">A convocatória completa, com a ordem de trabalhos, segue em <strong>anexo (PDF)</strong>.</p>'+
           (anexarProcuracao ? '<div style="background:#eef6ff;border:1px solid #b8d8f0;border-radius:8px;padding:12px 14px;margin:18px 0;font-size:12px;color:#1a5276;">📜 Segue também, em anexo, uma <strong>procuração pré-preenchida</strong>. Caso não possa comparecer, pode usá-la para se fazer representar — basta preencher o nome do representante e assinarem ambos.</div>' : '')+
+          (anexarNota ? '<div style="background:#f6f3ff;border:1px solid #d3c8f0;border-radius:8px;padding:12px 14px;margin:18px 0;font-size:12px;color:#4c3a8a;">📄 Junta-se ainda uma <strong>nota informativa</strong> que explica, em linguagem simples, o que a lei diz sobre quotas em atraso (juros, prazos e como se delibera) — para que todos possam participar de forma informada.</div>' : '')+
           '<div style="background:#fff8e8;border:1px solid #f0d090;border-radius:8px;padding:12px 14px;margin:18px 0;font-size:12px;color:#7a5c10;">⚠️ Por favor, confirme a receção desta convocatória respondendo a este email. A sua confirmação serve como recibo de receção, nos termos do Art. 1432.º do Código Civil.</div>'+
           '<div style="border-top:1px solid #eee;padding-top:14px;"><p style="font-size:12px;color:#555;margin:0;">Com os melhores cumprimentos,</p><p style="font-size:13px;color:#222;font-weight:700;margin:6px 0 0;">'+(currentCondo.gestor_nome||currentCondo.administrador_nome||'A Administração')+'</p></div>'+
         '</div>'+
         '<div style="background:#0d1825;padding:12px 28px;text-align:center;border-radius:0 0 10px 10px;"><div style="color:#5a6a79;font-size:10px;">COND.OS 2059 Pro · '+new Date().toLocaleDateString('pt-PT')+'</div></div></div>';
       // Anexo: convocatória (+ procuração combinada, se pedido)
       var anexoBase64 = pdfRes.base64, anexoNome = pdfRes.nomeFich;
-      if (anexarProcuracao) {
-        var combinado = await combinarConvocatoriaProcuracao(a, f, dados);
-        if (combinado) { anexoBase64 = combinado; anexoNome = 'Convocatoria_e_Procuracao_' + (f.codigo||'') + '.pdf'; }
+      if (anexarProcuracao || anexarNota) {
+        var combinado = await combinarConvocatoriaProcuracao(a, f, dados, anexarProcuracao, anexarNota);
+        if (combinado) { anexoBase64 = combinado; anexoNome = 'Convocatoria_' + (anexarProcuracao?'Procuracao_':'') + (anexarNota?'NotaLegal_':'') + (f.codigo||'') + '.pdf'; }
       }
       var ok = await enviarEmailGmailComAnexo(f.proprietario_email, assunto, corpo, anexoBase64, anexoNome);
       if (ok) enviados++; else falhas++;
@@ -8166,7 +8173,7 @@ async function enviarConvocatoriaTodos(assembleiaId) {
   resumo += '</div>';
 
   // Descarregar o PDF das cartas personalizadas (folha de rosto + 1 convocatória por destinatário)
-  if (totalCartas > 0) { gerarPDFCartasConvocatoria(a, porCarta.concat(semContacto), dados, anexarProcuracao); }
+  if (totalCartas > 0) { gerarPDFCartasConvocatoria(a, porCarta.concat(semContacto), dados, anexarProcuracao, anexarNota); }
 
   await confirmar(resumo, {titulo:'Convocatória enviada', tipo:'success', icon:'✅', okTexto:'Concluir', cancelarTexto:'', html:true});
 
@@ -8360,18 +8367,75 @@ async function fluxoRegistarCustos(tipo, nCartas, custoCartas, assembleiaId) {
   toast(ok ? '✅ Custo registado nas despesas' + (custoImpressao>0?' (postal + impressão)':'') : 'Não foi possível registar o custo', ok?'ok':'err');
 }
 
+// Nota informativa legal sobre dívidas (linguagem simples, NUNCA identifica condóminos)
+// Acrescenta uma página a um doc jsPDF existente e devolve o doc
+function gerarNotaInformativaNoDoc(doc) {
+  doc.addPage();
+  var W = 210, M = 22, y = 0;
+
+  // Cabeçalho
+  doc.setFillColor(244,241,232); doc.rect(0,0,W,30,'F');
+  doc.setDrawColor(26,26,23); doc.setLineWidth(0.8); doc.line(M,28,W-M,28);
+  doc.setTextColor(26,26,23); doc.setFont('helvetica','bold'); doc.setFontSize(14);
+  doc.text('NOTA INFORMATIVA', W/2, 13, {align:'center'});
+  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(90,80,60);
+  doc.text('O que diz a lei sobre quotas em atraso — em linguagem simples', W/2, 21, {align:'center'});
+
+  y = 40;
+  function seccao(titulo, corpo) {
+    if (y > 250) { doc.addPage(); y = 24; }
+    doc.setFont('helvetica','bold'); doc.setFontSize(10.5); doc.setTextColor(26,26,23);
+    doc.text(titulo, M, y); y += 6;
+    doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(60,60,60);
+    var linhas = doc.splitTextToSize(corpo, W-2*M);
+    doc.text(linhas, M, y); y += linhas.length*4.6 + 7;
+  }
+
+  seccao('1. Pagar as quotas é uma obrigação legal',
+    'Cada condómino é responsável pelas despesas comuns do prédio na proporção do valor da sua fração (Art. 1424.º do Código Civil). As quotas pagam a luz das escadas, o elevador, o seguro, a limpeza — quando alguém não paga, são os restantes que suportam o custo.');
+
+  seccao('2. Os juros de mora são automáticos',
+    'Uma quota em atraso vence juros à taxa legal (atualmente 4% ao ano) de forma automática — a lei não exige qualquer aprovação em assembleia para estes juros (Lei n.º 8/2022). Multas ou penalizações adicionais, essas sim, só são válidas se aprovadas em assembleia ou previstas no regulamento.');
+
+  seccao('3. As dívidas têm prazos (prescrição)',
+    'As quotas mensais (incluindo o fundo comum de reserva) prescrevem em 5 anos; as contribuições extraordinárias (por exemplo, para obras) em 20 anos. Atenção: a prescrição não funciona sozinha — só produz efeito se o devedor a invocar. E um acordo de pagamento ou o reconhecimento da dívida interrompe o prazo, que volta a contar do zero.');
+
+  seccao('4. A força legal da ata',
+    'Quando a assembleia delibera sobre o montante das contribuições em dívida, a ata dessa assembleia vale como título executivo (Decreto-Lei n.º 268/94). Em termos práticos: permite ao condomínio avançar diretamente para a cobrança judicial, sem ter de provar a dívida primeiro num processo declarativo — o que poupa tempo e custos a todos.');
+
+  seccao('5. Como se vota',
+    'A deliberação sobre a cobrança de dívidas toma-se, em regra, por maioria simples dos condóminos presentes ou representados, votando cada um com a permilagem da sua fração. As despesas com a cobrança (cartas registadas, honorários) podem ser imputadas ao condómino devedor.');
+
+  seccao('6. O caminho habitual',
+    'Primeiro procura-se sempre a via amigável: notificação e, se possível, um plano de pagamento. Só depois, se necessário, a via judicial. O administrador tem o dever de não deixar as dívidas arrastarem-se — a inércia prejudica o condomínio e pode fazer os juros acumularem para lá do valor original.');
+
+  // Rodapé de neutralidade
+  y += 2;
+  if (y > 258) { doc.addPage(); y = 24; }
+  doc.setFillColor(248,246,238); doc.setDrawColor(200,190,170); doc.setLineWidth(0.4);
+  doc.roundedRect(M, y, W-2*M, 22, 2, 2, 'FD');
+  doc.setFont('helvetica','italic'); doc.setFontSize(8.5); doc.setTextColor(110,100,80);
+  var neutro = doc.splitTextToSize('Esta nota explica a lei em termos gerais e não identifica qualquer condómino. Situações concretas serão tratadas na assembleia. Para casos específicos, recomenda-se apoio jurídico.', W-2*M-10);
+  doc.text(neutro, M+5, y+8);
+
+  doc.setTextColor(150,150,150); doc.setFontSize(7);
+  doc.text('Documento gerado por COND.OS 2059 Pro · Nota informativa legal', W/2, 288, {align:'center'});
+  return doc;
+}
+
 // Combinar a convocatória + a procuração de um condómino, num único PDF base64
-async function combinarConvocatoriaProcuracao(a, f, dadosConv) {
+async function combinarConvocatoriaProcuracao(a, f, dadosConv, comProcuracao, comNota) {
   try {
     // Gerar uma convocatória FRESCA (para não acumular no mesmo doc entre condóminos)
     var dadosFresh = Object.assign({}, dadosConv, { _retornarDoc: true });
     var convRes = await gerarConvocatoriaPDF(dadosFresh, a.id);
     if (!convRes || !convRes.doc) return null;
-    // Acrescentar a procuração a esse doc fresco
-    var combinado = gerarProcuracaoNoDoc(convRes.doc, a, f);
-    return combinado.output('datauristring').split(',')[1];
+    var docFinal = convRes.doc;
+    if (comProcuracao !== false) docFinal = gerarProcuracaoNoDoc(docFinal, a, f);
+    if (comNota) docFinal = gerarNotaInformativaNoDoc(docFinal);
+    return docFinal.output('datauristring').split(',')[1];
   } catch(e) {
-    console.error('Erro ao combinar convocatória + procuração:', e);
+    console.error('Erro ao combinar convocatória + anexos:', e);
     return null;
   }
 }
@@ -8509,7 +8573,7 @@ function gerarProcuracaoDoc(a, f) {
 
 // Gerar PDF para IMPRESSÃO das cartas de CONVOCATÓRIA aos condóminos:
 // folha de rosto "IMPRIMIR X CARTAS" + uma convocatória por destinatário (nome/morada no topo)
-function gerarPDFCartasConvocatoria(a, listaCartas, dadosConv, comProcuracao) {
+function gerarPDFCartasConvocatoria(a, listaCartas, dadosConv, comProcuracao, comNota) {
   if (!window.jspdf || !window.jspdf.jsPDF) { toast('Biblioteca PDF não carregada','err'); return; }
   var { jsPDF } = window.jspdf;
   var doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
@@ -8609,6 +8673,7 @@ function gerarPDFCartasConvocatoria(a, listaCartas, dadosConv, comProcuracao) {
     doc.text(dataFmt, W-M, yc, {align:'right'});
     // Se pedido, juntar a procuração deste condómino logo a seguir à sua carta
     if (comProcuracao) { gerarProcuracaoNoDoc(doc, a, f); }
+    if (comNota) { gerarNotaInformativaNoDoc(doc); }
   });
 
   var nomeFich = 'Cartas_Convocatoria_' + dataFmt.replace(/[\s\/\.]+/g,'_') + '.pdf';
