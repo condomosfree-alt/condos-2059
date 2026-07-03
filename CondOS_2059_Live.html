@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.03-0946</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.03-2200</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -785,6 +785,32 @@ textarea.fi{resize:vertical;min-height:60px;}
               </div>
               <div class="fl"><label>IMI Anual Total (€)</label><input class="fi" id="ed-imi-anual" type="number" step="0.01" placeholder="Ex: 3433.30"></div>
               <div style="font-size:10px;color:var(--t3);margin-top:8px;">💡 Estes dados são usados para cálculo de valor patrimonial por fração e estimativa de custos no orçamento anual.</div>
+            </div>
+          </div>
+
+          <!-- ⚡ ENERGIA & CADERNETA DIGITAL DO EDIFÍCIO -->
+          <div class="panel" style="margin-top:12px;border:1px solid rgba(255,214,0,.25);">
+            <div class="ph"><span class="pt">⚡ Energia & Eficiência</span><span class="pm">matéria-prima da futura Caderneta Digital do Edifício (EPBD)</span></div>
+            <div style="padding:16px;">
+              <div class="form-row">
+                <div class="fl"><label>Certificado Energético (classe)</label><select class="fi" id="ed-cert-classe"><option value="">Sem certificado / desconhecido</option><option value="A+">A+</option><option value="A">A</option><option value="B">B</option><option value="B-">B-</option><option value="C">C</option><option value="D">D</option><option value="E">E</option><option value="F">F</option></select></div>
+                <div class="fl"><label>Validade do Certificado</label><input class="fi" id="ed-cert-validade" type="date"></div>
+              </div>
+              <div class="form-row">
+                <div class="fl"><label>Janelas (partes comuns/predominante)</label><select class="fi" id="ed-janelas"><option value="">Desconhecido</option><option value="simples">Vidro simples</option><option value="duplas">Vidro duplo</option><option value="mistas">Mistas</option></select></div>
+                <div class="fl"><label>Isolamento térmico (fachada/cobertura)</label><select class="fi" id="ed-isolamento"><option value="">Desconhecido</option><option value="sim">Sim</option><option value="parcial">Parcial</option><option value="nao">Não</option></select></div>
+              </div>
+              <div class="form-row">
+                <div class="fl"><label>Painéis solares</label><select class="fi" id="ed-paineis"><option value="nao">Não tem</option><option value="fotovoltaico">Fotovoltaico</option><option value="termico">Térmico (águas)</option><option value="ambos">Ambos</option></select></div>
+                <div class="fl"><label>Potência instalada (kWp)</label><input class="fi" id="ed-paineis-potencia" type="number" step="0.1" placeholder="Ex: 5.2"></div>
+              </div>
+              <div class="form-row">
+                <div class="fl"><label>Carregadores para veículos elétricos</label><select class="fi" id="ed-ev"><option value="nao">Não tem</option><option value="sim">Sim</option><option value="pre">Pré-instalação</option></select></div>
+                <div class="fl"><label>Gás canalizado</label><select class="fi" id="ed-gas-canalizado"><option value="">Desconhecido</option><option value="sim">Sim</option><option value="nao">Não</option></select></div>
+              </div>
+              <button class="btn-ghost" style="width:100%;margin-top:10px;background:linear-gradient(135deg,rgba(255,214,0,.12),rgba(0,212,255,.12));border-color:rgba(255,214,0,.4);color:#ffd600;font-weight:600;" onclick="diagnosticoEnergetico()">⚡ Diagnóstico Energético (analisar o edifício)</button>
+              <div id="ed-diagnostico-energia" style="margin-top:12px;"></div>
+              <div style="font-size:10px;color:var(--t3);margin-top:8px;">💡 A UE (Diretiva EPBD 2024/1275) vai exigir a Caderneta Digital do Edifício e Passaportes de Renovação. Quem tiver estes dados organizados, exporta e ganha tempo. O diagnóstico cruza-os com os gastos reais para sugerir melhorias e apoios do Estado.</div>
             </div>
           </div>
 
@@ -2252,6 +2278,7 @@ textarea.fi{resize:vertical;min-height:60px;}
       <button class="btn-ghost" style="display:inline-flex;align-items:center;justify-content:center;gap:6px;" onclick="imprimirCartao()"><i class="ti ti-printer"></i>Imprimir</button>
       <button class="btn-ghost" style="display:inline-flex;align-items:center;justify-content:center;gap:6px;" onclick="editarDoCartao()"><i class="ti ti-edit"></i>Editar</button>
       <button class="btn-ghost" style="display:inline-flex;align-items:center;justify-content:center;gap:6px;background:rgba(180,140,255,.1);border-color:rgba(180,140,255,.3);color:#b48cff;" onclick="gerarDeclaracaoDivida()" title="Declaração de dívida para venda da fração (Art. 1424.º-A CC)"><i class="ti ti-file-certificate"></i>Declaração</button>
+      <button class="btn-ghost" style="display:inline-flex;align-items:center;justify-content:center;gap:6px;background:rgba(248,113,113,.08);border-color:rgba(248,113,113,.3);color:#f87171;" onclick="gerarDossierCobranca()" title="Pacote completo para entregar ao parceiro jurídico: resumo do caso, mapa da dívida com juros, enquadramento legal e checklist de anexos">📦 Dossier Parceiro</button>
       <button class="btn-ghost" style="display:inline-flex;align-items:center;justify-content:center;gap:6px;" onclick="closeModal('mo-cartao')"><i class="ti ti-x"></i>Fechar</button>
     </div>
   </div>
@@ -5069,6 +5096,151 @@ function cartaoWhatsApp() {
 
 
 // ===== DECLARAÇÃO DE DÍVIDA (Art. 1424.º-A CC) — para venda de fração =====
+// ===== DOSSIER DE COBRANÇA PARA O PARCEIRO JURÍDICO (fecha o ramo judicial do ciclo da dívida) =====
+async function gerarDossierCobranca() {
+  var f = fracoes.find(function(x){ return x.id === _cartaoFracaoId; });
+  if (!f) { toast('Fração não encontrada','err'); return; }
+  if (!window.jspdf || !window.jspdf.jsPDF) { toast('Biblioteca PDF não carregada','err'); return; }
+
+  toast('A preparar o dossier...','');
+
+  // Dívidas da fração (mesma lógica da declaração)
+  var todas = await sb.from('quotas').select('*').eq('condominio_id', currentCondo.id).eq('fracao_id', f.id).order('ano').order('mes');
+  var quotas = todas.data || [];
+  var hoje = new Date();
+  var TAXA_JURO = (currentCondo && currentCondo.taxa_juro_mora) ? (parseFloat(currentCondo.taxa_juro_mora)/100) : 0.04;
+  var mN = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  var dividas = [], totalDivida = 0, totalJuros = 0;
+  quotas.forEach(function(q){
+    var saldo = parseFloat(q.valor_emitido||0) - parseFloat(q.valor_pago||0);
+    if (saldo > 0.005) {
+      var juros = 0;
+      if (q.data_vencimento) {
+        var venc = new Date(q.data_vencimento);
+        if (hoje > venc) juros = saldo * TAXA_JURO * (Math.floor((hoje-venc)/86400000)/365);
+      }
+      dividas.push({ desc:'Quota — ' + mN[(q.mes||1)-1] + ' ' + q.ano, venc:q.data_vencimento, valor:saldo, juros:juros });
+      totalDivida += saldo; totalJuros += juros;
+    }
+  });
+  if (totalDivida <= 0.005) { toast('Esta fração não tem dívidas registadas — o dossier destina-se a cobrança','warn'); return; }
+
+  // Parceiro jurídico (se existir)
+  var pRes = await sb.from('parceiros').select('*').eq('condominio_id', currentCondo.id);
+  var juridico = (pRes.data||[]).find(function(p){ return /jur|advog|solicit|cobran/i.test(p.categoria||'') || /advog|solicit/i.test(p.nome||''); });
+
+  var { jsPDF } = window.jspdf;
+  var doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+  var W = 210, M = 20, y = 0;
+  var condoNome = displayNomeCondo(currentCondo.nome||'');
+  var hojeFmt = hoje.toLocaleDateString('pt-PT');
+
+  // CAPA
+  doc.setFillColor(13,24,37); doc.rect(0,0,W,42,'F');
+  doc.setFillColor(248,113,113); doc.rect(0,42,W,1.2,'F');
+  doc.setTextColor(248,113,113); doc.setFont('helvetica','bold'); doc.setFontSize(9);
+  doc.text('DOSSIER DE COBRANÇA · CONFIDENCIAL', W/2, 13, {align:'center'});
+  doc.setTextColor(255,255,255); doc.setFontSize(15);
+  doc.text(condoNome, W/2, 24, {align:'center'});
+  doc.setFontSize(11);
+  doc.text('Fração ' + (f.codigo||'') + ' · ' + (f.proprietario_nome||''), W/2, 33, {align:'center'});
+  doc.setTextColor(190,195,205); doc.setFont('helvetica','normal'); doc.setFontSize(8);
+  doc.text('Preparado em ' + hojeFmt + ' pelo COND.OS 2059 Pro', W/2, 39.5, {align:'center'});
+
+  y = 54;
+  doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(40,40,40);
+  doc.text('Destinatário', M, y); y += 6;
+  doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(60,60,60);
+  if (juridico) {
+    doc.text(juridico.nome + (juridico.categoria ? ' (' + juridico.categoria + ')' : ''), M+2, y); y += 5;
+    if (juridico.email) { doc.text('Email: ' + juridico.email, M+2, y); y += 5; }
+    if (juridico.telefone) { doc.text('Tel: ' + juridico.telefone, M+2, y); y += 5; }
+  } else {
+    doc.text('(A designar — sem parceiro jurídico registado no módulo Parceiros)', M+2, y); y += 5;
+  }
+  y += 5;
+
+  // RESUMO DO CASO
+  doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(40,40,40);
+  doc.text('Resumo do caso', M, y); y += 7;
+  doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(60,60,60);
+  var resumo = 'O condomínio ' + condoNome + ' solicita a cobrança de contribuições em dívida da fração ' + (f.codigo||'') + ', de que é proprietário(a) ' + (f.proprietario_nome||'—') + '. O valor em dívida ascende a ' + totalDivida.toFixed(2) + ' EUR de capital, acrescido de ' + totalJuros.toFixed(2) + ' EUR de juros de mora à taxa legal (' + (TAXA_JURO*100).toFixed(0) + '%/ano, automáticos nos termos da Lei n.º 8/2022), num total de ' + (totalDivida+totalJuros).toFixed(2) + ' EUR à data de ' + hojeFmt + '.';
+  var lR = doc.splitTextToSize(resumo, W-2*M);
+  doc.text(lR, M, y); y += lR.length*4.6 + 8;
+
+  // MAPA DA DÍVIDA
+  doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(40,40,40);
+  doc.text('Mapa da dívida', M, y); y += 7;
+  doc.setFillColor(240,238,235); doc.rect(M, y, W-2*M, 7, 'F');
+  doc.setFontSize(8.5); doc.setTextColor(60,60,60);
+  doc.text('Descrição', M+3, y+5);
+  doc.text('Vencimento', M+92, y+5);
+  doc.text('Capital', M+135, y+5, {align:'right'});
+  doc.text('Juros', W-M-3, y+5, {align:'right'});
+  y += 7;
+  doc.setFont('helvetica','normal');
+  dividas.forEach(function(d, i){
+    if (y > 265) { doc.addPage(); y = 24; }
+    if (i%2===0) { doc.setFillColor(249,248,246); doc.rect(M, y, W-2*M, 5.5, 'F'); }
+    doc.setTextColor(60,60,60);
+    doc.text(d.desc.substring(0,48), M+3, y+4);
+    doc.text(d.venc||'—', M+92, y+4);
+    doc.text(d.valor.toFixed(2), M+135, y+4, {align:'right'});
+    doc.setTextColor(150,100,30);
+    doc.text(d.juros.toFixed(2), W-M-3, y+4, {align:'right'});
+    y += 5.5;
+  });
+  doc.setDrawColor(40,40,40); doc.setLineWidth(0.4); doc.line(M, y+1, W-M, y+1); y += 6;
+  doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(150,40,40);
+  doc.text('TOTAL: ' + (totalDivida+totalJuros).toFixed(2) + ' EUR  (capital ' + totalDivida.toFixed(2) + ' + juros ' + totalJuros.toFixed(2) + ')', W-M, y, {align:'right'});
+  y += 10;
+
+  // ENQUADRAMENTO LEGAL (nova página se preciso)
+  if (y > 200) { doc.addPage(); y = 24; }
+  doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(40,40,40);
+  doc.text('Enquadramento legal (notas para o mandatário)', M, y); y += 7;
+  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(70,70,70);
+  var notas = [
+    '• Título executivo: a ata da assembleia que delibera o montante das contribuições devidas constitui título executivo contra o proprietário que o era à data da deliberação (Art. 6.º do DL n.º 268/94) — dispensa ação declarativa.',
+    '• Juros de mora: correm automaticamente à taxa legal, sem necessidade de deliberação (Lei n.º 8/2022). Sanções pecuniárias adicionais só se aprovadas em assembleia ou previstas no regulamento.',
+    '• Prescrição: quotas ordinárias e fundo comum de reserva — 5 anos (Art. 310.º al. g) CC); contribuições extraordinárias/obras — 20 anos (Art. 309.º CC). A titulação em título executivo dentro do prazo converte-o no prazo ordinário (Art. 311.º). Reconhecimento de dívida ou acordo de pagamento interrompe a prescrição (Art. 325.º).',
+    '• Custos: as despesas de cobrança (extrajudiciais e judiciais) são imputáveis ao condómino devedor, nos termos deliberados.',
+    '• Dívidas de anterior proprietário: a ata só é título executivo contra quem era condómino à data — verificar a titularidade em cada período da dívida.'
+  ];
+  notas.forEach(function(n){
+    var ln = doc.splitTextToSize(n, W-2*M);
+    if (y + ln.length*4.2 > 275) { doc.addPage(); y = 24; }
+    doc.text(ln, M, y); y += ln.length*4.2 + 3;
+  });
+  y += 5;
+
+  // CHECKLIST DE ANEXOS
+  if (y > 215) { doc.addPage(); y = 24; }
+  doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(40,40,40);
+  doc.text('Documentos que acompanham este dossier (juntar pelo administrador)', M, y); y += 8;
+  var anexos = [
+    'Ata da assembleia com a deliberação do montante em dívida (título executivo)',
+    'Declaração de dívida da fração (Art. 1424.º-A CC) — gerada no Dossier Financeiro',
+    'Relatório Raio-X das Contas (análise bancária e/ou cruzamento)',
+    'Comprovativos de notificação ao condómino (cartas registadas, emails)',
+    'Regulamento do condomínio (se prevê sanções)',
+    'Extratos bancários do período relevante'
+  ];
+  doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(60,60,60);
+  anexos.forEach(function(a){
+    if (y > 270) { doc.addPage(); y = 24; }
+    doc.setDrawColor(140,140,140); doc.setLineWidth(0.3);
+    doc.rect(M, y-3.5, 4, 4, 'S');
+    doc.text(a, M+7, y); y += 7;
+  });
+
+  doc.setTextColor(150,150,150); doc.setFontSize(7);
+  doc.text('Documento confidencial · dados pessoais tratados no âmbito da gestão do condomínio (interesse legítimo/execução de deveres legais)', W/2, 288, {align:'center'});
+
+  doc.save('Dossier_Cobranca_' + (f.codigo||'fracao') + '_' + condoNome.replace(/\s+/g,'_') + '.pdf');
+  toast('📦 Dossier de cobrança gerado' + (juridico ? ' (destinatário: ' + juridico.nome + ')' : ' — regista um parceiro jurídico nos Parceiros'), 'ok');
+}
+
 async function gerarDeclaracaoDivida() {
   var f = fracoes.find(function(x){ return x.id === _cartaoFracaoId; });
   if (!f) { toast('Fração não encontrada','err'); return; }
@@ -10034,6 +10206,11 @@ function loadEdificio() {
   set('ed-seg-seguradora', c.seg_seguradora); set('ed-seg-apolice', c.seg_apolice);
   set('ed-seg-validade', c.seg_validade); set('ed-seg-capital', c.seg_capital);
   set('ed-seg-premio', c.seg_premio); set('ed-cctv', c.cctv || 'nao');
+  // Energia
+  set('ed-cert-classe', c.cert_classe); set('ed-cert-validade', c.cert_validade);
+  set('ed-janelas', c.janelas_tipo); set('ed-isolamento', c.isolamento);
+  set('ed-paineis', c.paineis_solares || 'nao'); set('ed-paineis-potencia', c.paineis_potencia);
+  set('ed-ev', c.ev_carregadores || 'nao'); set('ed-gas-canalizado', c.gas_canalizado);
   // Mostrar info de blocos
   var infoEl = document.getElementById('ed-blocos-info');
   var infoTxt = document.getElementById('ed-blocos-info-texto');
@@ -10060,6 +10237,93 @@ function loadEdificio() {
   }, 200);
 }
 
+// ===== DIAGNÓSTICO ENERGÉTICO: cruza o perfil com os gastos reais e sugere melhorias/apoios =====
+async function diagnosticoEnergetico() {
+  if (!currentCondo) return;
+  var el = document.getElementById('ed-diagnostico-energia');
+  el.innerHTML = '<div style="font-size:12px;color:#ffd600;">⚡ A analisar o edifício...</div>';
+
+  var g = function(id){ var e = document.getElementById(id); return e ? e.value : ''; };
+  var c = currentCondo;
+  var anoAtual = new Date().getFullYear();
+  var idade = c.ano_construcao ? (anoAtual - parseInt(c.ano_construcao)) : null;
+  var achados = [];
+
+  // Gasto real em eletricidade das partes comuns (despesas do último ano)
+  var gastoLuz = 0;
+  try {
+    var dRes = await sb.from('despesas').select('descricao,valor_total,data_despesa').eq('condominio_id', c.id);
+    (dRes.data||[]).forEach(function(d){
+      if (/edp|eletric|electric|luz|endesa|galp power|iberdrola|energia/i.test(d.descricao||'')) {
+        var dt = d.data_despesa ? new Date(d.data_despesa) : null;
+        if (dt && (anoAtual - dt.getFullYear()) <= 1) gastoLuz += parseFloat(d.valor_total||0);
+      }
+    });
+  } catch(e){}
+
+  // 1. Certificado energético
+  var classe = g('ed-cert-classe');
+  if (!classe) {
+    achados.push({ nivel:'alto', icone:'📋', titulo:'Sem certificado energético registado',
+      texto:'O certificado é a porta de entrada: é obrigatório para aceder aos apoios do Fundo Ambiental e vai alimentar a futura Caderneta Digital. Em avisos anteriores, a certificação foi apoiada até 125€/fração.' });
+  } else if (['E','F'].indexOf(classe) > -1) {
+    achados.push({ nivel:'alto', icone:'🛂', titulo:'Classe ' + classe + ' — Passaporte de Renovação no horizonte',
+      texto:'Com a transposição da EPBD, espera-se que imóveis de classe E/F passem a precisar de um Passaporte de Renovação nas vendas/arrendamentos. Antecipar a renovação valoriza TODAS as frações do prédio.' });
+  } else if (['A+','A','B'].indexOf(classe) > -1) {
+    achados.push({ nivel:'ok', icone:'🏆', titulo:'Classe ' + classe + ' — bom desempenho',
+      texto:'O edifício está bem posicionado face às futuras normas mínimas. Alguns municípios dão redução de IMI a prédios eficientes — vale a pena confirmar na câmara.' });
+  }
+  var validade = g('ed-cert-validade');
+  if (validade && new Date(validade) < new Date()) {
+    achados.push({ nivel:'alto', icone:'⏰', titulo:'Certificado energético CADUCADO',
+      texto:'A validade (' + validade + ') já passou. Sem certificado válido não há candidaturas a apoios nem transações tranquilas.' });
+  }
+
+  // 2. Idade + janelas + isolamento
+  var janelas = g('ed-janelas'), isolamento = g('ed-isolamento');
+  if (idade && idade >= 30 && janelas === 'simples') {
+    achados.push({ nivel:'alto', icone:'🪟', titulo:'Prédio de ' + c.ano_construcao + ' com vidro simples',
+      texto:'Candidato forte a apoio de janelas eficientes. O programa Bairros Mais Sustentáveis apoia até 15.000€/fração (janelas, isolamento, bombas de calor, solar) nas áreas metropolitanas — e avisos destes esgotam em dias.' });
+  }
+  if (idade && idade >= 30 && (isolamento === 'nao' || isolamento === '')) {
+    achados.push({ nivel:'medio', icone:'🧱', titulo:'Isolamento térmico ausente ou desconhecido num prédio com ' + idade + ' anos',
+      texto:'O isolamento de fachada/cobertura é das intervenções com melhor retorno em conforto e poupança, e é tipologia elegível nos programas do Fundo Ambiental.' });
+  }
+
+  // 3. Painéis solares × gasto real de luz
+  var paineis = g('ed-paineis');
+  if (paineis === 'nao') {
+    var estPoupanca = gastoLuz > 0 ? Math.round(gastoLuz * 0.5) : null;
+    achados.push({ nivel: gastoLuz > 300 ? 'alto' : 'medio', icone:'☀️', titulo:'Sem painéis solares' + (gastoLuz > 0 ? ' — e gastas ~' + gastoLuz.toFixed(0) + '€/ano em eletricidade comum' : ''),
+      texto: (estPoupanca ? 'Com autoconsumo nas partes comuns (elevador, luz das escadas, garagem) a poupança típica ronda 40-60% — no teu caso, ~' + estPoupanca + '€/ano. ' : '') + 'O DL 130/2026 (junho) simplificou o licenciamento de solar em edifícios, e foi anunciado um novo apoio por vouchers para painéis (aguarda abertura). Pede orçamentos e prepara a deliberação (maioria simples se ≤ custo de 2 meses de encargos comuns... senão assembleia decide o investimento).' });
+  } else {
+    achados.push({ nivel:'ok', icone:'☀️', titulo:'Painéis solares instalados (' + paineis + (g('ed-paineis-potencia') ? ', ' + g('ed-paineis-potencia') + ' kWp' : '') + ')',
+      texto:'Excelente — já estás à frente da obrigação solar que a EPBD vai trazer. Confirma se a produção está a ser bem aproveitada (autoconsumo vs injeção).' });
+  }
+
+  // 4. Carregadores EV
+  if (g('ed-ev') === 'nao') {
+    achados.push({ nivel:'medio', icone:'🔌', titulo:'Sem carregadores para veículos elétricos',
+      texto:'O Fundo Ambiental tem apoiado carregadores em condomínios: 80% do equipamento até 800€ + 80% da instalação até 1000€ por lugar. A procura de carregamento em casa só vai crescer — antecipar valoriza o prédio.' });
+  }
+
+  // Render
+  if (!achados.length) {
+    el.innerHTML = '<div style="text-align:center;color:var(--t3);font-size:12px;padding:12px;">Preenche os campos acima (e o ano de construção) para o diagnóstico ter matéria-prima.</div>';
+    return;
+  }
+  var cores = { alto:'#f87171', medio:'#ffb300', ok:'var(--green)' };
+  var html = '<div style="font-size:11px;font-weight:700;color:#ffd600;margin-bottom:8px;">DIAGNÓSTICO — ' + achados.length + ' ponto(s):</div>';
+  achados.forEach(function(a){
+    html += '<div style="border-left:3px solid ' + cores[a.nivel] + ';background:var(--s2);border-radius:0 8px 8px 0;padding:10px 13px;margin-bottom:7px;">';
+    html += '<div style="font-size:12px;font-weight:700;color:var(--text);">' + a.icone + ' ' + a.titulo + '</div>';
+    html += '<div style="font-size:11px;color:var(--t2);margin-top:3px;line-height:1.55;">' + a.texto + '</div>';
+    html += '</div>';
+  });
+  html += '<div style="font-size:10px;color:var(--t3);margin-top:8px;">⚠️ Estimativas indicativas com base nos dados preenchidos e nos programas públicos conhecidos — os avisos do Fundo Ambiental mudam; confirma sempre em fundoambiental.pt antes de decidir. Grava o perfil para manter os dados.</div>';
+  el.innerHTML = html;
+}
+
 async function saveEdificio() {
   if (!currentCondo) return;
   var g = function(id) { var el = document.getElementById(id); return el ? (el.value.trim() || null) : null; };
@@ -10070,6 +10334,10 @@ async function saveEdificio() {
   var payload = {
     nif: g('ed-nif'), conservacao: g('ed-conservacao'), sala_reunioes: g('ed-sala-reunioes'), sala_bloco: g('ed-sala-bloco'), sala_piso: g('ed-sala-piso'), sala_extra: g('ed-sala-extra'),
     ano_construcao: gi('ed-ano2'),
+    cert_classe: g('ed-cert-classe'), cert_validade: g('ed-cert-validade'),
+    janelas_tipo: g('ed-janelas'), isolamento: g('ed-isolamento'),
+    paineis_solares: g('ed-paineis'), paineis_potencia: gn('ed-paineis-potencia'),
+    ev_carregadores: g('ed-ev'), gas_canalizado: g('ed-gas-canalizado'),
     taxa_juro_mora: gn('ed-taxa-juro'), juro_ata: g('ed-juro-ata'),
     ano_inscricao: gi('ed-ano-inscricao'), artigo_matricial: g('ed-artigo-matricial'),
     vpt: gn('ed-vpt'), area_total: gn('ed-area-total'),
