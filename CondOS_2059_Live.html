@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.03-0926</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.03-0934</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -566,9 +566,9 @@ textarea.fi{resize:vertical;min-height:60px;}
       <div class="ni active" onclick="nav('dashboard')"><i class="ti ti-dashboard"></i><span>Dashboard</span></div>
       <div class="ni" onclick="nav('edificio')"><i class="ti ti-home-2"></i><span>Perfil do Edifício</span></div>
       <div class="ni" onclick="nav('fracoes')"><i class="ti ti-building"></i><span>Frações</span><span class="nb" id="nb-fracoes"></span></div>
-      <div class="ni" onclick="nav('quotas')"><i class="ti ti-receipt"></i><span>Quotas</span><span class="nb" id="nb-quotas"></span></div>
+      <div class="ni" onclick="nav('quotas')"><i class="ti ti-receipt"></i><span>Quotas</span><span class="nb" id="nb-quotas"></span><span id="badge-quotas" style="display:none;margin-left:auto;background:#f87171;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;line-height:16px;text-align:center;border-radius:8px;padding:0 4px;"></span></div>
       <div class="ni" onclick="nav('financeiro')"><i class="ti ti-cash"></i><span>Financeiro</span></div>
-      <div class="ni" onclick="nav('orcamento')"><i class="ti ti-calculator"></i><span>Orçamento</span></div>
+      <div class="ni" onclick="nav('orcamento')"><i class="ti ti-calculator"></i><span>Orçamento</span><span id="badge-orcamento" style="display:none;margin-left:auto;background:#f87171;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;line-height:16px;text-align:center;border-radius:8px;padding:0 4px;"></span></div>
       <div class="ni" onclick="nav('despesas')"><i class="ti ti-tools"></i><span>Despesas</span><span class="nb" id="nb-despesas"></span></div>
       <div class="ni" onclick="nav('contas')"><i class="ti ti-report-money"></i><span>Contas</span></div>
       <div class="ni" onclick="nav('auditoria')"><i class="ti ti-zoom-money"></i><span>Raio-X das Contas</span></div>
@@ -614,6 +614,7 @@ textarea.fi{resize:vertical;min-height:60px;}
 
       <!-- DASHBOARD -->
       <div class="page active" id="page-dashboard">
+        <div id="avisos-gerais-dash"></div>
         <div class="kpi-grid">
           <div class="kpi" style="border-top:2px solid var(--cyan);">
             <div class="kpi-label">Taxa Cobrança</div>
@@ -3487,6 +3488,78 @@ async function checkSession() {
 }
 
 // ===== LOAD ALL CONDO DATA =====
+// ===== SISTEMA GERAL DE AVISOS ("o que tens de fazer") =====
+// Verifica pendências em todo o programa: badges no menu + bloco no dashboard
+var _avisosGerais = [];
+async function verificarAvisosGerais() {
+  if (!currentCondo) return;
+  var avisos = [];
+  var agora = new Date();
+  var mes = agora.getMonth()+1, ano = agora.getFullYear();
+  var mesesNomes = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  var diaVenc = parseInt(currentCondo.dia_vencimento) || 8;
+
+  try {
+    // 1) Quotas do mês corrente: emitidas?
+    var qRes = await sb.from('quotas').select('id,estado').eq('condominio_id', currentCondo.id).eq('mes', mes).eq('ano', ano);
+    var quotasMes = qRes.data || [];
+    if (!quotasMes.length) {
+      avisos.push({ pagina:'quotas', badge:'!', cor:'#f87171',
+        texto:'Quotas de ' + mesesNomes[mes-1] + ' por emitir',
+        detalhe:'Ainda não processaste as quotas deste mês. Vai a Quotas e emite-as.' });
+    } else if (agora.getDate() > diaVenc) {
+      // 2) Passou o dia de vencimento: pagamentos por confirmar
+      var pend = quotasMes.filter(function(q){ return q.estado !== 'pago' && q.estado !== 'isento'; });
+      if (pend.length) {
+        avisos.push({ pagina:'quotas', badge:String(pend.length), cor:'#ffb300',
+          texto: pend.length + ' quota(s) de ' + mesesNomes[mes-1] + ' por confirmar',
+          detalhe:'Já passou o dia ' + diaVenc + '. Vai buscar o extrato ao banco e confirma os pagamentos recebidos.' });
+      }
+    }
+
+    // 3) Orçamento do ano corrente existe?
+    var oRes = await sb.from('orcamento_rubricas').select('id', {count:'exact', head:true}).eq('condominio_id', currentCondo.id).eq('ano', ano);
+    if ((oRes.count||0) === 0) {
+      avisos.push({ pagina:'orcamento', badge:'!', cor:'#ffb300',
+        texto:'Sem orçamento para ' + ano,
+        detalhe:'O ano corrente não tem orçamento registado. Usa "Sugerir Orçamento" ou a base real do Raio-X.' });
+    }
+  } catch(e) { console.error('verificarAvisosGerais:', e); }
+
+  _avisosGerais = avisos;
+
+  // Badges no menu lateral
+  ['quotas','orcamento'].forEach(function(p){
+    var b = document.getElementById('badge-'+p);
+    if (!b) return;
+    var av = avisos.filter(function(a){ return a.pagina===p; });
+    if (av.length) {
+      b.style.display = 'inline-block';
+      b.textContent = av[0].badge;
+      b.style.background = av[0].cor;
+      b.title = av.map(function(a){ return a.texto; }).join(' · ');
+    } else { b.style.display = 'none'; }
+  });
+
+  // Bloco "precisa da tua atenção" no dashboard
+  var dash = document.getElementById('avisos-gerais-dash');
+  if (dash) {
+    if (!avisos.length) { dash.innerHTML = ''; }
+    else {
+      var html = '<div style="background:rgba(255,179,0,.06);border:1px solid rgba(255,179,0,.25);border-radius:10px;padding:14px 16px;margin-bottom:16px;">';
+      html += '<div style="font-size:12px;font-weight:700;color:var(--amber);">⚠️ PRECISA DA TUA ATENÇÃO</div>';
+      avisos.forEach(function(a){
+        html += '<div style="display:flex;align-items:center;gap:10px;padding:9px 0 7px;border-bottom:1px solid rgba(255,179,0,.12);cursor:pointer;" onclick="nav(\'' + a.pagina + '\')">';
+        html += '<span style="min-width:18px;height:18px;line-height:18px;text-align:center;border-radius:9px;background:' + a.cor + ';color:#fff;font-size:10px;font-weight:700;">' + a.badge + '</span>';
+        html += '<div style="flex:1;"><div style="font-size:12px;font-weight:600;color:var(--text);">' + a.texto + '</div><div style="font-size:11px;color:var(--t3);margin-top:1px;">' + a.detalhe + '</div></div>';
+        html += '<span style="color:var(--t3);font-size:16px;">›</span></div>';
+      });
+      html += '</div>';
+      dash.innerHTML = html;
+    }
+  }
+}
+
 async function loadCondData() {
   if (!currentCondo) return;
   await loadFracoes();
@@ -3502,6 +3575,7 @@ async function loadCondData() {
   loadDeliberacoes();
   updateBadges();
   initOrcamentoAno();
+  verificarAvisosGerais();
   loadOrcamento();
 }
 
@@ -6452,6 +6526,7 @@ async function emitirQuotas() {
   }
   closeModal('mo-emitir');
   toast(criadas > 0 ? `${criadas} quotas emitidas!` : 'Quotas já existiam para este mês.','ok');
+  verificarAvisosGerais();
   loadQuotas(); updateBadges();
 }
 
