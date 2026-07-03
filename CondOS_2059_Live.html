@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.03-0936</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.03-0946</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -1297,6 +1297,12 @@ textarea.fi{resize:vertical;min-height:60px;}
           <div class="panel" style="margin-bottom:16px;">
             <div class="ph"><span class="pt">📊 Orçamento Credível (base real)</span><span class="pm">do que o prédio gastou mesmo</span></div>
             <div id="auditoria-orcamento" style="padding:16px;overflow-x:auto;"></div>
+          </div>
+
+          <!-- Obrigações legais detetadas nos extratos -->
+          <div class="panel" style="margin-bottom:16px;">
+            <div class="ph"><span class="pt">⚖️ Obrigações Legais</span><span class="pm">seguro, elevadores, extintores, gás</span></div>
+            <div id="auditoria-obrigacoes" style="padding:16px;"></div>
           </div>
 
           <!-- Movimentos lidos -->
@@ -8097,11 +8103,37 @@ async function sugerirOrdemTrabalhos() {
       contexto.situacoes.push('Há uma assembleia anterior (' + (aRes.data[0].data_assembleia||'') + ') cuja ata pode precisar de aprovação.');
     }
 
+    // 6. CICLO DA DÍVIDA: auditorias guardadas do Raio-X com anomalias/dívidas
+    try {
+      var audRes = await sb.from('auditorias').select('data_auditoria,num_anomalias,num_transacoes').eq('condominio_id', c.id).order('data_auditoria', {ascending:false}).limit(1);
+      if (audRes.data && audRes.data.length && audRes.data[0].num_anomalias > 0) {
+        var aud = audRes.data[0];
+        contexto.situacoes.push('Foi realizada uma auditoria às contas (Raio-X, ' + new Date(aud.data_auditoria).toLocaleDateString('pt-PT') + ') que identificou ' + aud.num_anomalias + ' situação(ões) a verificar. IMPORTANTE: se a assembleia deliberar sobre o montante das contribuições em dívida, a ata vale como TÍTULO EXECUTIVO (DL 268/94) — o ponto deve ser formulado como "apreciação e deliberação sobre o montante das quotas em atraso e respetiva cobrança".');
+      }
+    } catch(eAud) { /* tabela auditorias pode não existir ainda */ }
+
+    // 7. Autorizações de comunicação por email em falta (poupança de custos CTT)
+    var semAutorizacao = (fracoes||[]).filter(function(f){ return f.proprietario_email && f.autoriza_email_convocatoria !== true; });
+    if (semAutorizacao.length) {
+      contexto.situacoes.push(semAutorizacao.length + ' condómino(s) têm email mas ainda não autorizaram comunicações eletrónicas — cada convocatória em papel custa 3,75€-5,54€ por carta registada (CTT). Um ponto de deliberação sobre autorização de comunicações por via eletrónica pouparia custos ao condomínio.');
+    }
+
+    // 8. Contas do exercício anterior (Art. 1436.º — obrigatório aprovar anualmente)
+    var anoPassado = hoje.getFullYear() - 1;
+    var qAnoRes = await sb.from('quotas').select('id', {count:'exact', head:true}).eq('condominio_id', c.id).eq('ano', anoPassado);
+    if ((qAnoRes.count||0) > 0) {
+      contexto.situacoes.push('Existem contas do exercício de ' + anoPassado + ' registadas no programa — a prestação e aprovação de contas é obrigatória (Art. 1436.º CC). O programa gera o documento no módulo Contas → Fecho de Contas.');
+    }
+
     var tipoAss = document.getElementById('as-tipo').value;
 
-    var prompt = 'És um administrador experiente de condomínios em Portugal. Com base na situação real do condomínio abaixo, sugere uma ORDEM DE TRABALHOS adequada para uma assembleia ' + tipoAss + '. ' +
-      'Inclui os pontos habituais e legais (ex: aprovação da ata anterior, aprovação de contas/orçamento se aplicável) E os pontos específicos que resultam das situações detetadas. ' +
-      'Ordena por relevância e lógica de uma assembleia. Sê conciso e prático. ' +
+    var prompt = 'És um administrador experiente de condomínios em Portugal, rigoroso na lei. Com base na situação real do condomínio abaixo, sugere uma ORDEM DE TRABALHOS adequada para uma assembleia ' + tipoAss + '. ' +
+      'Inclui os pontos habituais e legais (aprovação da ata anterior, contas e orçamento se aplicável) E os pontos específicos que resultam das situações detetadas. ' +
+      'REGRAS IMPORTANTES: ' +
+      '(1) Se houver quotas em atraso ou auditoria com dívidas, inclui um ponto formulado como "Apreciação e deliberação sobre o montante das contribuições em dívida e medidas de cobrança" — esta formulação permite que a ata sirva de título executivo (DL 268/94). ' +
+      '(2) NUNCA identifiques frações, nomes ou valores individuais em nenhum ponto — a ordem de trabalhos vai na convocatória para todos os condóminos (proteção de dados); os detalhes discutem-se na assembleia. ' +
+      '(3) Se houver obras de inovação a deliberar, acrescenta "(exige maioria de 2/3 — Art. 1425.º CC)" no fim desse ponto. ' +
+      '(4) Ordena por relevância e lógica de assembleia. Sê conciso e prático. ' +
       'SITUAÇÃO ATUAL DO CONDOMÍNIO:\n' + (contexto.situacoes.length ? contexto.situacoes.map(function(s){return '- '+s;}).join('\n') : '- Sem situações pendentes detetadas.') + '\n\n' +
       'Responde APENAS com a lista de pontos numerados (1., 2., 3., ...), um por linha, sem texto antes ou depois, sem explicações.';
 
@@ -12711,6 +12743,7 @@ function auditoriaProcessarResultados() {
   auditoriaRenderRecorrentes();
   auditoriaMapaPagamentos(entradas, datas);
   auditoriaOrcamentoSugerido(saidas, datas);
+  auditoriaObrigacoesLegais(saidas, datas);
   auditoriaRenderMovimentos(trans);
   document.getElementById('auditoria-resultados').style.display = 'block';
 
@@ -13080,6 +13113,63 @@ async function auditoriaApagar(id) {
   if (res.error) { toast('Erro ao apagar','err'); return; }
   toast('Auditoria apagada','ok');
   auditoriaCarregarHistorico();
+}
+
+// ===== CAMADA 4: Obrigações legais do condomínio detetadas nos extratos =====
+function auditoriaObrigacoesLegais(saidas, datas) {
+  var cont = document.getElementById('auditoria-obrigacoes');
+  if (!cont) return;
+
+  // Anos cobertos (para avaliar recorrência anual)
+  var anos = {};
+  datas.forEach(function(d){ if(d) anos[new Date(d).getFullYear()] = true; });
+  var nAnos = Math.max(1, Object.keys(anos).length);
+
+  var obrigacoes = [
+    { id:'seguro', nome:'Seguro de incêndio / multirriscos', lei:'Art. 1429.º CC — obrigatório para as partes comuns',
+      regex:/seguro|multirrisco|fidelidade|tranquilidade|allianz|ageas|zurich|liberty|generali/i, periodicidade:'anual' },
+    { id:'elevador', nome:'Manutenção de elevadores', lei:'DL 320/2002 — contrato de manutenção obrigatório (se houver elevador)',
+      regex:/elevador|otis|schindler|kone|thyssen|orona|ascensor/i, periodicidade:'mensal' },
+    { id:'extintor', nome:'Extintores / segurança contra incêndio', lei:'Manutenção periódica obrigatória (se existirem)',
+      regex:/extintor|inc[êe]ndio|seguran[çc]a contra|scie/i, periodicidade:'anual' },
+    { id:'gas', nome:'Inspeção da rede de gás', lei:'Inspeção periódica obrigatória (se houver rede de gás)',
+      regex:/g[áa]s|galp energia|inspe[çc][ãa]o.*g[áa]s/i, periodicidade:'anual' }
+  ];
+
+  var html = '<div style="font-size:11px;color:var(--t3);margin-bottom:12px;">O programa procurou nos extratos rasto de pagamento das obrigações legais do condomínio. ⚠️ "Sem rasto" não prova incumprimento — pode ter sido pago por outra conta ou estar noutro nome. Serve para saberes o que confirmar.</div>';
+
+  obrigacoes.forEach(function(ob){
+    var pagamentos = saidas.filter(function(t){ return ob.regex.test(t.descricao||''); });
+    var total = pagamentos.reduce(function(s,t){ return s + parseFloat(t.valor||0); }, 0);
+    var encontrado = pagamentos.length > 0;
+
+    // Avaliação de suficiência: anual → pelo menos 1 por ano; mensal → ~10+ por ano
+    var suficiente = encontrado;
+    var avaliacaoTxt = '';
+    if (encontrado) {
+      var porAno = pagamentos.length / nAnos;
+      if (ob.periodicidade === 'anual' && porAno < 1) { suficiente = false; avaliacaoTxt = 'menos de 1 pagamento/ano — pode faltar em alguns anos'; }
+      if (ob.periodicidade === 'mensal' && porAno < 10) { avaliacaoTxt = 'apenas ' + Math.round(porAno) + ' pagamentos/ano — verifica se o contrato cobre o ano todo'; }
+    }
+
+    var cor = encontrado ? (suficiente ? 'var(--green)' : 'var(--amber)') : 'var(--amber)';
+    var icon = encontrado ? (suficiente ? '✅' : '⚠️') : '⚠️';
+    var ultimo = pagamentos.length ? pagamentos.map(function(t){ return t.data; }).filter(Boolean).sort().pop() : null;
+
+    html += '<div style="border-left:3px solid ' + cor + ';background:var(--s2);border-radius:0 8px 8px 0;padding:11px 14px;margin-bottom:8px;">';
+    html += '<div style="display:flex;align-items:center;gap:8px;">';
+    html += '<span style="font-size:15px;">' + icon + '</span>';
+    html += '<div style="flex:1;"><div style="font-size:12px;font-weight:700;color:var(--text);">' + ob.nome + '</div>';
+    html += '<div style="font-size:10px;color:var(--t3);margin-top:1px;">' + ob.lei + '</div></div>';
+    if (encontrado) html += '<div style="text-align:right;"><div style="font-size:12px;font-weight:700;color:' + cor + ';">' + pagamentos.length + ' pagamento(s)</div><div style="font-size:10px;color:var(--t3);">' + total.toFixed(2) + '€' + (ultimo ? ' · último: ' + ultimo : '') + '</div></div>';
+    else html += '<div style="font-size:11px;font-weight:700;color:var(--amber);">SEM RASTO</div>';
+    html += '</div>';
+    if (avaliacaoTxt) html += '<div style="font-size:10px;color:var(--amber);margin-top:5px;">⚠️ ' + avaliacaoTxt + '</div>';
+    if (!encontrado) html += '<div style="font-size:10px;color:var(--t2);margin-top:5px;">Não encontrei pagamentos com esta descrição no período analisado. Confirma se está a ser pago (por outra conta?) ou se falta contratar' + (ob.id==='elevador'||ob.id==='gas'||ob.id==='extintor' ? ' — se o prédio não tiver, ignora este aviso' : '') + '.</div>';
+    html += '</div>';
+  });
+
+  cont.innerHTML = html;
 }
 
 // ===== CAMADA 2: Mapa de pagamentos por condómino (devedores reais) =====
