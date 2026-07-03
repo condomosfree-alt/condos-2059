@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.03-0934</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.03-0936</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -11245,9 +11245,8 @@ async function limparRubricasDuplicadas() {
   const ano = anoEl ? (parseInt(anoEl.value) || new Date().getFullYear()) : new Date().getFullYear();
 
   const { data, error } = await sb.from('orcamento_rubricas')
-    .select('id,nome,valor_total,bloco,created_at')
-    .eq('condominio_id', currentCondo.id).eq('ano', ano)
-    .order('created_at', {ascending:true});
+    .select('id,nome,valor_total,bloco')
+    .eq('condominio_id', currentCondo.id).eq('ano', ano);
   if (error) { toast('Erro ao carregar rubricas: ' + error.message,'err'); return; }
   var lista = data || [];
   if (!lista.length) { toast('Não há rubricas em ' + ano,'warn'); return; }
