@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.02-2157</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.03-0926</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -5147,6 +5147,10 @@ async function gerarDeclaracaoDivida() {
 
   doc.save('Declaracao_Divida_' + (f.codigo||'fracao') + '_' + condoNome.replace(/\s+/g,'_') + '.pdf');
   toast(temDivida ? '📄 Declaração gerada (com dívidas)' : '📄 Declaração gerada (sem dívidas)','ok');
+
+  // Nunca perder um gasto: registar o custo do envio (reg+AR é o modo próprio p/ declarações)
+  var regAR = await confirmar('Vais enviar esta declaração por carta REGISTADA COM AVISO DE RECEÇÃO?\n\nCusto CTT: 5,54€ — é a forma com prova legal de entrega.', {titulo:'Envio da declaração', tipo:'info', icon:'✉️', okTexto:'Sim, registada c/ AR', cancelarTexto:'Não / outra forma'});
+  await fluxoRegistarCustos('divida', 1, regAR ? 5.54 : 0);
 }
 
 function editarDoCartao() {
@@ -5314,6 +5318,9 @@ async function gerarQRTodosPDF() {
   }
   if (marcadas > 0) { renderCondominos(_condominosAll); toast('✅ PDF gerado e ' + marcadas + ' frações marcadas como notificadas!','ok'); }
   else toast('✅ PDF gerado! (cria a coluna ultima_notificacao no Supabase para guardar datas)','ok');
+
+  // Nunca perder um gasto: impressão das cartas QR (entrega em mão nas caixas de correio)
+  await fluxoRegistarCustos('qr', lista.length, 0);
 }
 
 function gerarQRCondomino(fracaoId) {
@@ -8332,8 +8339,16 @@ async function registarCustoPostal(tipo, nCartas, custo, assembleiaId, custoImpr
   var custoTotal = custo + (custoImpressao || 0);
   if (custoTotal <= 0) return;
   var hoje = new Date().toISOString().split('T')[0];
-  var descricao = (tipo === 'convocatoria' ? 'Envio de convocatórias' : 'Comunicação de ata aos ausentes') + ' — ' + nCartas + ' carta(s) registada(s)';
+  var descricoes = {
+    convocatoria: 'Envio de convocatórias',
+    ata: 'Comunicação de ata aos ausentes',
+    divida: 'Envio de declaração de dívida',
+    qr: 'Cartas QR de atualização de dados'
+  };
+  var unidade = (tipo === 'qr') ? 'carta(s)' : 'carta(s) registada(s)';
+  var descricao = (descricoes[tipo] || 'Envio de correspondência') + ' — ' + nCartas + ' ' + unidade;
   var notaExtra = custoImpressao > 0 ? ' Inclui ' + custoImpressao.toFixed(2).replace('.',',') + '€ de impressão (tinta/folhas).' : '';
+  var motivo = custo > 0 ? 'Custos postais CTT' : 'Custos de impressão (tinta/folhas)';
   var payload = {
     condominio_id: currentCondo.id,
     descricao: descricao,
@@ -8342,13 +8357,13 @@ async function registarCustoPostal(tipo, nCartas, custo, assembleiaId, custoImpr
     data_despesa: hoje,
     estado: 'aprovada',
     distribuicao: 'permilagem',
-    origem_tipo: 'assembleia',
-    assembleia_id: assembleiaId,
+    origem_tipo: assembleiaId ? 'assembleia' : null,
+    assembleia_id: assembleiaId || null,
     ocorrencia_id: null,
     parceiro_id: null,
-    motivo: 'Custos postais CTT (correio registado)',
+    motivo: motivo,
     forma_pagamento: 'transferencia',
-    notas: 'Registado automaticamente pelo envio de ' + (tipo === 'convocatoria' ? 'convocatórias' : 'ata') + '. ' + nCartas + ' × correio registado.' + notaExtra,
+    notas: 'Registado automaticamente. ' + descricao + '.' + notaExtra,
     quota_gerada: false
   };
   var res = await sb.from('despesas').insert(payload);
@@ -8358,15 +8373,19 @@ async function registarCustoPostal(tipo, nCartas, custo, assembleiaId, custoImpr
 
 // Perguntar e registar o custo de um envio (postal + impressão opcional)
 async function fluxoRegistarCustos(tipo, nCartas, custoCartas, assembleiaId) {
-  if (custoCartas <= 0) return;
-  var reg = await confirmar('Queres registar o custo postal de ' + custoCartas.toFixed(2).replace('.',',') + '€ como despesa do condomínio?\n\nAssim fica nas contas e nos relatórios de gastos do ano.', {titulo:'Registar custo nas contas', tipo:'info', icon:'💰', okTexto:'Sim, registar', cancelarTexto:'Não'});
-  if (!reg) return;
+  if (nCartas <= 0) return;
+  var reg = true;
+  if (custoCartas > 0) {
+    reg = await confirmar('Queres registar o custo postal de ' + custoCartas.toFixed(2).replace('.',',') + '€ como despesa do condomínio?\n\nAssim fica nas contas e nos relatórios de gastos do ano.', {titulo:'Registar custo nas contas', tipo:'info', icon:'💰', okTexto:'Sim, registar', cancelarTexto:'Não'});
+    if (!reg) return;
+  }
   // Perguntar sobre custo de impressão (tinta + folhas)
   var custoImpressao = 0;
   var querImpressao = await confirmar('Queres incluir o custo de impressão (tinta + folhas) das ' + nCartas + ' carta(s)?\n\nEstimativa: ~0,10€ por folha = ' + (nCartas*0.10).toFixed(2).replace('.',',') + '€.\n\nSe és tu a "oferecer" a impressão, escolhe Não.', {titulo:'Custo de impressão', tipo:'info', icon:'🖨', okTexto:'Sim, incluir', cancelarTexto:'Não, eu ofereço'});
   if (querImpressao) custoImpressao = nCartas * 0.10;
+  if (custoCartas + custoImpressao <= 0) return;
   var ok = await registarCustoPostal(tipo, nCartas, custoCartas, assembleiaId, custoImpressao);
-  toast(ok ? '✅ Custo registado nas despesas' + (custoImpressao>0?' (postal + impressão)':'') : 'Não foi possível registar o custo', ok?'ok':'err');
+  toast(ok ? '✅ Custo registado nas despesas' + (custoImpressao>0 && custoCartas>0 ? ' (postal + impressão)' : '') : 'Não foi possível registar o custo', ok?'ok':'err');
 }
 
 // Nota informativa legal sobre dívidas (linguagem simples, NUNCA identifica condóminos)
