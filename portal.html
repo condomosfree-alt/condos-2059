@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>COND.OS — Portal do Condómino</title>
+<style>
+  :root {
+    --bg:#0a1220; --card:#111d31; --card2:#16233a; --b:#233350;
+    --text:#e8eaf0; --t2:#9aa5b8; --t3:#5f6b80;
+    --cyan:#00d4ff; --green:#22e584; --red:#ff5470; --amber:#ffb300; --purple:#a78bfa;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:system-ui,-apple-system,'Segoe UI',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+  .wrap { max-width:480px; margin:0 auto; padding:18px 16px 90px; }
+  .brand { font-family:'Courier New',monospace; font-weight:700; letter-spacing:3px; font-size:15px; color:var(--cyan); margin-bottom:18px; }
+
+  .hero { background:linear-gradient(145deg,#132241,#0f1b33); border:1px solid var(--b); border-radius:18px; padding:22px 20px; margin-bottom:16px; position:relative; overflow:hidden; }
+  .hero::after { content:''; position:absolute; top:-40px; right:-40px; width:130px; height:130px; border-radius:50%; background:radial-gradient(circle,rgba(0,212,255,.14),transparent 70%); }
+  .hero .ola { font-size:13px; color:var(--t2); }
+  .hero .nome { font-size:24px; font-weight:800; margin:2px 0 4px; }
+  .hero .frac { font-family:'Courier New',monospace; font-size:12px; letter-spacing:2px; color:var(--cyan); }
+  .hero .sit-label { font-size:11px; color:var(--t3); margin-top:18px; letter-spacing:.5px; }
+  .hero .sit { font-family:'Courier New',monospace; font-weight:800; font-size:30px; letter-spacing:1px; margin:4px 0; }
+  .hero .sit.ok { color:var(--green); text-shadow:0 0 18px rgba(34,229,132,.35); }
+  .hero .sit.mau { color:var(--red); text-shadow:0 0 18px rgba(255,84,112,.3); }
+  .hero .sit-sub { font-size:11.5px; color:var(--t2); }
+
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:20px; }
+  .tile { background:var(--card); border:1px solid var(--b); border-radius:14px; padding:16px 14px; cursor:pointer; transition:transform .12s, border-color .12s; }
+  .tile:active { transform:scale(.97); }
+  .tile .ic { font-size:20px; margin-bottom:10px; }
+  .tile .tt { font-size:14px; font-weight:700; }
+  .tile .ts { font-size:11px; color:var(--t2); margin-top:2px; line-height:1.4; }
+
+  h2 { font-family:'Courier New',monospace; font-size:12px; letter-spacing:2px; color:var(--cyan); margin:22px 0 10px; }
+  .lista { display:flex; flex-direction:column; gap:8px; }
+  .li { background:var(--card); border:1px solid var(--b); border-radius:12px; padding:12px 14px; display:flex; align-items:center; gap:12px; }
+  .li .est { min-width:34px; height:34px; border-radius:9px; display:flex; align-items:center; justify-content:center; font-size:15px; }
+  .li .m { flex:1; }
+  .li .m .t { font-size:13.5px; font-weight:600; }
+  .li .m .s { font-size:11px; color:var(--t3); margin-top:1px; }
+  .li .v { font-size:13px; font-weight:700; text-align:right; }
+
+  .form { background:var(--card); border:1px solid var(--b); border-radius:14px; padding:16px; }
+  label { display:block; font-size:11.5px; color:var(--t2); margin:12px 0 5px; }
+  select, input, textarea { width:100%; background:var(--card2); border:1px solid var(--b); border-radius:9px; color:var(--text); padding:11px 12px; font-size:14px; font-family:inherit; }
+  textarea { min-height:90px; resize:vertical; }
+  .btn { width:100%; background:linear-gradient(135deg,var(--cyan),#0091ff); border:none; border-radius:11px; color:#04121f; font-weight:800; font-size:14.5px; padding:14px; margin-top:16px; cursor:pointer; }
+  .btn:disabled { opacity:.5; }
+  .msg-ok { background:rgba(34,229,132,.1); border:1px solid rgba(34,229,132,.35); color:var(--green); border-radius:11px; padding:13px; font-size:13px; margin-top:12px; display:none; }
+  .msg-err { background:rgba(255,84,112,.1); border:1px solid rgba(255,84,112,.35); color:var(--red); border-radius:11px; padding:13px; font-size:13px; margin-top:12px; display:none; }
+
+  .link-dados { display:block; text-align:center; margin-top:22px; font-size:12.5px; color:var(--t2); text-decoration:none; padding:12px; border:1px dashed var(--b); border-radius:11px; }
+  .rodape { text-align:center; font-size:10px; color:var(--t3); margin-top:26px; line-height:1.6; }
+  .invalido { text-align:center; padding:60px 24px; }
+  .invalido .ic { font-size:44px; margin-bottom:14px; }
+  .skel { color:var(--t3); font-size:13px; padding:8px 0; }
+</style>
+</head>
+<body>
+<div class="wrap" id="app" style="display:none;">
+  <div class="brand">□ COND.OS</div>
+
+  <div class="hero">
+    <div class="ola" id="p-ola">Olá,</div>
+    <div class="nome" id="p-nome">—</div>
+    <div class="frac" id="p-frac">FRAÇÃO —</div>
+    <div class="sit-label">SITUAÇÃO DE QUOTAS</div>
+    <div class="sit" id="p-sit">…</div>
+    <div class="sit-sub" id="p-sit-sub"></div>
+  </div>
+
+  <div class="grid">
+    <div class="tile" onclick="document.getElementById('sec-quotas').scrollIntoView({behavior:'smooth'})">
+      <div class="ic">🧾</div>
+      <div class="tt">Quotas</div>
+      <div class="ts">Ver o meu histórico</div>
+    </div>
+    <div class="tile" onclick="document.getElementById('sec-reportar').scrollIntoView({behavior:'smooth'})">
+      <div class="ic">🛠️</div>
+      <div class="tt">Ocorrências</div>
+      <div class="ts">Reportar um problema</div>
+    </div>
+  </div>
+
+  <h2 id="sec-quotas">AS MINHAS QUOTAS</h2>
+  <div class="lista" id="p-quotas"><div class="skel">A carregar…</div></div>
+
+  <h2 id="sec-reportar">REPORTAR UM PROBLEMA</h2>
+  <div class="form">
+    <div style="font-size:12px;color:var(--t2);line-height:1.5;">Viste uma avaria ou um problema nas partes comuns? Reporta aqui — a administração recebe de imediato.</div>
+    <label>Tipo de problema</label>
+    <select id="r-cat">
+      <option value="avaria">Avaria (elevador, luz, porta…)</option>
+      <option value="agua">Água / infiltração</option>
+      <option value="limpeza">Limpeza</option>
+      <option value="seguranca">Segurança</option>
+      <option value="barulho">Barulho / vizinhança</option>
+      <option value="outro">Outro</option>
+    </select>
+    <label>Onde? (local)</label>
+    <input id="r-local" placeholder="Ex: entrada do bloco A, garagem, 2.º piso…">
+    <label>Descreve o problema</label>
+    <textarea id="r-desc" placeholder="O que se passa? Desde quando?"></textarea>
+    <button class="btn" id="r-btn" onclick="reportar()">Enviar à administração</button>
+    <div class="msg-ok" id="r-ok">✅ Recebido! A administração foi notificada da ocorrência.</div>
+    <div class="msg-err" id="r-err"></div>
+  </div>
+
+  <a class="link-dados" id="p-link-ficha" href="#">✏️ Atualizar os meus dados (NIF, contacto, morada)</a>
+
+  <div class="rodape">Este portal mostra apenas os dados da sua fração.<br>Dúvidas? Contacte a administração do condomínio.<br>COND.OS 2059</div>
+</div>
+
+<div class="wrap invalido" id="invalido" style="display:none;">
+  <div class="ic">🔒</div>
+  <div style="font-size:16px;font-weight:700;margin-bottom:8px;">Link inválido ou desatualizado</div>
+  <div style="font-size:13px;color:var(--t2);line-height:1.6;">Este acesso é pessoal e único por fração.<br>Contacte a administração para obter o seu link.</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const SB_URL = 'https://iopkxoabszhzjimjltir.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlvcGt4b2Fic3poemppbWpsdGlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEyNzc5MjQsImV4cCI6MjA5Njg1MzkyNH0.PwopXnx0v7kSXUeua1Y3fI3xPDIS8S62SzGBfwPwLSA';
+const sb = supabase.createClient(SB_URL, SB_KEY);
+
+const token = new URLSearchParams(window.location.search).get('t');
+const mN = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+function saudacao() {
+  var h = new Date().getHours();
+  return h < 12 ? 'Bom dia,' : (h < 20 ? 'Boa tarde,' : 'Boa noite,');
+}
+
+async function iniciar() {
+  if (!token) { mostrarInvalido(); return; }
+  const res = await sb.rpc('portal_situacao', { p_token: token });
+  if (res.error || !res.data || !res.data.length) { mostrarInvalido(); return; }
+  const d = res.data[0];
+
+  document.getElementById('app').style.display = 'block';
+  document.getElementById('p-ola').textContent = saudacao();
+  document.getElementById('p-nome').textContent = (d.proprietario_nome || 'Condómino').split(' ').slice(0,2).join(' ');
+  document.getElementById('p-frac').textContent = 'FRAÇÃO ' + (d.fracao_codigo || '—') + (d.bloco ? ' · BLOCO ' + d.bloco : '');
+  document.getElementById('p-link-ficha').href = 'ficha.html?t=' + encodeURIComponent(token);
+
+  const divida = parseFloat(d.total_divida || 0);
+  const sit = document.getElementById('p-sit');
+  const sub = document.getElementById('p-sit-sub');
+  if (divida <= 0.005) {
+    sit.textContent = 'Regularizado';
+    sit.className = 'sit ok';
+    sub.textContent = d.ultima_paga ? ('Última quota paga em ' + new Date(d.ultima_paga).toLocaleDateString('pt-PT')) : 'Sem quotas em atraso';
+  } else {
+    sit.textContent = 'Em dívida';
+    sit.className = 'sit mau';
+    sub.textContent = d.n_quotas_divida + ' quota(s) em atraso · total ' + divida.toFixed(2).replace('.',',') + '€ — contacte a administração para regularizar';
+  }
+
+  carregarQuotas();
+}
+
+async function carregarQuotas() {
+  const res = await sb.rpc('portal_quotas', { p_token: token });
+  const cont = document.getElementById('p-quotas');
+  if (res.error || !res.data || !res.data.length) {
+    cont.innerHTML = '<div class="skel">Ainda não há quotas registadas.</div>';
+    return;
+  }
+  cont.innerHTML = res.data.map(function(q){
+    const emitido = parseFloat(q.valor_emitido||0), pago = parseFloat(q.valor_pago||0);
+    const saldo = emitido - pago;
+    let ic, bg, vTxt, vCor;
+    if (saldo <= 0.005 && pago > 0) { ic='✅'; bg='rgba(34,229,132,.12)'; vTxt = pago.toFixed(2).replace('.',',')+'€'; vCor='var(--green)'; }
+    else if (pago > 0)              { ic='🟡'; bg='rgba(255,179,0,.12)'; vTxt = 'falta ' + saldo.toFixed(2).replace('.',',')+'€'; vCor='var(--amber)'; }
+    else                            { ic='🔴'; bg='rgba(255,84,112,.12)'; vTxt = emitido.toFixed(2).replace('.',',')+'€'; vCor='var(--red)'; }
+    return '<div class="li">' +
+      '<div class="est" style="background:'+bg+';">'+ic+'</div>' +
+      '<div class="m"><div class="t">'+ (mN[(q.mes||1)-1]) + ' ' + q.ano + '</div>' +
+      '<div class="s">' + (q.data_pagamento ? ('pago em ' + new Date(q.data_pagamento).toLocaleDateString('pt-PT')) : 'por pagar') + '</div></div>' +
+      '<div class="v" style="color:'+vCor+';">'+vTxt+'</div></div>';
+  }).join('');
+}
+
+async function reportar() {
+  const desc = document.getElementById('r-desc').value.trim();
+  const local = document.getElementById('r-local').value.trim();
+  const errEl = document.getElementById('r-err');
+  const okEl = document.getElementById('r-ok');
+  errEl.style.display = 'none'; okEl.style.display = 'none';
+  if (desc.length < 8) { errEl.textContent = 'Descreve o problema com um pouco mais de detalhe.'; errEl.style.display = 'block'; return; }
+  const btn = document.getElementById('r-btn');
+  btn.disabled = true; btn.textContent = 'A enviar…';
+  const res = await sb.rpc('portal_reportar', {
+    p_token: token,
+    p_categoria: document.getElementById('r-cat').value,
+    p_local: local,
+    p_descricao: desc
+  });
+  btn.disabled = false; btn.textContent = 'Enviar à administração';
+  if (res.error || res.data === false) {
+    errEl.textContent = res.error ? ('Erro: ' + res.error.message) : 'Não foi possível enviar (limite diário atingido ou link inválido).';
+    errEl.style.display = 'block';
+  } else {
+    okEl.style.display = 'block';
+    document.getElementById('r-desc').value = '';
+    document.getElementById('r-local').value = '';
+  }
+}
+
+function mostrarInvalido() {
+  document.getElementById('invalido').style.display = 'block';
+}
+
+iniciar();
+</script>
+</body>
+</html>
