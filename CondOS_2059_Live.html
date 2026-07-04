@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.03-2207</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.04-2210</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -5577,7 +5577,7 @@ async function gerarQRTodosPDF() {
   for (var i = 0; i < lista.length; i++) {
     var f = lista[i];
     if (i > 0) doc.addPage();
-    var url = baseUrl + '/ficha.html?condo=' + encodeURIComponent(currentCondo.id) + '&fracao=' + encodeURIComponent(f.id) + '&codigo=' + encodeURIComponent(f.codigo||'') + '&bloco=' + encodeURIComponent(f.bloco||'');
+    var url = baseUrl + '/ficha.html?t=' + encodeURIComponent(f.token_acesso||'');
     var qrData = await gerarQRDataURL(url);
 
     // ===== CABEÇALHO ESCURO =====
@@ -5672,7 +5672,7 @@ function gerarQRCondomino(fracaoId) {
     : isGithubPages
       ? window.location.origin + '/condos-2059'
       : window.location.origin;
-  const url = baseUrl + '/ficha.html?condo=' + encodeURIComponent(currentCondo.id) + '&fracao=' + encodeURIComponent(f.id) + '&codigo=' + encodeURIComponent(f.codigo||'') + '&bloco=' + encodeURIComponent(f.bloco||'');
+  const url = baseUrl + '/ficha.html?t=' + encodeURIComponent(f.token_acesso||'');
   _qrLinkActual = url;
   _qrFracaoId = fracaoId;
   document.getElementById('qr-fracao-info').textContent = 'Fração ' + (f.codigo||'—') + (f.bloco ? ' — Bloco ' + f.bloco : '');
@@ -9517,7 +9517,7 @@ async function notificarIndividual(fracaoId) {
   var isLocal2 = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost' || window.location.protocol === 'file:';
   var isGithub2 = window.location.hostname.includes('github.io');
   var baseUrl = isLocal2 ? 'https://condomosfree-alt.github.io/condos-2059' : isGithub2 ? window.location.origin + '/condos-2059' : window.location.origin;
-  var url = baseUrl + '/ficha.html?condo=' + encodeURIComponent(currentCondo.id) + '&fracao=' + encodeURIComponent(f.id) + '&codigo=' + encodeURIComponent(f.codigo||'') + '&bloco=' + encodeURIComponent(f.bloco||'');
+  var url = baseUrl + '/ficha.html?t=' + encodeURIComponent(f.token_acesso||'');
   var assunto = '📋 Actualização de dados — ' + condoNome + ' — Fração ' + (f.codigo||'');
   var corpo = notificacaoEmailHTML(f, condoNome, url);
   toast('A enviar email...','');
@@ -9573,7 +9573,7 @@ async function notificarTodos() {
     var isLocal2 = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost' || window.location.protocol === 'file:';
     var isGithub2 = window.location.hostname.includes('github.io');
     var baseUrl = isLocal2 ? 'https://condomosfree-alt.github.io/condos-2059' : isGithub2 ? window.location.origin + '/condos-2059' : window.location.origin;
-    var url = baseUrl + '/ficha.html?condo=' + encodeURIComponent(currentCondo.id) + '&fracao=' + encodeURIComponent(f.id) + '&codigo=' + encodeURIComponent(f.codigo||'') + '&bloco=' + encodeURIComponent(f.bloco||'');
+    var url = baseUrl + '/ficha.html?t=' + encodeURIComponent(f.token_acesso||'');
     var assunto = '📋 Actualização de dados — ' + condoNome + ' — Fração ' + (f.codigo||'');
     var corpo =
       '<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#f4f6f8;">'+
