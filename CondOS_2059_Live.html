@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.03-2204</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.03-2207</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -4794,10 +4794,59 @@ async function carregarDossier() {
   if (!anos.length) anos = [new Date().getFullYear()];
   if (anos.indexOf(_dossierAno) === -1) _dossierAno = anos[0];
   _dossierAnos = anos.slice().sort(function(a,b){return a-b;});
-  el.innerHTML = renderDossierHTML(f, quotas, anos);
+  el.innerHTML = '<div id="cobranca-track"></div>' + renderDossierHTML(f, quotas, anos);
+}
+
+// ===== ACOMPANHAMENTO DE COBRANÇA: parceiro ligado à ficha do condómino =====
+async function renderCobrancaTrack(f) {
+  var box = document.getElementById('cobranca-track');
+  if (!box || !f || !f.cobranca_parceiro_id) { if (box) box.innerHTML=''; return; }
+  var nomeParceiro = '(parceiro)';
+  try {
+    var pR = await sb.from('parceiros').select('nome,telefone').eq('id', f.cobranca_parceiro_id).single();
+    if (pR.data) nomeParceiro = pR.data.nome + (pR.data.telefone ? ' · ' + pR.data.telefone : '');
+  } catch(e){}
+  var estados = ['em curso','acordo de pagamento','via judicial','resolvida'];
+  var atual = f.cobranca_estado || 'em curso';
+  var dataFmt = f.cobranca_data ? new Date(f.cobranca_data).toLocaleDateString('pt-PT') : '—';
+  var corEstado = atual === 'resolvida' ? 'var(--green)' : (atual === 'via judicial' ? '#f87171' : '#ffb300');
+  var html = '<div style="background:rgba(248,113,113,.05);border:1px solid rgba(248,113,113,.25);border-radius:10px;padding:13px 16px;margin-bottom:14px;">';
+  html += '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">';
+  html += '<span style="font-size:16px;">📦</span>';
+  html += '<div style="flex:1;min-width:200px;"><div style="font-size:12px;font-weight:700;color:var(--text);">Cobrança entregue ao parceiro</div>';
+  html += '<div style="font-size:11px;color:var(--t2);margin-top:2px;">' + nomeParceiro + ' · desde ' + dataFmt + '</div></div>';
+  html += '<select class="fi" style="width:auto;font-size:11px;padding:6px 10px;color:' + corEstado + ';font-weight:700;" onchange="atualizarEstadoCobranca(this.value)">';
+  estados.forEach(function(e){ html += '<option value="' + e + '"' + (e===atual?' selected':'') + '>' + e.toUpperCase() + '</option>'; });
+  html += '</select>';
+  html += '<span style="cursor:pointer;color:var(--t3);font-size:13px;" title="Remover acompanhamento" onclick="limparCobranca()">✕</span>';
+  html += '</div></div>';
+  box.innerHTML = html;
+}
+
+async function atualizarEstadoCobranca(estado) {
+  var f = fracoes.find(function(x){ return x.id === _cartaoFracaoId; });
+  if (!f) return;
+  var res = await sb.from('fracoes').update({ cobranca_estado: estado }).eq('id', f.id);
+  if (res.error) { toast('Erro: ' + res.error.message,'err'); return; }
+  f.cobranca_estado = estado;
+  toast(estado === 'resolvida' ? '🎉 Cobrança marcada como RESOLVIDA' : 'Estado atualizado: ' + estado, 'ok');
+  renderCobrancaTrack(f);
+}
+
+async function limparCobranca() {
+  var f = fracoes.find(function(x){ return x.id === _cartaoFracaoId; });
+  if (!f) return;
+  if (!await confirmar('Remover o acompanhamento de cobrança desta fração?\n\n(O histórico de quotas não é afetado — apenas deixa de mostrar a entrega ao parceiro.)', {titulo:'Remover acompanhamento', tipo:'aviso', icon:'📦', okTexto:'Remover', cancelarTexto:'Cancelar'})) return;
+  var res = await sb.from('fracoes').update({ cobranca_parceiro_id: null, cobranca_data: null, cobranca_estado: null }).eq('id', f.id);
+  if (res.error) { toast('Erro: ' + res.error.message,'err'); return; }
+  f.cobranca_parceiro_id = null; f.cobranca_data = null; f.cobranca_estado = null;
+  renderCobrancaTrack(f);
+  toast('Acompanhamento removido','ok');
 }
 
 function renderDossierHTML(f, todasQuotas, anos) {
+  // Caixa de acompanhamento de cobrança (preenchida async se existir)
+  setTimeout(function(){ renderCobrancaTrack(f); }, 50);
   var mN = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   var mNomes = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
   var eur = function(v){ return parseFloat(v||0).toFixed(2).replace('.',',')+'€'; };
@@ -5260,7 +5309,22 @@ async function gerarDossierCobranca() {
   doc.text('Documento confidencial · dados pessoais tratados no âmbito da gestão do condomínio (interesse legítimo/execução de deveres legais)', W/2, 288, {align:'center'});
 
   doc.save('Dossier_Cobranca_' + (f.codigo||'fracao') + '_' + condoNome.replace(/\s+/g,'_') + '.pdf');
-  toast('📦 Dossier de cobrança gerado' + (juridico ? ' (destinatário: ' + juridico.nome + ')' : ' — regista um parceiro jurídico nos Parceiros'), 'ok');
+  toast('📦 Dossier de cobrança gerado' + (juridico ? '' : ' — regista um parceiro jurídico nos Parceiros'), 'ok');
+
+  // Ligar à ficha: registar a entrega ao parceiro (acompanhamento do caso)
+  if (juridico) {
+    var registar = await confirmar('Registar na ficha desta fração que a cobrança foi ENTREGUE ao parceiro ' + juridico.nome + '?\n\nFica visível no Dossier Financeiro com o estado do caso (em curso / acordo / judicial / resolvida).', {titulo:'Acompanhar o caso', tipo:'info', icon:'📦', okTexto:'Sim, registar', cancelarTexto:'Não'});
+    if (registar) {
+      var hj = new Date().toISOString().split('T')[0];
+      var updT = await sb.from('fracoes').update({ cobranca_parceiro_id: juridico.id, cobranca_data: hj, cobranca_estado: 'em curso' }).eq('id', f.id);
+      if (updT.error) { toast('Erro ao registar (corre o sql_cobranca_tracking.sql): ' + updT.error.message, 'err'); }
+      else {
+        f.cobranca_parceiro_id = juridico.id; f.cobranca_data = hj; f.cobranca_estado = 'em curso';
+        renderCobrancaTrack(f);
+        toast('📦 Caso registado — acompanha o estado no Dossier Financeiro', 'ok');
+      }
+    }
+  }
 }
 
 async function gerarDeclaracaoDivida() {
