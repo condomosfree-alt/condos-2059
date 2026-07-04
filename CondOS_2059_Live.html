@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.04-2210</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.04-2232</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -2279,6 +2279,7 @@ textarea.fi{resize:vertical;min-height:60px;}
       <button class="btn-ghost" style="display:inline-flex;align-items:center;justify-content:center;gap:6px;" onclick="editarDoCartao()"><i class="ti ti-edit"></i>Editar</button>
       <button class="btn-ghost" style="display:inline-flex;align-items:center;justify-content:center;gap:6px;background:rgba(180,140,255,.1);border-color:rgba(180,140,255,.3);color:#b48cff;" onclick="gerarDeclaracaoDivida()" title="Declaração de dívida para venda da fração (Art. 1424.º-A CC)"><i class="ti ti-file-certificate"></i>Declaração</button>
       <button class="btn-ghost" style="display:inline-flex;align-items:center;justify-content:center;gap:6px;background:rgba(248,113,113,.08);border-color:rgba(248,113,113,.3);color:#f87171;" onclick="gerarDossierCobranca()" title="Pacote completo para entregar ao parceiro jurídico: resumo do caso, mapa da dívida com juros, enquadramento legal e checklist de anexos">📦 Dossier Parceiro</button>
+      <button class="btn-ghost" style="display:inline-flex;align-items:center;justify-content:center;gap:6px;background:rgba(0,212,255,.08);border-color:rgba(0,212,255,.3);color:var(--cyan);" onclick="copiarLinkPortal()" title="Copiar o link pessoal do Portal do Condómino desta fração (ver quotas, reportar avarias, atualizar dados)">🔗 Link do Portal</button>
       <button class="btn-ghost" style="display:inline-flex;align-items:center;justify-content:center;gap:6px;" onclick="closeModal('mo-cartao')"><i class="ti ti-x"></i>Fechar</button>
     </div>
   </div>
@@ -5168,6 +5169,22 @@ function cartaoWhatsApp() {
 
 // ===== DECLARAÇÃO DE DÍVIDA (Art. 1424.º-A CC) — para venda de fração =====
 // ===== DOSSIER DE COBRANÇA PARA O PARCEIRO JURÍDICO (fecha o ramo judicial do ciclo da dívida) =====
+// Copiar o link do Portal do Condómino desta fração
+async function copiarLinkPortal() {
+  var f = fracoes.find(function(x){ return x.id === _cartaoFracaoId; });
+  if (!f) { toast('Fração não encontrada','err'); return; }
+  if (!f.token_acesso) { toast('Esta fração ainda não tem token — corre o SQL da Fase 2 (sql_rls_fase2_token)','warn'); return; }
+  var baseUrl = location.href.substring(0, location.href.lastIndexOf('/'));
+  var url = baseUrl + '/portal.html?t=' + encodeURIComponent(f.token_acesso);
+  try {
+    await navigator.clipboard.writeText(url);
+    toast('🔗 Link do portal copiado! Envia ao condómino ' + (f.proprietario_nome||''), 'ok');
+  } catch(e) {
+    // fallback: mostrar num prompt para copiar à mão
+    prompt('Link do Portal do Condómino (copia):', url);
+  }
+}
+
 async function gerarDossierCobranca() {
   var f = fracoes.find(function(x){ return x.id === _cartaoFracaoId; });
   if (!f) { toast('Fração não encontrada','err'); return; }
