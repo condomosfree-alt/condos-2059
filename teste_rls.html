@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🔐 Teste de Segurança RLS — Cond.OS</title>
+<style>
+  body { font-family: system-ui, sans-serif; background: #0d1825; color: #e8eaed; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; }
+  h1 { font-size: 18px; color: #8b93a3; font-weight: 600; }
+  #resultado { font-size: 42px; font-weight: 800; margin: 20px 0; padding: 24px 40px; border-radius: 16px; text-align: center; }
+  .fechado { background: rgba(16,185,129,.12); border: 2px solid #10b981; color: #10b981; }
+  .aberto { background: rgba(248,113,113,.12); border: 2px solid #f87171; color: #f87171; }
+  .teste { background: #16202e; border-radius: 10px; padding: 14px 18px; margin: 6px 0; width: 100%; max-width: 520px; font-size: 14px; }
+  .ok { color: #10b981; } .mau { color: #f87171; }
+  #nota { font-size: 12px; color: #8b93a3; max-width: 520px; text-align: center; margin-top: 16px; line-height: 1.6; }
+</style>
+</head>
+<body>
+<h1>🔐 Teste de Segurança da Base de Dados — Cond.OS</h1>
+<div id="resultado">A testar...</div>
+<div id="testes"></div>
+<div id="nota">Este teste faz-se como um ESTRANHO (sem login). Abre esta página numa janela anónima ou em qualquer dispositivo — se disseres FECHADO, o mundo não lê os teus dados.</div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const sb = supabase.createClient('https://iopkxoabszhzjimjltir.supabase.co', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlvcGt4b2Fic3poemppbWpsdGlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEyNzc5MjQsImV4cCI6MjA5Njg1MzkyNH0.PwopXnx0v7kSXUeua1Y3fI3xPDIS8S62SzGBfwPwLSA');
+async function testar() {
+  const testes = [];
+  let furos = 0;
+
+  // Teste 1: ler condomínios
+  const t1 = await sb.from('condominios').select('nome').limit(5);
+  const l1 = (t1.data || []).length;
+  if (l1 > 0) furos++;
+  testes.push({ nome: 'Ler condomínios (nomes)', passou: l1 === 0, detalhe: l1 === 0 ? 'bloqueado — devolveu 0 registos' : '❗ devolveu ' + l1 + ' registo(s): ' + t1.data.map(c=>c.nome).join(', ') });
+
+  // Teste 2: ler frações (proprietários)
+  const t2 = await sb.from('fracoes').select('proprietario_nome').limit(5);
+  const l2 = (t2.data || []).length;
+  if (l2 > 0) furos++;
+  testes.push({ nome: 'Ler frações (proprietários)', passou: l2 === 0, detalhe: l2 === 0 ? 'bloqueado — devolveu 0 registos' : '❗ devolveu ' + l2 + ' registo(s)' });
+
+  // Teste 3: ler quotas (dados financeiros)
+  const t3 = await sb.from('quotas').select('valor_emitido').limit(5);
+  const l3 = (t3.data || []).length;
+  if (l3 > 0) furos++;
+  testes.push({ nome: 'Ler quotas (financeiro)', passou: l3 === 0, detalhe: l3 === 0 ? 'bloqueado — devolveu 0 registos' : '❗ devolveu ' + l3 + ' registo(s)' });
+
+  // Teste 4: tentar ESCREVER numa fração (o ataque real)
+  const t4 = await sb.from('fracoes').update({ proprietario_nome: 'HACKER TESTE' }).eq('id', 'b1d99252-2676-4802-944b-844a5fda90e7').select();
+  const l4 = (t4.data || []).length;
+  if (l4 > 0) furos++;
+  testes.push({ nome: 'Escrever numa fração (ataque)', passou: l4 === 0, detalhe: l4 === 0 ? 'bloqueado — 0 linhas alteradas' : '❗ CONSEGUIU ALTERAR ' + l4 + ' linha(s)!' });
+
+  // Render
+  const res = document.getElementById('resultado');
+  if (furos === 0) { res.textContent = '🔐 FECHADO'; res.className = 'fechado'; }
+  else { res.textContent = '🚨 ABERTO (' + furos + ' furo/s)'; res.className = 'aberto'; }
+  document.getElementById('testes').innerHTML = testes.map(t =>
+    '<div class="teste"><strong class="' + (t.passou?'ok':'mau') + '">' + (t.passou?'✅':'❌') + ' ' + t.nome + '</strong><br><span style="color:#8b93a3;">' + t.detalhe + '</span></div>'
+  ).join('');
+}
+testar();
+</script>
+</body>
+</html>
