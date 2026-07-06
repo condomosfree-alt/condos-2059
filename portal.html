@@ -103,6 +103,13 @@
 
   .rodape { text-align:center; font-size:10px; color:var(--t3); margin:20px 16px 0; line-height:1.6; }
 
+  /* Chat */
+  .bolha { max-width:78%; padding:10px 13px; border-radius:14px; font-size:13.5px; line-height:1.45; margin-bottom:8px; word-wrap:break-word; }
+  .bolha .hora { display:block; font-size:9.5px; opacity:.6; margin-top:4px; }
+  .bolha.eu { background:linear-gradient(135deg,var(--cyan),var(--cyan2)); color:#04121f; margin-left:auto; border-bottom-right-radius:4px; }
+  .bolha.eles { background:var(--card2); border:1px solid var(--b); color:var(--text); margin-right:auto; border-bottom-left-radius:4px; }
+  .chat-dia { text-align:center; font-size:10px; color:var(--t3); margin:12px 0; }
+
   #invalido { display:none; max-width:480px; margin:0 auto; text-align:center; padding:80px 30px; }
   #invalido .ic { font-size:48px; margin-bottom:16px; }
 </style>
@@ -159,6 +166,12 @@
         <div class="mtile-t">Documentos</div>
         <div class="mtile-s">Atas, seguros, regulamento</div>
       </div>
+      <div class="mtile" onclick="irPara('mensagens')" style="grid-column:span 2;">
+        <span class="mtile-badge" id="badge-msg" style="display:none;"></span>
+        <div class="mtile-ic">💬</div>
+        <div class="mtile-t">Mensagens</div>
+        <div class="mtile-s">Falar com a administração</div>
+      </div>
     </div>
 
     <div class="sec-h">🔔 ÚLTIMAS NOTIFICAÇÕES</div>
@@ -184,6 +197,18 @@
     <div class="ptitle">Documentos</div>
     <div class="psub">Atas, regulamento, seguros e balancetes do condomínio.</div>
     <div id="d-lista"><div class="skel">A carregar…</div></div>
+  </div>
+
+  <div class="page" id="pg-mensagens">
+    <div class="ptitle">Mensagens</div>
+    <div class="psub">Fala diretamente com a administração do condomínio.</div>
+    <div id="chat-scroll" style="min-height:200px;max-height:calc(100vh - 320px);overflow-y:auto;padding:4px 2px 8px;">
+      <div class="skel">A carregar…</div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:10px;position:sticky;bottom:0;">
+      <input id="chat-input" placeholder="Escreve uma mensagem…" style="flex:1;" onkeydown="if(event.key==='Enter')enviarMensagem()">
+      <button onclick="enviarMensagem()" style="background:linear-gradient(135deg,var(--cyan),var(--cyan2));border:none;border-radius:10px;color:#04121f;font-weight:800;padding:0 18px;font-size:16px;cursor:pointer;">➤</button>
+    </div>
   </div>
 
   <div class="page" id="pg-reportar">
@@ -216,7 +241,7 @@
     <button id="nav-quotas" onclick="irPara('quotas')"><span class="ni">🧾</span>Quotas</button>
     <button id="nav-contas" onclick="irPara('contas')"><span class="ni">💰</span>Contas</button>
     <button id="nav-docs" onclick="irPara('docs')"><span class="ni">📄</span>Docs</button>
-    <button id="nav-reportar" onclick="irPara('reportar')"><span class="ni">🛠️</span>Reportar</button>
+    <button id="nav-mensagens" onclick="irPara('mensagens')"><span class="ni">💬</span>Mensagens</button>
   </div>
 
   <div id="modal-ass" style="display:none;position:fixed;inset:0;z-index:50;background:rgba(4,8,16,.7);backdrop-filter:blur(3px);align-items:flex-end;justify-content:center;">
@@ -249,7 +274,9 @@ function irPara(pg) {
     if (pg==='contas') carregarContas();
     if (pg==='docs') carregarDocumentos();
     if (pg==='reportar') carregarHistOcorrencias();
+    if (pg==='mensagens') carregarMensagens();
   }
+  if (pg==='mensagens') carregarMensagens(); // recarrega sempre ao entrar
 }
 
 function saudacao() { const h=new Date().getHours(); return h<12?'Bom dia':(h<20?'Boa tarde':'Boa noite'); }
@@ -327,6 +354,14 @@ async function carregarFeed() {
     bd.textContent = rd.data.length > 9 ? '9+' : rd.data.length; bd.className = 'mtile-badge amber'; bd.style.display = 'block';
     const dd = rd.data[0];
     itens.push({ ic:'📄', cor:'rgba(0,212,255,.1)', t:'Novo documento disponível', s:dd.nome||dd.categoria, quando: dd.data_documento?tempoRelativo(dd.data_documento):'', onclick:"irPara('docs')" });
+  }
+
+  // Mensagens não lidas → badge no quadrado
+  const rm = await sb.rpc('portal_mensagens_nao_lidas', { p_token: token });
+  if (!rm.error && rm.data > 0) {
+    const bm = document.getElementById('badge-msg');
+    bm.textContent = rm.data; bm.style.display = 'block';
+    itens.unshift({ ic:'💬', cor:'rgba(0,212,255,.14)', t:rm.data+' nova(s) mensagem(ns) da administração', s:'Toca para ler e responder', quando:'', onclick:"irPara('mensagens')" });
   }
 
   if (!itens.length) { box.innerHTML = '<div class="empty">Sem notificações. Está tudo em ordem! ✨</div>'; return; }
@@ -459,6 +494,41 @@ async function reportar() {
   if (res.error || res.data===false) { errEl.textContent = res.error?('Erro: '+res.error.message):'Não foi possível enviar (limite diário atingido ou link inválido).'; errEl.style.display='block'; }
   else { okEl.style.display='block'; document.getElementById('r-desc').value=''; document.getElementById('r-local').value=''; _loaded.reportar=true; setTimeout(carregarHistOcorrencias, 800); }
 }
+
+// ===== MENSAGENS =====
+async function carregarMensagens() {
+  const cont = document.getElementById('chat-scroll');
+  const res = await sb.rpc('portal_mensagens', { p_token: token });
+  if (res.error) { cont.innerHTML = '<div class="empty">Não foi possível carregar as mensagens.</div>'; return; }
+  const msgs = res.data || [];
+  const bm = document.getElementById('badge-msg'); if (bm) bm.style.display = 'none';
+  if (!msgs.length) {
+    cont.innerHTML = '<div class="empty">Ainda não há mensagens.<br>Escreve à administração — ela responde por aqui.</div>';
+    return;
+  }
+  let html = '', ultimoDia = '';
+  msgs.forEach(function(m){
+    const dia = new Date(m.criado_em).toLocaleDateString('pt-PT');
+    if (dia !== ultimoDia) { html += '<div class="chat-dia">'+dia+'</div>'; ultimoDia = dia; }
+    const hora = new Date(m.criado_em).toLocaleTimeString('pt-PT',{hour:'2-digit',minute:'2-digit'});
+    const eu = m.autor === 'condomino';
+    html += '<div class="bolha '+(eu?'eu':'eles')+'">'+escapar(m.texto)+'<span class="hora">'+(eu?'':'Administração · ')+hora+'</span></div>';
+  });
+  cont.innerHTML = html;
+  cont.scrollTop = cont.scrollHeight;
+}
+
+async function enviarMensagem() {
+  const inp = document.getElementById('chat-input');
+  const txt = inp.value.trim();
+  if (!txt) return;
+  inp.value = '';
+  const res = await sb.rpc('portal_enviar_mensagem', { p_token: token, p_texto: txt });
+  if (res.error || res.data === false) { alert('Não foi possível enviar (limite diário atingido ou link inválido).'); inp.value = txt; return; }
+  carregarMensagens();
+}
+
+function escapar(s){ const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
 
 function categoriaLabel(c){ const m={avaria:'Avaria',agua:'Água / infiltração',limpeza:'Limpeza',seguranca:'Segurança',barulho:'Barulho',outro:'Outro'}; return m[c]||c||'Ocorrência'; }
 function categoriaIcon(c){ const m={avaria:'🛠️',agua:'💧',limpeza:'🧹',seguranca:'🛡️',barulho:'🔊',outro:'📌'}; return m[c]||'📌'; }

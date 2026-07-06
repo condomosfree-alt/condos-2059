@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.04-2232</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.06-1244</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -575,6 +575,7 @@ textarea.fi{resize:vertical;min-height:60px;}
       <div class="nav-section">Gestão</div>
       <div class="ni" onclick="nav('condominos')"><i class="ti ti-users"></i><span>Condóminos</span><span class="nb" id="nb-cond"></span></div>
       <div class="ni" onclick="nav('ocorrencias')"><i class="ti ti-alert-triangle"></i><span>Ocorrências</span><span class="nb" id="nb-oc"></span></div>
+      <div class="ni" onclick="nav('mensagens')"><i class="ti ti-message"></i><span>Mensagens</span><span class="nb" id="nb-msg" style="background:#f87171;"></span></div>
       <div class="ni" onclick="nav('parceiros')"><i class="ti ti-tool"></i><span>Parceiros</span></div>
       <div class="ni" onclick="nav('documentos')"><i class="ti ti-file-text"></i><span>Documentos</span></div>
       <div class="ni" onclick="nav('assembleias')"><i class="ti ti-speakerphone"></i><span>Assembleias</span><span id="badge-assembleias" style="display:none;margin-left:auto;background:#f87171;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;line-height:16px;text-align:center;border-radius:8px;padding:0 4px;"></span></div>
@@ -1479,6 +1480,25 @@ textarea.fi{resize:vertical;min-height:60px;}
       </div>
 
       <!-- PARCEIROS -->
+      <div class="page" id="page-mensagens">
+        <div class="sec-hdr"><span class="sec-t">Mensagens dos Condóminos</span></div>
+        <div style="display:flex;gap:14px;">
+          <div class="panel" style="flex:0 0 300px;max-height:70vh;overflow-y:auto;">
+            <div id="msg-lista-fracoes"><div class="loading"><div class="spin"></div></div></div>
+          </div>
+          <div class="panel" style="flex:1;display:flex;flex-direction:column;max-height:70vh;">
+            <div id="msg-cabecalho" style="padding:12px 16px;border-bottom:1px solid var(--border);font-weight:600;font-size:14px;">Escolhe uma conversa à esquerda</div>
+            <div id="msg-conversa" style="flex:1;overflow-y:auto;padding:16px;"></div>
+            <div id="msg-responder" style="display:none;padding:12px 16px;border-top:1px solid var(--border);gap:8px;">
+              <div style="display:flex;gap:8px;">
+                <input class="fi" id="msg-input" placeholder="Escreve a resposta…" style="flex:1;" onkeydown="if(event.key==='Enter')responderMensagem()">
+                <button class="btn-primary" onclick="responderMensagem()">Enviar</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="page" id="page-parceiros">
         <div class="sec-hdr"><span class="sec-t">Parceiros</span><button class="btn-primary" onclick="openModal('mo-parceiro')"><i class="ti ti-plus"></i>Adicionar</button></div>
         <div class="panel">
@@ -3632,6 +3652,7 @@ async function loadCondData() {
   updateBadges();
   initOrcamentoAno();
   verificarAvisosGerais();
+  atualizarBadgeMensagens();
   loadOrcamento();
 }
 
@@ -6808,6 +6829,7 @@ async function emitirQuotas() {
   closeModal('mo-emitir');
   toast(criadas > 0 ? `${criadas} quotas emitidas!` : 'Quotas já existiam para este mês.','ok');
   verificarAvisosGerais();
+  atualizarBadgeMensagens();
   loadQuotas(); updateBadges();
 }
 
@@ -12700,7 +12722,7 @@ async function importarFracoesIA() {
 }
 
 // ===== NAVIGATION =====
-const pageMap={dashboard:'Dashboard',edificio:'Edifício',fracoes:'Frações',quotas:'Quotas',financeiro:'Financeiro',contas:'Contas',auditoria:'Raio-X das Contas',ocorrencias:'Ocorrências',parceiros:'Parceiros',documentos:'Documentos',assembleias:'Assembleias',ia:'Assistente IA',definicoes:'Definições'};
+const pageMap={dashboard:'Dashboard',edificio:'Edifício',fracoes:'Frações',quotas:'Quotas',financeiro:'Financeiro',contas:'Contas',auditoria:'Raio-X das Contas',ocorrencias:'Ocorrências',mensagens:'Mensagens',parceiros:'Parceiros',documentos:'Documentos',assembleias:'Assembleias',ia:'Assistente IA',definicoes:'Definições'};
 const pathMap={dashboard:'Visão Geral',fracoes:'Moradores & Frações',quotas:'Gestão de Quotas',financeiro:'Contas & Movimentos',contas:'Mapa do Ano & Fecho de Contas',auditoria:'Auditoria & Passagem de Gestão',ocorrencias:'Gestão de Problemas',parceiros:'Base de Manutenção',documentos:'Arquivo Digital',assembleias:'Reuniões',ia:'IA Gratuita · Gemini',definicoes:'Configuração'};
 
 // ===== MÓDULO CONTAS (mapa do ano + orçado vs real) =====
@@ -14163,6 +14185,82 @@ function gerarRelatorioCruzamentoPDF() {
   toast('📄 Relatório do cruzamento gerado','ok');
 }
 
+// ===== MENSAGENS (lado do admin) =====
+var _msgFracaoAtiva = null;
+async function loadMensagens() {
+  if (!currentCondo) return;
+  var cont = document.getElementById('msg-lista-fracoes');
+  var res = await sb.from('mensagens').select('*').eq('condominio_id', currentCondo.id).order('criado_em', {ascending:false});
+  if (res.error) { cont.innerHTML = '<div style="padding:16px;color:var(--t3);font-size:12px;">Erro: ' + res.error.message + ' (corre o sql_mensagens.sql)</div>'; return; }
+  var msgs = res.data || [];
+  // Agrupar por fração: última mensagem + nº não lidas do condómino
+  var porFracao = {};
+  msgs.forEach(function(m){
+    if (!porFracao[m.fracao_id]) porFracao[m.fracao_id] = { ultima:m, naoLidas:0, total:0 };
+    porFracao[m.fracao_id].total++;
+    if (m.autor === 'condomino' && !m.lida_admin) porFracao[m.fracao_id].naoLidas++;
+  });
+  var ids = Object.keys(porFracao);
+  if (!ids.length) { cont.innerHTML = '<div style="padding:16px;color:var(--t3);font-size:12px;">Ainda não há mensagens de condóminos.</div>'; return; }
+  // ordenar por mais recente
+  ids.sort(function(a,b){ return new Date(porFracao[b].ultima.criado_em) - new Date(porFracao[a].ultima.criado_em); });
+  cont.innerHTML = ids.map(function(fid){
+    var f = fracoes.find(function(x){ return x.id === fid; });
+    var nome = f ? ((f.codigo||'') + ' · ' + (f.proprietario_nome||'—')) : 'Fração';
+    var g = porFracao[fid];
+    var preview = (g.ultima.autor==='admin'?'Tu: ':'') + (g.ultima.texto||'').substring(0,40);
+    return '<div onclick="abrirConversa(\''+fid+'\')" style="padding:12px 14px;border-bottom:1px solid var(--border);cursor:pointer;'+(_msgFracaoAtiva===fid?'background:var(--s2);':'')+'">' +
+      '<div style="display:flex;align-items:center;gap:8px;"><span style="font-size:13px;font-weight:600;flex:1;">'+nome+'</span>' +
+      (g.naoLidas>0?'<span style="background:#f87171;color:#fff;font-size:10px;font-weight:700;min-width:18px;height:18px;line-height:18px;text-align:center;border-radius:9px;">'+g.naoLidas+'</span>':'') +
+      '</div><div style="font-size:11px;color:var(--t3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+preview+'</div></div>';
+  }).join('');
+  atualizarBadgeMensagens();
+}
+
+async function abrirConversa(fracaoId) {
+  _msgFracaoAtiva = fracaoId;
+  var f = fracoes.find(function(x){ return x.id === fracaoId; });
+  document.getElementById('msg-cabecalho').textContent = f ? ((f.codigo||'') + ' · ' + (f.proprietario_nome||'')) : 'Conversa';
+  document.getElementById('msg-responder').style.display = 'block';
+  var conv = document.getElementById('msg-conversa');
+  var res = await sb.from('mensagens').select('*').eq('fracao_id', fracaoId).order('criado_em', {ascending:true});
+  var msgs = res.data || [];
+  // marcar as do condómino como lidas
+  await sb.from('mensagens').update({lida_admin:true}).eq('fracao_id', fracaoId).eq('autor','condomino').eq('lida_admin', false);
+  conv.innerHTML = msgs.map(function(m){
+    var admin = m.autor === 'admin';
+    var hora = new Date(m.criado_em).toLocaleString('pt-PT',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+    return '<div style="max-width:75%;padding:9px 12px;border-radius:12px;font-size:13px;margin-bottom:8px;'+(admin?'background:var(--cyan-dim,rgba(0,212,255,.15));margin-left:auto;border-bottom-right-radius:3px;':'background:var(--s2);margin-right:auto;border-bottom-left-radius:3px;')+'">'+escaparHtml(m.texto)+'<div style="font-size:9px;opacity:.6;margin-top:3px;">'+hora+'</div></div>';
+  }).join('') || '<div style="color:var(--t3);font-size:12px;text-align:center;padding:20px;">Sem mensagens.</div>';
+  conv.scrollTop = conv.scrollHeight;
+  loadMensagens(); // refrescar a lista (badges)
+}
+
+async function responderMensagem() {
+  if (!_msgFracaoAtiva) return;
+  var inp = document.getElementById('msg-input');
+  var txt = inp.value.trim();
+  if (!txt) return;
+  var f = fracoes.find(function(x){ return x.id === _msgFracaoAtiva; });
+  inp.value = '';
+  var res = await sb.from('mensagens').insert({
+    condominio_id: currentCondo.id, fracao_id: _msgFracaoAtiva,
+    autor: 'admin', texto: txt, lida_admin: true, lida_condomino: false
+  });
+  if (res.error) { toast('Erro ao enviar: ' + res.error.message, 'err'); inp.value = txt; return; }
+  abrirConversa(_msgFracaoAtiva);
+}
+
+async function atualizarBadgeMensagens() {
+  if (!currentCondo) return;
+  var res = await sb.from('mensagens').select('id', {count:'exact', head:true})
+    .eq('condominio_id', currentCondo.id).eq('autor','condomino').eq('lida_admin', false);
+  var b = document.getElementById('nb-msg');
+  if (b) { if ((res.count||0) > 0) { b.textContent = res.count; b.style.display=''; } else b.style.display='none'; }
+}
+
+function escaparHtml(s){ var d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
+
 function nav(p) {
   document.querySelectorAll('.page').forEach(el=>el.classList.remove('active'));
   document.querySelectorAll('.ni').forEach(el=>el.classList.remove('active'));
@@ -14172,6 +14270,7 @@ function nav(p) {
   document.querySelectorAll('.ni').forEach(el=>{const oc=el.getAttribute('onclick')||'';if(oc.includes("'"+p+"'"))el.classList.add('active');});
   if(p==='orcamento'){ initOrcamentoAno(); loadOrcamento(); }
   if(p==='condominos') loadCondominos();
+  if(p==='mensagens') loadMensagens();
   if(p==='quotas'){
     populateQpFracao();
     loadQuotas();
