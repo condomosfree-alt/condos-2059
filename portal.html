@@ -84,6 +84,17 @@
   .qtile .tt { font-size:13.5px; font-weight:700; margin-top:9px; }
   .qtile .ts { font-size:10.5px; color:var(--t3); margin-top:1px; }
 
+  /* Quadrados grandes de entrada (menu do Início) */
+  .menu-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:16px; }
+  .mtile { position:relative; background:var(--card); border:1px solid var(--b); border-radius:16px; padding:20px 16px 18px; cursor:pointer; transition:border-color .15s, transform .1s, background .15s; min-height:112px; display:flex; flex-direction:column; }
+  .mtile:active { transform:scale(.96); }
+  .mtile:hover { border-color:var(--b2); background:var(--card2); }
+  .mtile-ic { font-size:26px; margin-bottom:auto; }
+  .mtile-t { font-size:15px; font-weight:700; margin-top:12px; }
+  .mtile-s { font-size:11px; color:var(--t3); margin-top:2px; line-height:1.3; }
+  .mtile-badge { position:absolute; top:14px; right:14px; min-width:20px; height:20px; line-height:20px; text-align:center; background:var(--red); color:#fff; font-size:11px; font-weight:800; border-radius:10px; padding:0 6px; box-shadow:0 0 10px rgba(255,84,112,.5); }
+  .mtile-badge.amber { background:var(--amber); color:#1a1206; box-shadow:0 0 10px rgba(255,179,0,.4); }
+
   .nav { position:fixed; bottom:0; left:50%; transform:translateX(-50%); width:100%; max-width:480px; height:var(--nav-h); background:rgba(13,26,48,.96); backdrop-filter:blur(12px); border-top:1px solid var(--b); display:flex; z-index:30; }
   .nav button { flex:1; background:none; border:none; color:var(--t3); font-size:9.5px; font-weight:600; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; cursor:pointer; padding-top:4px; position:relative; }
   .nav button .ni { font-size:19px; line-height:1; }
@@ -123,15 +134,36 @@
       <div id="h-sit" style="font-family:'Courier New',monospace;font-weight:800;font-size:28px;margin:5px 0;">…</div>
       <div id="h-sit-sub" style="font-size:12px;color:var(--t2);"></div>
     </div>
-    <div class="sec-h">⚡ IMPORTANTE AGORA</div>
-    <div id="h-destaque"><div class="skel">A verificar…</div></div>
-    <div class="sec-h">ACESSO RÁPIDO</div>
-    <div class="quick">
-      <div class="qtile" onclick="irPara('quotas')"><div class="ic">🧾</div><div class="tt">Quotas</div><div class="ts">O meu histórico</div></div>
-      <div class="qtile" onclick="irPara('contas')"><div class="ic">💰</div><div class="tt">Contas</div><div class="ts">Do condomínio</div></div>
-      <div class="qtile" onclick="irPara('docs')"><div class="ic">📄</div><div class="tt">Documentos</div><div class="ts">Atas, seguros</div></div>
-      <div class="qtile" onclick="irPara('reportar')"><div class="ic">🛠️</div><div class="tt">Reportar</div><div class="ts">Uma avaria</div></div>
+
+    <div class="menu-grid">
+      <div class="mtile" onclick="irPara('quotas')">
+        <span class="mtile-badge" id="badge-quotas" style="display:none;"></span>
+        <div class="mtile-ic">🧾</div>
+        <div class="mtile-t">Quotas</div>
+        <div class="mtile-s">Ver histórico e pagar</div>
+      </div>
+      <div class="mtile" onclick="irPara('reportar')">
+        <span class="mtile-badge" id="badge-oc" style="display:none;"></span>
+        <div class="mtile-ic">🛠️</div>
+        <div class="mtile-t">Ocorrências</div>
+        <div class="mtile-s">Reportar problemas</div>
+      </div>
+      <div class="mtile" onclick="irPara('contas')">
+        <div class="mtile-ic">💰</div>
+        <div class="mtile-t">Contas</div>
+        <div class="mtile-s">Do condomínio</div>
+      </div>
+      <div class="mtile" onclick="irPara('docs')">
+        <span class="mtile-badge" id="badge-docs" style="display:none;"></span>
+        <div class="mtile-ic">📄</div>
+        <div class="mtile-t">Documentos</div>
+        <div class="mtile-s">Atas, seguros, regulamento</div>
+      </div>
     </div>
+
+    <div class="sec-h">🔔 ÚLTIMAS NOTIFICAÇÕES</div>
+    <div id="h-feed"><div class="skel">A carregar…</div></div>
+
     <a id="h-link-ficha" href="#" style="display:block;text-align:center;margin-top:18px;font-size:12.5px;color:var(--t2);text-decoration:none;padding:13px;border:1px dashed var(--b2);border-radius:12px;">✏️ Atualizar os meus dados (NIF, contacto, morada)</a>
     <div class="rodape">Este portal mostra apenas os dados da sua fração.<br>COND.OS 2059 · Gestão de Condomínios</div>
   </div>
@@ -186,6 +218,12 @@
     <button id="nav-docs" onclick="irPara('docs')"><span class="ni">📄</span>Docs</button>
     <button id="nav-reportar" onclick="irPara('reportar')"><span class="ni">🛠️</span>Reportar</button>
   </div>
+
+  <div id="modal-ass" style="display:none;position:fixed;inset:0;z-index:50;background:rgba(4,8,16,.7);backdrop-filter:blur(3px);align-items:flex-end;justify-content:center;">
+    <div style="width:100%;max-width:480px;background:var(--card);border:1px solid var(--b2);border-radius:20px 20px 0 0;padding:22px 18px calc(22px + env(safe-area-inset-bottom));animation:fade .2s ease;">
+      <div class="modal-body"></div>
+    </div>
+  </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -238,55 +276,101 @@ async function iniciar() {
     hs.textContent=eur(divida); hs.style.color='var(--red)'; hs.style.textShadow='0 0 16px rgba(255,84,112,.25)';
     hsub.textContent = d.n_quotas_divida + ' quota(s) em atraso — contacte a administração para regularizar';
   }
-  carregarDestaque();
+  // Badge de quotas em dívida no quadrado
+  if (divida > 0.005) {
+    const bq = document.getElementById('badge-quotas');
+    bq.textContent = d.n_quotas_divida; bq.className = 'mtile-badge amber'; bq.style.display = 'block';
+  }
+
+  carregarFeed();
 }
 
-async function carregarDestaque() {
-  const box = document.getElementById('h-destaque');
-  let html = '';
+// ===== FEED de notificações do Início + badges dos quadrados =====
+async function carregarFeed() {
+  const box = document.getElementById('h-feed');
+  const itens = [];
+
+  // Próxima assembleia → notificação + guardar para o botão de presença
   const ra = await sb.rpc('portal_proxima_assembleia', { p_token: token });
   if (!ra.error && ra.data && ra.data.length) {
     const a = ra.data[0];
     window._assembleiaId = a.assembleia_id;
-    const dataFmt = a.data_assembleia ? new Date(a.data_assembleia).toLocaleDateString('pt-PT',{weekday:'long',day:'numeric',month:'long'}) : 'data a confirmar';
+    window._assembleiaConf = a.presenca_confirmada;
+    const dataFmt = a.data_assembleia ? new Date(a.data_assembleia).toLocaleDateString('pt-PT',{day:'numeric',month:'long'}) : 'data a confirmar';
     const conf = a.presenca_confirmada;
-    let estadoLinha = '';
-    if (conf) {
-      const t = conf==='presente'?'✅ Confirmaste que vais':(conf==='representado'?'📜 Vais fazer-te representar':'❌ Confirmaste que não vais');
-      estadoLinha = '<div style="font-size:11.5px;color:var(--cyan);font-weight:600;margin-top:8px;">'+t+' · podes alterar</div>';
-    }
-    html += '<div class="card" style="border-color:rgba(0,212,255,.3);">' +
-      '<div style="display:flex;align-items:center;gap:8px;"><span style="font-size:18px;">📅</span><div><div style="font-size:14px;font-weight:700;">'+(a.tipo||'Assembleia')+'</div><div style="font-size:11.5px;color:var(--cyan);text-transform:capitalize;">'+dataFmt+'</div></div></div>' +
-      (a.local_assembleia?'<div style="font-size:11.5px;color:var(--t2);margin-top:6px;">📍 '+a.local_assembleia+'</div>':'') +
-      (a.ordem_trabalhos?'<div style="font-size:11px;color:var(--t3);margin-top:8px;white-space:pre-line;max-height:90px;overflow-y:auto;border-top:1px solid var(--b);padding-top:7px;">'+a.ordem_trabalhos.substring(0,400)+'</div>':'') +
-      estadoLinha +
-      '<div style="font-size:11px;color:var(--t2);margin:12px 0 6px;">Vais participar?</div>' +
-      '<div class="btn-sec">' +
-        '<button onclick="confirmarPresenca(\'presente\')" style="border-color:rgba(34,229,132,.4);color:var(--green);">✅ Vou</button>' +
-        '<button onclick="confirmarPresenca(\'representado\')" style="border-color:rgba(167,139,250,.4);color:var(--purple);">📜 Procuração</button>' +
-        '<button onclick="confirmarPresenca(\'ausente\')" style="border-color:rgba(255,84,112,.4);color:var(--red);">❌ Não vou</button>' +
-      '</div>' +
-      '<div class="msg-ok" id="a-ok">✅ Presença registada! A administração já sabe.</div>' +
-      '</div>';
+    const sub = conf
+      ? (conf==='presente'?'Confirmaste que vais':(conf==='representado'?'Vais fazer-te representar':'Confirmaste que não vais')) + ' · toca para alterar'
+      : (a.local_assembleia||'') + ' · confirma a tua presença';
+    itens.push({ ic:'📅', cor:'rgba(0,212,255,.14)', t:(a.tipo||'Assembleia')+' — '+dataFmt, s:sub, quando:'brevemente', onclick:"abrirAssembleia()" });
   }
+
+  // Ocorrências reportadas → notificação + badge
   const ro = await sb.rpc('portal_minhas_ocorrencias', { p_token: token });
+  let abertas = [];
   if (!ro.error && ro.data) {
-    const abertas = ro.data.filter(o => o.estado !== 'resolvida' && o.estado !== 'fechada');
-    abertas.slice(0,2).forEach(function(o){
-      html += '<div class="li"><div class="est" style="background:rgba(255,179,0,.12);">🛠️</div>' +
-        '<div class="m"><div class="t">'+categoriaLabel(o.categoria)+'</div><div class="s">'+(o.local_ocorrencia||'')+' · reportado '+tempoRelativo(o.criado_em)+'</div></div>' +
-        '<span class="badge '+estadoClasse(o.estado)+'">'+estadoLabel(o.estado)+'</span></div>';
+    abertas = ro.data.filter(o => o.estado !== 'resolvida' && o.estado !== 'fechada');
+    if (abertas.length) {
+      const bo = document.getElementById('badge-oc');
+      bo.textContent = abertas.length; bo.style.display = 'block';
+    }
+    ro.data.slice(0,2).forEach(function(o){
+      const resolv = (o.estado==='resolvida'||o.estado==='fechada');
+      itens.push({ ic: resolv?'✅':'🛠️', cor: resolv?'rgba(34,229,132,.14)':'rgba(255,179,0,.14)',
+        t: (resolv?'Resolvida: ':'Em curso: ') + categoriaLabel(o.categoria), s:(o.local_ocorrencia||'')||o.descricao.substring(0,40), quando:tempoRelativo(o.criado_em), onclick:"irPara('reportar')" });
     });
   }
-  box.innerHTML = html || '<div class="empty">Nada urgente de momento. Está tudo em ordem! ✨</div>';
+
+  // Últimos documentos → notificação + badge
+  const rd = await sb.rpc('portal_documentos', { p_token: token });
+  if (!rd.error && rd.data && rd.data.length) {
+    const bd = document.getElementById('badge-docs');
+    bd.textContent = rd.data.length > 9 ? '9+' : rd.data.length; bd.className = 'mtile-badge amber'; bd.style.display = 'block';
+    const dd = rd.data[0];
+    itens.push({ ic:'📄', cor:'rgba(0,212,255,.1)', t:'Novo documento disponível', s:dd.nome||dd.categoria, quando: dd.data_documento?tempoRelativo(dd.data_documento):'', onclick:"irPara('docs')" });
+  }
+
+  if (!itens.length) { box.innerHTML = '<div class="empty">Sem notificações. Está tudo em ordem! ✨</div>'; return; }
+  box.innerHTML = itens.map(function(n){
+    return '<div class="li" style="cursor:pointer;" onclick="'+n.onclick+'">' +
+      '<div class="est" style="background:'+n.cor+';">'+n.ic+'</div>' +
+      '<div class="m"><div class="t">'+n.t+'</div><div class="s">'+n.s+'</div></div>' +
+      (n.quando?'<div style="font-size:10px;color:var(--t3);white-space:nowrap;">'+n.quando+'</div>':'') +
+      '</div>';
+  }).join('');
 }
+
+// Abrir a aba reportar não serve p/ assembleia — mostramos a assembleia dentro de um modal simples no Início
+function abrirAssembleia() {
+  if (!window._assembleiaId) return;
+  const conf = window._assembleiaConf;
+  let estadoLinha = '';
+  if (conf) {
+    const t = conf==='presente'?'✅ Confirmaste que vais':(conf==='representado'?'📜 Vais fazer-te representar':'❌ Confirmaste que não vais');
+    estadoLinha = '<div style="font-size:12px;color:var(--cyan);font-weight:600;margin:10px 0;">'+t+'</div>';
+  }
+  const m = document.getElementById('modal-ass');
+  m.querySelector('.modal-body').innerHTML =
+    '<div style="font-size:16px;font-weight:800;margin-bottom:4px;">Confirmar presença</div>' +
+    '<div style="font-size:12px;color:var(--t2);margin-bottom:14px;">A administração precisa de saber quem vem para preparar a assembleia.</div>' +
+    estadoLinha +
+    '<div class="btn-sec" style="flex-direction:column;">' +
+      '<button onclick="confirmarPresenca(\'presente\')" style="border-color:rgba(34,229,132,.4);color:var(--green);">✅ Vou estar presente</button>' +
+      '<button onclick="confirmarPresenca(\'representado\')" style="border-color:rgba(167,139,250,.4);color:var(--purple);margin-top:8px;">📜 Vou fazer-me representar (procuração)</button>' +
+      '<button onclick="confirmarPresenca(\'ausente\')" style="border-color:rgba(255,84,112,.4);color:var(--red);margin-top:8px;">❌ Não vou poder ir</button>' +
+    '</div>' +
+    '<div class="msg-ok" id="a-ok">✅ Presença registada! A administração já sabe.</div>' +
+    '<button onclick="fecharModal()" style="width:100%;background:none;border:none;color:var(--t3);font-size:12px;margin-top:14px;cursor:pointer;">Fechar</button>';
+  m.style.display = 'flex';
+}
+function fecharModal() { document.getElementById('modal-ass').style.display = 'none'; }
 
 async function confirmarPresenca(estado) {
   if (!window._assembleiaId) return;
   const res = await sb.rpc('portal_confirmar_presenca', { p_token: token, p_assembleia: window._assembleiaId, p_estado: estado });
   if (res.error || res.data === false) { alert('Não foi possível registar. Tenta de novo.'); return; }
+  window._assembleiaConf = estado;
   const ok = document.getElementById('a-ok'); if (ok) ok.style.display = 'block';
-  setTimeout(carregarDestaque, 1200);
+  setTimeout(function(){ fecharModal(); carregarFeed(); }, 1100);
 }
 
 async function carregarQuotas() {
