@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.06-1244</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.06-2147</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -14256,8 +14256,10 @@ async function atualizarBadgeMensagens() {
   var res = await sb.from('mensagens').select('id', {count:'exact', head:true})
     .eq('condominio_id', currentCondo.id).eq('autor','condomino').eq('lida_admin', false);
   var b = document.getElementById('nb-msg');
-  if (b) { if ((res.count||0) > 0) { b.textContent = res.count; b.style.display=''; } else b.style.display='none'; }
+  if (b) { if ((res.count||0) > 0) { b.textContent = res.count; b.style.display='inline-block'; } else b.style.display='none'; }
 }
+// Verificar mensagens novas a cada 30s (para o admin ver sem recarregar)
+if (!window._msgInterval) { window._msgInterval = setInterval(function(){ if (currentCondo) atualizarBadgeMensagens(); }, 30000); }
 
 function escaparHtml(s){ var d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
 
