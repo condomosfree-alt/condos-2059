@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.07-1636</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.07-1639</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -7240,6 +7240,7 @@ async function deleteDoc(id) {
 
 // ===== SALA DA ASSEMBLEIA — Livro de Atos Imutável =====
 var _salaAssembleia = null;   // assembleia atual aberta na sala
+var _salaPresencaOrigem = {}; // origem de cada presença (portal vs manual)
 var _salaPontos = [];         // ordem de trabalhos parseada
 var _salaPontoAtual = 0;
 var _salaPresencas = {};      // fracao_id -> estado
@@ -7280,7 +7281,8 @@ async function abrirSalaAssembleia(assembleiaId) {
   // Carregar presenças existentes
   _salaPresencas = {};
   var pRes = await sb.from('assembleia_presencas').select('*').eq('assembleia_id', assembleiaId);
-  (pRes.data || []).forEach(function(p){ _salaPresencas[p.fracao_id] = p.estado; });
+  _salaPresencaOrigem = {};
+  (pRes.data || []).forEach(function(p){ _salaPresencas[p.fracao_id] = p.estado; if (p.origem) _salaPresencaOrigem[p.fracao_id] = p.origem; });
 
   // Carregar votos existentes
   _salaVotos = {};
@@ -7396,14 +7398,20 @@ function salaTab(tab) {
 }
 
 function renderSalaPresencas() {
+  // Contar pré-confirmações do portal
+  var preConf = Object.keys(_salaPresencaOrigem).filter(function(fid){ return _salaPresencaOrigem[fid]==='portal'; });
   var html = '<div style="max-height:340px;overflow-y:auto;">';
+  if (preConf.length) {
+    html += '<div style="background:rgba(0,212,255,.08);border:1px solid rgba(0,212,255,.25);border-radius:8px;padding:9px 13px;margin-bottom:10px;font-size:11.5px;color:var(--cyan);">📱 ' + preConf.length + ' condómino(s) pré-confirmaram a presença através do portal (marcados com 📱 abaixo). Confirma-os na sala quando chegarem.</div>';
+  }
   html += '<table class="tbl"><thead><tr><th>Fração</th><th>Condómino</th><th>Permilagem</th><th>Estado</th></tr></thead><tbody>';
   fracoes.forEach(function(f){
     var estado = _salaPresencas[f.id] || 'ausente';
     var bloqueado = (_salaAssembleia.estado_sessao === 'encerrada');
+    var viaPortal = _salaPresencaOrigem[f.id] === 'portal';
     html += '<tr>';
     html += '<td class="apt">' + (f.codigo||'—') + (f.bloco?' <span style="font-size:9px;color:var(--t3)">B'+f.bloco+'</span>':'') + '</td>';
-    html += '<td style="font-size:12px;">' + (f.proprietario_nome||'—') + '</td>';
+    html += '<td style="font-size:12px;">' + (f.proprietario_nome||'—') + (viaPortal?' <span title="Pré-confirmou pelo portal" style="font-size:10px;color:var(--cyan);">📱</span>':'') + '</td>';
     html += '<td class="mn" style="font-size:11px;">' + parseFloat(f.permilagem||0).toFixed(1) + '‰</td>';
     html += '<td><div style="display:flex;gap:3px;">';
     [['presente','Presente','var(--green)'],['representado','Repr.','var(--cyan)'],['ausente','Ausente','var(--t3)']].forEach(function(op){
