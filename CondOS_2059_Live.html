@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.06-2147</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.07-1052</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -608,6 +608,12 @@ textarea.fi{resize:vertical;min-height:60px;}
       <span class="tb-spacer"></span>
       <button class="tb-btn" onclick="nav('ocorrencias');openModal('mo-oc')"><i class="ti ti-plus"></i>Nova Ocorrência</button>
       <button class="tb-btn" onclick="nav('assistente')"><i class="ti ti-robot"></i>IA</button>
+      <div style="position:relative;">
+        <button class="tb-btn" onclick="toggleSino()" title="Notificações" style="padding:6px 9px;position:relative;"><i class="ti ti-bell"></i><span id="sino-badge" style="display:none;position:absolute;top:-3px;right:-3px;min-width:16px;height:16px;background:#f87171;color:#fff;font-size:9px;font-weight:700;border-radius:8px;align-items:center;justify-content:center;padding:0 4px;"></span></button>
+        <div id="sino-painel" style="display:none;position:absolute;top:calc(100% + 8px);right:0;width:320px;max-height:420px;overflow-y:auto;background:var(--s1,#111d31);border:1px solid var(--border,#233350);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.5);z-index:100;">
+          <div id="painel-notif"></div>
+        </div>
+      </div>
       <span class="tb-clock" id="clock">00:00:00</span>
       <div class="tb-av" id="tb-av2" style="cursor:pointer;" onclick="nav('definicoes')">J</div>
     </div>
@@ -3600,11 +3606,48 @@ async function verificarAvisosGerais() {
     checkData(currentCondo.cisternas_prox,
       'Limpeza de cisternas em atraso', 'Limpeza de cisternas em breve',
       'A data da próxima limpeza consta no Perfil do Edifício (Manutenção).');
+
+    // 5) Ocorrências abertas por resolver
+    var ocRes = await sb.from('ocorrencias').select('id,estado,categoria').eq('condominio_id', currentCondo.id);
+    var ocAbertas = (ocRes.data||[]).filter(function(o){ return o.estado !== 'resolvida' && o.estado !== 'fechada'; });
+    if (ocAbertas.length) {
+      avisos.push({ pagina:'ocorrencias', badge:String(ocAbertas.length), cor:'#ffb300',
+        texto: ocAbertas.length + ' ocorrência(s) por resolver',
+        detalhe:'Há problemas reportados à espera de tratamento. Alguns podem ter vindo do portal dos condóminos.' });
+    }
+
+    // 6) Mensagens não lidas de condóminos
+    var msgRes = await sb.from('mensagens').select('id', {count:'exact', head:true}).eq('condominio_id', currentCondo.id).eq('autor','condomino').eq('lida_admin', false);
+    if ((msgRes.count||0) > 0) {
+      avisos.push({ pagina:'mensagens', badge:String(msgRes.count), cor:'#f87171',
+        texto: msgRes.count + ' mensagem(ns) por responder',
+        detalhe:'Condóminos escreveram-te pelo portal e aguardam resposta.' });
+    }
+
+    // 7) Assembleia a chegar + pré-confirmações de presença do portal
+    var asRes = await sb.from('assembleias').select('id,tipo,data_assembleia,estado').eq('condominio_id', currentCondo.id).not('estado','in','(realizada,nao_realizada,cancelada)').order('data_assembleia',{ascending:true}).limit(1);
+    if (asRes.data && asRes.data.length) {
+      var prox = asRes.data[0];
+      var dataAss = prox.data_assembleia ? new Date(prox.data_assembleia) : null;
+      var diasAte = dataAss ? Math.ceil((dataAss - agora)/(24*60*60*1000)) : null;
+      // presenças confirmadas pelo portal
+      var presRes = await sb.from('assembleia_presencas').select('id,estado,origem').eq('assembleia_id', prox.id).eq('origem','portal');
+      var nConf = (presRes.data||[]).length;
+      if (diasAte !== null && diasAte >= 0 && diasAte <= 15) {
+        avisos.push({ pagina:'assembleias', badge:'!', cor:'#00d4ff',
+          texto: 'Assembleia ' + (prox.tipo||'') + ' em ' + (diasAte===0?'HOJE':(diasAte+' dia(s)')),
+          detalhe: (nConf>0 ? nConf + ' condómino(s) já confirmaram presença pelo portal. ' : '') + 'Prepara a ordem de trabalhos e a convocatória.' });
+      } else if (nConf > 0) {
+        avisos.push({ pagina:'assembleias', badge:String(nConf), cor:'#00d4ff',
+          texto: nConf + ' pré-confirmação(ões) de presença',
+          detalhe:'Condóminos confirmaram presença na próxima assembleia através do portal.' });
+      }
+    }
   } catch(e) { console.error('verificarAvisosGerais:', e); }
 
   _avisosGerais = avisos;
 
-  // Badges no menu lateral
+  // Badges no menu lateral (badge-* e também os nb-* das ocorrências/mensagens)
   ['quotas','orcamento','edificio'].forEach(function(p){
     var b = document.getElementById('badge-'+p);
     if (!b) return;
@@ -3616,14 +3659,31 @@ async function verificarAvisosGerais() {
       b.title = av.map(function(a){ return a.texto; }).join(' · ');
     } else { b.style.display = 'none'; }
   });
+  // Badges nos menus com 'nb-' (ocorrências, mensagens, assembleias)
+  [['ocorrencias','nb-oc'],['mensagens','nb-msg'],['assembleias','badge-assembleias']].forEach(function(par){
+    var b = document.getElementById(par[1]);
+    if (!b) return;
+    var av = avisos.filter(function(a){ return a.pagina===par[0]; });
+    if (av.length) { b.style.display='inline-block'; b.textContent=av[0].badge; b.style.background=av[0].cor; }
+    else { b.style.display='none'; }
+  });
+
+  // Sino global no topo — total de avisos
+  var sinoBadge = document.getElementById('sino-badge');
+  if (sinoBadge) {
+    if (avisos.length) { sinoBadge.textContent = avisos.length; sinoBadge.style.display='flex'; }
+    else sinoBadge.style.display='none';
+  }
+  renderPainelNotificacoes(avisos);
 
   // Bloco "precisa da tua atenção" no dashboard
   var dash = document.getElementById('avisos-gerais-dash');
   if (dash) {
-    if (!avisos.length) { dash.innerHTML = ''; }
-    else {
+    if (!avisos.length) {
+      dash.innerHTML = '<div style="background:rgba(34,229,132,.05);border:1px solid rgba(34,229,132,.18);border-radius:10px;padding:14px 16px;margin-bottom:16px;font-size:12px;color:var(--green);">✅ Está tudo em ordem — sem pendências de momento.</div>';
+    } else {
       var html = '<div style="background:rgba(255,179,0,.06);border:1px solid rgba(255,179,0,.25);border-radius:10px;padding:14px 16px;margin-bottom:16px;">';
-      html += '<div style="font-size:12px;font-weight:700;color:var(--amber);">⚠️ PRECISA DA TUA ATENÇÃO</div>';
+      html += '<div style="font-size:12px;font-weight:700;color:var(--amber);">⚠️ PRECISA DA TUA ATENÇÃO <span style="color:var(--t3);font-weight:400;">· ' + avisos.length + ' item(ns)</span></div>';
       avisos.forEach(function(a){
         html += '<div style="display:flex;align-items:center;gap:10px;padding:9px 0 7px;border-bottom:1px solid rgba(255,179,0,.12);cursor:pointer;" onclick="nav(\'' + a.pagina + '\')">';
         html += '<span style="min-width:18px;height:18px;line-height:18px;text-align:center;border-radius:9px;background:' + a.cor + ';color:#fff;font-size:10px;font-weight:700;">' + a.badge + '</span>';
@@ -3634,6 +3694,31 @@ async function verificarAvisosGerais() {
       dash.innerHTML = html;
     }
   }
+}
+
+// Painel de notificações do sino (topo)
+function renderPainelNotificacoes(avisos) {
+  var painel = document.getElementById('painel-notif');
+  if (!painel) return;
+  if (!avisos || !avisos.length) {
+    painel.innerHTML = '<div style="padding:24px 18px;text-align:center;color:var(--t3);font-size:12px;">✅ Sem notificações.<br>Está tudo em ordem!</div>';
+    return;
+  }
+  var html = '<div style="padding:12px 16px;border-bottom:1px solid var(--border);font-size:12px;font-weight:700;color:var(--text);">🔔 Notificações <span style="color:var(--t3);font-weight:400;">· ' + avisos.length + '</span></div>';
+  avisos.forEach(function(a){
+    html += '<div style="display:flex;align-items:flex-start;gap:10px;padding:11px 16px;border-bottom:1px solid var(--border);cursor:pointer;" onclick="nav(\'' + a.pagina + '\');toggleSino(true);">';
+    html += '<span style="min-width:8px;height:8px;border-radius:50%;background:' + a.cor + ';margin-top:5px;"></span>';
+    html += '<div style="flex:1;"><div style="font-size:12px;font-weight:600;color:var(--text);">' + a.texto + '</div><div style="font-size:11px;color:var(--t3);margin-top:2px;line-height:1.4;">' + a.detalhe + '</div></div>';
+    html += '</div>';
+  });
+  painel.innerHTML = html;
+}
+
+function toggleSino(forcar) {
+  var p = document.getElementById('sino-painel');
+  if (!p) return;
+  if (forcar === true) { p.style.display = 'none'; return; }
+  p.style.display = (p.style.display === 'block') ? 'none' : 'block';
 }
 
 async function loadCondData() {
@@ -14332,6 +14417,7 @@ function confirmar(msg, opts) {
   });
 }
 document.addEventListener('click',e=>{if(e.target.classList.contains('mo'))e.target.classList.remove('open');});
+document.addEventListener('click',function(e){ var p=document.getElementById('sino-painel'); if(p&&p.style.display==='block'&&!e.target.closest('#sino-painel')&&!e.target.closest('[onclick*="toggleSino"]')) p.style.display='none'; });
 function showErr(el,msg){el.textContent=msg;el.style.display='block';}
 function emptyState(ico,title,sub){return `<div class="empty"><i class="ti ${ico}"></i><div class="empty-title">${title}</div>${sub?`<div class="empty-sub">${sub}</div>`:''}</div>`;}
 function toast(msg,type){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+(type||'');t.classList.add('show');setTimeout(()=>t.classList.remove('show'),3200);}
