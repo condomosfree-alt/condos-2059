@@ -476,13 +476,37 @@ async function carregarDocumentos() {
 
 async function carregarHistOcorrencias() {
   const cont = document.getElementById('r-hist');
-  const res = await sb.rpc('portal_minhas_ocorrencias', { p_token: token });
+  const res = await sb.rpc('portal_ocorrencias_ativas', { p_token: token });
   if (res.error || !res.data || !res.data.length) { cont.innerHTML = '<div class="empty">Ainda não reportaste nada.</div>'; return; }
+  const estLabel = { aberta:'Recebida', parceiro_contactado:'Parceiro contactado', aguarda_orcamento:'A aguardar orçamento', aguarda_votacao:'Em votação', aprovada:'Aprovada', em_reparacao:'Em reparação', resolvida:'Resolvida' };
   cont.innerHTML = res.data.map(function(o){
-    return '<div class="li"><div class="est" style="background:rgba(0,212,255,.08);">'+categoriaIcon(o.categoria)+'</div>' +
-      '<div class="m"><div class="t">'+categoriaLabel(o.categoria)+'</div><div class="s">'+(o.local_ocorrencia?o.local_ocorrencia+' · ':'')+tempoRelativo(o.criado_em)+'</div></div>' +
-      '<span class="badge '+estadoClasse(o.estado)+'">'+estadoLabel(o.estado)+'</span></div>';
+    let html = '<div class="li" style="flex-direction:column;align-items:stretch;gap:8px;">';
+    html += '<div style="display:flex;align-items:center;gap:12px;">';
+    html += '<div class="est" style="background:rgba(0,212,255,.08);">'+categoriaIcon(o.categoria)+'</div>';
+    html += '<div class="m"><div class="t">'+categoriaLabel(o.categoria)+'</div><div class="s">'+(o.local_ocorrencia?o.local_ocorrencia+' · ':'')+tempoRelativo(o.criado_em)+'</div></div>';
+    html += '<span class="badge '+estadoClasse(o.estado)+'">'+(estLabel[o.estado]||o.estado)+'</span>';
+    html += '</div>';
+    // Se precisa de votação, mostrar os botões
+    if (o.precisa_votacao && o.estado === 'aguarda_votacao') {
+      html += '<div style="background:rgba(255,179,0,.08);border:1px solid rgba(255,179,0,.25);border-radius:8px;padding:10px;">';
+      html += '<div style="font-size:11.5px;color:var(--amber);font-weight:600;margin-bottom:6px;">🗳️ Aprovas esta reparação'+(o.orcamento_valor?' ('+parseFloat(o.orcamento_valor).toFixed(2).replace('.',',')+'€)':'')+'?</div>';
+      if (o.meu_voto) {
+        html += '<div style="font-size:11px;color:var(--cyan);">Já votaste: <strong>'+(o.meu_voto==='sim'?'✅ A favor':'❌ Contra')+'</strong> · podes alterar</div>';
+      }
+      html += '<div style="display:flex;gap:8px;margin-top:6px;">';
+      html += '<button onclick="votarOcorrencia(\''+o.id+'\',\'sim\')" style="flex:1;background:rgba(34,229,132,.12);border:1px solid rgba(34,229,132,.4);color:var(--green);border-radius:8px;padding:9px;font-size:12px;font-weight:700;cursor:pointer;">✅ A favor</button>';
+      html += '<button onclick="votarOcorrencia(\''+o.id+'\',\'nao\')" style="flex:1;background:rgba(255,84,112,.12);border:1px solid rgba(255,84,112,.4);color:var(--red);border-radius:8px;padding:9px;font-size:12px;font-weight:700;cursor:pointer;">❌ Contra</button>';
+      html += '</div></div>';
+    }
+    html += '</div>';
+    return html;
   }).join('');
+}
+
+async function votarOcorrencia(id, voto) {
+  const res = await sb.rpc('portal_votar_ocorrencia', { p_token: token, p_ocorrencia: id, p_voto: voto });
+  if (res.error || res.data === false) { alert('Não foi possível registar o voto.'); return; }
+  carregarHistOcorrencias();
 }
 
 async function reportar() {
