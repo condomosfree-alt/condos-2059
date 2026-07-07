@@ -71,6 +71,7 @@ textarea.fi{resize:vertical;min-height:60px;}
 .sb-nav{flex:1;overflow-y:auto;padding:10px 8px;}
 .nav-section{font-size:9px;color:var(--t3);letter-spacing:1.5px;text-transform:uppercase;padding:8px 8px 4px;}
 .ni{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;cursor:pointer;color:var(--t2);font-size:12px;font-weight:500;transition:all .15s;position:relative;margin-bottom:1px;}
+.mic{width:18px;display:inline-flex;align-items:center;justify-content:center;font-size:14px;line-height:1;filter:grayscale(.2);}
 .ni:hover{background:var(--s2);color:var(--text);}
 .ni.active{background:var(--cdim);color:var(--cyan);}
 .ni i{font-size:16px;width:18px;}
@@ -552,7 +553,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.07-1648</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.07-1655</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -563,27 +564,27 @@ textarea.fi{resize:vertical;min-height:60px;}
     </div>
     <nav class="sb-nav">
       <div class="nav-section">Principal</div>
-      <div class="ni active" onclick="nav('dashboard')"><i class="ti ti-dashboard"></i><span>Dashboard</span></div>
-      <div class="ni" onclick="nav('edificio')"><i class="ti ti-home-2"></i><span>Perfil do Edifício</span><span id="badge-edificio" style="display:none;margin-left:auto;background:#f87171;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;line-height:16px;text-align:center;border-radius:8px;padding:0 4px;"></span></div>
-      <div class="ni" onclick="nav('fracoes')"><i class="ti ti-building"></i><span>Frações</span><span class="nb" id="nb-fracoes"></span></div>
-      <div class="ni" onclick="nav('quotas')"><i class="ti ti-receipt"></i><span>Quotas</span><span class="nb" id="nb-quotas"></span><span id="badge-quotas" style="display:none;margin-left:auto;background:#f87171;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;line-height:16px;text-align:center;border-radius:8px;padding:0 4px;"></span></div>
-      <div class="ni" onclick="nav('financeiro')"><i class="ti ti-cash"></i><span>Financeiro</span></div>
-      <div class="ni" onclick="nav('orcamento')"><i class="ti ti-calculator"></i><span>Orçamento</span><span id="badge-orcamento" style="display:none;margin-left:auto;background:#f87171;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;line-height:16px;text-align:center;border-radius:8px;padding:0 4px;"></span></div>
-      <div class="ni" onclick="nav('despesas')"><i class="ti ti-tools"></i><span>Despesas</span><span class="nb" id="nb-despesas"></span></div>
-      <div class="ni" onclick="nav('contas')"><i class="ti ti-report-money"></i><span>Contas</span></div>
-      <div class="ni" onclick="nav('auditoria')"><i class="ti ti-zoom-money"></i><span>Raio-X das Contas</span></div>
+      <div class="ni active" onclick="nav('dashboard')"><span class="mic">📊</span><span>Dashboard</span></div>
+      <div class="ni" onclick="nav('edificio')"><span class="mic">🏢</span><span>Perfil do Edifício</span><span id="badge-edificio" style="display:none;margin-left:auto;background:#f87171;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;line-height:16px;text-align:center;border-radius:8px;padding:0 4px;"></span></div>
+      <div class="ni" onclick="nav('fracoes')"><span class="mic">🏠</span><span>Frações</span><span class="nb" id="nb-fracoes"></span></div>
+      <div class="ni" onclick="nav('quotas')"><span class="mic">🧾</span><span>Quotas</span><span class="nb" id="nb-quotas"></span><span id="badge-quotas" style="display:none;margin-left:auto;background:#f87171;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;line-height:16px;text-align:center;border-radius:8px;padding:0 4px;"></span></div>
+      <div class="ni" onclick="nav('financeiro')"><span class="mic">💵</span><span>Financeiro</span></div>
+      <div class="ni" onclick="nav('orcamento')"><span class="mic">🧮</span><span>Orçamento</span><span id="badge-orcamento" style="display:none;margin-left:auto;background:#f87171;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;line-height:16px;text-align:center;border-radius:8px;padding:0 4px;"></span></div>
+      <div class="ni" onclick="nav('despesas')"><span class="mic">🔧</span><span>Despesas</span><span class="nb" id="nb-despesas"></span></div>
+      <div class="ni" onclick="nav('contas')"><span class="mic">💰</span><span>Contas</span></div>
+      <div class="ni" onclick="nav('auditoria')"><span class="mic">🔍</span><span>Raio-X das Contas</span></div>
       <div class="nav-section">Gestão</div>
-      <div class="ni" onclick="nav('condominos')"><i class="ti ti-users"></i><span>Condóminos</span><span class="nb" id="nb-cond"></span></div>
-      <div class="ni" onclick="nav('ocorrencias')"><i class="ti ti-alert-triangle"></i><span>Ocorrências</span><span class="nb" id="nb-oc"></span></div>
-      <div class="ni" onclick="nav('mensagens')"><span style="width:16px;display:inline-block;text-align:center;">💬</span><span>Mensagens</span><span class="nb" id="nb-msg" style="background:#f87171;"></span></div>
-      <div class="ni" onclick="nav('parceiros')"><i class="ti ti-tool"></i><span>Parceiros</span></div>
-      <div class="ni" onclick="nav('documentos')"><i class="ti ti-file-text"></i><span>Documentos</span></div>
-      <div class="ni" onclick="nav('assembleias')"><i class="ti ti-speakerphone"></i><span>Assembleias</span><span id="badge-assembleias" style="display:none;margin-left:auto;background:#f87171;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;line-height:16px;text-align:center;border-radius:8px;padding:0 4px;"></span></div>
+      <div class="ni" onclick="nav('condominos')"><span class="mic">👥</span><span>Condóminos</span><span class="nb" id="nb-cond"></span></div>
+      <div class="ni" onclick="nav('ocorrencias')"><span class="mic">⚠️</span><span>Ocorrências</span><span class="nb" id="nb-oc"></span></div>
+      <div class="ni" onclick="nav('mensagens')"><span class="mic">💬</span><span>Mensagens</span><span class="nb" id="nb-msg" style="background:#f87171;"></span></div>
+      <div class="ni" onclick="nav('parceiros')"><span class="mic">🤝</span><span>Parceiros</span></div>
+      <div class="ni" onclick="nav('documentos')"><span class="mic">📄</span><span>Documentos</span></div>
+      <div class="ni" onclick="nav('assembleias')"><span class="mic">🗳️</span><span>Assembleias</span><span id="badge-assembleias" style="display:none;margin-left:auto;background:#f87171;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;line-height:16px;text-align:center;border-radius:8px;padding:0 4px;"></span></div>
       <div class="nav-section">IA</div>
-      <div class="ni" onclick="nav('assistente')"><i class="ti ti-robot"></i><span>Assistente IA</span><span class="nb" id="nb-ia">IA</span></div>
+      <div class="ni" onclick="nav('assistente')"><span class="mic">🤖</span><span>Assistente IA</span><span class="nb" id="nb-ia">IA</span></div>
       <div class="nav-section">Sistema</div>
-      <div class="ni" onclick="nav('definicoes')"><i class="ti ti-settings"></i><span>Definições</span></div>
-      <div class="ni" onclick="doLogout()"><i class="ti ti-logout"></i><span>Sair</span></div>
+      <div class="ni" onclick="nav('definicoes')"><span class="mic">⚙️</span><span>Definições</span></div>
+      <div class="ni" onclick="doLogout()"><span class="mic">🚪</span><span>Sair</span></div>
     </nav>
     <div class="sb-foot">
       <div class="sb-user-row">
