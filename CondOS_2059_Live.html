@@ -552,7 +552,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.07-1639</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.07-1648</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -7241,6 +7241,7 @@ async function deleteDoc(id) {
 // ===== SALA DA ASSEMBLEIA — Livro de Atos Imutável =====
 var _salaAssembleia = null;   // assembleia atual aberta na sala
 var _salaPresencaOrigem = {}; // origem de cada presença (portal vs manual)
+var _salaPortalAnuncio = {};  // o que o condómino anunciou no portal (vou/procuração/não vou)
 var _salaPontos = [];         // ordem de trabalhos parseada
 var _salaPontoAtual = 0;
 var _salaPresencas = {};      // fracao_id -> estado
@@ -7282,7 +7283,18 @@ async function abrirSalaAssembleia(assembleiaId) {
   _salaPresencas = {};
   var pRes = await sb.from('assembleia_presencas').select('*').eq('assembleia_id', assembleiaId);
   _salaPresencaOrigem = {};
-  (pRes.data || []).forEach(function(p){ _salaPresencas[p.fracao_id] = p.estado; if (p.origem) _salaPresencaOrigem[p.fracao_id] = p.origem; });
+  _salaPortalAnuncio = {};
+  (pRes.data || []).forEach(function(p){
+    if (p.origem === 'portal' && !p.confirmado_admin) {
+      // Pré-confirmação do portal: é só INTENÇÃO, não conta para quórum até o admin confirmar na sala
+      _salaPortalAnuncio[p.fracao_id] = p.estado;  // o que o condómino anunciou
+      _salaPresencas[p.fracao_id] = 'ausente';     // quórum real arranca em ausente
+      _salaPresencaOrigem[p.fracao_id] = 'portal';
+    } else {
+      _salaPresencas[p.fracao_id] = p.estado;
+      if (p.origem) _salaPresencaOrigem[p.fracao_id] = p.origem;
+    }
+  });
 
   // Carregar votos existentes
   _salaVotos = {};
@@ -7398,20 +7410,26 @@ function salaTab(tab) {
 }
 
 function renderSalaPresencas() {
-  // Contar pré-confirmações do portal
-  var preConf = Object.keys(_salaPresencaOrigem).filter(function(fid){ return _salaPresencaOrigem[fid]==='portal'; });
+  // Contar pré-confirmações do portal (ainda por confirmar na sala)
+  var preConf = Object.keys(_salaPortalAnuncio);
   var html = '<div style="max-height:340px;overflow-y:auto;">';
   if (preConf.length) {
-    html += '<div style="background:rgba(0,212,255,.08);border:1px solid rgba(0,212,255,.25);border-radius:8px;padding:9px 13px;margin-bottom:10px;font-size:11.5px;color:var(--cyan);">📱 ' + preConf.length + ' condómino(s) pré-confirmaram a presença através do portal (marcados com 📱 abaixo). Confirma-os na sala quando chegarem.</div>';
+    html += '<div style="background:rgba(0,212,255,.08);border:1px solid rgba(0,212,255,.25);border-radius:8px;padding:9px 13px;margin-bottom:10px;font-size:11.5px;color:var(--cyan);line-height:1.5;">📱 <strong>' + preConf.length + ' pré-confirmação(ões) pelo portal</strong> — isto é uma <strong>previsão</strong>, não conta para o quórum. Marca "Presente" só quando o condómino chegar mesmo à sala.</div>';
   }
-  html += '<table class="tbl"><thead><tr><th>Fração</th><th>Condómino</th><th>Permilagem</th><th>Estado</th></tr></thead><tbody>';
+  html += '<table class="tbl"><thead><tr><th>Fração</th><th>Condómino</th><th>Permilagem</th><th>Estado (quórum real)</th></tr></thead><tbody>';
   fracoes.forEach(function(f){
     var estado = _salaPresencas[f.id] || 'ausente';
     var bloqueado = (_salaAssembleia.estado_sessao === 'encerrada');
-    var viaPortal = _salaPresencaOrigem[f.id] === 'portal';
+    var anuncio = _salaPortalAnuncio[f.id];  // o que anunciou no portal (se ainda não confirmado)
+    var selo = '';
+    if (anuncio) {
+      var txt = anuncio==='presente'?'📱 disse que vem':(anuncio==='representado'?'📱 procuração':'📱 disse que não vem');
+      var cor = anuncio==='presente'?'var(--cyan)':(anuncio==='representado'?'var(--purple,#a78bfa)':'var(--t3)');
+      selo = ' <span title="Anunciou no portal — ainda não confirmado na sala" style="font-size:9.5px;color:' + cor + ';white-space:nowrap;">' + txt + '</span>';
+    }
     html += '<tr>';
     html += '<td class="apt">' + (f.codigo||'—') + (f.bloco?' <span style="font-size:9px;color:var(--t3)">B'+f.bloco+'</span>':'') + '</td>';
-    html += '<td style="font-size:12px;">' + (f.proprietario_nome||'—') + (viaPortal?' <span title="Pré-confirmou pelo portal" style="font-size:10px;color:var(--cyan);">📱</span>':'') + '</td>';
+    html += '<td style="font-size:12px;">' + (f.proprietario_nome||'—') + selo + '</td>';
     html += '<td class="mn" style="font-size:11px;">' + parseFloat(f.permilagem||0).toFixed(1) + '‰</td>';
     html += '<td><div style="display:flex;gap:3px;">';
     [['presente','Presente','var(--green)'],['representado','Repr.','var(--cyan)'],['ausente','Ausente','var(--t3)']].forEach(function(op){
@@ -7427,12 +7445,13 @@ function renderSalaPresencas() {
 
 async function marcarPresenca(fracaoId, estado) {
   _salaPresencas[fracaoId] = estado;
+  delete _salaPortalAnuncio[fracaoId];  // o admin confirmou na sala — deixa de ser só previsão
   var f = fracoes.find(function(x){ return x.id === fracaoId; });
   var perm = f ? parseFloat(f.permilagem||0) : 0;
-  // Upsert presença
+  // Upsert presença (confirmado_admin=true marca que foi validado na sala)
   await sb.from('assembleia_presencas').upsert({
     assembleia_id: _salaAssembleia.id, condominio_id: currentCondo.id,
-    fracao_id: fracaoId, estado: estado, permilagem: perm
+    fracao_id: fracaoId, estado: estado, permilagem: perm, confirmado_admin: true
   }, { onConflict: 'assembleia_id,fracao_id' });
   // Atualização CIRÚRGICA: só os KPIs e a aba de presenças (sem reconstruir o modal todo)
   atualizarKPIsQuorum();
