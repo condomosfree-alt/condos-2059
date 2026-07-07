@@ -267,7 +267,9 @@ function irPara(pg) {
   document.querySelectorAll('.nav button').forEach(b => b.classList.remove('on'));
   const map = { inicio:'pg-inicio', quotas:'pg-quotas', contas:'pg-contas', docs:'pg-docs', reportar:'pg-reportar', mensagens:'pg-mensagens' };
   document.getElementById(map[pg]).classList.add('active');
-  document.getElementById('nav-'+pg).classList.add('on');
+  var navBtn = document.getElementById('nav-'+pg);
+  if (navBtn) navBtn.classList.add('on');
+  else { var ni = document.getElementById('nav-inicio'); if (ni) ni.classList.add('on'); } // páginas sem botão próprio (ex: reportar) mantêm o Início aceso
   var cb = document.getElementById('chat-barra');
   if (cb) cb.style.display = (pg === 'mensagens') ? 'flex' : 'none';
   window.scrollTo(0,0);
