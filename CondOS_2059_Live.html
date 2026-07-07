@@ -553,7 +553,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.07-1655</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.07-1701</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -8015,6 +8015,25 @@ async function obterProximoNumeroAta() {
   return { numero: numUltima + 1, provisorio: provisorio };
 }
 
+// Liga a ata gerada ao módulo Documentos (e daí ao portal do condómino)
+async function registarAtaNoDocumentos() {
+  if (!_salaAssembleia || !_salaAssembleia.numero_ata) return;
+  var nomeDoc = 'Ata n.º ' + _salaAssembleia.numero_ata + (_salaAssembleia.tipo ? ' — ' + _salaAssembleia.tipo : '');
+  var dataDoc = _salaAssembleia.data_assembleia || new Date().toISOString().split('T')[0];
+  try {
+    // Evitar duplicados: já existe um documento para esta ata?
+    var jaHa = await sb.from('documentos').select('id').eq('condominio_id', currentCondo.id).eq('categoria', 'Ata').ilike('nome', 'Ata n.º ' + _salaAssembleia.numero_ata + '%');
+    if (jaHa.data && jaHa.data.length) return; // já registada
+    await sb.from('documentos').insert({
+      condominio_id: currentCondo.id,
+      nome: nomeDoc,
+      categoria: 'Ata',
+      data_documento: dataDoc
+    });
+    toast('📄 Ata registada nos Documentos (disponível no portal dos condóminos)', 'ok');
+  } catch(e) { console.error('registarAtaNoDocumentos:', e); }
+}
+
 async function gerarAtaDoLivro() {
   var res = await sb.from('assembleia_eventos').select('*').eq('assembleia_id', _salaAssembleia.id).order('registado_em', { ascending: true });
   var eventos = res.data || [];
@@ -8081,6 +8100,7 @@ async function gerarAtaDoLivro() {
     _salaAssembleia.ata_texto = ata;
     _salaAssembleia.ata_gerada_ia = true;
     _salaAssembleia.numero_ata = numeroAta;
+    await registarAtaNoDocumentos();
     renderAtaGerada(ata);
   } catch(err) {
     cont.innerHTML = '<div style="padding:30px;text-align:center;color:var(--t2);"><i class="ti ti-alert-circle" style="font-size:28px;color:var(--amber);"></i><div style="margin-top:10px;">Não foi possível gerar a ata agora.</div><div style="font-size:11px;color:var(--t3);margin-top:6px;">' + err.message + '</div><button class="btn-ghost" style="margin-top:14px;" onclick="renderSala()">Voltar</button></div>';
