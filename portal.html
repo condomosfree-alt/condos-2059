@@ -208,34 +208,52 @@
   </div>
 
   <div class="page" id="pg-reportar">
-    <div class="ptitle">Reportar um problema</div>
-    <div class="psub">Viste uma avaria nas partes comuns? A administração recebe de imediato.</div>
-    <div class="card">
-      <label>Tipo de problema</label>
-      <select id="r-cat">
-        <option value="avaria">Avaria (elevador, luz, porta…)</option>
-        <option value="agua">Água / infiltração</option>
-        <option value="limpeza">Limpeza</option>
-        <option value="seguranca">Segurança</option>
-        <option value="barulho">Barulho / vizinhança</option>
-        <option value="outro">Outro</option>
-      </select>
-      <label>Onde? (local)</label>
-      <input id="r-local" placeholder="Ex: entrada bloco A, garagem, 2.º piso…">
-      <label>Descreve o problema</label>
-      <textarea id="r-desc" placeholder="O que se passa? Desde quando?"></textarea>
-      <button class="btn" id="r-btn" onclick="reportar()">Enviar à administração</button>
-      <div class="msg-ok" id="r-ok">✅ Recebido! A administração foi notificada.</div>
-      <div class="msg-err" id="r-err"></div>
+    <!-- VISTA LISTA -->
+    <div id="oc-vista-lista">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+        <div class="ptitle">Ocorrências</div>
+        <button onclick="ocVista('nova')" style="background:linear-gradient(135deg,var(--cyan),var(--cyan2));border:none;border-radius:10px;color:#04121f;font-weight:800;font-size:12px;padding:9px 14px;cursor:pointer;">+ Reportar</button>
+      </div>
+      <div class="psub">Toca numa ocorrência para ver o estado e o histórico.</div>
+      <div id="r-hist"><div class="skel">A carregar…</div></div>
     </div>
-    <div class="sec-h">📋 O QUE JÁ REPORTASTE</div>
-    <div id="r-hist"><div class="skel">A carregar…</div></div>
+
+    <!-- VISTA DETALHE (uma só ocorrência) -->
+    <div id="oc-vista-detalhe" style="display:none;">
+      <button onclick="ocVista('lista')" style="background:none;border:none;color:var(--cyan);font-size:13px;cursor:pointer;padding:0;margin-bottom:12px;">‹ Voltar às ocorrências</button>
+      <div id="oc-detalhe"><div class="skel">A carregar…</div></div>
+    </div>
+
+    <!-- VISTA NOVA (formulário de reportar) -->
+    <div id="oc-vista-nova" style="display:none;">
+      <button onclick="ocVista('lista')" style="background:none;border:none;color:var(--cyan);font-size:13px;cursor:pointer;padding:0;margin-bottom:12px;">‹ Voltar</button>
+      <div class="ptitle">Reportar um problema</div>
+      <div class="psub">Viste uma avaria nas partes comuns? A administração recebe de imediato.</div>
+      <div class="card">
+        <label>Tipo de problema</label>
+        <select id="r-cat">
+          <option value="avaria">Avaria (elevador, luz, porta…)</option>
+          <option value="agua">Água / infiltração</option>
+          <option value="limpeza">Limpeza</option>
+          <option value="seguranca">Segurança</option>
+          <option value="barulho">Barulho / vizinhança</option>
+          <option value="outro">Outro</option>
+        </select>
+        <label>Onde? (local)</label>
+        <input id="r-local" placeholder="Ex: entrada bloco A, garagem, 2.º piso…">
+        <label>Descreve o problema</label>
+        <textarea id="r-desc" placeholder="O que se passa? Desde quando?"></textarea>
+        <button class="btn" id="r-btn" onclick="reportar()">Enviar à administração</button>
+        <div class="msg-ok" id="r-ok">✅ Recebido! A administração foi notificada.</div>
+        <div class="msg-err" id="r-err"></div>
+      </div>
+    </div>
   </div>
 
   <div class="nav">
     <button class="on" id="nav-inicio" onclick="irPara('inicio')"><span class="ni">🏠</span>Início</button>
     <button id="nav-quotas" onclick="irPara('quotas')"><span class="ni">🧾</span>Quotas</button>
-    <button id="nav-contas" onclick="irPara('contas')"><span class="ni">💰</span>Contas</button>
+    <button id="nav-reportar" onclick="irPara('reportar')"><span class="ni">🛠️</span>Avarias</button>
     <button id="nav-docs" onclick="irPara('docs')"><span class="ni">📄</span>Docs</button>
     <button id="nav-mensagens" onclick="irPara('mensagens')"><span class="ni">💬</span>Mensagens</button>
   </div>
@@ -261,6 +279,7 @@ const token = new URLSearchParams(window.location.search).get('t');
 const mN = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 const eur = v => parseFloat(v||0).toFixed(2).replace('.',',') + '€';
 let _loaded = {};
+let _ocCache = {};
 
 function irPara(pg) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -278,9 +297,9 @@ function irPara(pg) {
     if (pg==='quotas') carregarQuotas();
     if (pg==='contas') carregarContas();
     if (pg==='docs') carregarDocumentos();
-    if (pg==='reportar') carregarHistOcorrencias();
     if (pg==='mensagens') carregarMensagens();
   }
+  if (pg==='reportar') ocVista('lista'); // sempre abre na lista
   if (pg==='mensagens') carregarMensagens(); // recarrega sempre ao entrar
 }
 
@@ -476,60 +495,99 @@ async function carregarDocumentos() {
   }).join('') + '<div class="rodape" style="margin-top:8px;">Para receber uma cópia de qualquer documento, contacte a administração.</div>';
 }
 
+function ocVista(v) {
+  document.getElementById('oc-vista-lista').style.display = (v==='lista')?'block':'none';
+  document.getElementById('oc-vista-detalhe').style.display = (v==='detalhe')?'block':'none';
+  document.getElementById('oc-vista-nova').style.display = (v==='nova')?'block':'none';
+  if (v==='lista') carregarHistOcorrencias();
+  window.scrollTo(0,0);
+}
+
 async function carregarHistOcorrencias() {
   const cont = document.getElementById('r-hist');
   const res = await sb.rpc('portal_ocorrencias_ativas', { p_token: token });
-  if (res.error || !res.data || !res.data.length) { cont.innerHTML = '<div class="empty">Ainda não reportaste nada.</div>'; return; }
+  if (res.error || !res.data || !res.data.length) { cont.innerHTML = '<div class="empty">Ainda não há ocorrências.<br>Toca em "+ Reportar" para comunicar um problema.</div>'; return; }
   const estLabel = { aberta:'Recebida', parceiro_contactado:'Parceiro contactado', aguarda_orcamento:'A aguardar orçamento', aguarda_votacao:'Em votação', aprovada:'Aprovada', em_reparacao:'Em reparação', resolvida:'Resolvida' };
+  _ocCache = {};
   cont.innerHTML = res.data.map(function(o){
-    let html = '<div class="li" style="flex-direction:column;align-items:stretch;gap:8px;">';
-    html += '<div style="display:flex;align-items:center;gap:12px;">';
-    html += '<div class="est" style="background:rgba(0,212,255,.08);">'+categoriaIcon(o.categoria)+'</div>';
-    html += '<div class="m"><div class="t">'+categoriaLabel(o.categoria)+'</div><div class="s">'+(o.local_ocorrencia?o.local_ocorrencia+' · ':'')+tempoRelativo(o.criado_em)+'</div></div>';
-    html += '<span class="badge '+estadoClasse(o.estado)+'">'+(estLabel[o.estado]||o.estado)+'</span>';
-    html += '</div>';
-    // Se precisa de votação, mostrar os botões
-    if (o.precisa_votacao && o.estado === 'aguarda_votacao') {
-      html += '<div style="background:rgba(255,179,0,.08);border:1px solid rgba(255,179,0,.25);border-radius:8px;padding:10px;">';
-      // Motivo (o que o parceiro vai fazer)
-      if (o.orcamento_nota) {
-        html += '<div style="font-size:11px;color:var(--t2);margin-bottom:6px;">🔧 <strong>Trabalho:</strong> '+o.orcamento_nota+'</div>';
-      }
-      html += '<div style="font-size:11.5px;color:var(--amber);font-weight:600;margin-bottom:2px;">🗳️ Aprovas esta reparação?</div>';
-      // Valor total + a MINHA parte
-      if (o.orcamento_valor) {
-        const total = parseFloat(o.orcamento_valor);
-        html += '<div style="font-size:11px;color:var(--t2);">Custo total: <strong>'+total.toFixed(2).replace('.',',')+'€</strong>';
-        // calcular a minha parte (permilagem / total do grupo)
-        html += ' · <span id="minhaparte-'+o.id+'">a calcular a tua parte…</span></div>';
-        // buscar o total de permilagem do grupo e calcular
-        sb.rpc('portal_perm_total', { p_token: token, p_metodo: o.divisao_metodo||'geral' }).then(function(pr){
-          const totalPerm = parseFloat(pr.data||0);
-          const el = document.getElementById('minhaparte-'+o.id);
-          if (el && totalPerm > 0 && o.minha_permilagem != null) {
-            const parte = total * (parseFloat(o.minha_permilagem) / totalPerm);
-            const soBloco = (o.divisao_metodo||'').indexOf('bloco:')===0;
-            el.innerHTML = '<strong style="color:var(--cyan);">a tua parte: '+parte.toFixed(2).replace('.',',')+'€</strong>' + (soBloco?' (dividido pelo teu bloco)':'');
-          } else if (el) { el.textContent = ''; }
-        });
-      }
-      if (o.meu_voto) {
-        html += '<div style="font-size:11px;color:var(--cyan);margin-top:5px;">Já votaste: <strong>'+(o.meu_voto==='sim'?'✅ A favor':'❌ Contra')+'</strong> · podes alterar</div>';
-      }
-      html += '<div style="display:flex;gap:8px;margin-top:8px;">';
-      html += '<button onclick="votarOcorrencia(\''+o.id+'\',\'sim\')" style="flex:1;background:rgba(34,229,132,.12);border:1px solid rgba(34,229,132,.4);color:var(--green);border-radius:8px;padding:9px;font-size:12px;font-weight:700;cursor:pointer;">✅ A favor</button>';
-      html += '<button onclick="votarOcorrencia(\''+o.id+'\',\'nao\')" style="flex:1;background:rgba(255,84,112,.12);border:1px solid rgba(255,84,112,.4);color:var(--red);border-radius:8px;padding:9px;font-size:12px;font-weight:700;cursor:pointer;">❌ Contra</button>';
-      html += '</div></div>';
-    }
-    html += '</div>';
-    return html;
+    _ocCache[o.id] = o;
+    const precisaVoto = o.precisa_votacao && o.estado==='aguarda_votacao' && !o.meu_voto;
+    return '<div class="li" style="cursor:pointer;" onclick="abrirOcorrencia(\''+o.id+'\')">' +
+      '<div class="est" style="background:rgba(0,212,255,.08);">'+categoriaIcon(o.categoria)+'</div>' +
+      '<div class="m"><div class="t">'+categoriaLabel(o.categoria)+(precisaVoto?' <span style="color:var(--amber);font-size:10px;">● precisa do teu voto</span>':'')+'</div>' +
+      '<div class="s">'+(o.local_ocorrencia?o.local_ocorrencia+' · ':'')+'Última atualização: '+dataCurta(o.criado_em)+'</div></div>' +
+      '<span class="badge '+estadoClasse(o.estado)+'">'+(estLabel[o.estado]||o.estado)+'</span></div>';
   }).join('');
+}
+
+async function abrirOcorrencia(id) {
+  ocVista('detalhe');
+  const cont = document.getElementById('oc-detalhe');
+  const o = _ocCache[id];
+  if (!o) { cont.innerHTML='<div class="empty">Não encontrada.</div>'; return; }
+  const estLabel = { aberta:'Recebida', parceiro_contactado:'Parceiro contactado', aguarda_orcamento:'A aguardar orçamento', aguarda_votacao:'Em votação', aprovada:'Aprovada', em_reparacao:'Em reparação', resolvida:'Resolvida' };
+  let html = '';
+  // Cabeçalho da ocorrência
+  html += '<div class="card"><div style="display:flex;align-items:center;gap:12px;">';
+  html += '<div class="est" style="background:rgba(0,212,255,.1);width:44px;height:44px;font-size:20px;">'+categoriaIcon(o.categoria)+'</div>';
+  html += '<div style="flex:1;"><div style="font-size:16px;font-weight:700;">'+categoriaLabel(o.categoria)+'</div>';
+  html += '<div style="font-size:12px;color:var(--t3);">'+(o.local_ocorrencia||'')+'</div></div>';
+  html += '<span class="badge '+estadoClasse(o.estado)+'">'+(estLabel[o.estado]||o.estado)+'</span></div>';
+  if (o.descricao) html += '<div style="font-size:12.5px;color:var(--t2);margin-top:12px;line-height:1.5;">'+escapar(o.descricao)+'</div>';
+  html += '<div style="font-size:11px;color:var(--t3);margin-top:8px;">Última atualização: '+dataCurta(o.criado_em)+'</div>';
+  html += '</div>';
+
+  // Votação (se precisar)
+  if (o.precisa_votacao && o.estado === 'aguarda_votacao') {
+    html += '<div class="card" style="border-color:rgba(255,179,0,.3);">';
+    if (o.orcamento_nota) html += '<div style="font-size:12px;color:var(--t2);margin-bottom:8px;">🔧 <strong>Trabalho proposto:</strong> '+escapar(o.orcamento_nota)+'</div>';
+    html += '<div style="font-size:13px;color:var(--amber);font-weight:700;margin-bottom:4px;">🗳️ Aprovas esta reparação?</div>';
+    if (o.orcamento_valor) {
+      const total = parseFloat(o.orcamento_valor);
+      html += '<div style="font-size:12px;color:var(--t2);">Custo total: <strong>'+total.toFixed(2).replace('.',',')+'€</strong> · <span id="minhaparte-'+o.id+'">a calcular…</span></div>';
+      sb.rpc('portal_perm_total', { p_token: token, p_metodo: o.divisao_metodo||'geral' }).then(function(pr){
+        const totalPerm = parseFloat(pr.data||0);
+        const el = document.getElementById('minhaparte-'+o.id);
+        if (el && totalPerm > 0 && o.minha_permilagem != null) {
+          const parte = total * (parseFloat(o.minha_permilagem) / totalPerm);
+          const soBloco = (o.divisao_metodo||'').indexOf('bloco:')===0;
+          el.innerHTML = '<strong style="color:var(--cyan);">a tua parte: '+parte.toFixed(2).replace('.',',')+'€</strong>'+(soBloco?' (só o teu bloco)':'');
+        } else if (el) el.textContent='';
+      });
+    }
+    if (o.meu_voto) html += '<div style="font-size:11.5px;color:var(--cyan);margin-top:8px;">Já votaste: <strong>'+(o.meu_voto==='sim'?'✅ A favor':'❌ Contra')+'</strong> · podes alterar</div>';
+    html += '<div style="display:flex;gap:8px;margin-top:10px;">';
+    html += '<button onclick="votarOcorrencia(\''+o.id+'\',\'sim\')" style="flex:1;background:rgba(34,229,132,.12);border:1px solid rgba(34,229,132,.4);color:var(--green);border-radius:8px;padding:11px;font-size:13px;font-weight:700;cursor:pointer;">✅ A favor</button>';
+    html += '<button onclick="votarOcorrencia(\''+o.id+'\',\'nao\')" style="flex:1;background:rgba(255,84,112,.12);border:1px solid rgba(255,84,112,.4);color:var(--red);border-radius:8px;padding:11px;font-size:13px;font-weight:700;cursor:pointer;">❌ Contra</button>';
+    html += '</div></div>';
+  }
+
+  // Timeline (histórico do que aconteceu)
+  html += '<div class="sec-h">📋 HISTÓRICO</div>';
+  html += '<div id="oc-timeline"><div class="skel">A carregar histórico…</div></div>';
+  cont.innerHTML = html;
+
+  // Buscar a timeline
+  const tRes = await sb.rpc('portal_ocorrencia_timeline', { p_token: token, p_ocorrencia: id });
+  const tl = document.getElementById('oc-timeline');
+  if (tRes.error || !tRes.data || !tRes.data.length) {
+    tl.innerHTML = '<div class="empty" style="padding:16px;">A administração ainda não registou atualizações.</div>';
+  } else {
+    tl.innerHTML = tRes.data.map(function(e){
+      return '<div style="display:flex;gap:12px;padding:10px 2px;">' +
+        '<div style="display:flex;flex-direction:column;align-items:center;"><span style="width:10px;height:10px;border-radius:50%;background:var(--cyan);"></span><span style="flex:1;width:2px;background:var(--b);margin-top:2px;"></span></div>' +
+        '<div style="flex:1;padding-bottom:6px;"><div style="font-size:12.5px;color:var(--text);line-height:1.4;">'+escapar(e.texto)+'</div>' +
+        '<div style="font-size:10.5px;color:var(--t3);margin-top:2px;">'+dataHora(e.criado_em)+'</div></div></div>';
+    }).join('');
+  }
 }
 
 async function votarOcorrencia(id, voto) {
   const res = await sb.rpc('portal_votar_ocorrencia', { p_token: token, p_ocorrencia: id, p_voto: voto });
   if (res.error || res.data === false) { alert('Não foi possível registar o voto.'); return; }
-  carregarHistOcorrencias();
+  // Atualizar o cache e reabrir o detalhe
+  if (_ocCache[id]) _ocCache[id].meu_voto = voto;
+  abrirOcorrencia(id);
 }
 
 async function reportar() {
@@ -542,7 +600,7 @@ async function reportar() {
   const res = await sb.rpc('portal_reportar', { p_token: token, p_categoria: document.getElementById('r-cat').value, p_local: local, p_descricao: desc });
   btn.disabled=false; btn.textContent='Enviar à administração';
   if (res.error || res.data===false) { errEl.textContent = res.error?('Erro: '+res.error.message):'Não foi possível enviar (limite diário atingido ou link inválido).'; errEl.style.display='block'; }
-  else { okEl.style.display='block'; document.getElementById('r-desc').value=''; document.getElementById('r-local').value=''; _loaded.reportar=true; setTimeout(carregarHistOcorrencias, 800); }
+  else { okEl.style.display='block'; document.getElementById('r-desc').value=''; document.getElementById('r-local').value=''; setTimeout(function(){ ocVista('lista'); }, 1000); }
 }
 
 // ===== MENSAGENS =====
@@ -585,6 +643,8 @@ function categoriaIcon(c){ const m={avaria:'🛠️',agua:'💧',limpeza:'🧹',
 function estadoLabel(e){ if(e==='resolvida'||e==='fechada')return 'Resolvida'; if(e==='em_curso'||e==='curso')return 'Em curso'; return 'Aberta'; }
 function estadoClasse(e){ if(e==='resolvida'||e==='fechada')return 'resolvida'; if(e==='em_curso'||e==='curso')return 'curso'; return 'aberta'; }
 function tempoRelativo(ts){ if(!ts)return''; const d=Math.floor((Date.now()-new Date(ts))/86400000); if(d<=0)return 'hoje'; if(d===1)return 'ontem'; if(d<30)return 'há '+d+' dias'; return new Date(ts).toLocaleDateString('pt-PT'); }
+function dataCurta(ts){ if(!ts)return''; return new Date(ts).toLocaleDateString('pt-PT',{day:'2-digit',month:'short',year:'numeric'}); }
+function dataHora(ts){ if(!ts)return''; return new Date(ts).toLocaleDateString('pt-PT',{day:'2-digit',month:'short'})+' às '+new Date(ts).toLocaleTimeString('pt-PT',{hour:'2-digit',minute:'2-digit'}); }
 
 iniciar();
 </script>
