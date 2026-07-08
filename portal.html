@@ -491,11 +491,32 @@ async function carregarHistOcorrencias() {
     // Se precisa de votação, mostrar os botões
     if (o.precisa_votacao && o.estado === 'aguarda_votacao') {
       html += '<div style="background:rgba(255,179,0,.08);border:1px solid rgba(255,179,0,.25);border-radius:8px;padding:10px;">';
-      html += '<div style="font-size:11.5px;color:var(--amber);font-weight:600;margin-bottom:6px;">🗳️ Aprovas esta reparação'+(o.orcamento_valor?' ('+parseFloat(o.orcamento_valor).toFixed(2).replace('.',',')+'€)':'')+'?</div>';
-      if (o.meu_voto) {
-        html += '<div style="font-size:11px;color:var(--cyan);">Já votaste: <strong>'+(o.meu_voto==='sim'?'✅ A favor':'❌ Contra')+'</strong> · podes alterar</div>';
+      // Motivo (o que o parceiro vai fazer)
+      if (o.orcamento_nota) {
+        html += '<div style="font-size:11px;color:var(--t2);margin-bottom:6px;">🔧 <strong>Trabalho:</strong> '+o.orcamento_nota+'</div>';
       }
-      html += '<div style="display:flex;gap:8px;margin-top:6px;">';
+      html += '<div style="font-size:11.5px;color:var(--amber);font-weight:600;margin-bottom:2px;">🗳️ Aprovas esta reparação?</div>';
+      // Valor total + a MINHA parte
+      if (o.orcamento_valor) {
+        const total = parseFloat(o.orcamento_valor);
+        html += '<div style="font-size:11px;color:var(--t2);">Custo total: <strong>'+total.toFixed(2).replace('.',',')+'€</strong>';
+        // calcular a minha parte (permilagem / total do grupo)
+        html += ' · <span id="minhaparte-'+o.id+'">a calcular a tua parte…</span></div>';
+        // buscar o total de permilagem do grupo e calcular
+        sb.rpc('portal_perm_total', { p_token: token, p_metodo: o.divisao_metodo||'geral' }).then(function(pr){
+          const totalPerm = parseFloat(pr.data||0);
+          const el = document.getElementById('minhaparte-'+o.id);
+          if (el && totalPerm > 0 && o.minha_permilagem != null) {
+            const parte = total * (parseFloat(o.minha_permilagem) / totalPerm);
+            const soBloco = (o.divisao_metodo||'').indexOf('bloco:')===0;
+            el.innerHTML = '<strong style="color:var(--cyan);">a tua parte: '+parte.toFixed(2).replace('.',',')+'€</strong>' + (soBloco?' (dividido pelo teu bloco)':'');
+          } else if (el) { el.textContent = ''; }
+        });
+      }
+      if (o.meu_voto) {
+        html += '<div style="font-size:11px;color:var(--cyan);margin-top:5px;">Já votaste: <strong>'+(o.meu_voto==='sim'?'✅ A favor':'❌ Contra')+'</strong> · podes alterar</div>';
+      }
+      html += '<div style="display:flex;gap:8px;margin-top:8px;">';
       html += '<button onclick="votarOcorrencia(\''+o.id+'\',\'sim\')" style="flex:1;background:rgba(34,229,132,.12);border:1px solid rgba(34,229,132,.4);color:var(--green);border-radius:8px;padding:9px;font-size:12px;font-weight:700;cursor:pointer;">✅ A favor</button>';
       html += '<button onclick="votarOcorrencia(\''+o.id+'\',\'nao\')" style="flex:1;background:rgba(255,84,112,.12);border:1px solid rgba(255,84,112,.4);color:var(--red);border-radius:8px;padding:9px;font-size:12px;font-weight:700;cursor:pointer;">❌ Contra</button>';
       html += '</div></div>';

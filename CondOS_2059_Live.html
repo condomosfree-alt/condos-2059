@@ -553,7 +553,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.07-1714</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.07-1733</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -7247,6 +7247,17 @@ async function gerirOcorrencia(id) {
   h += '<input id="oc-orc-valor" class="fi" type="number" step="0.01" placeholder="Valor €" style="flex:0 0 110px;font-size:12px;" value="'+(_ocAtual.orcamento_valor||'')+'">';
   h += '<input id="oc-orc-nota" class="fi" placeholder="O que o parceiro disse (ex: troca do motor)" style="flex:1;font-size:12px;" value="'+((_ocAtual.orcamento_nota||'').replace(/"/g,'&quot;'))+'">';
   h += '</div>';
+  // Método de divisão do custo
+  var temBlocos = fracoes.some(function(f){ return f.bloco; });
+  h += '<div style="font-size:11px;color:var(--t2);margin:10px 0 5px;">Como dividir o custo? <span style="color:var(--t3);">(Art. 1424.º CC — regra: permilagem)</span></div>';
+  h += '<select id="oc-divisao" class="fi" style="width:100%;font-size:12px;" onchange="ocPreverDivisao()">';
+  h += '<option value="geral"'+(_ocAtual.divisao_metodo==='geral'||!_ocAtual.divisao_metodo?' selected':'')+'>Todos os condóminos (permilagem geral)</option>';
+  if (temBlocos) {
+    var blocos = [...new Set(fracoes.map(function(f){return f.bloco;}).filter(Boolean))];
+    blocos.forEach(function(bl){ h += '<option value="bloco:'+bl+'"'+(_ocAtual.divisao_metodo==='bloco:'+bl?' selected':'')+'>Só o Bloco '+bl+' (quem usa/beneficia)</option>'; });
+  }
+  h += '</select>';
+  h += '<div id="oc-previsao-divisao" style="font-size:10.5px;color:var(--t3);margin-top:6px;"></div>';
   h += '<button class="btn-ghost" style="width:100%;margin-top:8px;font-size:11px;" onclick="ocRegistarOrcamento('+limite+')">💰 Registar orçamento</button>';
   h += '<div style="font-size:10px;color:var(--t3);margin-top:6px;">Limite sem votação: '+limite.toFixed(0)+'€. Acima disto, gera votação dos condóminos.</div>';
   h += '</div>';
@@ -7301,6 +7312,36 @@ async function ocEvento(tipo, texto) {
   await sb.from('ocorrencia_eventos').insert({ ocorrencia_id:_ocAtual.id, condominio_id:currentCondo.id, tipo:tipo, texto:texto, autor:'admin' });
 }
 
+// Calcula a parte de cada fração para um dado valor e método de divisão
+function ocCalcularPartes(valor, metodo) {
+  var alvo = fracoes;
+  var base = 'geral';
+  if (metodo && metodo.indexOf('bloco:') === 0) {
+    var bl = metodo.split(':')[1];
+    alvo = fracoes.filter(function(f){ return f.bloco === bl; });
+    base = 'bloco';
+  }
+  var totalPerm = alvo.reduce(function(s,f){ return s + parseFloat(f.permilagem||0); }, 0);
+  var partes = {};
+  alvo.forEach(function(f){
+    var peso = totalPerm > 0 ? parseFloat(f.permilagem||0) / totalPerm : 1/alvo.length;
+    partes[f.id] = valor * peso;
+  });
+  return { partes: partes, alvo: alvo, base: base };
+}
+
+function ocPreverDivisao() {
+  var valor = parseFloat(document.getElementById('oc-orc-valor').value) || 0;
+  var metodo = document.getElementById('oc-divisao').value;
+  var el = document.getElementById('oc-previsao-divisao');
+  if (!valor || !el) { if(el) el.innerHTML=''; return; }
+  var r = ocCalcularPartes(valor, metodo);
+  var n = r.alvo.length;
+  var min = Math.min.apply(null, Object.values(r.partes));
+  var max = Math.max.apply(null, Object.values(r.partes));
+  el.innerHTML = '↳ dividido por ' + n + ' fração(ões) — cada uma paga entre ' + min.toFixed(2) + '€ e ' + max.toFixed(2) + '€ (conforme permilagem)';
+}
+
 async function ocContactarParceiro() {
   var pid = document.getElementById('oc-parceiro').value;
   if (!pid) { toast('Escolhe um parceiro','err'); return; }
@@ -7315,10 +7356,12 @@ async function ocContactarParceiro() {
 async function ocRegistarOrcamento(limite) {
   var valor = parseFloat(document.getElementById('oc-orc-valor').value);
   var nota = document.getElementById('oc-orc-nota').value.trim();
+  var metodo = document.getElementById('oc-divisao').value;
   if (!valor || valor <= 0) { toast('Indica o valor do orçamento','err'); return; }
   var novoEstado = valor <= limite ? 'aguarda_orcamento' : 'aguarda_votacao';
-  await sb.from('ocorrencias').update({ orcamento_valor:valor, orcamento_nota:nota, estado:novoEstado }).eq('id',_ocAtual.id);
-  await ocEvento('orcamento', 'Orçamento recebido: ' + valor.toFixed(2) + '€' + (nota?' — '+nota:'') + '.');
+  await sb.from('ocorrencias').update({ orcamento_valor:valor, orcamento_nota:nota, divisao_metodo:metodo, estado:novoEstado }).eq('id',_ocAtual.id);
+  var divTxt = metodo && metodo.indexOf('bloco:')===0 ? 'só o Bloco ' + metodo.split(':')[1] : 'todos os condóminos (permilagem)';
+  await ocEvento('orcamento', 'Orçamento recebido: ' + valor.toFixed(2) + '€' + (nota?' — '+nota:'') + '. Custo a dividir por: ' + divTxt + '.');
   toast('Orçamento registado','ok');
   gerirOcorrencia(_ocAtual.id);
 }
@@ -7347,15 +7390,17 @@ async function ocAprovar() {
 
 async function ocConcluir() {
   var valor = parseFloat(_ocAtual.orcamento_valor||0);
+  var metodo = _ocAtual.divisao_metodo || 'geral';
+  var divTxt = metodo.indexOf('bloco:')===0 ? 'Bloco ' + metodo.split(':')[1] : 'permilagem geral';
   // Criar despesa
   var dRes = await sb.from('despesas').insert({
     condominio_id:currentCondo.id,
-    descricao:'Reparação: ' + (_ocAtual.categoria||'') + ' — ' + (_ocAtual.descricao||'').substring(0,60),
+    descricao:'Reparação: ' + (_ocAtual.categoria||'') + ' — ' + (_ocAtual.descricao||'').substring(0,50) + ' [' + divTxt + ']',
     valor_total:valor, tipo:'reparacao', data_despesa:new Date().toISOString().split('T')[0]
   }).select();
   var despId = dRes.data && dRes.data[0] ? dRes.data[0].id : null;
   await sb.from('ocorrencias').update({ estado:'resolvida', data_resolucao:new Date().toISOString(), despesa_id:despId }).eq('id',_ocAtual.id);
-  await ocEvento('estado', 'Reparação concluída. Custo de ' + valor.toFixed(2) + '€ lançado nas despesas do condomínio (dividido por permilagem).');
+  await ocEvento('estado', 'Reparação concluída. Custo de ' + valor.toFixed(2) + '€ lançado nas despesas, dividido por ' + divTxt + '.');
   toast('✅ Resolvida! Custo de '+valor.toFixed(2)+'€ lançado nas despesas.','ok');
   fecharModalGenerico();
   loadOcorrencias();
