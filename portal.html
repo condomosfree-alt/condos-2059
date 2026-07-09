@@ -496,9 +496,12 @@ async function carregarDocumentos() {
 }
 
 function ocVista(v) {
-  document.getElementById('oc-vista-lista').style.display = (v==='lista')?'block':'none';
-  document.getElementById('oc-vista-detalhe').style.display = (v==='detalhe')?'block':'none';
-  document.getElementById('oc-vista-nova').style.display = (v==='nova')?'block':'none';
+  const l = document.getElementById('oc-vista-lista');
+  const d = document.getElementById('oc-vista-detalhe');
+  const n = document.getElementById('oc-vista-nova');
+  if (l) l.style.display = (v==='lista')?'block':'none';
+  if (d) d.style.display = (v==='detalhe')?'block':'none';
+  if (n) n.style.display = (v==='nova')?'block':'none';
   if (v==='lista') { carregarHistOcorrencias(); carregarAvaliaveis(); }
   window.scrollTo(0,0);
 }
@@ -510,10 +513,14 @@ async function carregarAvaliaveis() {
     box = document.createElement('div');
     box.id = 'oc-avaliaveis';
     const lista = document.getElementById('oc-vista-lista');
-    lista.insertBefore(box, document.getElementById('r-hist'));
+    const hist = document.getElementById('r-hist');
+    if (lista && hist) lista.insertBefore(box, hist);
   }
-  const res = await sb.rpc('portal_reparacoes_avaliaveis', { p_token: token });
-  if (res.error || !res.data || !res.data.length) { box.innerHTML = ''; return; }
+  if (!box) return;
+  let res;
+  try { res = await sb.rpc('portal_reparacoes_avaliaveis', { p_token: token }); }
+  catch(e) { box.innerHTML=''; return; }
+  if (!res || res.error || !res.data || !res.data.length) { box.innerHTML = ''; return; }
   const porAvaliar = res.data.filter(function(r){ return !r.ja_avaliei; });
   if (!porAvaliar.length) { box.innerHTML = ''; return; }
   let html = '<div class="sec-h" style="color:var(--amber);">⭐ AVALIA AS REPARAÇÕES CONCLUÍDAS</div>';
@@ -587,8 +594,14 @@ async function carregarHistOcorrencias() {
 async function abrirOcorrencia(id) {
   ocVista('detalhe');
   const cont = document.getElementById('oc-detalhe');
-  const o = _ocCache[id];
-  if (!o) { cont.innerHTML='<div class="empty">Não encontrada.</div>'; return; }
+  cont.innerHTML = '<div class="skel">A carregar…</div>';
+  let o = _ocCache[id];
+  // Se não está no cache, buscar da lista de novo
+  if (!o) {
+    const r = await sb.rpc('portal_ocorrencias_ativas', { p_token: token });
+    if (!r.error && r.data) { r.data.forEach(function(x){ _ocCache[x.id]=x; }); o = _ocCache[id]; }
+  }
+  if (!o) { cont.innerHTML='<div class="empty">Não foi possível abrir esta ocorrência.<br><button onclick="ocVista(\'lista\')" style="margin-top:10px;background:none;border:1px solid var(--b2);color:var(--cyan);border-radius:8px;padding:8px 14px;cursor:pointer;">‹ Voltar</button></div>'; return; }
   const estLabel = { aberta:'Recebida', parceiro_contactado:'Parceiro contactado', aguarda_orcamento:'A aguardar orçamento', aguarda_votacao:'Em votação', aprovada:'Aprovada', em_reparacao:'Em reparação', resolvida:'Resolvida' };
   let html = '';
   // Cabeçalho da ocorrência
