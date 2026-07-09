@@ -499,8 +499,72 @@ function ocVista(v) {
   document.getElementById('oc-vista-lista').style.display = (v==='lista')?'block':'none';
   document.getElementById('oc-vista-detalhe').style.display = (v==='detalhe')?'block':'none';
   document.getElementById('oc-vista-nova').style.display = (v==='nova')?'block':'none';
-  if (v==='lista') carregarHistOcorrencias();
+  if (v==='lista') { carregarHistOcorrencias(); carregarAvaliaveis(); }
   window.scrollTo(0,0);
+}
+
+// Reparações concluídas à espera de avaliação
+async function carregarAvaliaveis() {
+  let box = document.getElementById('oc-avaliaveis');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'oc-avaliaveis';
+    const lista = document.getElementById('oc-vista-lista');
+    lista.insertBefore(box, document.getElementById('r-hist'));
+  }
+  const res = await sb.rpc('portal_reparacoes_avaliaveis', { p_token: token });
+  if (res.error || !res.data || !res.data.length) { box.innerHTML = ''; return; }
+  const porAvaliar = res.data.filter(function(r){ return !r.ja_avaliei; });
+  if (!porAvaliar.length) { box.innerHTML = ''; return; }
+  let html = '<div class="sec-h" style="color:var(--amber);">⭐ AVALIA AS REPARAÇÕES CONCLUÍDAS</div>';
+  porAvaliar.forEach(function(r){
+    html += '<div class="card" style="border-color:rgba(255,179,0,.3);">';
+    html += '<div style="font-size:13px;font-weight:700;">'+categoriaLabel(r.categoria)+'</div>';
+    html += '<div style="font-size:11.5px;color:var(--t3);margin:2px 0 10px;">Feita por <strong style="color:var(--t2);">'+(r.parceiro_nome||'parceiro')+'</strong> · '+dataCurta(r.data_resolucao)+'</div>';
+    html += '<div style="font-size:11.5px;color:var(--t2);margin-bottom:6px;">Como correu o trabalho?</div>';
+    // Estrelas clicáveis
+    html += '<div id="estrelas-'+r.ocorrencia_id+'" style="font-size:26px;color:var(--t3);letter-spacing:3px;margin-bottom:8px;">';
+    for (let i=1;i<=5;i++) html += '<span onclick="escolherEstrela(\''+r.ocorrencia_id+'\','+i+')" data-star="'+i+'" style="cursor:pointer;">☆</span>';
+    html += '</div>';
+    // Recomenda
+    html += '<div style="display:flex;gap:8px;margin-bottom:8px;">';
+    html += '<button id="rec-sim-'+r.ocorrencia_id+'" onclick="escolherRecomenda(\''+r.ocorrencia_id+'\',true)" style="flex:1;background:transparent;border:1px solid var(--b2);color:var(--t2);border-radius:8px;padding:8px;font-size:12px;cursor:pointer;">👍 Recomendo</button>';
+    html += '<button id="rec-nao-'+r.ocorrencia_id+'" onclick="escolherRecomenda(\''+r.ocorrencia_id+'\',false)" style="flex:1;background:transparent;border:1px solid var(--b2);color:var(--t2);border-radius:8px;padding:8px;font-size:12px;cursor:pointer;">👎 Não</button>';
+    html += '</div>';
+    html += '<input id="coment-'+r.ocorrencia_id+'" placeholder="Comentário (opcional)" style="width:100%;margin-bottom:8px;">';
+    html += '<button class="btn" style="margin-top:0;" onclick="enviarAvaliacao(\''+r.ocorrencia_id+'\')">Enviar avaliação</button>';
+    html += '</div>';
+  });
+  box.innerHTML = html;
+}
+
+const _avalEstado = {};
+function escolherEstrela(id, n) {
+  _avalEstado[id] = _avalEstado[id] || {};
+  _avalEstado[id].estrelas = n;
+  const box = document.getElementById('estrelas-'+id);
+  box.querySelectorAll('span').forEach(function(s){
+    const v = parseInt(s.getAttribute('data-star'));
+    s.textContent = v <= n ? '★' : '☆';
+    s.style.color = v <= n ? 'var(--amber)' : 'var(--t3)';
+  });
+}
+function escolherRecomenda(id, val) {
+  _avalEstado[id] = _avalEstado[id] || {};
+  _avalEstado[id].recomenda = val;
+  const sim = document.getElementById('rec-sim-'+id), nao = document.getElementById('rec-nao-'+id);
+  sim.style.borderColor = val ? 'var(--green)' : 'var(--b2)';
+  sim.style.color = val ? 'var(--green)' : 'var(--t2)';
+  nao.style.borderColor = !val ? 'var(--red)' : 'var(--b2)';
+  nao.style.color = !val ? 'var(--red)' : 'var(--t2)';
+}
+async function enviarAvaliacao(id) {
+  const est = _avalEstado[id] || {};
+  if (!est.estrelas) { alert('Escolhe quantas estrelas (1 a 5).'); return; }
+  const coment = document.getElementById('coment-'+id).value.trim();
+  const res = await sb.rpc('portal_avaliar_parceiro', { p_token: token, p_ocorrencia: id, p_estrelas: est.estrelas, p_recomenda: (est.recomenda===undefined?null:est.recomenda), p_comentario: coment });
+  if (res.error || res.data === false) { alert('Não foi possível enviar a avaliação.'); return; }
+  carregarAvaliaveis();
 }
 
 async function carregarHistOcorrencias() {

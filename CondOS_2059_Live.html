@@ -553,7 +553,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.07-1733</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.09-0905</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -7421,12 +7421,104 @@ async function loadParceiros() {
   const cats = ['Todos',...new Set(ps.map(p=>p.categoria))];
   document.getElementById('cat-filters').innerHTML = cats.map(c=>`<button onclick="setCatFil('${c}')" style="background:${c===catFil?'var(--cyan)':'none'};color:${c===catFil?'var(--bg)':'var(--t2)'};border:1px solid ${c===catFil?'var(--cyan)':'var(--b1)'};padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;">${c}</button>`).join('');
   const fil = catFil==='Todos'?ps:ps.filter(p=>p.categoria===catFil);
-  const stars = n=>'★'.repeat(n)+'☆'.repeat(5-n);
+  const stars = n=>'★'.repeat(Math.round(n))+'☆'.repeat(5-Math.round(n));
   document.getElementById('parceiros-list').innerHTML = fil.length ?
-    fil.map(p=>`<div class="pc"><div style="display:flex;justify-content:space-between;align-items:flex-start;"><div><div class="pc-name">${p.nome}</div><div class="pc-cat">${p.categoria}</div></div><div class="pc-rat">${stars(p.rating||4)}</div></div><div class="pc-info"><i class="ti ti-phone" style="margin-right:4px;font-size:11px"></i>${p.telefone||'—'}</div><div class="pc-info"><i class="ti ti-mail" style="margin-right:4px;font-size:11px"></i>${p.email||'—'}</div>${p.notas?`<div style="font-size:10px;color:var(--t3);margin-top:3px">${p.notas}</div>`:''}<button class="tb-btn" style="font-size:11px;padding:4px 9px;margin-top:6px;" onclick="toast('A contactar ${p.nome}...','ok')"><i class="ti ti-phone"></i>Contactar</button></div>`).join('') :
+    fil.map(p=>{
+      const rat = parseFloat(p.rating||0);
+      const nAv = parseInt(p.num_avaliacoes||0);
+      const ratTxt = nAv > 0 ? `<span style="color:var(--amber);">${stars(rat)}</span> <span style="font-size:10px;color:var(--t3);">${rat.toFixed(1)} · ${nAv} aval.</span>` : `<span style="font-size:10px;color:var(--t3);">sem avaliações</span>`;
+      return `<div class="pc" style="cursor:pointer;" onclick="abrirParceiro('${p.id}')"><div style="display:flex;justify-content:space-between;align-items:flex-start;"><div><div class="pc-name">${p.nome}</div><div class="pc-cat">${p.categoria||''}</div></div><div class="pc-rat">${ratTxt}</div></div><div class="pc-info"><i class="ti ti-phone" style="margin-right:4px;font-size:11px"></i>${p.telefone||'—'}</div><div class="pc-info"><i class="ti ti-mail" style="margin-right:4px;font-size:11px"></i>${p.email||'—'}</div>${p.notas?`<div style="font-size:10px;color:var(--t3);margin-top:3px">${p.notas}</div>`:''}<div style="font-size:10px;color:var(--cyan);margin-top:8px;">Toca para ver e editar ›</div></div>`;
+    }).join('') :
     emptyState('ti-tool','Sem parceiros','Adiciona empresas de manutenção ao teu condomínio.');
 }
 function setCatFil(c){catFil=c;loadParceiros();}
+
+// Ficha do parceiro: editar dados + ver avaliações
+async function abrirParceiro(id) {
+  var pRes = await sb.from('parceiros').select('*').eq('id', id).single();
+  if (pRes.error) { toast('Erro ao abrir parceiro','err'); return; }
+  var p = pRes.data;
+  _parceiroAtual = p;
+  // Trabalhos feitos (ocorrências resolvidas com este parceiro)
+  var oRes = await sb.from('ocorrencias').select('categoria,descricao,orcamento_valor,data_resolucao').eq('parceiro_id', id).eq('estado','resolvida').order('data_resolucao',{ascending:false});
+  var trabalhos = oRes.data || [];
+  // Avaliações
+  var avRes = await sb.from('parceiro_avaliacoes').select('estrelas,recomenda,comentario,criado_em').eq('parceiro_id', id).order('criado_em',{ascending:false});
+  var avals = avRes.data || [];
+  var rat = parseFloat(p.rating||0), nAv = parseInt(p.num_avaliacoes||0);
+  var stars = function(n){ return '★'.repeat(Math.round(n))+'☆'.repeat(5-Math.round(n)); };
+  var recomendam = avals.filter(function(a){return a.recomenda===true;}).length;
+
+  var h = '<div style="max-height:75vh;overflow-y:auto;padding:2px;">';
+  // Rating grande
+  if (nAv > 0) {
+    h += '<div style="text-align:center;background:var(--s1);border:1px solid var(--b1);border-radius:10px;padding:14px;margin-bottom:14px;">';
+    h += '<div style="font-size:30px;font-weight:800;color:var(--amber);">'+rat.toFixed(1)+'</div>';
+    h += '<div style="color:var(--amber);font-size:16px;">'+stars(rat)+'</div>';
+    h += '<div style="font-size:11px;color:var(--t3);margin-top:4px;">'+nAv+' avaliação(ões) · 👍 '+recomendam+' recomendam</div>';
+    h += '</div>';
+  }
+  // Campos editáveis
+  h += '<label style="font-size:11px;color:var(--t2);">Nome</label><input id="ep-nome" class="fi" style="width:100%;margin-bottom:8px;" value="'+(p.nome||'').replace(/"/g,'&quot;')+'">';
+  h += '<label style="font-size:11px;color:var(--t2);">Categoria / especialidade</label><input id="ep-cat" class="fi" style="width:100%;margin-bottom:8px;" value="'+(p.categoria||'').replace(/"/g,'&quot;')+'">';
+  h += '<div style="display:flex;gap:8px;"><div style="flex:1;"><label style="font-size:11px;color:var(--t2);">Telefone</label><input id="ep-tel" class="fi" style="width:100%;margin-bottom:8px;" value="'+(p.telefone||'')+'"></div>';
+  h += '<div style="flex:1;"><label style="font-size:11px;color:var(--t2);">NIF</label><input id="ep-nif" class="fi" style="width:100%;margin-bottom:8px;" value="'+(p.nif||'')+'"></div></div>';
+  h += '<label style="font-size:11px;color:var(--t2);">Email</label><input id="ep-email" class="fi" style="width:100%;margin-bottom:8px;" value="'+(p.email||'')+'">';
+  h += '<label style="font-size:11px;color:var(--t2);">Notas</label><textarea id="ep-notas" class="fi" style="width:100%;min-height:50px;margin-bottom:8px;">'+(p.notas||'')+'</textarea>';
+  h += '<div style="display:flex;gap:8px;margin-top:6px;">';
+  h += '<button class="btn-primary" style="flex:1;" onclick="guardarParceiro()">💾 Guardar</button>';
+  h += '<button class="tb-btn" style="color:var(--red);border-color:rgba(255,68,68,.3);" onclick="apagarParceiro()">🗑️</button>';
+  h += '</div>';
+
+  // Trabalhos feitos
+  h += '<div style="font-size:11px;font-weight:700;color:var(--t2);margin:16px 0 8px;">🔧 TRABALHOS REALIZADOS ('+trabalhos.length+')</div>';
+  if (trabalhos.length) {
+    trabalhos.forEach(function(t){
+      h += '<div style="background:var(--s1);border:1px solid var(--b1);border-radius:8px;padding:9px 12px;margin-bottom:6px;font-size:12px;"><div style="display:flex;justify-content:space-between;"><span>'+(t.categoria||'')+'</span><span style="color:var(--green);font-weight:600;">'+(t.orcamento_valor?parseFloat(t.orcamento_valor).toFixed(2)+'€':'')+'</span></div><div style="font-size:10.5px;color:var(--t3);">'+(t.descricao||'').substring(0,50)+' · '+(t.data_resolucao||'').slice(0,10)+'</div></div>';
+    });
+  } else { h += '<div style="font-size:11px;color:var(--t3);">Ainda sem trabalhos concluídos.</div>'; }
+
+  // Comentários das avaliações
+  var comAvals = avals.filter(function(a){return a.comentario;});
+  if (comAvals.length) {
+    h += '<div style="font-size:11px;font-weight:700;color:var(--t2);margin:16px 0 8px;">💬 O QUE OS CONDÓMINOS DIZEM</div>';
+    comAvals.forEach(function(a){
+      h += '<div style="background:var(--s1);border:1px solid var(--b1);border-radius:8px;padding:9px 12px;margin-bottom:6px;"><div style="color:var(--amber);font-size:12px;">'+stars(a.estrelas)+' '+(a.recomenda===true?'👍':(a.recomenda===false?'👎':''))+'</div><div style="font-size:11.5px;color:var(--t2);margin-top:3px;">"'+a.comentario+'"</div></div>';
+    });
+  }
+
+  h += '</div>';
+  abrirModalGenerico('Ficha do Parceiro', h);
+}
+
+async function guardarParceiro() {
+  if (!_parceiroAtual) return;
+  var upd = {
+    nome: document.getElementById('ep-nome').value.trim(),
+    categoria: document.getElementById('ep-cat').value.trim(),
+    telefone: document.getElementById('ep-tel').value.trim(),
+    nif: document.getElementById('ep-nif').value.trim(),
+    email: document.getElementById('ep-email').value.trim(),
+    notas: document.getElementById('ep-notas').value.trim()
+  };
+  if (!upd.nome) { toast('O nome é obrigatório','err'); return; }
+  var res = await sb.from('parceiros').update(upd).eq('id', _parceiroAtual.id);
+  if (res.error) { toast('Erro: '+res.error.message,'err'); return; }
+  toast('Parceiro atualizado!','ok');
+  fecharModalGenerico();
+  loadParceiros();
+}
+
+async function apagarParceiro() {
+  if (!_parceiroAtual) return;
+  if (!confirm('Apagar o parceiro "'+_parceiroAtual.nome+'"? As avaliações e o histórico ficam órfãos.')) return;
+  var res = await sb.from('parceiros').delete().eq('id', _parceiroAtual.id);
+  if (res.error) { toast('Erro: '+res.error.message,'err'); return; }
+  toast('Parceiro removido','ok');
+  fecharModalGenerico();
+  loadParceiros();
+}
+var _parceiroAtual = null;
 
 async function saveParceiro() {
   const nome = document.getElementById('pc-nome').value.trim();
