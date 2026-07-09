@@ -553,7 +553,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.09-0949</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.09-1002</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -7506,21 +7506,53 @@ async function ocAbrirVotacao() {
 }
 
 async function ocRenderVotos(id) {
-  var vRes = await sb.from('ocorrencia_votos').select('voto').eq('ocorrencia_id',id);
+  var vRes = await sb.from('ocorrencia_votos').select('voto,fracao_id').eq('ocorrencia_id',id);
   var votos = vRes.data || [];
-  var sim = votos.filter(function(v){return v.voto==='sim';}).length;
-  var nao = votos.filter(function(v){return v.voto==='nao';}).length;
+
+  // Grupo que pode votar (todos ou só o bloco, conforme a divisão)
+  var metodo = _ocAtual.divisao_metodo || 'geral';
+  var grupo = fracoes;
+  if (metodo.indexOf('bloco:') === 0) {
+    var bl = metodo.split(':')[1];
+    grupo = fracoes.filter(function(f){ return f.bloco === bl; });
+  }
+  var permTotal = grupo.reduce(function(s,f){ return s + parseFloat(f.permilagem||0); }, 0);
+
+  // Permilagem a favor / contra
+  var permSim = 0, permNao = 0, nSim = 0, nNao = 0;
+  votos.forEach(function(v){
+    var f = grupo.find(function(x){ return x.id === v.fracao_id; });
+    if (!f) return; // voto de fração fora do grupo (não conta)
+    var p = parseFloat(f.permilagem||0);
+    if (v.voto === 'sim') { permSim += p; nSim++; }
+    else if (v.voto === 'nao') { permNao += p; nNao++; }
+  });
+  var pctSim = permTotal > 0 ? (permSim/permTotal*100) : 0;
+  var pctNao = permTotal > 0 ? (permNao/permTotal*100) : 0;
+  var pctVotou = permTotal > 0 ? ((permSim+permNao)/permTotal*100) : 0;
+
+  // Regra legal: aprovado se a permilagem A FAVOR > 50% do total do grupo
+  window._ocPodeAprovar = (pctSim > 50);
+
   var resultado = '';
   if (votos.length === 0) {
-    resultado = '<div style="font-size:10.5px;color:var(--amber);margin-top:4px;">⚠️ Ainda ninguém votou. Podes aguardar mais votos ou decidir na mesma.</div>';
-  } else if (sim > nao) {
-    resultado = '<div style="font-size:10.5px;color:var(--green);margin-top:4px;">✅ Maioria a favor</div>';
-  } else if (nao > sim) {
-    resultado = '<div style="font-size:10.5px;color:var(--red);margin-top:4px;">❌ Maioria contra</div>';
+    resultado = '<div style="font-size:10.5px;color:var(--amber);margin-top:6px;">⚠️ Ainda ninguém votou.</div>';
+  } else if (pctSim > 50) {
+    resultado = '<div style="font-size:10.5px;color:var(--green);margin-top:6px;font-weight:700;">✅ APROVADO — mais de 50% da permilagem a favor ('+pctSim.toFixed(1)+'‰%)</div>';
+  } else if (pctNao >= 50) {
+    resultado = '<div style="font-size:10.5px;color:var(--red);margin-top:6px;font-weight:700;">❌ REJEITADO — maioria da permilagem contra</div>';
   } else {
-    resultado = '<div style="font-size:10.5px;color:var(--t3);margin-top:4px;">➖ Empate</div>';
+    resultado = '<div style="font-size:10.5px;color:var(--amber);margin-top:6px;">⏳ SEM MAIORIA AINDA — só '+pctVotou.toFixed(1)+'% da permilagem votou. Faltam votos para atingir os 50% necessários (Art. 1432.º CC).</div>';
   }
-  return '<div style="font-size:11px;color:var(--t2);margin:8px 0;padding:8px;background:var(--s2);border-radius:6px;">🗳️ <strong style="color:var(--green);">'+sim+' a favor</strong> · <strong style="color:var(--red);">'+nao+' contra</strong> (de '+fracoes.length+' frações)'+resultado+'</div>';
+
+  return '<div style="font-size:11px;color:var(--t2);margin:8px 0;padding:10px;background:var(--s2);border-radius:6px;">' +
+    '<div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span>🗳️ Votação por permilagem</span><span style="color:var(--t3);">'+(nSim+nNao)+'/'+grupo.length+' frações votaram</span></div>' +
+    '<div style="height:8px;background:var(--b1);border-radius:4px;overflow:hidden;display:flex;margin:6px 0;">' +
+    '<div style="width:'+pctSim+'%;background:var(--green);"></div>' +
+    '<div style="width:'+pctNao+'%;background:var(--red);"></div>' +
+    '</div>' +
+    '<div style="display:flex;justify-content:space-between;font-size:10.5px;"><span style="color:var(--green);">A favor: '+permSim.toFixed(1)+'‰ ('+pctSim.toFixed(1)+'%)</span><span style="color:var(--red);">Contra: '+permNao.toFixed(1)+'‰</span></div>' +
+    resultado + '</div>';
 }
 
 async function ocRecusar() {
@@ -7545,7 +7577,10 @@ async function ocEncerrar() {
 }
 
 async function ocAprovar() {
-  // Registar a contagem de votos no evento (fica no PDF)
+  // Regra legal: só aprova se a permilagem a favor > 50% (a menos que o admin force)
+  if (window._ocPodeAprovar === false) {
+    if (!confirm('⚠️ ATENÇÃO: A votação ainda NÃO atingiu a maioria legal (mais de 50% da permilagem a favor).\n\nAprovar mesmo assim pode ser juridicamente contestável. Só deves fazê-lo se tiveres outra base legal (ex: reparação urgente de conservação).\n\nTens a certeza que queres aprovar?')) return;
+  }
   var vRes = await sb.from('ocorrencia_votos').select('voto').eq('ocorrencia_id',_ocAtual.id);
   var votos = vRes.data || [];
   var sim = votos.filter(function(v){return v.voto==='sim';}).length;

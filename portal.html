@@ -355,15 +355,25 @@ async function carregarFeed() {
     itens.push({ ic:'📅', cor:'rgba(0,212,255,.14)', t:(a.tipo||'Assembleia')+' — '+dataFmt, s:sub, quando:'brevemente', onclick:"abrirAssembleia()" });
   }
 
-  // Ocorrências reportadas → notificação + badge
-  const ro = await sb.rpc('portal_minhas_ocorrencias', { p_token: token });
+  // Ocorrências ativas → notificação + badge (prioriza votações pendentes)
+  const ro = await sb.rpc('portal_ocorrencias_ativas', { p_token: token });
   let abertas = [];
   if (!ro.error && ro.data) {
-    abertas = ro.data.filter(o => o.estado !== 'resolvida' && o.estado !== 'fechada');
-    if (abertas.length) {
-      const bo = document.getElementById('badge-oc');
+    abertas = ro.data;
+    // votações pendentes que ESTE condómino ainda não votou
+    const votacoesPendentes = abertas.filter(o => o.precisa_votacao && o.estado==='aguarda_votacao' && !o.meu_voto);
+    const bo = document.getElementById('badge-oc');
+    if (votacoesPendentes.length) {
+      bo.textContent = votacoesPendentes.length; bo.style.display = 'block';
+      bo.className = 'mtile-badge'; // vermelho — precisa de ação
+    } else if (abertas.length) {
       bo.textContent = abertas.length; bo.style.display = 'block';
+      bo.className = 'mtile-badge amber'; // âmbar — a decorrer, sem ação urgente
     }
+    // notificação de votação no topo do feed
+    votacoesPendentes.slice(0,2).forEach(function(o){
+      itens.unshift({ ic:'🗳️', cor:'rgba(255,179,0,.15)', t:'Votação pendente: '+categoriaLabel(o.categoria), s:'Toca para veres a tua parte e votares', quando:'', onclick:"irPara('reportar')" });
+    });
     ro.data.slice(0,2).forEach(function(o){
       const resolv = (o.estado==='resolvida'||o.estado==='fechada');
       itens.push({ ic: resolv?'✅':'🛠️', cor: resolv?'rgba(34,229,132,.14)':'rgba(255,179,0,.14)',
