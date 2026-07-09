@@ -553,7 +553,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.09-0905</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.09-0928</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -7304,8 +7304,118 @@ async function gerirOcorrencia(id) {
     });
   } else { h += '<div style="font-size:11px;color:var(--t3);">Ainda sem eventos.</div>'; }
 
+  // Botão de exportar relatório (prova)
+  h += '<button class="btn-primary" style="width:100%;margin-top:16px;" onclick="exportarOcorrenciaPDF()">📄 Exportar relatório (PDF de prova)</button>';
+
   h += '</div>';
   abrirModalGenerico('Gerir Ocorrência', h);
+}
+
+async function exportarOcorrenciaPDF() {
+  if (!_ocAtual) return;
+  if (!window.jspdf || !window.jspdf.jsPDF) { toast('Biblioteca PDF não carregada','err'); return; }
+  toast('A gerar relatório...','');
+
+  var oRes = await sb.from('ocorrencias').select('*').eq('id', _ocAtual.id).single();
+  var o = oRes.data || _ocAtual;
+  var evRes = await sb.from('ocorrencia_eventos').select('*').eq('ocorrencia_id', o.id).order('criado_em',{ascending:true});
+  var eventos = evRes.data || [];
+  var parceiroNome = '—';
+  if (o.parceiro_id) { var pR = await sb.from('parceiros').select('nome,telefone,email').eq('id', o.parceiro_id).single(); if (pR.data) parceiroNome = pR.data.nome; }
+  var votos = [];
+  if (o.precisa_votacao) { var vR = await sb.from('ocorrencia_votos').select('voto').eq('ocorrencia_id', o.id); votos = vR.data || []; }
+
+  var { jsPDF } = window.jspdf;
+  var doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+  var W = 210, M = 20, y = 0;
+  var condoNome = displayNomeCondo(currentCondo.nome||'');
+  var hoje = new Date();
+  var hojeFmt = hoje.toLocaleDateString('pt-PT');
+  var estLabels = { aberta:'Aberta', parceiro_contactado:'Parceiro contactado', aguarda_orcamento:'Aguarda orçamento', aguarda_votacao:'Em votação', aprovada:'Aprovada', em_reparacao:'Em reparação', resolvida:'Resolvida' };
+
+  doc.setFillColor(13,24,37); doc.rect(0,0,W,42,'F');
+  doc.setFillColor(0,212,255); doc.rect(0,42,W,1.2,'F');
+  doc.setTextColor(0,212,255); doc.setFont('helvetica','bold'); doc.setFontSize(9);
+  doc.text('RELATORIO DE OCORRENCIA', W/2, 13, {align:'center'});
+  doc.setTextColor(255,255,255); doc.setFontSize(15);
+  doc.text(condoNome, W/2, 24, {align:'center'});
+  doc.setFontSize(11);
+  doc.text((o.categoria||'Ocorrencia') + ' - ' + (o.local_ocorrencia||''), W/2, 33, {align:'center'});
+  doc.setTextColor(190,195,205); doc.setFont('helvetica','normal'); doc.setFontSize(8);
+  doc.text('Documento gerado em ' + hojeFmt + ' pelo COND.OS 2059 Pro', W/2, 39.5, {align:'center'});
+
+  y = 54;
+  doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(40,40,40);
+  doc.text('Identificacao', M, y); y += 6;
+  doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(60,60,60);
+  var linhas = [
+    ['Categoria:', o.categoria||'-'],
+    ['Local:', o.local_ocorrencia||'-'],
+    ['Reportado por:', o.reportado_por||'-'],
+    ['Data do reporte:', (o.criado_em||'').slice(0,10)],
+    ['Estado atual:', estLabels[o.estado]||o.estado||'-'],
+    ['Parceiro:', parceiroNome]
+  ];
+  linhas.forEach(function(l){
+    doc.setFont('helvetica','bold'); doc.text(l[0], M+2, y);
+    doc.setFont('helvetica','normal'); doc.text(String(l[1]), M+42, y); y += 5.5;
+  });
+  y += 3;
+
+  if (o.descricao) {
+    doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(40,40,40);
+    doc.text('Descricao', M, y); y += 6;
+    doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(60,60,60);
+    var desc = doc.splitTextToSize(o.descricao, W-2*M);
+    doc.text(desc, M+2, y); y += desc.length*5 + 4;
+  }
+
+  if (o.orcamento_valor) {
+    doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(40,40,40);
+    doc.text('Orcamento e custo', M, y); y += 6;
+    doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(60,60,60);
+    doc.text('Valor orcamentado: ' + parseFloat(o.orcamento_valor).toFixed(2) + ' EUR', M+2, y); y += 5.5;
+    if (o.orcamento_nota) { var nt = doc.splitTextToSize('Trabalho: ' + o.orcamento_nota, W-2*M); doc.text(nt, M+2, y); y += nt.length*5.5; }
+    var divTxt = (o.divisao_metodo||'').indexOf('bloco:')===0 ? 'Bloco ' + o.divisao_metodo.split(':')[1] : 'Permilagem geral (Art. 1424 CC)';
+    doc.text('Divisao do custo: ' + divTxt, M+2, y); y += 5.5;
+    y += 3;
+  }
+
+  if (o.precisa_votacao && votos.length) {
+    var sim = votos.filter(function(v){return v.voto==='sim';}).length;
+    var nao = votos.filter(function(v){return v.voto==='nao';}).length;
+    doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(40,40,40);
+    doc.text('Votacao dos condominos', M, y); y += 6;
+    doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(60,60,60);
+    doc.text('A favor: ' + sim + '   .   Contra: ' + nao + '   .   Total: ' + votos.length, M+2, y); y += 8;
+  }
+
+  doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(40,40,40);
+  doc.text('Historico cronologico', M, y); y += 6;
+  if (eventos.length) {
+    eventos.forEach(function(ev){
+      if (y > 268) { doc.addPage(); y = 20; }
+      var dt = (ev.criado_em||'').slice(0,16).replace('T',' ');
+      doc.setTextColor(0,140,180); doc.setFontSize(9); doc.setFont('helvetica','bold'); doc.text('*', M+2, y+4);
+      doc.setTextColor(120,120,120); doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.text(dt, M+6, y);
+      doc.setTextColor(60,60,60); doc.setFontSize(9);
+      var txt = doc.splitTextToSize(ev.texto, W-2*M-8);
+      doc.text(txt, M+6, y+4); y += 4 + txt.length*4.5 + 2;
+    });
+  } else { doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(60,60,60); doc.text('(Sem eventos registados)', M+2, y); y += 6; }
+
+  var totalPaginas = doc.internal.getNumberOfPages();
+  for (var i=1; i<=totalPaginas; i++) {
+    doc.setPage(i);
+    doc.setDrawColor(220,220,220); doc.line(M, 285, W-M, 285);
+    doc.setFontSize(7); doc.setTextColor(150,150,150); doc.setFont('helvetica','normal');
+    doc.text('COND.OS 2059 Pro - Documento gerado automaticamente - ' + condoNome, M, 290);
+    doc.text('Pag. ' + i + '/' + totalPaginas, W-M, 290, {align:'right'});
+  }
+
+  var nomeFich = 'Ocorrencia_' + (o.categoria||'').replace(/[^a-zA-Z0-9]/g,'') + '_' + hojeFmt.replace(/\//g,'-') + '.pdf';
+  doc.save(nomeFich);
+  toast('Relatorio gerado!','ok');
 }
 
 async function ocEvento(tipo, texto) {
