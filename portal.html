@@ -650,11 +650,14 @@ async function abrirOcorrencia(id) {
   if (tRes.error || !tRes.data || !tRes.data.length) {
     tl.innerHTML = '<div class="empty" style="padding:16px;">A administração ainda não registou atualizações.</div>';
   } else {
+    const votacaoAberta = (o.precisa_votacao && o.estado === 'aguarda_votacao');
     tl.innerHTML = tRes.data.map(function(e){
+      const eVotacao = e.tipo === 'votacao';
+      const nota = (eVotacao && votacaoAberta && !o.meu_voto) ? '<div onclick="document.getElementById(\'oc-detalhe\').scrollIntoView({behavior:\'smooth\',block:\'start\'})" style="font-size:11px;color:var(--amber);font-weight:600;margin-top:4px;cursor:pointer;">↑ Vê a votação no topo e dá a tua opinião</div>' : '';
       return '<div style="display:flex;gap:12px;padding:10px 2px;">' +
-        '<div style="display:flex;flex-direction:column;align-items:center;"><span style="width:10px;height:10px;border-radius:50%;background:var(--cyan);"></span><span style="flex:1;width:2px;background:var(--b);margin-top:2px;"></span></div>' +
+        '<div style="display:flex;flex-direction:column;align-items:center;"><span style="width:10px;height:10px;border-radius:50%;background:'+(eVotacao?'var(--amber)':'var(--cyan)')+';"></span><span style="flex:1;width:2px;background:var(--b);margin-top:2px;"></span></div>' +
         '<div style="flex:1;padding-bottom:6px;"><div style="font-size:12.5px;color:var(--text);line-height:1.4;">'+escapar(e.texto)+'</div>' +
-        '<div style="font-size:10.5px;color:var(--t3);margin-top:2px;">'+dataHora(e.criado_em)+'</div></div></div>';
+        '<div style="font-size:10.5px;color:var(--t3);margin-top:2px;">'+dataHora(e.criado_em)+'</div>'+nota+'</div></div>';
     }).join('');
   }
 }
