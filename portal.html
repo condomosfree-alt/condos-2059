@@ -361,7 +361,7 @@ async function carregarFeed() {
   if (!ro.error && ro.data) {
     abertas = ro.data;
     // votações pendentes que ESTE condómino ainda não votou
-    const votacoesPendentes = abertas.filter(o => o.precisa_votacao && o.estado==='aguarda_votacao' && !o.meu_voto);
+    const votacoesPendentes = abertas.filter(o => o.precisa_votacao && o.estado==='aguarda_votacao' && !o.meu_voto && o.posso_votar !== false);
     const bo = document.getElementById('badge-oc');
     if (votacoesPendentes.length) {
       bo.textContent = votacoesPendentes.length; bo.style.display = 'block';
@@ -592,7 +592,7 @@ async function carregarHistOcorrencias() {
   _ocCache = {};
   cont.innerHTML = res.data.map(function(o){
     _ocCache[o.id] = o;
-    const precisaVoto = o.precisa_votacao && o.estado==='aguarda_votacao' && !o.meu_voto;
+    const precisaVoto = o.precisa_votacao && o.estado==='aguarda_votacao' && !o.meu_voto && o.posso_votar !== false;
     return '<div class="li" style="cursor:pointer;" onclick="abrirOcorrencia(\''+o.id+'\')">' +
       '<div class="est" style="background:rgba(0,212,255,.08);">'+categoriaIcon(o.categoria)+'</div>' +
       '<div class="m"><div class="t">'+categoriaLabel(o.categoria)+(precisaVoto?' <span style="color:var(--amber);font-size:10px;">● precisa do teu voto</span>':'')+'</div>' +
@@ -626,27 +626,35 @@ async function abrirOcorrencia(id) {
 
   // Votação (se precisar)
   if (o.precisa_votacao && o.estado === 'aguarda_votacao') {
+    const podeVotar = (o.posso_votar !== false); // true se do bloco ou geral
     html += '<div class="card" style="border-color:rgba(255,179,0,.3);">';
     if (o.orcamento_nota) html += '<div style="font-size:12px;color:var(--t2);margin-bottom:8px;">🔧 <strong>Trabalho proposto:</strong> '+escapar(o.orcamento_nota)+'</div>';
-    html += '<div style="font-size:13px;color:var(--amber);font-weight:700;margin-bottom:4px;">🗳️ Aprovas esta reparação?</div>';
-    if (o.orcamento_valor) {
-      const total = parseFloat(o.orcamento_valor);
-      html += '<div style="font-size:12px;color:var(--t2);">Custo total: <strong>'+total.toFixed(2).replace('.',',')+'€</strong> · <span id="minhaparte-'+o.id+'">a calcular…</span></div>';
-      sb.rpc('portal_perm_total', { p_token: token, p_metodo: o.divisao_metodo||'geral' }).then(function(pr){
-        const totalPerm = parseFloat(pr.data||0);
-        const el = document.getElementById('minhaparte-'+o.id);
-        if (el && totalPerm > 0 && o.minha_permilagem != null) {
-          const parte = total * (parseFloat(o.minha_permilagem) / totalPerm);
-          const soBloco = (o.divisao_metodo||'').indexOf('bloco:')===0;
-          el.innerHTML = '<strong style="color:var(--cyan);">a tua parte: '+parte.toFixed(2).replace('.',',')+'€</strong>'+(soBloco?' (só o teu bloco)':'');
-        } else if (el) el.textContent='';
-      });
+    if (podeVotar) {
+      html += '<div style="font-size:13px;color:var(--amber);font-weight:700;margin-bottom:4px;">🗳️ Aprovas esta reparação?</div>';
+      if (o.orcamento_valor) {
+        const total = parseFloat(o.orcamento_valor);
+        html += '<div style="font-size:12px;color:var(--t2);">Custo total: <strong>'+total.toFixed(2).replace('.',',')+'€</strong> · <span id="minhaparte-'+o.id+'">a calcular…</span></div>';
+        sb.rpc('portal_perm_total', { p_token: token, p_metodo: o.divisao_metodo||'geral' }).then(function(pr){
+          const totalPerm = parseFloat(pr.data||0);
+          const el = document.getElementById('minhaparte-'+o.id);
+          if (el && totalPerm > 0 && o.minha_permilagem != null) {
+            const parte = total * (parseFloat(o.minha_permilagem) / totalPerm);
+            const soBloco = (o.divisao_metodo||'').indexOf('bloco:')===0;
+            el.innerHTML = '<strong style="color:var(--cyan);">a tua parte: '+parte.toFixed(2).replace('.',',')+'€</strong>'+(soBloco?' (só o teu bloco)':'');
+          } else if (el) el.textContent='';
+        });
+      }
+      if (o.meu_voto) html += '<div style="font-size:11.5px;color:var(--cyan);margin-top:8px;">Já votaste: <strong>'+(o.meu_voto==='sim'?'✅ A favor':'❌ Contra')+'</strong> · podes alterar</div>';
+      html += '<div style="display:flex;gap:8px;margin-top:10px;">';
+      html += '<button onclick="votarOcorrencia(\''+o.id+'\',\'sim\')" style="flex:1;background:rgba(34,229,132,.12);border:1px solid rgba(34,229,132,.4);color:var(--green);border-radius:8px;padding:11px;font-size:13px;font-weight:700;cursor:pointer;">✅ A favor</button>';
+      html += '<button onclick="votarOcorrencia(\''+o.id+'\',\'nao\')" style="flex:1;background:rgba(255,84,112,.12);border:1px solid rgba(255,84,112,.4);color:var(--red);border-radius:8px;padding:11px;font-size:13px;font-weight:700;cursor:pointer;">❌ Contra</button>';
+      html += '</div>';
+    } else {
+      // Não pertence ao bloco desta reparação
+      const bl = (o.divisao_metodo||'').indexOf('bloco:')===0 ? o.divisao_metodo.split(':')[1] : '';
+      html += '<div style="font-size:12px;color:var(--t3);padding:6px 0;">🔒 Esta reparação é da responsabilidade do <strong>Bloco '+bl+'</strong>. Só os condóminos desse bloco votam e pagam — a tua fração não é afetada.</div>';
     }
-    if (o.meu_voto) html += '<div style="font-size:11.5px;color:var(--cyan);margin-top:8px;">Já votaste: <strong>'+(o.meu_voto==='sim'?'✅ A favor':'❌ Contra')+'</strong> · podes alterar</div>';
-    html += '<div style="display:flex;gap:8px;margin-top:10px;">';
-    html += '<button onclick="votarOcorrencia(\''+o.id+'\',\'sim\')" style="flex:1;background:rgba(34,229,132,.12);border:1px solid rgba(34,229,132,.4);color:var(--green);border-radius:8px;padding:11px;font-size:13px;font-weight:700;cursor:pointer;">✅ A favor</button>';
-    html += '<button onclick="votarOcorrencia(\''+o.id+'\',\'nao\')" style="flex:1;background:rgba(255,84,112,.12);border:1px solid rgba(255,84,112,.4);color:var(--red);border-radius:8px;padding:11px;font-size:13px;font-weight:700;cursor:pointer;">❌ Contra</button>';
-    html += '</div></div>';
+    html += '</div>';
   }
 
   // Timeline (histórico do que aconteceu)
