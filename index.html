@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#060A14">
+<title>Cond.OS 2059 — O sistema operativo do seu condomínio</title>
+<meta name="description" content="Quotas, avarias, assembleias e provas legais — com a lei portuguesa embutida em cada decisão. Gestão de condomínios sem papel.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,500&family=Inter:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#060A14; --panel:#0D1526; --panel2:#131D33;
+  --ink:#E9F1FF; --dim:#8496B4; --faint:#44536F;
+  --cyan:#00D4FF; --gold:#F5B942; --green:#22E584; --red:#FF5470;
+  --line:rgba(0,212,255,.14); --line2:rgba(0,212,255,.3);
+  --serif:'Fraunces',serif; --sans:'Inter',sans-serif; --mono:'Space Mono',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.6;overflow-x:hidden}
+a{color:inherit;text-decoration:none}
+::selection{background:rgba(0,212,255,.25)}
+:focus-visible{outline:2px solid var(--cyan);outline-offset:3px;border-radius:4px}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+
+/* fundo: grelha de plantas de prédio, muito subtil */
+body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:linear-gradient(rgba(0,212,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(0,212,255,.025) 1px,transparent 1px);
+  background-size:56px 56px;
+  mask-image:radial-gradient(ellipse 90% 60% at 50% 0%,#000 30%,transparent 75%);}
+.wrap{position:relative;z-index:1;max-width:1120px;margin:0 auto;padding:0 28px}
+
+/* ===== HEADER ===== */
+header{position:sticky;top:0;z-index:50;backdrop-filter:blur(14px);background:rgba(6,10,20,.72);border-bottom:1px solid var(--line)}
+.hd{display:flex;align-items:center;justify-content:space-between;height:64px}
+.logo{font-family:var(--mono);font-weight:700;font-size:16px;letter-spacing:.5px}
+.logo em{color:var(--cyan);font-style:normal}
+.logo small{display:block;font-size:8.5px;letter-spacing:3.5px;color:var(--faint);font-weight:400;margin-top:-2px}
+.hd nav{display:flex;gap:26px;font-size:13.5px;color:var(--dim)}
+.hd nav a:hover{color:var(--ink)}
+.btn{display:inline-flex;align-items:center;gap:8px;font-family:var(--sans);font-weight:600;font-size:14px;border-radius:10px;padding:11px 20px;cursor:pointer;border:1px solid transparent;transition:transform .15s ease,box-shadow .15s ease}
+.btn:hover{transform:translateY(-1px)}
+.btn-cyan{background:linear-gradient(135deg,#00D4FF,#0090BF);color:#02121D;box-shadow:0 6px 24px rgba(0,212,255,.22)}
+.btn-ghost{border-color:var(--line2);color:var(--ink);background:rgba(0,212,255,.05)}
+.btn-sm{padding:8px 16px;font-size:13px}
+@media(max-width:760px){.hd nav{display:none}}
+
+/* ===== HERO ===== */
+.hero{padding:84px 0 60px;display:grid;grid-template-columns:1.05fr .95fr;gap:56px;align-items:center}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:3px;color:var(--cyan);text-transform:uppercase;margin-bottom:22px}
+.hero h1{font-family:var(--serif);font-weight:500;font-size:clamp(38px,5.2vw,60px);line-height:1.08;letter-spacing:-.5px}
+.hero h1 .papel{color:var(--dim)}
+.hero h1 .este{display:block;margin-top:10px;font-weight:600;font-style:italic;color:var(--cyan)}
+.hero p.sub{margin:26px 0 34px;font-size:17px;color:var(--dim);max-width:46ch}
+.hero p.sub strong{color:var(--ink);font-weight:500}
+.hero-ctas{display:flex;gap:14px;flex-wrap:wrap}
+.hero-note{margin-top:18px;font-family:var(--mono);font-size:11px;color:var(--faint)}
+
+/* cartões reais do produto, empilhados */
+.stack{position:relative;min-height:430px}
+.card{position:absolute;width:100%;max-width:360px;background:linear-gradient(160deg,var(--panel2),var(--panel));border:1px solid var(--line2);border-radius:16px;padding:20px;box-shadow:0 24px 60px rgba(0,0,0,.5)}
+.card .tag{font-family:var(--mono);font-size:9.5px;letter-spacing:2px;color:var(--faint);text-transform:uppercase;margin-bottom:10px}
+.c1{top:0;right:0;z-index:3;animation:float1 7s ease-in-out infinite}
+.c2{top:190px;right:70px;z-index:2;animation:float2 8s ease-in-out infinite}
+.c3{top:330px;right:12px;z-index:1;opacity:.85;animation:float1 9s ease-in-out infinite}
+@keyframes float1{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+@keyframes float2{0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}
+.vt{font-size:14px;font-weight:600;margin-bottom:4px}
+.vs{font-size:12.5px;color:var(--dim)}
+.vs b{color:var(--cyan);font-weight:600}
+.vbar{height:8px;border-radius:4px;background:#1A2440;overflow:hidden;display:flex;margin:12px 0 6px}
+.vbar i{display:block;height:100%}
+.vlegend{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;color:var(--faint)}
+.vbtns{display:flex;gap:8px;margin-top:12px}
+.vbtns span{flex:1;text-align:center;font-size:12px;font-weight:700;border-radius:8px;padding:9px}
+.paga{display:flex;justify-content:space-between;align-items:center}
+.paga .val{font-family:var(--mono);font-weight:700;font-size:20px}
+.pill{font-family:var(--mono);font-size:10px;letter-spacing:1px;border-radius:20px;padding:4px 12px}
+.mini-tl{display:flex;flex-direction:column;gap:9px;margin-top:4px}
+.mini-tl div{display:flex;gap:10px;align-items:center;font-size:12px;color:var(--dim)}
+.mini-tl i{width:8px;height:8px;border-radius:50%;background:var(--cyan);flex:none}
+.mini-tl div:last-child{color:var(--green)}
+.mini-tl div:last-child i{background:var(--green)}
+@media(max-width:920px){.hero{grid-template-columns:1fr;padding-top:56px}.stack{min-height:0;display:flex;flex-direction:column;gap:16px}.card{position:static;max-width:100%;animation:none}}
+
+/* ===== NUMBERS BAR ===== */
+.numbers{border-top:1px solid var(--line);border-bottom:1px solid var(--line);background:rgba(13,21,38,.5)}
+.numbers .in{display:grid;grid-template-columns:repeat(4,1fr);gap:1px}
+.num{padding:26px 20px;text-align:center;border-left:1px solid var(--line)}
+.num:first-child{border-left:none}
+.num b{font-family:var(--mono);font-size:24px;font-weight:700;color:var(--cyan);display:block}
+.num span{font-size:12px;color:var(--faint);letter-spacing:.4px}
+@media(max-width:760px){.numbers .in{grid-template-columns:repeat(2,1fr)}.num:nth-child(3){border-left:none}}
+
+/* ===== SECTIONS ===== */
+section{padding:96px 0}
+.sec-eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:3px;color:var(--cyan);text-transform:uppercase;margin-bottom:16px}
+.sec-title{font-family:var(--serif);font-weight:500;font-size:clamp(28px,3.6vw,42px);line-height:1.15;letter-spacing:-.3px;max-width:22ch}
+.sec-title em{font-style:italic;color:var(--gold)}
+.sec-lead{margin-top:18px;color:var(--dim);max-width:56ch;font-size:16px}
+
+/* lei / carimbos */
+.lei-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:48px}
+.lei{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--gold);border-radius:12px;padding:22px}
+.lei .art{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--gold);letter-spacing:1px}
+.lei h3{font-family:var(--serif);font-size:18px;font-weight:600;margin:10px 0 8px}
+.lei p{font-size:13.5px;color:var(--dim)}
+@media(max-width:860px){.lei-grid{grid-template-columns:1fr}}
+
+/* ciclo — a assinatura */
+.ciclo{position:relative;margin-top:64px}
+.ciclo-line{position:absolute;left:0;right:0;top:26px;height:2px;background:linear-gradient(90deg,var(--cyan),var(--gold),var(--green));opacity:.35}
+.ciclo-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:14px;position:relative}
+.passo{text-align:left}
+.passo .dot{width:52px;height:52px;border-radius:14px;background:var(--panel2);border:1px solid var(--line2);display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:14px;position:relative;z-index:1}
+.passo h4{font-size:14px;font-weight:600;margin-bottom:5px}
+.passo p{font-size:12px;color:var(--faint);line-height:1.5}
+.passo p b{color:var(--dim);font-weight:500}
+@media(max-width:920px){.ciclo-line{display:none}.ciclo-grid{grid-template-columns:repeat(2,1fr);gap:28px 18px}}
+@media(max-width:520px){.ciclo-grid{grid-template-columns:1fr}}
+
+/* módulos */
+.mod-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:48px}
+.mod{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:24px;transition:border-color .2s ease,transform .2s ease}
+.mod:hover{border-color:var(--line2);transform:translateY(-3px)}
+.mod .ic{font-size:24px;margin-bottom:14px}
+.mod h3{font-size:16px;font-weight:600;margin-bottom:7px}
+.mod p{font-size:13.5px;color:var(--dim)}
+@media(max-width:860px){.mod-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:560px){.mod-grid{grid-template-columns:1fr}}
+
+/* dois lados */
+.dois{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:48px}
+.lado{border-radius:16px;padding:34px;border:1px solid var(--line)}
+.lado.admin{background:linear-gradient(160deg,rgba(0,212,255,.07),var(--panel))}
+.lado.inv{background:linear-gradient(160deg,rgba(245,185,66,.06),var(--panel))}
+.lado h3{font-family:var(--serif);font-size:22px;font-weight:600;margin-bottom:14px}
+.lado ul{list-style:none;display:flex;flex-direction:column;gap:11px}
+.lado li{font-size:14px;color:var(--dim);padding-left:24px;position:relative}
+.lado li::before{content:'—';position:absolute;left:0;color:var(--cyan)}
+.lado.inv li::before{color:var(--gold)}
+@media(max-width:820px){.dois{grid-template-columns:1fr}}
+
+/* CTA final */
+.final{text-align:center;padding:110px 0 130px}
+.final h2{font-family:var(--serif);font-weight:500;font-size:clamp(30px,4.4vw,50px);line-height:1.1;letter-spacing:-.4px}
+.final h2 em{font-style:italic;color:var(--cyan)}
+.final p{margin:20px auto 36px;color:var(--dim);max-width:52ch}
+footer{border-top:1px solid var(--line);padding:30px 0;font-family:var(--mono);font-size:11px;color:var(--faint);display:flex;justify-content:space-between;flex-wrap:gap;gap:10px}
+
+/* reveal on scroll */
+.rv{opacity:0;transform:translateY(22px);transition:opacity .7s ease,transform .7s ease}
+.rv.on{opacity:1;transform:none}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap hd">
+    <div class="logo">COND<em>.</em>OS <em>2059</em><small>GESTÃO DE CONDOMÍNIOS</small></div>
+    <nav>
+      <a href="#lei">A lei</a>
+      <a href="#ciclo">O ciclo</a>
+      <a href="#modulos">Módulos</a>
+      <a href="#quem">Para quem</a>
+    </nav>
+    <a class="btn btn-ghost btn-sm" href="CondOS_2059_Live.html">Entrar no sistema</a>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- HERO -->
+  <div class="hero">
+    <div>
+      <div class="eyebrow">Feito em Portugal · Para a lei portuguesa</div>
+      <h1>400.000 condomínios <span class="papel">geridos a papel e Excel.</span> <span class="este">Este não.</span></h1>
+      <p class="sub">O Cond.OS trata das <strong>quotas</strong>, <strong>avarias</strong>, <strong>assembleias</strong> e <strong>provas documentais</strong> — com o Código Civil embutido em cada decisão. Cada condómino vê a sua parte. Ao cêntimo.</p>
+      <div class="hero-ctas">
+        <a class="btn btn-cyan" href="CondOS_2059_Live.html">Ver o sistema a funcionar</a>
+        <a class="btn btn-ghost" href="#ciclo">Como funciona</a>
+      </div>
+      <div class="hero-note">// sem instalação · corre no navegador · dados seguros no Supabase</div>
+    </div>
+
+    <!-- cartões REAIS do produto -->
+    <div class="stack" aria-hidden="true">
+      <div class="card c1">
+        <div class="tag">Portal do condómino · votação</div>
+        <div class="vt">🗳️ Aprovas esta reparação?</div>
+        <div class="vs">Custo total: <b>250,00€</b> · a tua parte: <b>26,85€</b> (só o teu bloco)</div>
+        <div class="vbar"><i style="width:62%;background:var(--green)"></i><i style="width:11%;background:var(--red)"></i></div>
+        <div class="vlegend"><span>A FAVOR 623,4‰</span><span>CONTRA 108‰</span></div>
+        <div class="vbtns">
+          <span style="background:rgba(34,229,132,.12);border:1px solid rgba(34,229,132,.4);color:var(--green)">✅ A favor</span>
+          <span style="background:rgba(255,84,112,.10);border:1px solid rgba(255,84,112,.35);color:var(--red)">❌ Contra</span>
+        </div>
+      </div>
+      <div class="card c2">
+        <div class="tag">Quotas · Março 2026</div>
+        <div class="paga">
+          <div><div class="vt">Fração B — R/c Direito</div><div class="vs">Recibo enviado por email ✓</div></div>
+          <div style="text-align:right"><span class="val" style="color:var(--green)">45,00€</span><br><span class="pill" style="background:rgba(34,229,132,.12);color:var(--green)">PAGA</span></div>
+        </div>
+      </div>
+      <div class="card c3">
+        <div class="tag">Ocorrência · elevador bloco A</div>
+        <div class="mini-tl">
+          <div><i></i>Reportada pelo condómino no portal</div>
+          <div><i></i>Orçamento: 250€ · votação aberta</div>
+          <div><i></i>Resolvida · custo dividido por permilagem ✓</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- NÚMEROS -->
+<div class="numbers">
+  <div class="wrap in">
+    <div class="num rv"><b>1000‰</b><span>votação pesada por permilagem</span></div>
+    <div class="num rv"><b>Art. 1424.º</b><span>divisão de custos como a lei manda</span></div>
+    <div class="num rv"><b>2 min</b><span>da avaria reportada ao parceiro sugerido</span></div>
+    <div class="num rv"><b>100%</b><span>português — lei, língua e suporte</span></div>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <!-- A LEI -->
+  <section id="lei">
+    <div class="sec-eyebrow">O motor legal</div>
+    <h2 class="sec-title">A lei não é um extra. <em>É o motor.</em></h2>
+    <p class="sec-lead">A maioria do software de gestão trata a lei como um PDF em anexo. No Cond.OS, os artigos do Código Civil estão dentro das decisões — a dividir custos, a pesar votos, a validar maiorias.</p>
+    <div class="lei-grid">
+      <div class="lei rv">
+        <div class="art">ART. 1424.º CC</div>
+        <h3>Divisão de despesas</h3>
+        <p>Cada custo é dividido por permilagem — geral ou só do bloco que beneficia. O sistema calcula a parte de cada fração ao cêntimo e regista o método na prova.</p>
+      </div>
+      <div class="lei rv">
+        <div class="art">ART. 1432.º CC</div>
+        <h3>Deliberações e maiorias</h3>
+        <p>Os votos valem pela permilagem, não por cabeças. Uma reparação só é aprovada com mais de 50% do valor do prédio a favor — e o sistema avisa quando não há maioria.</p>
+      </div>
+      <div class="lei rv">
+        <div class="art">DL 268/94 · ART. 6.º</div>
+        <h3>Atas com força executiva</h3>
+        <p>Atas geradas em PDF oficial, numeradas e arquivadas — o título executivo que permite cobrar dívidas sem passar por tribunal declarativo.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- O CICLO — assinatura -->
+  <section id="ciclo">
+    <div class="sec-eyebrow">A assinatura do Cond.OS</div>
+    <h2 class="sec-title">Da avaria à prova documental — <em>sem uma folha de papel.</em></h2>
+    <p class="sec-lead">O ciclo completo de uma reparação, do relato do condómino ao custo lançado nas contas. Cada passo fica registado com data e hora — e sai num relatório PDF apresentável em assembleia ou em tribunal.</p>
+    <div class="ciclo">
+      <div class="ciclo-line"></div>
+      <div class="ciclo-grid">
+        <div class="passo rv"><div class="dot">📱</div><h4>Reporta</h4><p>O condómino relata a avaria no portal. <b>Sem telefonemas.</b></p></div>
+        <div class="passo rv"><div class="dot">🤝</div><h4>Parceiro</h4><p>O sistema sugere a empresa certa pela categoria e pela <b>nota real</b> de trabalhos anteriores.</p></div>
+        <div class="passo rv"><div class="dot">💶</div><h4>Orçamento</h4><p>Registado com o método de divisão legal: <b>permilagem geral ou só o bloco.</b></p></div>
+        <div class="passo rv"><div class="dot">🗳️</div><h4>Votação</h4><p>Cada condómino vê <b>a sua parte ao cêntimo</b> e vota no telemóvel.</p></div>
+        <div class="passo rv"><div class="dot">🔧</div><h4>Reparação</h4><p>Aprovada com maioria de permilagem. O custo entra <b>sozinho nas despesas.</b></p></div>
+        <div class="passo rv"><div class="dot">📄</div><h4>Prova</h4><p>Relatório PDF com histórico, votos e divisão. <b>Pronto para a assembleia.</b></p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- MÓDULOS -->
+  <section id="modulos">
+    <div class="sec-eyebrow">Tudo num só sistema</div>
+    <h2 class="sec-title">Os módulos que um administrador usa <em>todos os dias.</em></h2>
+    <div class="mod-grid">
+      <div class="mod rv"><div class="ic">🧾</div><h3>Quotas &amp; Recibos</h3><p>Emissão mensal, importação do extrato bancário com conciliação inteligente, recibos por email e mapa anual em PDF.</p></div>
+      <div class="mod rv"><div class="ic">🗳️</div><h3>Assembleias</h3><p>Sala ao vivo com quórum em tempo real, votação por permilagem e ata oficial gerada no fim — numerada e arquivada.</p></div>
+      <div class="mod rv"><div class="ic">⚠️</div><h3>Ocorrências</h3><p>O ciclo completo da avaria: reporte, parceiro, orçamento, votação, custo e prova. Timeline visível ao condómino.</p></div>
+      <div class="mod rv"><div class="ic">🚪</div><h3>Portal do Condómino</h3><p>Cada fração vê as suas quotas, contas do prédio, documentos, avarias e fala com a administração por chat.</p></div>
+      <div class="mod rv"><div class="ic">🔍</div><h3>Raio-X às Contas</h3><p>Auditoria de transições de gestão: analisa extratos, deteta anomalias e cruza com mapas de devedores de outros softwares.</p></div>
+      <div class="mod rv"><div class="ic">🤖</div><h3>Orçamento com IA</h3><p>Proposta de orçamento anual construída sobre os dados reais do edifício — editável, com inflação e exportável.</p></div>
+    </div>
+  </section>
+
+  <!-- PARA QUEM -->
+  <section id="quem">
+    <div class="sec-eyebrow">Para quem é</div>
+    <h2 class="sec-title">Dois lados do mesmo edifício.</h2>
+    <div class="dois">
+      <div class="lado admin rv">
+        <h3>Para administradores e síndicos</h3>
+        <ul>
+          <li>Menos telefonemas: os condóminos reportam, acompanham e votam no portal</li>
+          <li>Provas documentais de tudo — ocorrências, conversas, atas, contas</li>
+          <li>Conciliação bancária que faz em minutos o trabalho de uma tarde</li>
+          <li>A lei aplicada por si: divisões, maiorias e prescrições sem dúvidas</li>
+        </ul>
+      </div>
+      <div class="lado inv rv">
+        <h3>Para investidores e parceiros</h3>
+        <ul>
+          <li>400.000 condomínios em Portugal, a maioria gerida sem software</li>
+          <li>Produto funcional e profundo — não um protótipo de slides</li>
+          <li>Diferenciação real: rigor legal português que os genéricos não têm</li>
+          <li>Rede de parceiros de manutenção como motor de aquisição</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- CTA FINAL -->
+<div class="final wrap">
+  <h2 class="rv">O seu condomínio merece <em>um sistema</em>,<br>não uma pasta de papéis.</h2>
+  <p class="rv">Abra o Cond.OS no navegador e veja o ciclo completo a funcionar — das quotas à prova documental.</p>
+  <div class="rv"><a class="btn btn-cyan" href="CondOS_2059_Live.html">Entrar no Cond.OS</a></div>
+</div>
+
+<footer class="wrap">
+  <span>COND.OS 2059 · gestão de condomínios</span>
+  <span>feito em Portugal 🇵🇹</span>
+</footer>
+
+<script>
+// reveal on scroll
+const io = new IntersectionObserver((es)=>{es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('on');io.unobserve(e.target);}})},{threshold:.15});
+document.querySelectorAll('.rv').forEach(el=>io.observe(el));
+</script>
+</body>
+</html>
