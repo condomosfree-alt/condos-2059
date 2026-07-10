@@ -553,7 +553,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.09-1002</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.10-2138</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -1494,7 +1494,7 @@ textarea.fi{resize:vertical;min-height:60px;}
             <div id="msg-lista-fracoes"><div class="loading"><div class="spin"></div></div></div>
           </div>
           <div class="panel" style="flex:1;display:flex;flex-direction:column;max-height:70vh;">
-            <div id="msg-cabecalho" style="padding:12px 16px;border-bottom:1px solid var(--border);font-weight:600;font-size:14px;">Escolhe uma conversa à esquerda</div>
+            <div id="msg-cabecalho" style="padding:12px 16px;border-bottom:1px solid var(--border);font-weight:600;font-size:14px;display:flex;justify-content:space-between;align-items:center;"><span id="msg-cabecalho-nome">Escolhe uma conversa à esquerda</span><button id="msg-pdf-btn" style="display:none;font-size:11px;padding:5px 10px;background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--cyan);cursor:pointer;" onclick="exportarConversaPDF()">📄 Exportar prova</button></div>
             <div id="msg-conversa" style="flex:1;overflow-y:auto;padding:16px;"></div>
             <div id="msg-responder" style="display:none;padding:12px 16px;border-top:1px solid var(--border);gap:8px;">
               <div style="display:flex;gap:8px;">
@@ -3626,6 +3626,15 @@ async function verificarAvisosGerais() {
         detalhe:'Condóminos escreveram-te pelo portal e aguardam resposta.' });
     }
 
+    // 6b) Condóminos que atualizaram os dados pela ficha
+    var faRes = await sb.from('fracoes').select('id,codigo,proprietario_nome,dados_atualizados_em').eq('condominio_id', currentCondo.id).not('dados_atualizados_em','is',null);
+    var atualizadas = faRes.data || [];
+    if (atualizadas.length) {
+      avisos.push({ pagina:'condominos', badge:String(atualizadas.length), cor:'#00d4ff',
+        texto: atualizadas.length + ' condómino(s) atualizaram os dados',
+        detalhe: atualizadas.map(function(f){ return (f.codigo||'') + (f.proprietario_nome?' ('+f.proprietario_nome+')':''); }).join(', ') + '. Vai a Condóminos para reveres e confirmar.' });
+    }
+
     // 7) Assembleia a chegar + pré-confirmações de presença do portal
     var asRes = await sb.from('assembleias').select('id,tipo,data_assembleia,estado').eq('condominio_id', currentCondo.id).not('estado','in','(realizada,nao_realizada,cancelada)').order('data_assembleia',{ascending:true}).limit(1);
     if (asRes.data && asRes.data.length) {
@@ -3662,7 +3671,7 @@ async function verificarAvisosGerais() {
     } else { b.style.display = 'none'; }
   });
   // Badges nos menus com 'nb-' (ocorrências, mensagens, assembleias)
-  [['ocorrencias','nb-oc'],['mensagens','nb-msg'],['assembleias','badge-assembleias']].forEach(function(par){
+  [['ocorrencias','nb-oc'],['mensagens','nb-msg'],['assembleias','badge-assembleias'],['condominos','nb-cond']].forEach(function(par){
     var b = document.getElementById(par[1]);
     if (!b) return;
     var av = avisos.filter(function(a){ return a.pagina===par[0]; });
@@ -4497,6 +4506,15 @@ function abrirNovoCondomino() {
   openModal('mo-fracao');
 }
 
+async function confirmarDadosVistos(fracaoId) {
+  var res = await sb.from('fracoes').update({ dados_atualizados_em: null }).eq('id', fracaoId);
+  if (res.error) { toast('Erro: ' + res.error.message, 'err'); return; }
+  toast('✓ Dados confirmados', 'ok');
+  await loadFracoes();
+  renderCondominos(fracoes);
+  verificarAvisosGerais();
+}
+
 function renderCondominos(lista) {
   var el = document.getElementById('condominos-list');
   if (!lista || !lista.length) {
@@ -4537,10 +4555,11 @@ function renderCondominos(lista) {
         trBorder = '';
       }
 
-      return '<tr style="' + trBorder + '">' +
+      return '<tr style="' + (f.dados_atualizados_em ? 'border-left:3px solid var(--cyan);background:rgba(0,212,255,.04);' : trBorder) + '">' +
         '<td><span class="apt">' + (f.codigo||'—') + '</span></td>' +
         '<td><span class="pill info">' + (f.bloco||'—') + '</span></td>' +
         '<td><div style="font-weight:500;cursor:pointer;color:var(--cyan);display:inline-flex;align-items:center;gap:5px;" onclick="abrirCartaoCondomino(\'' + f.id + '\')" title="Ver ficha"><i class="ti ti-id-badge-2" style="font-size:14px;opacity:.7;"></i>' + (f.proprietario_nome||'<span style="color:var(--t3)">Sem nome</span>') + '</div>' +
+          (f.dados_atualizados_em ? '<div style="font-size:9px;color:var(--cyan);font-weight:700;margin-top:2px;">🆕 Atualizou os dados em ' + new Date(f.dados_atualizados_em).toLocaleDateString("pt-PT") + '</div>' : '') +
           (f.proprietario_morada ? '<div style="font-size:10px;color:var(--t3)">' + f.proprietario_morada + '</div>' : '') + '</td>' +
         '<td class="mn" style="font-size:11px">' + (f.proprietario_nif||'<span style="color:var(--red)">⚠️ Falta</span>') + '</td>' +
         '<td><div style="font-size:11px">' + (f.proprietario_tel||'—') + '</div>' +
@@ -4556,6 +4575,7 @@ function renderCondominos(lista) {
           return '<span style="font-size:9px;color:'+corN+'">📨 ' + dn.toLocaleDateString("pt-PT") + '</span>';
         })() + '</td>' +
         '<td><div style="display:flex;gap:4px;">' +
+          (f.dados_atualizados_em ? '<button class="tb-btn" onclick="confirmarDadosVistos(\'' + f.id + '\')" style="font-size:11px;padding:5px 9px;display:inline-flex;align-items:center;gap:4px;border-radius:6px;background:rgba(0,212,255,.12);border-color:rgba(0,212,255,.35);color:var(--cyan);" title="Marcar que já revi os novos dados"><i class="ti ti-eye-check"></i> Vi</button>' : '') +
           '<button class="tb-btn" onclick="editFracao(\'' + f.id + '\')" style="font-size:11px;padding:5px 9px;display:inline-flex;align-items:center;gap:4px;border-radius:6px;"><i class="ti ti-edit"></i> Editar</button>' +
           '<button class="tb-btn" onclick="gerarQRCondomino(\'' + f.id + '\')" style="font-size:11px;padding:5px 9px;display:inline-flex;align-items:center;gap:4px;border-radius:6px;"><i class="ti ti-qrcode"></i> QR</button>' +
           (function(){
@@ -14893,11 +14913,13 @@ async function loadMensagens() {
 async function abrirConversa(fracaoId) {
   _msgFracaoAtiva = fracaoId;
   var f = fracoes.find(function(x){ return x.id === fracaoId; });
-  document.getElementById('msg-cabecalho').textContent = f ? ((f.codigo||'') + ' · ' + (f.proprietario_nome||'')) : 'Conversa';
+  document.getElementById('msg-cabecalho-nome').textContent = f ? ((f.codigo||'') + ' · ' + (f.proprietario_nome||'')) : 'Conversa';
+  document.getElementById('msg-pdf-btn').style.display = 'inline-block';
   document.getElementById('msg-responder').style.display = 'block';
   var conv = document.getElementById('msg-conversa');
   var res = await sb.from('mensagens').select('*').eq('fracao_id', fracaoId).order('criado_em', {ascending:true});
   var msgs = res.data || [];
+  _msgConversaAtual = msgs;
   // marcar as do condómino como lidas
   await sb.from('mensagens').update({lida_admin:true}).eq('fracao_id', fracaoId).eq('autor','condomino').eq('lida_admin', false);
   conv.innerHTML = msgs.map(function(m){
@@ -14907,6 +14929,81 @@ async function abrirConversa(fracaoId) {
   }).join('') || '<div style="color:var(--t3);font-size:12px;text-align:center;padding:20px;">Sem mensagens.</div>';
   conv.scrollTop = conv.scrollHeight;
   loadMensagens(); // refrescar a lista (badges)
+}
+
+var _msgConversaAtual = [];
+async function exportarConversaPDF() {
+  if (!_msgFracaoAtiva || !_msgConversaAtual.length) { toast('Sem mensagens para exportar','err'); return; }
+  if (!window.jspdf || !window.jspdf.jsPDF) { toast('Biblioteca PDF não carregada','err'); return; }
+  var f = fracoes.find(function(x){ return x.id === _msgFracaoAtiva; });
+  var { jsPDF } = window.jspdf;
+  var doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+  var W = 210, M = 20, y = 0;
+  var condoNome = displayNomeCondo(currentCondo.nome||'');
+  var hojeFmt = new Date().toLocaleDateString('pt-PT');
+  var fracInfo = f ? ((f.codigo||'') + ' - ' + (f.proprietario_nome||'')) : 'Fracao';
+
+  // Cabeçalho oficial
+  doc.setFillColor(13,24,37); doc.rect(0,0,W,42,'F');
+  doc.setFillColor(0,212,255); doc.rect(0,42,W,1.2,'F');
+  doc.setTextColor(0,212,255); doc.setFont('helvetica','bold'); doc.setFontSize(9);
+  doc.text('REGISTO DE COMUNICACOES', W/2, 13, {align:'center'});
+  doc.setTextColor(255,255,255); doc.setFontSize(15);
+  doc.text(condoNome, W/2, 24, {align:'center'});
+  doc.setFontSize(10);
+  doc.text('Fracao ' + fracInfo, W/2, 33, {align:'center'});
+  doc.setTextColor(190,195,205); doc.setFont('helvetica','normal'); doc.setFontSize(8);
+  doc.text('Documento gerado em ' + hojeFmt + ' - ' + _msgConversaAtual.length + ' mensagem(ns)', W/2, 39.5, {align:'center'});
+
+  y = 54;
+  doc.setFontSize(9);
+  var ultimoDia = '';
+  _msgConversaAtual.forEach(function(m){
+    var d = new Date(m.criado_em);
+    var dia = d.toLocaleDateString('pt-PT');
+    var hora = d.toLocaleTimeString('pt-PT',{hour:'2-digit',minute:'2-digit'});
+    var autor = m.autor === 'admin' ? 'Administracao' : ('Condomino (' + (f?f.codigo:'') + ')');
+
+    if (dia !== ultimoDia) {
+      if (y > 260) { doc.addPage(); y = 20; }
+      doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.setTextColor(120,120,120);
+      doc.text('--- ' + dia + ' ---', W/2, y, {align:'center'}); y += 7;
+      ultimoDia = dia;
+    }
+
+    var linhas = doc.splitTextToSize(m.texto, W-2*M-4);
+    var alturaBloco = 6 + linhas.length*4.5 + 4;
+    if (y + alturaBloco > 278) { doc.addPage(); y = 20; }
+
+    var admin = m.autor === 'admin';
+    doc.setFont('helvetica','bold'); doc.setFontSize(8);
+    doc.setTextColor(admin?0:60, admin?140:60, admin?180:60);
+    doc.text(autor + '  ·  ' + hora, M+2, y); y += 4.5;
+    doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(40,40,40);
+    doc.text(linhas, M+2, y); y += linhas.length*4.5 + 5;
+  });
+
+  // Declaração de integridade no fim
+  if (y > 250) { doc.addPage(); y = 20; }
+  y += 6;
+  doc.setDrawColor(200,200,200); doc.line(M, y, W-M, y); y += 8;
+  doc.setFont('helvetica','italic'); doc.setFontSize(8); doc.setTextColor(90,90,90);
+  var declaracao = doc.splitTextToSize('Este registo reproduz integralmente as comunicacoes trocadas entre a administracao e a fracao identificada, atraves do portal do condomino, extraidas da base de dados do sistema em ' + hojeFmt + '.', W-2*M);
+  doc.text(declaracao, M, y);
+
+  // Rodapé
+  var totalPaginas = doc.internal.getNumberOfPages();
+  for (var i=1; i<=totalPaginas; i++) {
+    doc.setPage(i);
+    doc.setDrawColor(220,220,220); doc.line(M, 285, W-M, 285);
+    doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor(150,150,150);
+    doc.text('COND.OS 2059 Pro - ' + condoNome + ' - Registo de comunicacoes', M, 290);
+    doc.text('Pag. ' + i + '/' + totalPaginas, W-M, 290, {align:'right'});
+  }
+
+  var nomeFich = 'Mensagens_' + (f?f.codigo:'fracao').replace(/[^a-zA-Z0-9]/g,'') + '_' + hojeFmt.replace(/\//g,'-') + '.pdf';
+  doc.save(nomeFich);
+  toast('Registo de comunicacoes gerado!','ok');
 }
 
 async function responderMensagem() {
