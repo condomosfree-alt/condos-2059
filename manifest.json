@@ -1,0 +1,12 @@
+{
+  "name": "Cond.OS 2059 — Gestão de Condomínios",
+  "short_name": "Cond.OS",
+  "description": "Quotas, avarias, assembleias e provas legais — o sistema operativo do seu condomínio.",
+  "display": "standalone",
+  "background_color": "#0a1220",
+  "theme_color": "#0a1220",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
