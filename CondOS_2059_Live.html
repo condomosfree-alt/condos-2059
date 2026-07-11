@@ -632,7 +632,7 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.11-1020</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.11-1029</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -7148,7 +7148,7 @@ async function loadDespesas() {
         '<td><div style="display:flex;gap:4px;">' +
           (d.quota_gerada
             ? '<span class="pill ok" style="font-size:9px;">✓ Quota gerada</span>'
-            : '<button class="tb-btn" style="font-size:10px;padding:4px 8px;background:rgba(0,212,255,.1);border-color:rgba(0,212,255,.3);color:var(--cyan);" onclick="gerarQuotaExtra(\'' + d.id + '\')" title="Gerar quota extraordinária dividida pelas frações">➗ Gerar Quota</button>') +
+            : '<button class="tb-btn" style="font-size:10px;padding:4px 8px;background:rgba(0,212,255,.1);border-color:rgba(0,212,255,.3);color:var(--cyan);" onclick="gerarQuotaExtra(\'' + d.id + '\')" title="Gerar quota extraordinária dividida pelas frações">➗ Gerar Quotas</button>') +
           '<button class="tb-btn" style="font-size:11px;padding:4px 8px;" onclick="imprimirDespesa(\'' + d.id + '\')" title="Imprimir relatório da despesa (PDF)">📄</button>' +
           ((d.quota_gerada || (d.estado && d.estado !== 'planeada'))
             ? '<button class="tb-btn" style="font-size:11px;padding:4px 8px;opacity:.35;cursor:not-allowed;" onclick="toast(\'Não podes apagar uma despesa aprovada ou que já gerou quota. Cancela-a primeiro se necessário.\',\'err\')" title="Bloqueado: despesa registada/aprovada não pode ser apagada">🔒</button>'
@@ -7362,22 +7362,39 @@ async function gerarQuotaExtra(despesaId) {
   var valor = parseFloat(d.valor_total||0);
   if (!valor) { toast('A despesa não tem valor','err'); return; }
 
-  var ativas = fracoes.filter(function(f){ return f.ativo !== false; });
-  var msg = 'Vai ser criada uma quota extraordinária de ' + valor.toFixed(2).replace('.',',') + '€ dividida por ' + ativas.length + ' frações (' + (d.distribuicao==='igual'?'valor igual':'por permilagem') + ').\n\nCada fração recebe a sua parte. Continuar?';
+  // Verificar se esta despesa veio de uma ocorrência com método de divisão (bloco/geral)
+  var metodo = 'geral', divLabel = 'todos os condóminos', ocLigada = null;
+  var ocR = await sb.from('ocorrencias').select('id,categoria,descricao,divisao_metodo').eq('despesa_id', d.id).maybeSingle();
+  if (ocR.data) {
+    ocLigada = ocR.data;
+    metodo = ocLigada.divisao_metodo || 'geral';
+  }
+
+  // Determinar o GRUPO que paga (todas as frações OU só o bloco)
+  var grupo = fracoes.filter(function(f){ return f.ativo !== false; });
+  if (metodo.indexOf('bloco:') === 0) {
+    var bl = metodo.split(':')[1];
+    grupo = grupo.filter(function(f){ return f.bloco === bl; });
+    divLabel = 'só o Bloco ' + bl;
+  }
+  if (!grupo.length) { toast('Sem frações no grupo para dividir','err'); return; }
+
+  var distTxt = (d.distribuicao==='igual') ? 'valor igual' : 'por permilagem';
+  var msg = 'Vai ser criada uma quota extraordinária de ' + valor.toFixed(2).replace('.',',') + '€ dividida por ' + grupo.length + ' fração(ões) — ' + divLabel + ' (' + distTxt + ').\n\nCada fração recebe a sua parte e é avisada no portal. Continuar?';
   if (!await confirmar(msg, {titulo:'Gerar Quota Extraordinária', tipo:'info', icon:'➗', okTexto:'Gerar'})) return;
 
-  // Calcular total de permilagem (para distribuição proporcional)
-  var totalPerm = ativas.reduce(function(a,f){ return a + parseFloat(f.permilagem||0); }, 0);
+  var totalPerm = grupo.reduce(function(a,f){ return a + parseFloat(f.permilagem||0); }, 0);
   var hoje = new Date();
   var mes = hoje.getMonth()+1, ano = hoje.getFullYear();
   var dataVenc = d.data_despesa || hoje.toISOString().split('T')[0];
+  var refTxt = ocLigada ? ('Reparação: ' + (ocLigada.categoria||'') + ' (' + (ocLigada.descricao||'').substring(0,40) + ')') : ('Quota extraordinária: ' + d.descricao);
 
   var criadas = 0;
-  for (var i = 0; i < ativas.length; i++) {
-    var f = ativas[i];
+  for (var i = 0; i < grupo.length; i++) {
+    var f = grupo[i];
     var parte;
     if (d.distribuicao === 'igual' || totalPerm <= 0) {
-      parte = valor / ativas.length;
+      parte = valor / grupo.length;
     } else {
       parte = valor * (parseFloat(f.permilagem||0) / totalPerm);
     }
@@ -7386,16 +7403,25 @@ async function gerarQuotaExtra(despesaId) {
       condominio_id: currentCondo.id, fracao_id: f.id, mes: mes, ano: ano,
       valor_emitido: parte, valor_pago: 0, estado: 'pendente',
       data_vencimento: dataVenc, tipo: 'extraordinaria', despesa_id: d.id,
-      notas: 'Quota extraordinária: ' + d.descricao
+      notas: refTxt
     });
-    if (!ins.error) criadas++;
+    if (!ins.error) {
+      criadas++;
+      // MENSAGEM DE PROVA no portal de cada fração (fica no log — prova de que foi avisado do custo)
+      try {
+        await sb.from('mensagens').insert({
+          condominio_id: currentCondo.id, fracao_id: f.id, autor: 'admin',
+          texto: '💶 Foi-te lançada uma quota extraordinária de ' + parte.toFixed(2).replace('.',',') + '€ referente a: ' + (ocLigada ? (ocLigada.categoria||'reparação') : d.descricao) + '. Vencimento: ' + dataVenc + '. Podes consultá-la e pagá-la na secção Quotas do portal.',
+          lida_admin: true, lida_condomino: false
+        });
+      } catch(e) { console.error('aviso quota:', e); }
+    }
   }
   await sb.from('despesas').update({quota_gerada: true, estado: d.estado==='planeada'?'aprovada':d.estado}).eq('id', d.id);
-  toast('✅ Quota extraordinária gerada para ' + criadas + ' frações!','ok');
+  toast('✅ Quota gerada para ' + criadas + ' fração(ões) — ' + divLabel + '. Todos avisados no portal.','ok');
   loadDespesas();
-  // Levar o utilizador às quotas do mês onde foram geradas
   if (typeof _mesSel !== 'undefined') { _mesSel.mes = mes; _mesSel.ano = ano; }
-  if (await confirmar('Quota extraordinária criada em ' + ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'][mes-1] + ' ' + ano + '.\n\nVer as quotas agora?', {titulo:'Quota gerada', tipo:'info', icon:'✅', okTexto:'Ver Quotas', cancelarTexto:'Mais tarde'})) {
+  if (await confirmar('Quota extraordinária criada em ' + ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'][mes-1] + ' ' + ano + ' para ' + criadas + ' fração(ões).\n\nVer as quotas agora?', {titulo:'Quota gerada', tipo:'info', icon:'✅', okTexto:'Ver Quotas', cancelarTexto:'Mais tarde'})) {
     nav('quotas');
   }
 }
@@ -7929,7 +7955,17 @@ async function ocProcessarTudo() {
       data_vencimento: dataVenc, tipo: 'extraordinaria', despesa_id: despId,
       notas: 'Reparação: ' + (_ocAtual.categoria||'') + ' (' + (_ocAtual.descricao||'').substring(0,40) + ')'
     });
-    if (!ins.error) criadas++;
+    if (!ins.error) {
+      criadas++;
+      // Mensagem de prova no portal de cada fração (fica no log)
+      try {
+        await sb.from('mensagens').insert({
+          condominio_id: currentCondo.id, fracao_id: f.id, autor: 'admin',
+          texto: '💶 Foi-te lançada uma quota extraordinária de ' + parte.toFixed(2).replace('.',',') + '€ referente à reparação: ' + (_ocAtual.categoria||'') + '. Vencimento: ' + dataVenc + '. Consulta e paga na secção Quotas do portal.',
+          lida_admin: true, lida_condomino: false
+        });
+      } catch(e) { console.error('aviso quota:', e); }
+    }
   }
 
   // 5) Avisar quem reportou
