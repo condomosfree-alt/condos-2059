@@ -203,6 +203,80 @@ textarea.fi{resize:vertical;min-height:60px;}
 
 /* PRO badge */
 .pro-badge{display:inline-flex;align-items:center;gap:4px;background:linear-gradient(90deg,var(--cyan),var(--violet));border-radius:4px;padding:1px 6px;font-size:9px;font-weight:700;color:#000;letter-spacing:.5px;}
+
+/* ═══════════════════════════════════════════════════════
+   SKIN BRUTAL 2059 · refinamento visual (só CSS, zero estrutura)
+   Se algo correr mal: apagar este bloco inteiro repõe tudo.
+   ═══════════════════════════════════════════════════════ */
+
+/* 1 · Fundo com profundidade: gradiente + grelha de planta subtil */
+body{
+  background:
+    linear-gradient(rgba(0,212,255,.018) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(0,212,255,.018) 1px,transparent 1px),
+    radial-gradient(ellipse 90% 55% at 50% -10%, #0c1826 0%, #080d14 60%);
+  background-size: 54px 54px, 54px 54px, cover;
+  background-attachment: fixed;
+}
+
+/* 2 · Scrollbars dark (o detalhe que muda tudo) */
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--b1);border-radius:6px;border:2px solid var(--bg)}
+::-webkit-scrollbar-thumb:hover{background:var(--b2)}
+*{scrollbar-width:thin;scrollbar-color:var(--b1) transparent}
+
+/* 3 · Seleção de texto com a marca */
+::selection{background:rgba(0,212,255,.28);color:#fff}
+
+/* 4 · KPIs com vida: profundidade + hover lift */
+.kpi{
+  background:linear-gradient(155deg,var(--s2),var(--s1));
+  box-shadow:0 4px 20px rgba(0,0,0,.28);
+  transition:transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+}
+.kpi:hover{transform:translateY(-2px);border-color:var(--b2);box-shadow:0 10px 30px rgba(0,0,0,.4)}
+
+/* 5 · Botões primários com glow da marca */
+.btn-primary{
+  box-shadow:0 4px 18px rgba(0,212,255,.22);
+  transition:transform .15s ease, box-shadow .15s ease, filter .15s ease;
+}
+.btn-primary:hover{transform:translateY(-1px);box-shadow:0 8px 26px rgba(0,212,255,.32);filter:brightness(1.06)}
+.btn-primary:active{transform:translateY(0)}
+.btn-ghost{transition:border-color .15s ease, background .15s ease, transform .15s ease}
+.btn-ghost:hover{border-color:var(--b2);background:rgba(0,212,255,.05)}
+.tb-btn{transition:border-color .15s ease, background .15s ease}
+.tb-btn:hover{border-color:var(--b2);background:rgba(0,212,255,.06)}
+
+/* 6 · Inputs: focus com anel da marca */
+.fi{transition:border-color .15s ease, box-shadow .15s ease}
+.fi:focus{border-color:var(--cyan)!important;box-shadow:0 0 0 3px rgba(0,212,255,.12);outline:none}
+
+/* 7 · Ecrã de login: primeira impressão com peso */
+.auth-card{
+  background:linear-gradient(160deg,var(--s2),var(--s1));
+  box-shadow:0 30px 80px rgba(0,0,0,.55), 0 0 0 1px rgba(0,212,255,.08);
+}
+
+/* 8 · Cabeçalhos de secção: linha gradiente da marca */
+.sec-t{position:relative;padding-bottom:2px}
+.sec-t::after{content:'';position:absolute;left:0;bottom:-4px;width:34px;height:2px;border-radius:2px;background:linear-gradient(90deg,var(--cyan),transparent)}
+
+/* 9 · Topbar com vidro */
+.topbar{backdrop-filter:blur(10px);background:rgba(8,13,20,.82)}
+
+/* 10 · Modais com profundidade */
+.mo-box,.modal-box,[class*="mo-"] .box{box-shadow:0 40px 100px rgba(0,0,0,.6)}
+
+/* 11 · Linhas de tabela com hover suave */
+tbody tr{transition:background .12s ease}
+tbody tr:hover{background:rgba(0,212,255,.03)}
+
+/* 12 · Menu lateral: item ativo com barra da marca */
+.ni{transition:background .14s ease, color .14s ease}
+.ni:hover{background:rgba(0,212,255,.05)}
+
 </style>
 
 <script>
@@ -553,7 +627,7 @@ textarea.fi{resize:vertical;min-height:60px;}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.10-2138</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.11-0936</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
