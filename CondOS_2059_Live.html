@@ -632,7 +632,7 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.11-0949</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.11-1004</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -3689,12 +3689,36 @@ async function verificarAvisosGerais() {
       'A data da próxima limpeza consta no Perfil do Edifício (Manutenção).');
 
     // 5) Ocorrências abertas por resolver
-    var ocRes = await sb.from('ocorrencias').select('id,estado,categoria').eq('condominio_id', currentCondo.id);
+    var ocRes = await sb.from('ocorrencias').select('id,estado,categoria,precisa_votacao,divisao_metodo,orcamento_valor').eq('condominio_id', currentCondo.id);
     var ocAbertas = (ocRes.data||[]).filter(function(o){ return o.estado !== 'resolvida' && o.estado !== 'fechada'; });
     if (ocAbertas.length) {
       avisos.push({ pagina:'ocorrencias', badge:String(ocAbertas.length), cor:'#ffb300',
         texto: ocAbertas.length + ' ocorrência(s) por resolver',
         detalhe:'Há problemas reportados à espera de tratamento. Alguns podem ter vindo do portal dos condóminos.' });
+    }
+    // 5b) Votações que JÁ têm maioria — prontas a aprovar
+    var emVotacao = ocAbertas.filter(function(o){ return o.estado === 'aguarda_votacao' && o.precisa_votacao; });
+    var prontas = 0;
+    for (var vi = 0; vi < emVotacao.length; vi++) {
+      var oc = emVotacao[vi];
+      var vr = await sb.from('ocorrencia_votos').select('voto,fracao_id').eq('ocorrencia_id', oc.id);
+      var vts = vr.data || [];
+      if (!vts.length) continue;
+      // grupo (bloco ou geral) e permilagem total
+      var grupo = fracoes;
+      if ((oc.divisao_metodo||'').indexOf('bloco:')===0) {
+        var bl = oc.divisao_metodo.split(':')[1];
+        grupo = fracoes.filter(function(f){ return f.bloco === bl; });
+      }
+      var permTot = grupo.reduce(function(s,f){ return s + parseFloat(f.permilagem||0); }, 0);
+      var permSim = 0;
+      vts.forEach(function(v){ if (v.voto==='sim'){ var f = grupo.find(function(x){return x.id===v.fracao_id;}); if (f) permSim += parseFloat(f.permilagem||0); } });
+      if (permTot > 0 && (permSim/permTot*100) > 50) prontas++;
+    }
+    if (prontas > 0) {
+      avisos.push({ pagina:'ocorrencias', badge:String(prontas), cor:'#22e584',
+        texto: prontas + ' votação(ões) com maioria — prontas a aprovar',
+        detalhe:'Os condóminos já decidiram a favor. Entra em Ocorrências para aprovar e dar seguimento.' });
     }
 
     // 6) Mensagens não lidas de condóminos
@@ -7376,10 +7400,23 @@ async function gerirOcorrencia(id) {
       h += '<div style="font-size:11px;color:var(--t2);margin-bottom:8px;">Acima do limite — os condóminos devem aprovar. Ao abrir a votação, aparece no portal de cada um.</div>';
       if (_ocAtual.precisa_votacao) {
         h += await ocRenderVotos(id);
-        h += '<div style="display:flex;gap:8px;margin-top:8px;">';
-        h += '<button class="btn-ghost" style="flex:1;font-size:11px;color:var(--green);border-color:rgba(34,229,132,.3);" onclick="ocAprovar()">👍 Aprovar reparação</button>';
-        h += '<button class="btn-ghost" style="flex:1;font-size:11px;color:var(--red);border-color:rgba(255,68,68,.3);" onclick="ocRecusar()">👎 Recusar</button>';
-        h += '</div>';
+        // Se já há maioria, avisa e destaca o botão de seguimento rápido
+        if (window._ocPodeAprovar === true) {
+          h += '<div style="background:rgba(34,229,132,.1);border:1px solid rgba(34,229,132,.35);border-radius:8px;padding:10px 12px;margin-top:10px;">';
+          h += '<div style="font-size:12px;font-weight:700;color:var(--green);">🎉 Esta votação já tem maioria!</div>';
+          h += '<div style="font-size:10.5px;color:var(--t2);margin-top:2px;">Podes aprovar e dar seguimento. Se quiseres, marca já como resolvida e lança a despesa num só passo.</div>';
+          h += '</div>';
+          h += '<button class="btn-primary" style="width:100%;margin-top:10px;font-size:12px;box-shadow:0 4px 18px rgba(34,229,132,.3);" onclick="ocAprovarEConcluir()">✅ Aprovar e lançar despesa (' + parseFloat(_ocAtual.orcamento_valor||0).toFixed(2) + '€)</button>';
+          h += '<div style="display:flex;gap:8px;margin-top:8px;">';
+          h += '<button class="btn-ghost" style="flex:1;font-size:11px;color:var(--green);border-color:rgba(34,229,132,.3);" onclick="ocAprovar()">👍 Só aprovar (concluo depois)</button>';
+          h += '<button class="btn-ghost" style="flex:1;font-size:11px;color:var(--red);border-color:rgba(255,68,68,.3);" onclick="ocRecusar()">👎 Recusar</button>';
+          h += '</div>';
+        } else {
+          h += '<div style="display:flex;gap:8px;margin-top:8px;">';
+          h += '<button class="btn-ghost" style="flex:1;font-size:11px;color:var(--green);border-color:rgba(34,229,132,.3);" onclick="ocAprovar()">👍 Aprovar reparação</button>';
+          h += '<button class="btn-ghost" style="flex:1;font-size:11px;color:var(--red);border-color:rgba(255,68,68,.3);" onclick="ocRecusar()">👎 Recusar</button>';
+          h += '</div>';
+        }
       } else {
         h += '<button class="btn-ghost" style="width:100%;font-size:11px;" onclick="ocAbrirVotacao()">🗳️ Abrir votação no portal</button>';
       }
@@ -7673,6 +7710,20 @@ async function ocEncerrar() {
   fecharModalGenerico();
   loadOcorrencias();
   verificarAvisosGerais();
+}
+
+async function ocAprovarEConcluir() {
+  var valor = parseFloat(_ocAtual.orcamento_valor||0);
+  if (!confirm('Aprovar esta reparação e lançar já a despesa de ' + valor.toFixed(2) + '€ nas contas?\n\nA ocorrência fica marcada como resolvida e o custo é dividido pelos condóminos.')) return;
+  // 1) Registar aprovação com a contagem de votos
+  var vRes = await sb.from('ocorrencia_votos').select('voto').eq('ocorrencia_id',_ocAtual.id);
+  var votos = vRes.data || [];
+  var sim = votos.filter(function(v){return v.voto==='sim';}).length;
+  var nao = votos.filter(function(v){return v.voto==='nao';}).length;
+  var votoTxt = votos.length ? ' (votação: ' + sim + ' a favor, ' + nao + ' contra)' : '';
+  await ocEvento('estado', 'Reparação APROVADA' + votoTxt + '. Trabalho autorizado ao parceiro.');
+  // 2) Lançar despesa + concluir (reutiliza a lógica do ocConcluir)
+  await ocConcluir();
 }
 
 async function ocAprovar() {
