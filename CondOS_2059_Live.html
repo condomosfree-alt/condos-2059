@@ -632,7 +632,7 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.11-1016</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.11-1020</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -7543,11 +7543,13 @@ async function gerirOcorrencia(id) {
         if (window._ocPodeAprovar === true) {
           h += '<div style="background:rgba(34,229,132,.1);border:1px solid rgba(34,229,132,.35);border-radius:8px;padding:10px 12px;margin-top:10px;">';
           h += '<div style="font-size:12px;font-weight:700;color:var(--green);">🎉 Esta votação já tem maioria!</div>';
-          h += '<div style="font-size:10.5px;color:var(--t2);margin-top:2px;">Podes aprovar e dar seguimento. Se quiseres, marca já como resolvida e lança a despesa num só passo.</div>';
+          h += '<div style="font-size:10.5px;color:var(--t2);margin-top:2px;">Os condóminos decidiram e tu validaste. Podes fechar tudo num só clique.</div>';
           h += '</div>';
-          h += '<button class="btn-primary" style="width:100%;margin-top:10px;font-size:12px;box-shadow:0 4px 18px rgba(34,229,132,.3);" onclick="ocAprovarEConcluir()">✅ Aprovar e lançar despesa (' + parseFloat(_ocAtual.orcamento_valor||0).toFixed(2) + '€)</button>';
-          h += '<div style="display:flex;gap:8px;margin-top:8px;">';
-          h += '<button class="btn-ghost" style="flex:1;font-size:11px;color:var(--green);border-color:rgba(34,229,132,.3);" onclick="ocAprovar()">👍 Só aprovar (concluo depois)</button>';
+          // 🪄 O BOTÃO MÁGICO — aprova + despesa + gera quotas de todas as frações
+          h += '<button class="btn-primary" style="width:100%;margin-top:10px;font-size:12.5px;font-weight:700;box-shadow:0 4px 20px rgba(34,229,132,.4);background:linear-gradient(135deg,var(--green),#00b894);" onclick="ocProcessarTudo()">🪄 Processar tudo — aprovar, lançar e cobrar (' + parseFloat(_ocAtual.orcamento_valor||0).toFixed(2) + '€)</button>';
+          h += '<div style="font-size:9.5px;color:var(--t3);text-align:center;margin-top:5px;">Um clique: aprova · lança a despesa · gera a quota de cada fração</div>';
+          h += '<div style="display:flex;gap:8px;margin-top:10px;">';
+          h += '<button class="btn-ghost" style="flex:1;font-size:11px;color:var(--green);border-color:rgba(34,229,132,.3);" onclick="ocAprovar()">👍 Só aprovar</button>';
           h += '<button class="btn-ghost" style="flex:1;font-size:11px;color:var(--red);border-color:rgba(255,68,68,.3);" onclick="ocRecusar()">👎 Recusar</button>';
           h += '</div>';
         } else {
@@ -7865,7 +7867,93 @@ async function ocAprovarEConcluir() {
   await ocConcluir();
 }
 
+// 🪄 BOTÃO MÁGICO: aprova + lança despesa + gera as quotas de todas as frações, num só clique
+async function ocProcessarTudo() {
+  var valor = parseFloat(_ocAtual.orcamento_valor||0);
+  var metodo = _ocAtual.divisao_metodo || 'geral';
+  // Determinar o grupo de frações que paga (todas ou só o bloco)
+  var grupo = fracoes.filter(function(f){ return f.ativo !== false; });
+  var divLabel = 'todos os condóminos (permilagem)';
+  if (metodo.indexOf('bloco:') === 0) {
+    var bl = metodo.split(':')[1];
+    grupo = grupo.filter(function(f){ return f.bloco === bl; });
+    divLabel = 'Bloco ' + bl;
+  }
+  if (!grupo.length) { toast('Sem frações no grupo para dividir','err'); return; }
+
+  var msg = '🪄 PROCESSAR TUDO numa só ação:\n\n';
+  msg += '1. Aprovar a reparação\n';
+  msg += '2. Lançar a despesa de ' + valor.toFixed(2) + '€\n';
+  msg += '3. Gerar a quota para ' + grupo.length + ' fração(ões) — ' + divLabel + '\n\n';
+  msg += 'Cada fração fica com a sua parte a pagar. Continuar?';
+  if (!confirm(msg)) return;
+
+  toast('A processar...','');
+
+  // 1) Aprovar (regista votos no histórico)
+  var vRes = await sb.from('ocorrencia_votos').select('voto').eq('ocorrencia_id',_ocAtual.id);
+  var votos = vRes.data || [];
+  var sim = votos.filter(function(v){return v.voto==='sim';}).length;
+  var nao = votos.filter(function(v){return v.voto==='nao';}).length;
+  var votoTxt = votos.length ? ' (votação: ' + sim + ' a favor, ' + nao + ' contra)' : '';
+  await ocEvento('estado', 'Reparação APROVADA' + votoTxt + '. Trabalho autorizado ao parceiro.');
+
+  // 2) Criar despesa (marcada como aprovada + quota gerada, para não ficar pendente no sino)
+  var divTxt = metodo.indexOf('bloco:')===0 ? 'Bloco ' + metodo.split(':')[1] : 'permilagem geral';
+  var dRes = await sb.from('despesas').insert({
+    condominio_id:currentCondo.id,
+    descricao:'Reparação: ' + (_ocAtual.categoria||'') + ' — ' + (_ocAtual.descricao||'').substring(0,50) + ' [' + divTxt + ']',
+    valor_total:valor, tipo:'reparacao', data_despesa:new Date().toISOString().split('T')[0],
+    distribuicao: metodo.indexOf('bloco:')===0 ? 'permilagem' : 'permilagem',
+    estado:'aprovada', quota_gerada:true
+  }).select();
+  var despId = dRes.data && dRes.data[0] ? dRes.data[0].id : null;
+
+  // 3) Marcar ocorrência resolvida
+  await sb.from('ocorrencias').update({ estado:'resolvida', data_resolucao:new Date().toISOString(), despesa_id:despId }).eq('id',_ocAtual.id);
+  await ocEvento('estado', 'Reparação concluída. Custo de ' + valor.toFixed(2) + '€ lançado e quotas geradas para ' + divLabel + '.');
+
+  // 4) Gerar as quotas (dividir por permilagem do grupo)
+  var totalPerm = grupo.reduce(function(a,f){ return a + parseFloat(f.permilagem||0); }, 0);
+  var hoje = new Date();
+  var mes = hoje.getMonth()+1, ano = hoje.getFullYear();
+  var dataVenc = hoje.toISOString().split('T')[0];
+  var criadas = 0;
+  for (var i = 0; i < grupo.length; i++) {
+    var f = grupo[i];
+    var parte = totalPerm > 0 ? valor * (parseFloat(f.permilagem||0) / totalPerm) : valor / grupo.length;
+    parte = Math.round(parte * 100) / 100;
+    var ins = await sb.from('quotas').insert({
+      condominio_id: currentCondo.id, fracao_id: f.id, mes: mes, ano: ano,
+      valor_emitido: parte, valor_pago: 0, estado: 'pendente',
+      data_vencimento: dataVenc, tipo: 'extraordinaria', despesa_id: despId,
+      notas: 'Reparação: ' + (_ocAtual.categoria||'') + ' (' + (_ocAtual.descricao||'').substring(0,40) + ')'
+    });
+    if (!ins.error) criadas++;
+  }
+
+  // 5) Avisar quem reportou
+  try {
+    var repMatch = (_ocAtual.reportado_por||'').match(/Fração\s+(\S+)/i);
+    if (repMatch) {
+      var fr = fracoes.find(function(f){ return f.codigo === repMatch[1]; });
+      if (fr) await sb.from('mensagens').insert({ condominio_id:currentCondo.id, fracao_id:fr.id, autor:'admin',
+        texto:'✅ A ocorrência que reportaste ("' + (_ocAtual.categoria||'') + '") foi resolvida. Podes avaliar o trabalho na secção Avarias.',
+        lida_admin:true, lida_condomino:false });
+    }
+  } catch(e) { console.error(e); }
+
+  toast('🪄 Feito! Reparação aprovada, despesa lançada e quota gerada para ' + criadas + ' fração(ões).','ok');
+  fecharModalGenerico();
+  loadOcorrencias();
+  verificarAvisosGerais();
+}
+
 async function ocAprovar() {
+  // Regra legal: só aprova se a permilagem a favor > 50% (a menos que o admin force)
+  if (window._ocPodeAprovar === false) {
+    if (!confirm('⚠️ ATENÇÃO: A votação ainda NÃO atingiu a maioria legal (mais de 50% da permilagem a favor).\n\nAprovar mesmo assim pode ser juridicamente contestável. Só deves fazê-lo se tiveres outra base legal (ex: reparação urgente de conservação).\n\nTens a certeza que queres aprovar?')) return;
+  }
   // Regra legal: só aprova se a permilagem a favor > 50% (a menos que o admin force)
   if (window._ocPodeAprovar === false) {
     if (!confirm('⚠️ ATENÇÃO: A votação ainda NÃO atingiu a maioria legal (mais de 50% da permilagem a favor).\n\nAprovar mesmo assim pode ser juridicamente contestável. Só deves fazê-lo se tiveres outra base legal (ex: reparação urgente de conservação).\n\nTens a certeza que queres aprovar?')) return;
