@@ -632,7 +632,7 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.11-1004</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.11-1016</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -3721,6 +3721,18 @@ async function verificarAvisosGerais() {
         detalhe:'Os condóminos já decidiram a favor. Entra em Ocorrências para aprovar e dar seguimento.' });
     }
 
+    // 5c) Despesas SEM quota gerada — o dinheiro ainda não foi cobrado a ninguém!
+    var despRes = await sb.from('despesas').select('id,descricao,valor_total,quota_gerada,estado').eq('condominio_id', currentCondo.id);
+    var semQuota = (despRes.data||[]).filter(function(dp){
+      return !dp.quota_gerada && dp.estado !== 'cancelada' && parseFloat(dp.valor_total||0) > 0;
+    });
+    if (semQuota.length) {
+      var totalSemCobrar = semQuota.reduce(function(s,dp){ return s + parseFloat(dp.valor_total||0); }, 0);
+      avisos.push({ pagina:'despesas', badge:String(semQuota.length), cor:'#ff6b35',
+        texto: semQuota.length + ' despesa(s) por cobrar aos condóminos',
+        detalhe: 'Há ' + totalSemCobrar.toFixed(2) + '€ em despesas ainda sem quota gerada — ninguém foi cobrado. Vai a Despesas e clica em "Gerar Quota" para lançar a cobrança.' });
+    }
+
     // 6) Mensagens não lidas de condóminos
     var msgRes = await sb.from('mensagens').select('id', {count:'exact', head:true}).eq('condominio_id', currentCondo.id).eq('autor','condomino').eq('lida_admin', false);
     if ((msgRes.count||0) > 0) {
@@ -3774,7 +3786,7 @@ async function verificarAvisosGerais() {
     } else { b.style.display = 'none'; }
   });
   // Badges nos menus com 'nb-' (ocorrências, mensagens, assembleias)
-  [['ocorrencias','nb-oc'],['mensagens','nb-msg'],['assembleias','badge-assembleias'],['condominos','nb-cond']].forEach(function(par){
+  [['ocorrencias','nb-oc'],['mensagens','nb-msg'],['assembleias','badge-assembleias'],['condominos','nb-cond'],['despesas','nb-despesas']].forEach(function(par){
     var b = document.getElementById(par[1]);
     if (!b) return;
     var av = avisos.filter(function(a){ return a.pagina===par[0]; });
@@ -7136,8 +7148,11 @@ async function loadDespesas() {
         '<td><div style="display:flex;gap:4px;">' +
           (d.quota_gerada
             ? '<span class="pill ok" style="font-size:9px;">✓ Quota gerada</span>'
-            : '<button class="tb-btn" style="font-size:10px;padding:4px 8px;background:rgba(0,212,255,.1);border-color:rgba(0,212,255,.3);color:var(--cyan);" onclick="gerarQuotaExtra(\'' + d.id + '\')" title="Gerar quota extraordinária dividida pelas frações"><i class="ti ti-divide"></i> Gerar Quota</button>') +
-          '<button class="tb-btn" style="font-size:10px;padding:4px 8px;" onclick="apagarDespesa(\'' + d.id + '\')"><i class="ti ti-trash"></i></button>' +
+            : '<button class="tb-btn" style="font-size:10px;padding:4px 8px;background:rgba(0,212,255,.1);border-color:rgba(0,212,255,.3);color:var(--cyan);" onclick="gerarQuotaExtra(\'' + d.id + '\')" title="Gerar quota extraordinária dividida pelas frações">➗ Gerar Quota</button>') +
+          '<button class="tb-btn" style="font-size:11px;padding:4px 8px;" onclick="imprimirDespesa(\'' + d.id + '\')" title="Imprimir relatório da despesa (PDF)">📄</button>' +
+          ((d.quota_gerada || (d.estado && d.estado !== 'planeada'))
+            ? '<button class="tb-btn" style="font-size:11px;padding:4px 8px;opacity:.35;cursor:not-allowed;" onclick="toast(\'Não podes apagar uma despesa aprovada ou que já gerou quota. Cancela-a primeiro se necessário.\',\'err\')" title="Bloqueado: despesa registada/aprovada não pode ser apagada">🔒</button>'
+            : '<button class="tb-btn" style="font-size:11px;padding:4px 8px;" onclick="apagarDespesa(\'' + d.id + '\')" title="Apagar esta despesa (só rascunhos)">🗑️</button>') +
         '</div></td>' +
         '</tr>';
     }).join('') + '</tbody></table>';
@@ -7209,8 +7224,132 @@ async function saveDespesa() {
   loadDespesas();
 }
 
+async function imprimirDespesa(despesaId) {
+  var d = _despesasAll.find(function(x){ return x.id === despesaId; });
+  if (!d) return;
+  if (!window.jspdf || !window.jspdf.jsPDF) { toast('Biblioteca PDF não carregada','err'); return; }
+  toast('A gerar relatório...','');
+
+  // Se a despesa veio de uma ocorrência, buscar os dados dela (incl. votação)
+  var oc = null, eventos = [], votos = [];
+  var ocR = await sb.from('ocorrencias').select('*').eq('despesa_id', d.id).maybeSingle();
+  if (ocR.data) {
+    oc = ocR.data;
+    var evR = await sb.from('ocorrencia_eventos').select('*').eq('ocorrencia_id', oc.id).order('criado_em',{ascending:true});
+    eventos = evR.data || [];
+    if (oc.precisa_votacao) { var vR = await sb.from('ocorrencia_votos').select('voto').eq('ocorrencia_id', oc.id); votos = vR.data || []; }
+  }
+  // Quotas geradas por esta despesa
+  var qR = await sb.from('quotas').select('valor_emitido,fracao_id').eq('despesa_id', d.id);
+  var quotas = qR.data || [];
+
+  var { jsPDF } = window.jspdf;
+  var doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+  var W = 210, M = 20, y = 0;
+  var condoNome = displayNomeCondo(currentCondo.nome||'');
+  var hojeFmt = new Date().toLocaleDateString('pt-PT');
+
+  // CAPA
+  doc.setFillColor(13,24,37); doc.rect(0,0,W,42,'F');
+  doc.setFillColor(0,212,255); doc.rect(0,42,W,1.2,'F');
+  doc.setTextColor(0,212,255); doc.setFont('helvetica','bold'); doc.setFontSize(9);
+  doc.text('RELATORIO DE DESPESA', W/2, 13, {align:'center'});
+  doc.setTextColor(255,255,255); doc.setFontSize(15);
+  doc.text(condoNome, W/2, 24, {align:'center'});
+  doc.setFontSize(11);
+  doc.text((d.descricao||'Despesa').substring(0,60), W/2, 33, {align:'center'});
+  doc.setTextColor(190,195,205); doc.setFont('helvetica','normal'); doc.setFontSize(8);
+  doc.text('Documento gerado em ' + hojeFmt + ' pelo COND.OS 2059 Pro', W/2, 39.5, {align:'center'});
+
+  y = 54;
+  // DADOS DA DESPESA
+  doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(40,40,40);
+  doc.text('Dados da despesa', M, y); y += 6;
+  doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(60,60,60);
+  var TIPO = {extraordinaria:'Extraordinaria', derrama:'Derrama', obra:'Obra', reparacao:'Reparacao', outro:'Outro'};
+  [['Descricao:', d.descricao||'-'],
+   ['Tipo:', TIPO[d.tipo]||d.tipo||'-'],
+   ['Origem:', d.origem_tipo||'manual'],
+   ['Valor total:', parseFloat(d.valor_total||0).toFixed(2) + ' EUR'],
+   ['Distribuicao:', d.distribuicao==='igual'?'Valor igual por fracao':'Por permilagem (Art. 1424 CC)'],
+   ['Estado:', d.estado||'planeada'],
+   ['Data:', d.data_despesa||'-']
+  ].forEach(function(l){
+    doc.setFont('helvetica','bold'); doc.text(l[0], M+2, y);
+    doc.setFont('helvetica','normal'); doc.text(String(l[1]), M+48, y); y += 5.5;
+  });
+  if (d.motivo) { y += 1; var mt = doc.splitTextToSize('Motivo: ' + d.motivo, W-2*M); doc.text(mt, M+2, y); y += mt.length*5.5; }
+  y += 4;
+
+  // ORIGEM: OCORRÊNCIA (se aplicável)
+  if (oc) {
+    doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(40,40,40);
+    doc.text('Origem: ocorrencia', M, y); y += 6;
+    doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(60,60,60);
+    doc.text('Categoria: ' + (oc.categoria||'-') + '  ·  Local: ' + (oc.local_ocorrencia||'-'), M+2, y); y += 5.5;
+    if (oc.orcamento_nota) { var on = doc.splitTextToSize('Trabalho: ' + oc.orcamento_nota, W-2*M); doc.text(on, M+2, y); y += on.length*5.5; }
+
+    // Votação
+    if (votos.length) {
+      var sim = votos.filter(function(v){return v.voto==='sim';}).length;
+      var nao = votos.filter(function(v){return v.voto==='nao';}).length;
+      y += 2;
+      doc.setFont('helvetica','bold'); doc.text('Votacao dos condominos:', M+2, y);
+      doc.setFont('helvetica','normal'); doc.text(sim + ' a favor  ·  ' + nao + ' contra  ·  ' + votos.length + ' votos', M+62, y); y += 6;
+    }
+    y += 2;
+    // Histórico
+    if (eventos.length) {
+      doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(40,40,40);
+      doc.text('Historico da ocorrencia:', M+2, y); y += 5;
+      doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(80,80,80);
+      eventos.forEach(function(ev){
+        if (y > 265) { doc.addPage(); y = 20; }
+        var dt = (ev.criado_em||'').slice(0,16).replace('T',' ');
+        var tx = doc.splitTextToSize('• [' + dt + '] ' + ev.texto, W-2*M-4);
+        doc.text(tx, M+4, y); y += tx.length*4.2 + 1;
+      });
+    }
+    y += 4;
+  }
+
+  // DIVISÃO POR FRAÇÃO (quotas geradas)
+  if (quotas.length) {
+    if (y > 240) { doc.addPage(); y = 20; }
+    doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(40,40,40);
+    doc.text('Divisao por fracao (' + quotas.length + ' fracoes)', M, y); y += 6;
+    doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(60,60,60);
+    var fMap = {}; fracoes.forEach(function(f){ fMap[f.id] = f; });
+    quotas.forEach(function(q){
+      if (y > 270) { doc.addPage(); y = 20; }
+      var f = fMap[q.fracao_id];
+      var nome = f ? (f.codigo + (f.proprietario_nome?' - '+f.proprietario_nome:'')) : 'Fracao';
+      doc.text(nome, M+2, y);
+      doc.text(parseFloat(q.valor_emitido||0).toFixed(2) + ' EUR', W-M, y, {align:'right'}); y += 5;
+    });
+  }
+
+  // Rodapé
+  var tp = doc.internal.getNumberOfPages();
+  for (var i=1; i<=tp; i++) {
+    doc.setPage(i);
+    doc.setDrawColor(220,220,220); doc.line(M, 285, W-M, 285);
+    doc.setFontSize(7); doc.setTextColor(150,150,150); doc.setFont('helvetica','normal');
+    doc.text('COND.OS 2059 Pro - Documento gerado automaticamente - ' + condoNome, M, 290);
+    doc.text('Pag. ' + i + '/' + tp, W-M, 290, {align:'right'});
+  }
+
+  doc.save('Despesa_' + (d.descricao||'').replace(/[^a-zA-Z0-9]/g,'_').substring(0,30) + '_' + hojeFmt.replace(/\//g,'-') + '.pdf');
+  toast('Relatorio gerado!','ok');
+}
+
 async function apagarDespesa(id) {
-  if (!await confirmar('Eliminar esta despesa? As quotas já geradas não são apagadas automaticamente.', {titulo:'Eliminar despesa?', tipo:'perigo', icon:'🗑️', okTexto:'Eliminar'})) return;
+  var d = _despesasAll.find(function(x){ return x.id === id; });
+  if (d && (d.quota_gerada || (d.estado && d.estado !== 'planeada'))) {
+    toast('Esta despesa já foi aprovada ou gerou quota — não pode ser apagada.','err');
+    return;
+  }
+  if (!await confirmar('Eliminar esta despesa? (só é possível porque ainda é um rascunho, sem quota gerada)', {titulo:'Eliminar despesa?', tipo:'perigo', icon:'🗑️', okTexto:'Eliminar'})) return;
   await sb.from('despesas').delete().eq('id', id);
   toast('Despesa eliminada','ok');
   loadDespesas();
@@ -7770,7 +7909,7 @@ async function ocConcluir() {
     }
   } catch(e) { console.error('aviso resolvido:', e); }
 
-  toast('✅ Resolvida! Custo de '+valor.toFixed(2)+'€ lançado nas despesas.','ok');
+  toast('✅ Resolvida! Custo de '+valor.toFixed(2)+'€ lançado nas Despesas. Vai lá gerar a quota para cobrar aos condóminos.','ok');
   fecharModalGenerico();
   loadOcorrencias();
   verificarAvisosGerais();
