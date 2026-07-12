@@ -632,7 +632,7 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.12-2210</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.12-2224</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -646,17 +646,19 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
       <div class="ni active" onclick="nav('dashboard')"><span class="mic">📊</span><span>Dashboard</span></div>
       <div class="ni" onclick="nav('edificio')"><span class="mic">🏢</span><span>Perfil do Edifício</span><span id="badge-edificio" style="display:none;margin-left:auto;background:#f87171;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;line-height:16px;text-align:center;border-radius:8px;padding:0 4px;"></span></div>
       <div class="ni" onclick="nav('fracoes')"><span class="mic">🏠</span><span>Frações</span><span class="nb" id="nb-fracoes"></span></div>
-      <div class="ni" onclick="nav('quotas')"><span class="mic">🧾</span><span>Quotas</span><span class="nb" id="nb-quotas"></span><span id="badge-quotas" style="display:none;margin-left:auto;background:#f87171;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;line-height:16px;text-align:center;border-radius:8px;padding:0 4px;"></span></div>
-      <div class="ni" onclick="nav('financeiro')"><span class="mic">💵</span><span>Financeiro</span></div>
-      <div class="ni" onclick="nav('orcamento')"><span class="mic">🧮</span><span>Orçamento</span><span id="badge-orcamento" style="display:none;margin-left:auto;background:#f87171;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;line-height:16px;text-align:center;border-radius:8px;padding:0 4px;"></span></div>
-      <div class="ni" onclick="nav('despesas')"><span class="mic">🔧</span><span>Despesas</span><span class="nb" id="nb-despesas"></span></div>
-      <div class="ni" onclick="nav('contas')"><span class="mic">💰</span><span>Contas</span></div>
-      <div class="ni" onclick="nav('auditoria')"><span class="mic">🔍</span><span>Raio-X das Contas</span></div>
-      <div class="nav-section">Gestão</div>
+      <div class="nav-section">💰 Dinheiro</div>
+      <div class="ni" onclick="nav('quotas')" title="Emitir e receber quotas · registar pagamentos · importar o extrato do banco"><span class="mic">🧾</span><span>Quotas · Receber</span><span class="nb" id="nb-quotas"></span><span id="badge-quotas" style="display:none;margin-left:auto;background:#f87171;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;line-height:16px;text-align:center;border-radius:8px;padding:0 4px;"></span></div>
+      <div class="ni" onclick="nav('despesas')" title="Registar gastos e reparações · pagar fornecedores · gerar quotas extraordinárias"><span class="mic">🔧</span><span>Despesas · Pagar</span><span class="nb" id="nb-despesas"></span></div>
+      <div class="ni" onclick="nav('financeiro')" title="Livro de movimentos — todas as entradas e saídas de dinheiro"><span class="mic">💳</span><span>Movimentos</span></div>
+      <div class="ni" onclick="nav('contas')" title="Resumo do ano · orçado vs real · extrato detalhado mês a mês"><span class="mic">💰</span><span>Fecho do Ano</span></div>
+      <div class="ni" onclick="nav('orcamento')" title="Plano anual de receitas e despesas"><span class="mic">🧮</span><span>Orçamento</span><span id="badge-orcamento" style="display:none;margin-left:auto;background:#f87171;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;line-height:16px;text-align:center;border-radius:8px;padding:0 4px;"></span></div>
+      <div class="ni" onclick="nav('auditoria')" title="Auditoria de contas e passagem de gestão"><span class="mic">🔍</span><span>Raio-X das Contas</span></div>
+      <div class="nav-section">Comunidade</div>
       <div class="ni" onclick="nav('condominos')"><span class="mic">👥</span><span>Condóminos</span><span class="nb" id="nb-cond"></span></div>
       <div class="ni" onclick="nav('ocorrencias')"><span class="mic">⚠️</span><span>Ocorrências</span><span class="nb" id="nb-oc"></span></div>
       <div class="ni" onclick="nav('mensagens')"><span class="mic">💬</span><span>Mensagens</span><span class="nb" id="nb-msg" style="background:#f87171;"></span></div>
       <div class="ni" onclick="nav('parceiros')"><span class="mic">🤝</span><span>Parceiros</span></div>
+      <div class="nav-section">Documentos &amp; Reuniões</div>
       <div class="ni" onclick="nav('documentos')"><span class="mic">📄</span><span>Documentos</span></div>
       <div class="ni" onclick="nav('assembleias')"><span class="mic">🗳️</span><span>Assembleias</span><span id="badge-assembleias" style="display:none;margin-left:auto;background:#f87171;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;line-height:16px;text-align:center;border-radius:8px;padding:0 4px;"></span></div>
       <div class="nav-section">IA</div>
@@ -6458,14 +6460,18 @@ async function importarExtratoBancario(input) {
     // Carregar memória de associações
     var memoriaAssoc = await carregarMemoriaExtrato();
 
-    // Ir buscar quotas pendentes do mês
+    // Ir buscar quotas pendentes — do mês selecionado E em atraso de meses anteriores
+    // (permite reconhecer quem paga tudo junto: mensal + extraordinária + atrasos)
     var { data: quotasPendentes } = await sb.from('quotas')
       .select('*, fracoes(codigo,proprietario_nome,permilagem,nib_proprio)')
       .eq('condominio_id', currentCondo.id)
-      .eq('mes', mes).eq('ano', ano)
       .in('estado', ['pendente','atraso','parcial']);
 
-    var quotasPend = quotasPendentes || [];
+    // Só as até ao mês/ano selecionado (não busca quotas futuras)
+    var quotasPend = (quotasPendentes || []).filter(function(q){
+      var qa = parseInt(q.ano||0), qm = parseInt(q.mes||0);
+      return qa < ano || (qa === ano && qm <= mes);
+    });
 
     // Cruzar transacções com quotas
     var marcadas = [];
@@ -6478,31 +6484,87 @@ async function importarExtratoBancario(input) {
       var valor = parseFloat(tr.valor);
       var desc = (tr.descricao||'').toLowerCase();
       var matched = null;
+      var matchedGrupo = null;  // várias quotas pagas de uma vez (ex: mensal + extraordinária)
 
-      // Tentar match por nome do proprietário
+      // 1) Identificar o CONDÓMINO (por nome ou código de fração)
+      var fracaoDaTransacao = null;
       for (var qi = 0; qi < quotasPend.length; qi++) {
         var q = quotasPend[qi];
         if (jaProcessados[q.id]) continue;
         var nomeP = (q.fracoes ? q.fracoes.proprietario_nome || '' : '').toLowerCase();
         var codFrac = (q.fracoes ? q.fracoes.codigo || '' : '').toLowerCase();
-        var valorQ = parseFloat(q.valor_emitido);
-        // Match por nome OU por código de fração na descrição OU por valor exacto
-        // Match de nome em qualquer ordem — banco usa apelido primeiro
         var nomePartes = nomeP.replace(/[áàãâä]/g,'a').replace(/[éèêë]/g,'e').replace(/[íìîï]/g,'i').replace(/[óòõôö]/g,'o').replace(/[úùûü]/g,'u').replace(/[ç]/g,'c').split(' ').filter(function(p){ return p.length > 2; });
         var descNorm = desc.replace(/[áàãâä]/g,'a').replace(/[éèêë]/g,'e').replace(/[íìîï]/g,'i').replace(/[óòõôö]/g,'o').replace(/[úùûü]/g,'u').replace(/[ç]/g,'c');
         var nomeMatch = nomePartes.length >= 2 && nomePartes.filter(function(p){ return descNorm.includes(p); }).length >= 2;
-        var codMatch = codFrac && desc.includes('fr' + codFrac) || desc.includes('fração ' + codFrac) || desc.includes('fracao ' + codFrac);
-        var valorMatch = Math.abs(valor - valorQ) < 0.10;
-        if (nomeMatch || codMatch || (valorMatch && !matched)) {
-          matched = q;
-          if (nomeMatch || codMatch) break; // match forte — para aqui
-        }
+        var codMatch = codFrac && (desc.includes('fr' + codFrac) || desc.includes('fração ' + codFrac) || desc.includes('fracao ' + codFrac));
+        if (nomeMatch || codMatch) { fracaoDaTransacao = q.fracao_id; break; }
       }
 
-      if (matched) {
+      // 2) Se identificámos o condómino, ver TODAS as quotas pendentes dele
+      if (fracaoDaTransacao) {
+        var quotasDele = quotasPend.filter(function(q){ return q.fracao_id === fracaoDaTransacao && !jaProcessados[q.id]; });
+        // a) A transferência bate certo com UMA quota?
+        var umaQuota = quotasDele.find(function(q){ return Math.abs(valor - parseFloat(q.valor_emitido)) < 0.10; });
+        if (umaQuota) {
+          matched = umaQuota;
+        }
+        // b) A transferência bate certo com a SOMA de várias quotas? (pagamento agrupado!)
+        else if (quotasDele.length > 1) {
+          var somaTodas = quotasDele.reduce(function(s,q){ return s + parseFloat(q.valor_emitido||0); }, 0);
+          if (Math.abs(valor - somaTodas) < 0.10) {
+            matchedGrupo = quotasDele;  // pagou TUDO de uma vez
+          } else {
+            // tentar combinações de 2 quotas (o caso mais comum: mensal + extraordinária)
+            for (var a = 0; a < quotasDele.length && !matchedGrupo; a++) {
+              for (var b = a+1; b < quotasDele.length; b++) {
+                var soma2 = parseFloat(quotasDele[a].valor_emitido||0) + parseFloat(quotasDele[b].valor_emitido||0);
+                if (Math.abs(valor - soma2) < 0.10) { matchedGrupo = [quotasDele[a], quotasDele[b]]; break; }
+              }
+            }
+          }
+        }
+        // c) Nome bate mas o valor não corresponde a nada — assumir a mais antiga
+        if (!matched && !matchedGrupo && quotasDele.length) { matched = quotasDele[0]; }
+      }
+
+      // 3) Sem identificação do condómino: tentar só por valor exacto
+      if (!matched && !matchedGrupo) {
+        matched = quotasPend.find(function(q){
+          return !jaProcessados[q.id] && Math.abs(valor - parseFloat(q.valor_emitido)) < 0.10;
+        }) || null;
+      }
+
+      var dataP = tr.data || new Date().toISOString().split('T')[0];
+      var TIPO_LABEL = function(q){ return q.tipo === 'extraordinaria' ? 'Quota extraordinária' : 'Quota'; };
+
+      // PAGAMENTO AGRUPADO — marca várias quotas de uma só transferência
+      if (matchedGrupo && matchedGrupo.length) {
+        for (var gi = 0; gi < matchedGrupo.length; gi++) {
+          var qg = matchedGrupo[gi];
+          jaProcessados[qg.id] = true;
+          await sb.from('quotas').update({
+            valor_pago: parseFloat(qg.valor_emitido),
+            estado: 'pago',
+            metodo_pagamento: 'Transferência Bancária',
+            data_pagamento: dataP,
+            notas: 'Auto-importado do extrato (pagamento agrupado de ' + valor.toFixed(2) + '€): ' + (tr.descricao||'')
+          }).eq('id', qg.id);
+          await sb.from('movimentos').insert({
+            condominio_id: currentCondo.id,
+            tipo: 'receita',
+            categoria: 'Quota',
+            descricao: TIPO_LABEL(qg) + ' ' + mesesNomes[(qg.mes||mes)-1] + '/' + (qg.ano||ano) + ' — ' + (qg.fracoes ? qg.fracoes.codigo : '') + ' (extrato, agrupado)',
+            valor: parseFloat(qg.valor_emitido),
+            data_movimento: dataP,
+            conta: 'operacional',
+            fracao_id: qg.fracao_id
+          });
+          marcadas.push({ tr: tr, quota: qg, agrupado: true });
+        }
+      }
+      // PAGAMENTO SIMPLES — uma quota
+      else if (matched) {
         jaProcessados[matched.id] = true;
-        // Marcar como pago no Supabase
-        var dataP = tr.data || new Date().toISOString().split('T')[0];
         await sb.from('quotas').update({
           valor_pago: parseFloat(matched.valor_emitido),
           estado: 'pago',
@@ -6510,18 +6572,17 @@ async function importarExtratoBancario(input) {
           data_pagamento: dataP,
           notas: 'Auto-importado do extrato: ' + (tr.descricao||'')
         }).eq('id', matched.id);
-        // Registar movimento
         await sb.from('movimentos').insert({
           condominio_id: currentCondo.id,
           tipo: 'receita',
           categoria: 'Quota',
-          descricao: 'Quota ' + mesesNomes[mes-1] + '/' + ano + ' — ' + (matched.fracoes ? matched.fracoes.codigo : '') + ' (extrato)',
+          descricao: TIPO_LABEL(matched) + ' ' + mesesNomes[(matched.mes||mes)-1] + '/' + (matched.ano||ano) + ' — ' + (matched.fracoes ? matched.fracoes.codigo : '') + ' (extrato)',
           valor: parseFloat(matched.valor_emitido),
           data_movimento: dataP,
           conta: 'operacional',
           fracao_id: matched.fracao_id
         });
-        marcadas.push({ tr, quota: matched });
+        marcadas.push({ tr: tr, quota: matched });
       } else {
         naoCruzadas.push(tr);
       }
@@ -13870,7 +13931,7 @@ async function importarFracoesIA() {
 
 // ===== NAVIGATION =====
 const pageMap={dashboard:'Dashboard',edificio:'Edifício',fracoes:'Frações',quotas:'Quotas',financeiro:'Financeiro',contas:'Contas',auditoria:'Raio-X das Contas',ocorrencias:'Ocorrências',mensagens:'Mensagens',parceiros:'Parceiros',documentos:'Documentos',assembleias:'Assembleias',ia:'Assistente IA',definicoes:'Definições'};
-const pathMap={dashboard:'Visão Geral',fracoes:'Moradores & Frações',quotas:'Gestão de Quotas',financeiro:'Contas & Movimentos',contas:'Mapa do Ano & Fecho de Contas',auditoria:'Auditoria & Passagem de Gestão',ocorrencias:'Gestão de Problemas',parceiros:'Base de Manutenção',documentos:'Arquivo Digital',assembleias:'Reuniões',ia:'IA Gratuita · Gemini',definicoes:'Configuração'};
+const pathMap={dashboard:'Visão Geral',fracoes:'Moradores & Frações',quotas:'Quotas · Receber — pagamentos e extrato bancário',financeiro:'Movimentos — livro de entradas e saídas',contas:'Fecho do Ano — resumo, mapa e extrato detalhado',auditoria:'Auditoria & Passagem de Gestão',ocorrencias:'Gestão de Problemas',parceiros:'Base de Manutenção',documentos:'Arquivo Digital',assembleias:'Reuniões',ia:'IA Gratuita · Gemini',definicoes:'Configuração'};
 
 // ===== MÓDULO CONTAS (mapa do ano + orçado vs real) =====
 var _contasAno = new Date().getFullYear();
@@ -15683,6 +15744,39 @@ if (!window._msgInterval) { window._msgInterval = setInterval(function(){ if (cu
 
 function escaparHtml(s){ var d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
 
+// 💰 Barra de navegação do dinheiro — orienta entre as 5 páginas financeiras
+function injetarBarraDinheiro(pAtual) {
+  var paginasDinheiro = {
+    quotas:    { ic:'🧾', nome:'Quotas · Receber', dica:'pagamentos + extrato do banco' },
+    despesas:  { ic:'🔧', nome:'Despesas · Pagar', dica:'gastos + gerar quotas' },
+    financeiro:{ ic:'💳', nome:'Movimentos', dica:'livro de caixa' },
+    contas:    { ic:'💰', nome:'Fecho do Ano', dica:'resumo + extrato detalhado' },
+    orcamento: { ic:'🧮', nome:'Orçamento', dica:'plano anual' }
+  };
+  if (!paginasDinheiro[pAtual]) return; // só nas páginas de dinheiro
+  var pg = document.getElementById('page-' + pAtual);
+  if (!pg) return;
+  var barra = pg.querySelector('.barra-dinheiro');
+  if (!barra) {
+    barra = document.createElement('div');
+    barra.className = 'barra-dinheiro';
+    barra.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;padding:8px 10px;background:var(--s1);border:1px solid var(--b1);border-radius:10px;align-items:center;';
+    pg.insertBefore(barra, pg.firstChild);
+  }
+  var h = '<span style="font-size:9.5px;color:var(--t3);font-weight:700;letter-spacing:1px;margin-right:4px;">💰 DINHEIRO:</span>';
+  Object.keys(paginasDinheiro).forEach(function(k){
+    var pd = paginasDinheiro[k];
+    var ativo = (k === pAtual);
+    h += '<button onclick="nav(\'' + k + '\')" title="' + pd.dica + '" style="' +
+      'background:' + (ativo ? 'rgba(0,212,255,.15)' : 'transparent') + ';' +
+      'border:1px solid ' + (ativo ? 'var(--cyan)' : 'var(--b1)') + ';' +
+      'color:' + (ativo ? 'var(--cyan)' : 'var(--t2)') + ';' +
+      'border-radius:16px;padding:5px 12px;font-size:10.5px;font-weight:600;cursor:pointer;transition:all .12s ease;">' +
+      pd.ic + ' ' + pd.nome + '</button>';
+  });
+  barra.innerHTML = h;
+}
+
 function nav(p) {
   document.querySelectorAll('.page').forEach(el=>el.classList.remove('active'));
   document.querySelectorAll('.ni').forEach(el=>el.classList.remove('active'));
@@ -15690,6 +15784,7 @@ function nav(p) {
   const _tbt=document.getElementById('tb-title')||document.getElementById('tb-page'); if(_tbt) _tbt.textContent=pageMap[p]||p;
   const _tbp=document.getElementById('tb-path'); if(_tbp) _tbp.textContent=pathMap[p]||'';
   document.querySelectorAll('.ni').forEach(el=>{const oc=el.getAttribute('onclick')||'';if(oc.includes("'"+p+"'"))el.classList.add('active');});
+  injetarBarraDinheiro(p);
   if(p==='orcamento'){ initOrcamentoAno(); loadOrcamento(); }
   if(p==='condominos') loadCondominos();
   if(p==='mensagens') loadMensagens();
