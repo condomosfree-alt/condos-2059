@@ -632,7 +632,7 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.12-2203</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.12-2210</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -3744,6 +3744,17 @@ async function verificarAvisosGerais() {
       avisos.push({ pagina:'despesas', badge:String(semQuota.length), cor:'#ff6b35',
         texto: semQuota.length + ' despesa(s) por cobrar aos condóminos',
         detalhe: 'Há ' + totalSemCobrar.toFixed(2) + '€ em despesas ainda sem quota gerada — ninguém foi cobrado. Vai a Despesas e clica em "Gerar Quota" para lançar a cobrança.' });
+    }
+
+    // 5d) Despesas aprovadas mas ainda NÃO PAGAS ao fornecedor (o dinheiro ainda não saiu do banco)
+    var porPagarForn = (despRes.data||[]).filter(function(dp){
+      return dp.estado !== 'paga' && dp.estado !== 'cancelada' && dp.estado !== 'planeada' && parseFloat(dp.valor_total||0) > 0;
+    });
+    if (porPagarForn.length) {
+      var totalPorPagar = porPagarForn.reduce(function(s,dp){ return s + parseFloat(dp.valor_total||0); }, 0);
+      avisos.push({ pagina:'despesas', badge:String(porPagarForn.length), cor:'#f87171',
+        texto: porPagarForn.length + ' despesa(s) por pagar ao fornecedor',
+        detalhe: 'Há ' + totalPorPagar.toFixed(2) + '€ aprovados mas ainda não pagos. Quando pagares, clica em "💸 Pagar" para o movimento entrar no extrato.' });
     }
 
     // 6) Mensagens não lidas de condóminos
@@ -7159,8 +7170,11 @@ async function loadDespesas() {
         '<td><span class="pill ' + (ESTADO_CLS[d.estado]||'') + '">' + (d.estado||'planeada') + '</span></td>' +
         '<td class="mn" style="font-size:11px;">' + (d.data_despesa||'—') + '</td>' +
         '<td><div style="display:flex;gap:4px;">' +
+          (d.estado === 'paga'
+            ? '<span class="pill ok" style="font-size:9px;">💸 Paga</span>'
+            : '<button class="tb-btn" style="font-size:10px;padding:4px 8px;background:rgba(255,84,112,.1);border-color:rgba(255,84,112,.3);color:var(--red);" onclick="marcarDespesaPaga(\'' + d.id + '\')" title="Registar o pagamento — sai dinheiro da conta e entra no extrato">💸 Pagar</button>') +
           (d.quota_gerada
-            ? '<span class="pill ok" style="font-size:9px;">✓ Quota gerada</span>'
+            ? '<span class="pill ok" style="font-size:9px;">✓ Quota</span>'
             : '<button class="tb-btn" style="font-size:10px;padding:4px 8px;background:rgba(0,212,255,.1);border-color:rgba(0,212,255,.3);color:var(--cyan);" onclick="gerarQuotaExtra(\'' + d.id + '\')" title="Gerar quota extraordinária dividida pelas frações">➗ Gerar Quotas</button>') +
           '<button class="tb-btn" style="font-size:11px;padding:4px 8px;" onclick="imprimirDespesa(\'' + d.id + '\')" title="Imprimir relatório da despesa (PDF)">📄</button>' +
           ((d.quota_gerada || (d.estado && d.estado !== 'planeada'))
@@ -7354,6 +7368,40 @@ async function imprimirDespesa(despesaId) {
 
   doc.save('Despesa_' + (d.descricao||'').replace(/[^a-zA-Z0-9]/g,'_').substring(0,30) + '_' + hojeFmt.replace(/\//g,'-') + '.pdf');
   toast('Relatorio gerado!','ok');
+}
+
+// 💸 Marcar despesa como PAGA → cria o movimento de SAÍDA (o dinheiro sai da conta = aparece no extrato)
+async function marcarDespesaPaga(despesaId) {
+  var d = _despesasAll.find(function(x){ return x.id === despesaId; });
+  if (!d) return;
+  var valor = parseFloat(d.valor_total||0);
+  if (!valor) { toast('A despesa não tem valor','err'); return; }
+
+  var hoje = new Date().toISOString().split('T')[0];
+  var msg = 'Registar o pagamento de ' + valor.toFixed(2).replace('.',',') + '€?\n\n';
+  msg += 'A saída de dinheiro entra no EXTRATO (Contas), para bater certo com o banco.\n\n';
+  msg += 'Confirma que o pagamento foi mesmo feito.';
+  if (!await confirmar(msg, {titulo:'Registar pagamento', tipo:'info', icon:'💸', okTexto:'Sim, foi pago'})) return;
+
+  // 1) Criar o MOVIMENTO de saída (é isto que faz o extrato bater certo com o banco)
+  var mov = await sb.from('movimentos').insert({
+    condominio_id: currentCondo.id,
+    tipo: 'despesa',
+    categoria: (d.tipo === 'reparacao' ? 'Manutenção' : (d.tipo === 'obra' ? 'Obras' : 'Despesa')),
+    descricao: d.descricao || 'Despesa',
+    valor: valor,
+    data_movimento: hoje,
+    conta: 'operacional',
+    fornecedor: d.fornecedor || null
+  });
+  if (mov.error) { toast('Erro ao registar movimento: ' + mov.error.message, 'err'); return; }
+
+  // 2) Marcar a despesa como paga
+  await sb.from('despesas').update({ estado: 'paga' }).eq('id', d.id);
+
+  toast('💸 Pagamento registado! Saiu ' + valor.toFixed(2).replace('.',',') + '€ — já aparece no extrato.','ok');
+  loadDespesas();
+  verificarAvisosGerais();
 }
 
 async function apagarDespesa(id) {
