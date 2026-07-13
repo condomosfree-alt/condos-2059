@@ -632,7 +632,7 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.13-1757</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.13-1813</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -6483,6 +6483,7 @@ async function importarExtratoBancario(input) {
 
     // --- SAÍDAS: lançar como movimentos de despesa (é isto que faz bater certo com o banco) ---
     var saidasLancadas = [];
+    var duplicadosEvitados = 0;
     for (var si = 0; si < saidas.length; si++) {
       var sd = saidas[si];
       var vsd = parseFloat(sd.valor||0);
@@ -6500,9 +6501,24 @@ async function importarExtratoBancario(input) {
       else if (/obra|pintura|construc/.test(dsd)) catSd = 'Obra';
       else if (/eletricista|canalizador|serralheiro|reparacao|reparação/.test(dsd)) catSd = 'Manutenção';
       // Evitar duplicar: já existe movimento igual (mesma data + valor)?
-      var jaExiste = await sb.from('movimentos').select('id').eq('condominio_id', currentCondo.id)
-        .eq('data_movimento', sd.data).eq('valor', vsd).eq('tipo','despesa').limit(1);
-      if (jaExiste.data && jaExiste.data.length) continue;
+      // ANTI-DUPLICADOS INTELIGENTE: procura o mesmo valor numa janela de ±7 dias
+      // (o admin pode ter registado o pagamento à mão com data diferente da do banco)
+      var dSd = new Date(sd.data || new Date());
+      var dIni = new Date(dSd); dIni.setDate(dIni.getDate() - 7);
+      var dFim = new Date(dSd); dFim.setDate(dFim.getDate() + 7);
+      var possiveis = await sb.from('movimentos').select('id,descricao,data_movimento,valor')
+        .eq('condominio_id', currentCondo.id).eq('tipo','despesa').eq('valor', vsd)
+        .gte('data_movimento', dIni.toISOString().split('T')[0])
+        .lte('data_movimento', dFim.toISOString().split('T')[0]).limit(1);
+      if (possiveis.data && possiveis.data.length) {
+        var ex = possiveis.data[0];
+        var msgDup = '⚠️ POSSÍVEL DUPLICADO\n\n';
+        msgDup += 'O banco mostra:\n  "' + (sd.descricao||'').substring(0,45) + '"\n  ' + vsd.toFixed(2) + '€ a ' + (sd.data||'?') + '\n\n';
+        msgDup += 'Já existe nas contas:\n  "' + (ex.descricao||'').substring(0,45) + '"\n  ' + parseFloat(ex.valor).toFixed(2) + '€ a ' + ex.data_movimento + '\n\n';
+        msgDup += 'É o MESMO pagamento?\n\n';
+        msgDup += 'OK = é o mesmo, não lançar de novo (evita duplicar)\nCancelar = são pagamentos diferentes, lançar na mesma';
+        if (confirm(msgDup)) { duplicadosEvitados++; continue; }
+      }
       var insSd = await sb.from('movimentos').insert({
         condominio_id: currentCondo.id,
         tipo: 'despesa',
@@ -6565,8 +6581,15 @@ async function importarExtratoBancario(input) {
             }
           }
         }
-        // c) Nome bate mas o valor não corresponde a nada — assumir a mais antiga
-        if (!matched && !matchedGrupo && quotasDele.length) { matched = quotasDele[0]; }
+        // c) Nome bate mas o valor NÃO corresponde a nenhuma quota nem soma?
+        //    NÃO ASSUMIR NADA — é dinheiro! Vai para "não identificadas" e o admin decide.
+        //    (assumir aqui marcava como pagas quotas que ninguém pagou)
+        if (!matched && !matchedGrupo && quotasDele.length) {
+          var fr = fracoes.find(function(f){ return f.id === fracaoDaTransacao; });
+          tr._pista = 'Parece ser de ' + (fr ? (fr.codigo + (fr.proprietario_nome ? ' — ' + fr.proprietario_nome : '')) : 'um condómino') +
+            ', mas ' + valor.toFixed(2) + '€ não bate com nenhuma quota dele (' +
+            quotasDele.map(function(q){ return parseFloat(q.valor_emitido).toFixed(2) + '€'; }).join(' / ') + ')';
+        }
       }
 
       // 3) Sem identificação do condómino: tentar só por valor exacto
@@ -6663,7 +6686,7 @@ async function importarExtratoBancario(input) {
         naoCruzadas.forEach(function(tr, tridx) {
           html += '<tr>';
           html += '<td>' + (tr.data||'—') + '</td>';
-          html += '<td>' + (tr.descricao||'—').slice(0,50) + '</td>';
+          html += '<td>' + (tr.descricao||'—').slice(0,50) + (tr._pista ? '<div style="font-size:9.5px;color:var(--amber);margin-top:2px;">💡 ' + tr._pista + '</div>' : '') + '</td>';
           html += '<td class="mn">' + parseFloat(tr.valor||0).toFixed(2) + '€</td>';
           html += '<td style="display:flex;gap:5px;">';
           html += '<button onclick="abrirAssociarTransacao(' + tridx + ')" class="btn-ghost" style="font-size:10px;padding:3px 8px;color:var(--cyan);">🔗 Associar</button>';
@@ -6682,6 +6705,11 @@ async function importarExtratoBancario(input) {
           html += '<tr><td>' + (s.desc||'—').slice(0,50) + '</td><td><span class="pill" style="font-size:9px;">' + s.cat + '</span></td><td class="mn" style="color:var(--red);">-' + s.valor.toFixed(2) + '€</td></tr>';
         });
         html += '</tbody></table>';
+      }
+      if (duplicadosEvitados > 0) {
+        html += '<div style="background:rgba(255,179,0,.08);border:1px solid rgba(255,179,0,.25);border-radius:8px;padding:10px 12px;margin-top:12px;font-size:11px;color:var(--t2);">';
+        html += '🛡️ <strong style="color:var(--amber);">' + duplicadosEvitados + ' duplicado(s) evitado(s)</strong> — pagamentos que já estavam registados nas contas não foram lançados outra vez.';
+        html += '</div>';
       }
       resultado.innerHTML = html;
     }
@@ -7332,6 +7360,48 @@ async function loadMovimentos() {
     emptyState('ti-chart-bar','Sem movimentos','');
 }
 
+// 🛡️ Detetar movimentos duplicados (mesmo valor + mesma descrição + datas próximas)
+async function detetarDuplicados() {
+  var movs = window._movsCache || [];
+  if (!movs.length) { toast('Sem movimentos para analisar','err'); return; }
+  var grupos = {};
+  movs.forEach(function(m){
+    var chave = m.tipo + '|' + parseFloat(m.valor||0).toFixed(2) + '|' + (m.descricao||'').substring(0,25).toLowerCase();
+    if (!grupos[chave]) grupos[chave] = [];
+    grupos[chave].push(m);
+  });
+  var suspeitos = Object.keys(grupos).filter(function(k){ return grupos[k].length > 1; });
+  if (!suspeitos.length) { toast('✅ Não encontrei duplicados','ok'); return; }
+
+  var h = '<div style="padding:2px;">';
+  h += '<div style="font-size:11px;color:var(--t2);margin-bottom:12px;">Encontrei movimentos com o mesmo valor e descrição parecida. Verifica se são duplicados (o mesmo pagamento registado 2x) ou pagamentos legítimos repetidos.</div>';
+  var total = 0;
+  suspeitos.forEach(function(k){
+    var g = grupos[k];
+    total += (g.length - 1);
+    h += '<div style="background:var(--s2);border:1px solid rgba(255,179,0,.3);border-radius:8px;padding:10px;margin-bottom:10px;">';
+    h += '<div style="font-size:12px;font-weight:700;color:var(--amber);margin-bottom:6px;">' + g.length + '× ' + parseFloat(g[0].valor).toFixed(2) + '€ — ' + (g[0].descricao||'').substring(0,40) + '</div>';
+    g.forEach(function(m, i){
+      h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-top:1px solid var(--b1);font-size:11px;">';
+      h += '<span style="color:var(--t2);">' + (i===0?'✅ manter':'⚠️ duplicado?') + ' · ' + m.data_movimento + ' · ' + (m.categoria||'') + '</span>';
+      if (i > 0) h += '<button class="tb-btn" style="font-size:10px;padding:3px 9px;color:var(--red);" onclick="apagarDuplicado(\'' + m.id + '\', this)">🗑️ Apagar</button>';
+      h += '</div>';
+    });
+    h += '</div>';
+  });
+  h += '<div style="font-size:10.5px;color:var(--t3);text-align:center;margin-top:8px;">' + total + ' movimento(s) possivelmente a mais</div>';
+  h += '</div>';
+  abrirModalGenerico('🛡️ Possíveis Duplicados', h);
+}
+
+async function apagarDuplicado(id, btn) {
+  var res = await sb.from('movimentos').delete().eq('id', id);
+  if (res.error) { toast('Erro: ' + res.error.message,'err'); return; }
+  if (btn) { btn.textContent = '✓ Apagado'; btn.disabled = true; btn.style.opacity = '.4'; }
+  toast('Duplicado apagado','ok');
+  loadMovimentos();
+}
+
 var _movFiltro = 'tudo';
 function filtrarMovimentos(f) { _movFiltro = f; renderMovimentos(); }
 
@@ -7356,6 +7426,7 @@ function renderMovimentos() {
   barra += pill('entradas', '💰 Entradas', nEnt, 'var(--green)');
   barra += pill('saidas', '💸 Saídas', nSai, 'var(--red)');
   if (nId) barra += pill('identificar', '❓ A identificar', nId, 'var(--amber)');
+  barra += '<button onclick="detetarDuplicados()" style="margin-left:auto;background:transparent;border:1px solid var(--b1);color:var(--t2);border-radius:14px;padding:4px 11px;font-size:10.5px;font-weight:600;cursor:pointer;" title="Procurar movimentos repetidos (o mesmo pagamento registado 2x)">🛡️ Verificar duplicados</button>';
   barra += '</div>';
 
   var html = lista.length ? lista.map(function(m){ return `
