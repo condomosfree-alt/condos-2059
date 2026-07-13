@@ -632,7 +632,7 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.13-0821</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.13-1757</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -6492,7 +6492,8 @@ async function importarExtratoBancario(input) {
       var catSd = 'Outro';
       if (/elevador|schindler|otis|kone|thyssen/.test(dsd)) catSd = 'Manutenção';
       else if (/seguro|fidelidade|tranquilidade|allianz|apolice/.test(dsd)) catSd = 'Seguro';
-      else if (/edp|galp|endesa|iberdrola|luz|eletric|energia/.test(dsd)) catSd = 'Energia';
+      else if (/eletricista|electricista|canalizador|serralheiro|picheleiro|reparacao|reparação|servico|serviço/.test(dsd)) catSd = 'Manutenção';
+      else if (/edp|galp|endesa|iberdrola|luz partes|eletricidade|energia/.test(dsd)) catSd = 'Energia';
       else if (/agua|epal|aguas/.test(dsd)) catSd = 'Água';
       else if (/limpeza|brilho|clean/.test(dsd)) catSd = 'Limpeza';
       else if (/comissao|comissão|manutencao conta|imposto selo|banco/.test(dsd)) catSd = 'Banco';
@@ -7310,7 +7311,7 @@ async function apagarMovimento(id) {
 
 async function loadMovimentos() {
   if (!currentCondo) return;
-  const { data } = await sb.from('movimentos').select('*').eq('condominio_id',currentCondo.id).order('data_movimento',{ascending:false}).limit(50);
+  const { data } = await sb.from('movimentos').select('*').eq('condominio_id',currentCondo.id).order('data_movimento',{ascending:false}).limit(300);
   const movs = data || [];
   const now = new Date();
   const mesAtual = now.getMonth()+1; const anoAtual = now.getFullYear();
@@ -7324,18 +7325,49 @@ async function loadMovimentos() {
   document.getElementById('f-desp').innerHTML = desp.toFixed(0)+'<span>€</span>';
   document.getElementById('f-rec').innerHTML = rec.toFixed(0)+'<span>€</span>';
   const catIco = {Quota:'ti-arrow-down',Serviço:'ti-tools',Seguro:'ti-shield',Obra:'ti-hammer',Energia:'ti-bolt',Limpeza:'ti-brush',Outro:'ti-dots'};
-  const html = movs.length ? movs.slice(0,20).map(m=>`
+  window._movsCache = movs;
+  renderMovimentos();
+  document.getElementById('dash-movimentos').innerHTML = movs.length ?
+    movs.slice(0,5).map(m=>`<div class="fin-row"><div class="fin-ico" style="background:${m.tipo==='receita'?'var(--gdim)':'var(--rdim)'};color:${m.tipo==='receita'?'var(--green)':'var(--red)'}"><i class="ti ti-arrow-${m.tipo==='receita'?'down':'up'}"></i></div><div><div class="fin-lbl">${m.descricao}</div><div class="fin-sub">${m.data_movimento}</div></div><div class="fin-amt ${m.tipo==='receita'?'pos':'neg'}">${m.tipo==='receita'?'+':'-'}${parseFloat(m.valor).toFixed(2)}€</div></div>`).join('') :
+    emptyState('ti-chart-bar','Sem movimentos','');
+}
+
+var _movFiltro = 'tudo';
+function filtrarMovimentos(f) { _movFiltro = f; renderMovimentos(); }
+
+function renderMovimentos() {
+  var movs = window._movsCache || [];
+  var catIco = {Quota:'ti-arrow-down',Serviço:'ti-tools',Seguro:'ti-shield',Obra:'ti-hammer',Energia:'ti-bolt',Limpeza:'ti-brush',Outro:'ti-dots'};
+  var lista = movs;
+  if (_movFiltro === 'entradas') lista = movs.filter(function(m){ return m.tipo === 'receita'; });
+  if (_movFiltro === 'saidas') lista = movs.filter(function(m){ return m.tipo !== 'receita'; });
+  if (_movFiltro === 'identificar') lista = movs.filter(function(m){ return m.categoria === 'A identificar'; });
+
+  var nEnt = movs.filter(function(m){ return m.tipo==='receita'; }).length;
+  var nSai = movs.filter(function(m){ return m.tipo!=='receita'; }).length;
+  var nId = movs.filter(function(m){ return m.categoria === 'A identificar'; }).length;
+
+  var pill = function(id, txt, n, cor) {
+    var on = (_movFiltro === id);
+    return '<button onclick="filtrarMovimentos(\'' + id + '\')" style="background:' + (on?'rgba(0,212,255,.15)':'transparent') + ';border:1px solid ' + (on?'var(--cyan)':'var(--b1)') + ';color:' + (on?'var(--cyan)':(cor||'var(--t2)')) + ';border-radius:14px;padding:4px 11px;font-size:10.5px;font-weight:600;cursor:pointer;">' + txt + ' (' + n + ')</button>';
+  };
+  var barra = '<div style="display:flex;gap:6px;padding:10px 0;flex-wrap:wrap;align-items:center;">';
+  barra += pill('tudo', '📋 Tudo', movs.length);
+  barra += pill('entradas', '💰 Entradas', nEnt, 'var(--green)');
+  barra += pill('saidas', '💸 Saídas', nSai, 'var(--red)');
+  if (nId) barra += pill('identificar', '❓ A identificar', nId, 'var(--amber)');
+  barra += '</div>';
+
+  var html = lista.length ? lista.map(function(m){ return `
     <div class="fin-row">
       <div class="fin-ico" style="background:${m.tipo==='receita'?'var(--gdim)':'var(--rdim)'};color:${m.tipo==='receita'?'var(--green)':'var(--red)'}"><i class="ti ${catIco[m.categoria]||'ti-circle'}" style="font-size:13px"></i></div>
       <div><div class="fin-lbl">${m.descricao}</div><div class="fin-sub">${m.data_movimento||''} · ${m.categoria||''} · ${m.conta}</div></div>
       <div class="fin-amt ${m.tipo==='receita'?'pos':'neg'}">${m.tipo==='receita'?'+':'-'}${parseFloat(m.valor).toFixed(2)}€</div>
       <button class="tb-btn" style="font-size:10px;padding:3px 7px;margin-left:8px;opacity:.6;" onclick="editarMovimento('${m.id}')" title="Modificar este movimento (ex: identificar a quem pertence)">✏️</button>
       <button class="tb-btn" style="font-size:10px;padding:3px 7px;margin-left:4px;opacity:.6;" onclick="apagarMovimento('${m.id}')" title="Apagar este movimento (corrigir erro de lançamento)">🗑️</button>
-    </div>`).join('') : emptyState('ti-chart-bar','Sem movimentos','Regista receitas e despesas do condomínio.');
-  document.getElementById('movimentos-list').innerHTML = html;
-  document.getElementById('dash-movimentos').innerHTML = movs.length ?
-    movs.slice(0,5).map(m=>`<div class="fin-row"><div class="fin-ico" style="background:${m.tipo==='receita'?'var(--gdim)':'var(--rdim)'};color:${m.tipo==='receita'?'var(--green)':'var(--red)'}"><i class="ti ti-arrow-${m.tipo==='receita'?'down':'up'}"></i></div><div><div class="fin-lbl">${m.descricao}</div><div class="fin-sub">${m.data_movimento}</div></div><div class="fin-amt ${m.tipo==='receita'?'pos':'neg'}">${m.tipo==='receita'?'+':'-'}${parseFloat(m.valor).toFixed(2)}€</div></div>`).join('') :
-    emptyState('ti-chart-bar','Sem movimentos','');
+    </div>`; }).join('') : '<div style="padding:20px;text-align:center;color:var(--t3);font-size:12px;">Sem movimentos neste filtro.</div>';
+
+  document.getElementById('movimentos-list').innerHTML = barra + html;
 }
 
 async function saveMov() {
