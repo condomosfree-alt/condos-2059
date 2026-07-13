@@ -632,7 +632,7 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.13-1823</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.13-2047</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -8052,7 +8052,10 @@ async function gerirOcorrencia(id) {
   } else { h += '<div style="font-size:11px;color:var(--t3);">Ainda sem eventos.</div>'; }
 
   // Botão de exportar relatório (prova)
-  h += '<button class="btn-primary" style="width:100%;margin-top:16px;" onclick="exportarOcorrenciaPDF()">📄 Exportar relatório (PDF de prova)</button>';
+  h += '<div style="display:flex;gap:8px;margin-top:16px;">';
+  h += '<button class="btn-primary" style="flex:1;" onclick="exportarOcorrenciaPDF()">📄 PDF de prova</button>';
+  h += '<button class="btn-ghost" style="flex:1;color:var(--cyan);border-color:rgba(0,212,255,.35);" onclick="ocPartilhar(\'' + _ocAtual.id + '\')" title="Gera um QR e um link só de leitura — para mostrar em assembleia ou enviar a um condómino">🔗 Partilhar / QR</button>';
+  h += '</div>';
   // Encerrar ocorrência (falso alarme, resolvido sem custo, etc.) — só se ainda não resolvida
   if (_ocAtual.estado !== 'resolvida' && _ocAtual.estado !== 'fechada') {
     h += '<button class="btn-ghost" style="width:100%;margin-top:8px;font-size:11px;color:var(--t3);" onclick="ocEncerrar()">✕ Encerrar sem reparação (falso alarme, resolvido, duplicada…)</button>';
@@ -8154,6 +8157,31 @@ async function exportarOcorrenciaPDF() {
       doc.text(txt, M+6, y+4); y += 4 + txt.length*4.5 + 2;
     });
   } else { doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(60,60,60); doc.text('(Sem eventos registados)', M+2, y); y += 6; }
+
+  // 🔗 QR CODE — link permanente para o registo online (verificação em assembleia)
+  if (o.token_publico && window.QRCode) {
+    if (y > 225) { doc.addPage(); y = 20; }
+    y += 8;
+    var baseU = location.href.substring(0, location.href.lastIndexOf('/') + 1);
+    var urlPub = baseU + 'ocorrencia.html?t=' + o.token_publico;
+    try {
+      var tmpQR = document.createElement('div');
+      new QRCode(tmpQR, { text: urlPub, width: 200, height: 200, colorDark:'#000000', colorLight:'#ffffff', correctLevel: QRCode.CorrectLevel.M });
+      await new Promise(function(r){ setTimeout(r, 260); });
+      var imgQ = tmpQR.querySelector('img') || tmpQR.querySelector('canvas');
+      var dataQ = imgQ.tagName === 'IMG' ? imgQ.src : imgQ.toDataURL('image/png');
+      // Caixa do QR
+      doc.setDrawColor(0,150,190); doc.setLineWidth(0.4);
+      doc.roundedRect(M, y, W-2*M, 42, 2, 2, 'S');
+      doc.addImage(dataQ, 'PNG', M+4, y+4, 34, 34);
+      doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(0,120,160);
+      doc.text('Verificacao online', M+44, y+11);
+      doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(90,90,90);
+      var notaQ = doc.splitTextToSize('Leia o codigo com o telemovel para consultar o registo oficial e atualizado desta ocorrencia: votacao por permilagem, historico com datas e horas, e divisao de custos. O registo e lido diretamente do sistema e nao pode ser alterado por quem consulta.', W-2*M-48);
+      doc.text(notaQ, M+44, y+17);
+      y += 46;
+    } catch(e) { console.error('QR no PDF:', e); }
+  }
 
   var totalPaginas = doc.internal.getNumberOfPages();
   for (var i=1; i<=totalPaginas; i++) {
@@ -8335,6 +8363,72 @@ async function ocAprovarEConcluir() {
 }
 
 // 🪄 BOTÃO MÁGICO: aprova + lança despesa + gera as quotas de todas as frações, num só clique
+// 🔗 QR + link público da ocorrência (prova verificável — resolve conflitos)
+async function ocPartilhar(ocId) {
+  var oc = _ocAtual;
+  if (!oc || oc.id !== ocId) {
+    var r = await sb.from('ocorrencias').select('*').eq('id', ocId).single();
+    if (r.error) { toast('Erro ao carregar','err'); return; }
+    oc = r.data;
+  }
+  if (!oc.token_publico) {
+    toast('Corre o sql_qr_ocorrencia.sql para ativar os links públicos','err');
+    return;
+  }
+  var base = location.href.substring(0, location.href.lastIndexOf('/') + 1);
+  var url = base + 'ocorrencia.html?t=' + oc.token_publico;
+
+  var h = '<div style="padding:4px;">';
+  h += '<div style="font-size:11.5px;color:var(--t2);margin-bottom:14px;">Quem abrir este link vê a ocorrência, a votação e o histórico completo — <strong style="color:var(--cyan);">mas não pode alterar nada</strong>. Ideal para mostrar em assembleia ou enviar a um condómino.</div>';
+  h += '<div id="oc-qr-box" style="background:#fff;padding:14px;border-radius:12px;display:flex;justify-content:center;margin-bottom:14px;"></div>';
+  h += '<div style="font-size:10px;color:var(--t3);margin-bottom:4px;">LINK</div>';
+  h += '<div style="display:flex;gap:6px;margin-bottom:12px;">';
+  h += '<input id="oc-url" class="fi" style="flex:1;font-size:11px;font-family:monospace;" value="' + url + '" readonly onclick="this.select()">';
+  h += '<button class="btn-primary" style="font-size:11px;padding:8px 12px;" onclick="ocCopiarLink()">📋 Copiar</button>';
+  h += '</div>';
+  h += '<div style="display:flex;gap:8px;">';
+  h += '<button class="btn-ghost" style="flex:1;font-size:11px;" onclick="window.open(\'' + url + '\',\'_blank\')">👁️ Abrir</button>';
+  h += '<button class="btn-ghost" style="flex:1;font-size:11px;" onclick="ocImprimirQR(\'' + url + '\')">🖨️ Imprimir QR</button>';
+  h += '</div>';
+  h += '<div style="font-size:10px;color:var(--t3);margin-top:12px;line-height:1.5;">💡 <strong>Numa assembleia:</strong> se alguém disser "não houve maioria" ou "não fui avisado", lê-se o QR e a verdade aparece — com datas, votos e permilagens.</div>';
+  h += '</div>';
+  abrirModalGenerico('🔗 Partilhar Ocorrência', h);
+
+  setTimeout(function(){
+    var box = document.getElementById('oc-qr-box');
+    if (box && window.QRCode) {
+      box.innerHTML = '';
+      new QRCode(box, { text: url, width: 190, height: 190, colorDark:'#0a1220', colorLight:'#ffffff', correctLevel: QRCode.CorrectLevel.M });
+    }
+  }, 120);
+}
+
+function ocCopiarLink() {
+  var el = document.getElementById('oc-url');
+  el.select();
+  navigator.clipboard.writeText(el.value).then(function(){ toast('📋 Link copiado','ok'); })
+    .catch(function(){ document.execCommand('copy'); toast('📋 Link copiado','ok'); });
+}
+
+function ocImprimirQR(url) {
+  var temp = document.createElement('div');
+  new QRCode(temp, { text: url, width: 300, height: 300, colorDark:'#000000', colorLight:'#ffffff', correctLevel: QRCode.CorrectLevel.H });
+  setTimeout(function(){
+    var img = temp.querySelector('img') || temp.querySelector('canvas');
+    var src = img.tagName === 'IMG' ? img.src : img.toDataURL();
+    var w = window.open('', '_blank');
+    w.document.write('<html><head><title>QR da Ocorrência</title></head><body style="font-family:sans-serif;text-align:center;padding:40px;">' +
+      '<h2 style="margin-bottom:6px;">' + (_ocAtual.categoria||'Ocorrência') + '</h2>' +
+      '<p style="color:#666;font-size:13px;margin-bottom:24px;">' + (_ocAtual.local_ocorrencia||'') + '</p>' +
+      '<img src="' + src + '" style="width:300px;height:300px;">' +
+      '<p style="color:#888;font-size:11px;margin-top:20px;">Leia o código para consultar o registo oficial<br>votação · histórico · custos</p>' +
+      '<p style="color:#aaa;font-size:9px;margin-top:30px;">COND.OS 2059</p>' +
+      '</body></html>');
+    w.document.close();
+    setTimeout(function(){ w.print(); }, 400);
+  }, 250);
+}
+
 async function ocProcessarTudo() {
   var valor = parseFloat(_ocAtual.orcamento_valor||0);
   var metodo = _ocAtual.divisao_metodo || 'geral';
