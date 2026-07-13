@@ -261,6 +261,19 @@
     <div class="ptitle">As minhas quotas</div>
     <div class="psub">Histórico dos últimos 24 meses da sua fração.</div>
     <div id="q-lista"><div class="skel">A carregar…</div></div>
+
+    <div class="card" style="margin-top:20px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+        <div class="sec-h">🗺️ Mapa do condomínio</div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <button onclick="mudarAnoMapa(-1)" style="background:transparent;border:1px solid var(--b);color:var(--t2);border-radius:6px;width:24px;height:24px;font-size:13px;cursor:pointer;">‹</button>
+          <span id="q-mapa-ano" style="font-size:12px;font-weight:700;color:var(--cyan);min-width:34px;text-align:center;"></span>
+          <button onclick="mudarAnoMapa(1)" style="background:transparent;border:1px solid var(--b);color:var(--t2);border-radius:6px;width:24px;height:24px;font-size:13px;cursor:pointer;">›</button>
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--t3);margin-bottom:10px;">Quem está em dia com as quotas. Cada linha é uma fração (sem nomes).</div>
+      <div id="q-mapa"><div class="skel">A carregar…</div></div>
+    </div>
   </div>
 
   <div class="page" id="pg-contas">
@@ -370,7 +383,7 @@ function irPara(pg) {
   window.scrollTo(0,0);
   if (!_loaded[pg]) {
     _loaded[pg] = true;
-    if (pg==='quotas') carregarQuotas();
+    if (pg==='quotas') { carregarQuotas(); document.getElementById('q-mapa-ano').textContent = _mapaAno; carregarMapaQuotas(); }
     if (pg==='contas') carregarContas();
     if (pg==='docs') carregarDocumentos();
     if (pg==='mensagens') carregarMensagens();
@@ -516,6 +529,89 @@ async function confirmarPresenca(estado) {
   window._assembleiaConf = estado;
   const ok = document.getElementById('a-ok'); if (ok) ok.style.display = 'block';
   setTimeout(function(){ fecharModal(); carregarFeed(); }, 1100);
+}
+
+// 🗺️ MAPA DE QUOTAS — grelha do ano todo, por fração (RGPD-safe: sem nomes)
+var _mapaAno = new Date().getFullYear();
+
+async function carregarMapaQuotas() {
+  const cont = document.getElementById('q-mapa');
+  if (!cont) return;
+  cont.innerHTML = '<div style="padding:14px;text-align:center;color:var(--t3);font-size:12px;">A carregar mapa…</div>';
+  const res = await sb.rpc('portal_mapa_quotas', { p_token: token, p_ano: _mapaAno });
+  if (res.error || !res.data || !res.data.length) {
+    cont.innerHTML = '<div style="padding:14px;text-align:center;color:var(--t3);font-size:12px;">Sem quotas registadas em ' + _mapaAno + '.</div>';
+    return;
+  }
+  // Agrupar por fração
+  const porFracao = {};
+  res.data.forEach(function(r){
+    const k = r.fracao_codigo;
+    if (!porFracao[k]) porFracao[k] = { codigo: k, bloco: r.fracao_bloco, minha: r.e_minha, meses: {} };
+    if (!porFracao[k].meses[r.mes]) porFracao[k].meses[r.mes] = [];
+    porFracao[k].meses[r.mes].push({ estado: r.estado, valor: parseFloat(r.valor_emitido||0), tipo: r.tipo });
+  });
+
+  const mAbrev = ['J','F','M','A','M','J','J','A','S','O','N','D'];
+  let h = '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">';
+  h += '<table style="width:100%;border-collapse:collapse;font-size:11px;min-width:340px;">';
+  h += '<thead><tr>';
+  h += '<th style="text-align:left;padding:6px 4px;color:var(--t3);font-size:9.5px;font-weight:600;position:sticky;left:0;background:var(--bg);">FRAÇÃO</th>';
+  for (let m = 1; m <= 12; m++) h += '<th style="padding:6px 2px;color:var(--t3);font-size:9px;font-weight:600;">' + mAbrev[m-1] + '</th>';
+  h += '</tr></thead><tbody>';
+
+  const chaves = Object.keys(porFracao).sort();
+  chaves.forEach(function(k){
+    const f = porFracao[k];
+    const destaque = f.minha;
+    h += '<tr style="' + (destaque ? 'background:rgba(0,212,255,.07);' : '') + '">';
+    h += '<td style="padding:7px 4px;font-weight:' + (destaque?'700':'500') + ';color:' + (destaque?'var(--cyan)':'var(--t2)') + ';white-space:nowrap;position:sticky;left:0;background:' + (destaque?'rgba(10,18,32,.98)':'var(--bg)') + ';font-size:10.5px;">';
+    h += (destaque ? '👉 ' : '') + (f.codigo||'').split(' ')[0] + (f.bloco ? ' <span style="opacity:.5;font-size:9px;">' + f.bloco + '</span>' : '');
+    h += '</td>';
+    for (let m = 1; m <= 12; m++) {
+      const qs = f.meses[m];
+      let bola = '·', cor = 'var(--b2)', tit = '';
+      if (qs && qs.length) {
+        const pagas = qs.filter(function(q){ return q.estado === 'pago'; }).length;
+        const total = qs.length;
+        const emDivida = qs.filter(function(q){ return q.estado !== 'pago'; }).reduce(function(s,q){ return s + q.valor; }, 0);
+        if (pagas === total) { bola = '●'; cor = 'var(--green)'; tit = 'Pago'; }
+        else if (pagas > 0) { bola = '◐'; cor = 'var(--amber)'; tit = 'Parcial — falta ' + emDivida.toFixed(2) + '€'; }
+        else { bola = '●'; cor = 'var(--red)'; tit = 'Por pagar — ' + emDivida.toFixed(2) + '€'; }
+      }
+      h += '<td style="text-align:center;padding:6px 2px;color:' + cor + ';font-size:13px;" title="' + tit + '">' + bola + '</td>';
+    }
+    h += '</tr>';
+  });
+  h += '</tbody></table></div>';
+
+  // Legenda + resumo
+  const totalFracoes = chaves.length;
+  const emDia = chaves.filter(function(k){
+    const f = porFracao[k];
+    return Object.keys(f.meses).every(function(m){
+      return f.meses[m].every(function(q){ return q.estado === 'pago'; });
+    });
+  }).length;
+  h += '<div style="display:flex;gap:12px;flex-wrap:wrap;padding:10px 2px 2px;font-size:10px;color:var(--t3);">';
+  h += '<span><span style="color:var(--green);">●</span> pago</span>';
+  h += '<span><span style="color:var(--amber);">◐</span> parcial</span>';
+  h += '<span><span style="color:var(--red);">●</span> por pagar</span>';
+  h += '<span><span style="color:var(--b2);">·</span> sem quota</span>';
+  h += '</div>';
+  h += '<div style="padding:8px 10px;background:rgba(0,212,255,.05);border-radius:8px;margin-top:8px;font-size:11px;color:var(--t2);">';
+  h += '📊 <strong>' + emDia + ' de ' + totalFracoes + '</strong> frações estão em dia neste ano.';
+  h += '</div>';
+  h += '<div style="font-size:9.5px;color:var(--t3);margin-top:8px;line-height:1.5;">As frações são identificadas apenas pelo código, sem nomes. A transparência das contas é um direito de todos os condóminos (Art. 1436.º CC).</div>';
+
+  cont.innerHTML = h;
+}
+
+function mudarAnoMapa(d) {
+  _mapaAno += d;
+  const el = document.getElementById('q-mapa-ano');
+  if (el) el.textContent = _mapaAno;
+  carregarMapaQuotas();
 }
 
 async function carregarQuotas() {
