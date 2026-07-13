@@ -632,7 +632,7 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.13-2047</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.13-2056</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -6781,6 +6781,7 @@ async function notificarDevedores() {
     if (!await confirmar('Condóminos sem telemóvel só podem ser notificados por email. Liga o Gmail em Definições → Integrações.\n\nContinuar via WhatsApp para os que têm telemóvel?', {titulo:'Gmail não ligado', tipo:'aviso', icon:'⚠️', okTexto:'Continuar'})) return;
   }
   var enviados = 0;
+  var registados = 0;
   var mesesNomes = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
   if (!_gmailToken && qs.some(function(q){ return q.fracoes && q.fracoes.proprietario_email && !q.fracoes.proprietario_tel; })) {
     if (!await confirmar('Condóminos sem telemóvel só podem ser notificados por email. Liga o Gmail em Definições → Integrações.\n\nContinuar via WhatsApp para os que têm telemóvel?', {titulo:'Gmail não ligado', tipo:'aviso', icon:'⚠️', okTexto:'Continuar'})) return;
@@ -6791,6 +6792,7 @@ async function notificarDevedores() {
     if (!f) continue;
     var em = f.proprietario_email;
     var saldo = parseFloat(q.valor_emitido) - parseFloat(q.valor_pago||0);
+    var viaTxt = '';
     if (em && _gmailToken) {
       var assunto = 'Quota em atraso — ' + mesesNomes[mes-1] + '/' + ano + ' — ' + (currentCondo.nome||'Condomínio');
       var corpo = '<div style="font-family:Arial,sans-serif;max-width:600px;">' +
@@ -6807,13 +6809,37 @@ async function notificarDevedores() {
         '<p style="font-size:11px;color:#aaa;">Administração — ' + (currentCondo.nome||'') + '</p></div></div>';
       var ok = await enviarEmailGmail(em, assunto, corpo);
       if (ok) enviados++;
+      viaTxt = 'email (' + em + ')';
     } else if (f.proprietario_tel) {
       var msg = 'Quota ' + mesesNomes[mes-1] + '/' + ano + ' (Fr.' + f.codigo + ') — ' + saldo.toFixed(2) + '€ por pagar. Regularize brevemente. ' + (currentCondo.nome||'');
       window.open('https://wa.me/351' + f.proprietario_tel.replace(/\D/g,'') + '?text=' + encodeURIComponent(msg));
       enviados++;
+      viaTxt = 'WhatsApp (' + f.proprietario_tel + ')';
     }
+
+    // 🛡️ PROVA: registar SEMPRE o aviso no log de mensagens do portal (mesmo sem email/telefone)
+    //    O condómino tem acesso gratuito ao portal — não pode dizer que não foi avisado.
+    try {
+      await sb.from('mensagens').insert({
+        condominio_id: currentCondo.id, fracao_id: f.id, autor: 'admin',
+        texto: '⚠️ AVISO DE QUOTA EM ATRASO\n\n' +
+               'Fração: ' + (f.codigo||'') + '\n' +
+               'Referente a: ' + mesesNomes[mes-1] + ' de ' + ano + '\n' +
+               'Valor em dívida: ' + saldo.toFixed(2).replace('.',',') + '€\n' +
+               'Vencimento: dia ' + (currentCondo.dia_vencimento||8) + ' de cada mês\n\n' +
+               'Solicita-se a regularização o mais breve possível.\n' +
+               'IBAN: ' + (currentCondo.iban_operacional||'consulte a administração') + '\n\n' +
+               (viaTxt ? 'Aviso também enviado por ' + viaTxt + '.' : 'Sem email/telemóvel registado — este é o canal de aviso disponível.'),
+        lida_admin: true, lida_condomino: false
+      });
+      registados++;
+    } catch(e) { console.error('log aviso divida:', e); }
   }
-  toast(enviados > 0 ? '📨 ' + enviados + ' devedores notificados!' : 'Sem contactos registados nos devedores', enviados > 0 ? 'ok' : 'warn');
+  toast(
+    (enviados > 0 ? '📨 ' + enviados + ' notificados por email/WhatsApp. ' : '') +
+    '🛡️ ' + registados + ' avisos registados no portal (prova com data e hora).',
+    'ok'
+  );
 }
 
 async function enviarRecibo(qid) {
@@ -6891,7 +6917,21 @@ async function enviarRecibo(qid) {
   '</div>';
 
   var ok = await enviarEmailGmail(email, assunto, corpo);
-  if (ok) toast('📧 Recibo enviado para '+email+'!','ok');
+  if (ok) {
+    toast('📧 Recibo enviado para '+email+' — e registado no portal como prova.','ok');
+    // 🛡️ PROVA DUPLA: registar no log de mensagens do portal (imutável, com data e hora)
+    try {
+      await sb.from('mensagens').insert({
+        condominio_id: currentCondo.id, fracao_id: f.id, autor: 'admin',
+        texto: '✅ RECIBO N.º ' + nRec + ' — Pagamento da quota de ' + mAnoNome + ' recebido.\n\n' +
+               'Valor: ' + valor + '€\n' +
+               'Data de pagamento: ' + dataPag + '\n' +
+               'Método: ' + (q.metodo_pagamento||'Transferência Bancária') + '\n\n' +
+               'Recibo enviado por email para ' + email + '. Isento de IVA (Art. 9.º n.º 21 CIVA).',
+        lida_admin: true, lida_condomino: false
+      });
+    } catch(e) { console.error('log recibo:', e); }
+  }
   else toast('⚠️ Erro ao enviar. Verifica Gmail.','warn');
 }
 

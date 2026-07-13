@@ -271,7 +271,8 @@
           <button onclick="mudarAnoMapa(1)" style="background:transparent;border:1px solid var(--b);color:var(--t2);border-radius:6px;width:24px;height:24px;font-size:13px;cursor:pointer;">›</button>
         </div>
       </div>
-      <div style="font-size:11px;color:var(--t3);margin-bottom:10px;">Quem está em dia com as quotas. Cada linha é uma fração (sem nomes).</div>
+      <div style="font-size:11px;color:var(--t3);margin-bottom:6px;">Quem está em dia com as quotas. Cada linha é uma fração (sem nomes).</div>
+      <div id="q-mapa-atualizado" style="font-size:10.5px;color:var(--amber);background:rgba(255,179,0,.07);border:1px solid rgba(255,179,0,.2);border-radius:8px;padding:7px 10px;margin-bottom:10px;display:none;"></div>
       <div id="q-mapa"><div class="skel">A carregar…</div></div>
     </div>
   </div>
@@ -538,6 +539,23 @@ async function carregarMapaQuotas() {
   const cont = document.getElementById('q-mapa');
   if (!cont) return;
   cont.innerHTML = '<div style="padding:14px;text-align:center;color:var(--t3);font-size:12px;">A carregar mapa…</div>';
+
+  // Data da última atualização — para o condómino saber se o admin já viu o pagamento dele
+  sb.rpc('portal_quotas_atualizacao', { p_token: token }).then(function(ra){
+    const el = document.getElementById('q-mapa-atualizado');
+    if (!el || !ra.data || !ra.data.length || !ra.data[0].ultima_atualizacao) return;
+    const d = new Date(ra.data[0].ultima_atualizacao);
+    const agora = new Date();
+    const horas = Math.floor((agora - d) / 3600000);
+    let quando;
+    if (horas < 1) quando = 'há menos de 1 hora';
+    else if (horas < 24) quando = 'há ' + horas + ' hora' + (horas>1?'s':'');
+    else { const dias = Math.floor(horas/24); quando = 'há ' + dias + ' dia' + (dias>1?'s':''); }
+    el.style.display = 'block';
+    el.innerHTML = '🕐 <strong>Última atualização: ' + d.toLocaleDateString('pt-PT') + ' às ' + d.toLocaleTimeString('pt-PT',{hour:'2-digit',minute:'2-digit'}) + '</strong> (' + quando + ')' +
+      '<div style="color:var(--t3);margin-top:3px;font-size:9.5px;">Se pagaste depois desta data, o pagamento ainda pode não estar registado. Fala com a administração se tiveres dúvidas.</div>';
+  });
+
   const res = await sb.rpc('portal_mapa_quotas', { p_token: token, p_ano: _mapaAno });
   if (res.error || !res.data || !res.data.length) {
     cont.innerHTML = '<div style="padding:14px;text-align:center;color:var(--t3);font-size:12px;">Sem quotas registadas em ' + _mapaAno + '.</div>';
