@@ -632,7 +632,7 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.13-1813</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.13-1823</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -6467,7 +6467,7 @@ async function importarExtratoBancario(input) {
     // Ir buscar quotas pendentes — do mês selecionado E em atraso de meses anteriores
     // (permite reconhecer quem paga tudo junto: mensal + extraordinária + atrasos)
     var { data: quotasPendentes } = await sb.from('quotas')
-      .select('*, fracoes(codigo,proprietario_nome,permilagem,nib_proprio)')
+      .select('*, fracoes(codigo,proprietario_nome,permilagem,nib_proprio,proprietario_tel)')
       .eq('condominio_id', currentCondo.id)
       .in('estado', ['pendente','atraso','parcial']);
 
@@ -6484,6 +6484,7 @@ async function importarExtratoBancario(input) {
     // --- SAÍDAS: lançar como movimentos de despesa (é isto que faz bater certo com o banco) ---
     var saidasLancadas = [];
     var duplicadosEvitados = 0;
+    var despesasMarcadasPagas = [];
     for (var si = 0; si < saidas.length; si++) {
       var sd = saidas[si];
       var vsd = parseFloat(sd.valor||0);
@@ -6528,7 +6529,18 @@ async function importarExtratoBancario(input) {
         data_movimento: sd.data || new Date().toISOString().split('T')[0],
         conta: 'operacional'
       });
-      if (!insSd.error) saidasLancadas.push({ desc: sd.descricao, valor: vsd, cat: catSd });
+      if (!insSd.error) {
+        saidasLancadas.push({ desc: sd.descricao, valor: vsd, cat: catSd });
+        // CRUZAR com DESPESAS por pagar — se o banco confirma o pagamento, marcar a despesa como PAGA
+        var despPend = await sb.from('despesas').select('id,descricao,valor_total,estado')
+          .eq('condominio_id', currentCondo.id).eq('valor_total', vsd)
+          .neq('estado','paga').neq('estado','cancelada').limit(1);
+        if (despPend.data && despPend.data.length) {
+          var dp = despPend.data[0];
+          await sb.from('despesas').update({ estado: 'paga' }).eq('id', dp.id);
+          despesasMarcadasPagas.push({ desc: dp.descricao, valor: vsd });
+        }
+      }
     }
 
     // Cruzar ENTRADAS com quotas
@@ -6544,8 +6556,34 @@ async function importarExtratoBancario(input) {
       var matched = null;
       var matchedGrupo = null;  // várias quotas pagas de uma vez (ex: mensal + extraordinária)
 
-      // 1) Identificar o CONDÓMINO (por nome ou código de fração)
+      // 1) Identificar o CONDÓMINO (por nome, código de fração, ou TELEFONE se for MB WAY)
       var fracaoDaTransacao = null;
+      var comoIdentificado = '';
+
+      // 1a) MB WAY / MBWAY: o banco mostra o telemóvel (ex: "MB WAY 917******23")
+      //     Cruzar com os telefones dos condóminos que temos na ficha
+      if (/mb\s*way|mbway/i.test(desc)) {
+        var digitos = (tr.descricao||'').replace(/\D/g,''); // só os números visíveis
+        if (digitos.length >= 4) {
+          var ini = digitos.substring(0,3);   // primeiros 3 (ex: 917)
+          var fim = digitos.slice(-2);        // últimos 2 (ex: 23)
+          for (var mi = 0; mi < quotasPend.length; mi++) {
+            var qm = quotasPend[mi];
+            var tel = (qm.fracoes ? (qm.fracoes.proprietario_tel||'') : '').replace(/\D/g,'');
+            if (tel.length >= 9) {
+              var telIni = tel.substring(0,3), telFim = tel.slice(-2);
+              if (telIni === ini && telFim === fim) {
+                fracaoDaTransacao = qm.fracao_id;
+                comoIdentificado = 'telemóvel MB WAY';
+                break;
+              }
+            }
+          }
+        }
+      }
+
+      // 1b) Por nome do proprietário ou código de fração na descrição
+      if (!fracaoDaTransacao) {
       for (var qi = 0; qi < quotasPend.length; qi++) {
         var q = quotasPend[qi];
         if (jaProcessados[q.id]) continue;
@@ -6555,7 +6593,8 @@ async function importarExtratoBancario(input) {
         var descNorm = desc.replace(/[áàãâä]/g,'a').replace(/[éèêë]/g,'e').replace(/[íìîï]/g,'i').replace(/[óòõôö]/g,'o').replace(/[úùûü]/g,'u').replace(/[ç]/g,'c');
         var nomeMatch = nomePartes.length >= 2 && nomePartes.filter(function(p){ return descNorm.includes(p); }).length >= 2;
         var codMatch = codFrac && (desc.includes('fr' + codFrac) || desc.includes('fração ' + codFrac) || desc.includes('fracao ' + codFrac));
-        if (nomeMatch || codMatch) { fracaoDaTransacao = q.fracao_id; break; }
+        if (nomeMatch || codMatch) { fracaoDaTransacao = q.fracao_id; comoIdentificado = nomeMatch ? 'nome' : 'código de fração'; break; }
+      }
       }
 
       // 2) Se identificámos o condómino, ver TODAS as quotas pendentes dele
@@ -6709,6 +6748,14 @@ async function importarExtratoBancario(input) {
       if (duplicadosEvitados > 0) {
         html += '<div style="background:rgba(255,179,0,.08);border:1px solid rgba(255,179,0,.25);border-radius:8px;padding:10px 12px;margin-top:12px;font-size:11px;color:var(--t2);">';
         html += '🛡️ <strong style="color:var(--amber);">' + duplicadosEvitados + ' duplicado(s) evitado(s)</strong> — pagamentos que já estavam registados nas contas não foram lançados outra vez.';
+        html += '</div>';
+      }
+      if (despesasMarcadasPagas.length) {
+        html += '<div style="background:rgba(34,229,132,.08);border:1px solid rgba(34,229,132,.25);border-radius:8px;padding:10px 12px;margin-top:12px;font-size:11px;color:var(--t2);">';
+        html += '✅ <strong style="color:var(--green);">' + despesasMarcadasPagas.length + ' despesa(s) marcadas como PAGAS</strong> — o banco confirma o pagamento ao fornecedor:<br>';
+        despesasMarcadasPagas.forEach(function(d){
+          html += '<span style="font-size:10.5px;">· ' + (d.desc||'').substring(0,45) + ' — ' + d.valor.toFixed(2) + '€</span><br>';
+        });
         html += '</div>';
       }
       resultado.innerHTML = html;
