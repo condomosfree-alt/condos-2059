@@ -632,7 +632,7 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.12-2224</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.13-0806</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -646,7 +646,7 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
       <div class="ni active" onclick="nav('dashboard')"><span class="mic">📊</span><span>Dashboard</span></div>
       <div class="ni" onclick="nav('edificio')"><span class="mic">🏢</span><span>Perfil do Edifício</span><span id="badge-edificio" style="display:none;margin-left:auto;background:#f87171;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;line-height:16px;text-align:center;border-radius:8px;padding:0 4px;"></span></div>
       <div class="ni" onclick="nav('fracoes')"><span class="mic">🏠</span><span>Frações</span><span class="nb" id="nb-fracoes"></span></div>
-      <div class="nav-section">💰 Dinheiro</div>
+      <div class="nav-section">💰 Finanças</div>
       <div class="ni" onclick="nav('quotas')" title="Emitir e receber quotas · registar pagamentos · importar o extrato do banco"><span class="mic">🧾</span><span>Quotas · Receber</span><span class="nb" id="nb-quotas"></span><span id="badge-quotas" style="display:none;margin-left:auto;background:#f87171;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;line-height:16px;text-align:center;border-radius:8px;padding:0 4px;"></span></div>
       <div class="ni" onclick="nav('despesas')" title="Registar gastos e reparações · pagar fornecedores · gerar quotas extraordinárias"><span class="mic">🔧</span><span>Despesas · Pagar</span><span class="nb" id="nb-despesas"></span></div>
       <div class="ni" onclick="nav('financeiro')" title="Livro de movimentos — todas as entradas e saídas de dinheiro"><span class="mic">💳</span><span>Movimentos</span></div>
@@ -1273,7 +1273,10 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
           </div>
         </div>
         <div class="panel">
-          <div class="ph"><span class="pt">Movimentos</span></div>
+          <div class="ph">
+            <span class="pt">Movimentos</span>
+            <button class="btn-primary" style="margin-left:auto;font-size:11px;padding:7px 14px;" onclick="abrirNovoMovimento()">+ Registar movimento</button>
+          </div>
           <div id="movimentos-list" style="padding:0 16px;"><div class="loading"><div class="spin"></div></div></div>
         </div>
       </div>
@@ -7141,6 +7144,57 @@ async function emitirQuotas() {
 }
 
 // ===== MOVIMENTOS =====
+// 💳 Registar um movimento MANUAL (comissão do banco, juros, receita extra, correção...)
+function abrirNovoMovimento() {
+  var hoje = new Date().toISOString().split('T')[0];
+  var h = '<div style="padding:2px;">';
+  h += '<div style="font-size:11px;color:var(--t2);margin-bottom:12px;">Regista aqui o que não vem das quotas nem das despesas: comissões do banco, juros, receitas extra, correções.</div>';
+  h += '<label style="font-size:11px;color:var(--t2);">Tipo</label>';
+  h += '<select id="nm-tipo" class="fi" style="width:100%;margin-bottom:8px;"><option value="despesa">💸 Saída (dinheiro sai)</option><option value="receita">💰 Entrada (dinheiro entra)</option></select>';
+  h += '<label style="font-size:11px;color:var(--t2);">Descrição</label>';
+  h += '<input id="nm-desc" class="fi" style="width:100%;margin-bottom:8px;" placeholder="Ex: Comissão de manutenção da conta">';
+  h += '<div style="display:flex;gap:8px;">';
+  h += '<div style="flex:1;"><label style="font-size:11px;color:var(--t2);">Valor (€)</label><input id="nm-valor" class="fi" type="number" step="0.01" style="width:100%;margin-bottom:8px;" placeholder="0.00"></div>';
+  h += '<div style="flex:1;"><label style="font-size:11px;color:var(--t2);">Data</label><input id="nm-data" class="fi" type="date" style="width:100%;margin-bottom:8px;" value="' + hoje + '"></div>';
+  h += '</div>';
+  h += '<div style="display:flex;gap:8px;">';
+  h += '<div style="flex:1;"><label style="font-size:11px;color:var(--t2);">Categoria</label><select id="nm-cat" class="fi" style="width:100%;margin-bottom:8px;"><option>Banco</option><option>Quota</option><option>Serviço</option><option>Seguro</option><option>Obra</option><option>Energia</option><option>Limpeza</option><option>Manutenção</option><option>Outro</option></select></div>';
+  h += '<div style="flex:1;"><label style="font-size:11px;color:var(--t2);">Conta</label><select id="nm-conta" class="fi" style="width:100%;margin-bottom:8px;"><option value="operacional">Operacional</option><option value="reserva">Fundo de Reserva</option></select></div>';
+  h += '</div>';
+  h += '<button class="btn-primary" style="width:100%;margin-top:8px;" onclick="guardarNovoMovimento()">💾 Registar movimento</button>';
+  h += '</div>';
+  abrirModalGenerico('Registar Movimento', h);
+}
+
+async function guardarNovoMovimento() {
+  var desc = document.getElementById('nm-desc').value.trim();
+  var valor = parseFloat(document.getElementById('nm-valor').value);
+  if (!desc || !valor || valor <= 0) { toast('Preenche a descrição e o valor','err'); return; }
+  var res = await sb.from('movimentos').insert({
+    condominio_id: currentCondo.id,
+    tipo: document.getElementById('nm-tipo').value,
+    categoria: document.getElementById('nm-cat').value,
+    descricao: desc,
+    valor: valor,
+    data_movimento: document.getElementById('nm-data').value,
+    conta: document.getElementById('nm-conta').value
+  });
+  if (res.error) { toast('Erro: ' + res.error.message,'err'); return; }
+  toast('✅ Movimento registado','ok');
+  fecharModalGenerico();
+  loadMovimentos();
+  verificarAvisosGerais();
+}
+
+// 🗑️ Apagar um movimento errado (corrigir lançamentos)
+async function apagarMovimento(id) {
+  if (!await confirmar('Apagar este movimento?\n\nSe ele veio de uma quota ou despesa paga, o registo dessa quota/despesa NÃO é alterado — só desaparece do extrato. Usa isto apenas para corrigir erros de lançamento.', {titulo:'Apagar movimento?', tipo:'perigo', icon:'🗑️', okTexto:'Apagar'})) return;
+  var res = await sb.from('movimentos').delete().eq('id', id);
+  if (res.error) { toast('Erro: ' + res.error.message,'err'); return; }
+  toast('Movimento apagado','ok');
+  loadMovimentos();
+}
+
 async function loadMovimentos() {
   if (!currentCondo) return;
   const { data } = await sb.from('movimentos').select('*').eq('condominio_id',currentCondo.id).order('data_movimento',{ascending:false}).limit(50);
@@ -7162,6 +7216,7 @@ async function loadMovimentos() {
       <div class="fin-ico" style="background:${m.tipo==='receita'?'var(--gdim)':'var(--rdim)'};color:${m.tipo==='receita'?'var(--green)':'var(--red)'}"><i class="ti ${catIco[m.categoria]||'ti-circle'}" style="font-size:13px"></i></div>
       <div><div class="fin-lbl">${m.descricao}</div><div class="fin-sub">${m.data_movimento||''} · ${m.categoria||''} · ${m.conta}</div></div>
       <div class="fin-amt ${m.tipo==='receita'?'pos':'neg'}">${m.tipo==='receita'?'+':'-'}${parseFloat(m.valor).toFixed(2)}€</div>
+      <button class="tb-btn" style="font-size:10px;padding:3px 7px;margin-left:8px;opacity:.6;" onclick="apagarMovimento('${m.id}')" title="Apagar este movimento (corrigir erro de lançamento)">🗑️</button>
     </div>`).join('') : emptyState('ti-chart-bar','Sem movimentos','Regista receitas e despesas do condomínio.');
   document.getElementById('movimentos-list').innerHTML = html;
   document.getElementById('dash-movimentos').innerHTML = movs.length ?
@@ -14180,19 +14235,25 @@ function renderContasOVR(rubricas, despesas, orcamentoReceita, receitaReal, desp
 
 // ===== EXTRATO MENSAL DETALHADO (transparência total — bate certo com o banco) =====
 var _extratoMovs = [];
+var _extratoMovsTodos = [];
 var _extratoMesAberto = null;
 
 async function carregarExtrato(ano) {
   var cont = document.getElementById('extrato-meses');
   if (!cont) return;
-  // Buscar TODOS os movimentos do ano (o extrato real do dinheiro)
+  // Buscar TODOS os movimentos (todos os anos — para o saldo transitado ser real)
   var res = await sb.from('movimentos').select('*').eq('condominio_id', currentCondo.id).order('data_movimento', {ascending:true});
-  _extratoMovs = (res.data||[]).filter(function(m){
+  _extratoMovsTodos = res.data || [];
+  _extratoMovs = _extratoMovsTodos.filter(function(m){
     return m.data_movimento && new Date(m.data_movimento).getFullYear() === ano;
   });
 
   var MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
-  var h = '';
+  var saldoAbertura = parseFloat(currentCondo.saldo_inicial_conta||0);
+  var h = '<div style="width:100%;display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">';
+  h += '<span style="font-size:10.5px;color:var(--t2);">🏦 Saldo de abertura da conta: <strong style="color:var(--cyan);">' + saldoAbertura.toFixed(2).replace('.',',') + '€</strong>' + (currentCondo.saldo_inicial_data ? ' (a ' + currentCondo.saldo_inicial_data + ')' : '') + '</span>';
+  h += '<button class="tb-btn" style="font-size:10px;padding:4px 10px;" onclick="definirSaldoInicial()" title="O saldo que a conta bancária tinha antes de começares a registar movimentos no programa">⚙️ Definir saldo de abertura</button>';
+  h += '</div>';
   for (var m = 1; m <= 12; m++) {
     var doMes = _extratoMovs.filter(function(mv){ return new Date(mv.data_movimento).getMonth()+1 === m; });
     var entradas = doMes.filter(function(mv){ return mv.tipo==='receita'; }).reduce(function(s,mv){ return s+parseFloat(mv.valor||0); },0);
@@ -14215,6 +14276,24 @@ async function carregarExtrato(ano) {
   cont.innerHTML = h;
 }
 
+async function definirSaldoInicial() {
+  var atual = parseFloat(currentCondo.saldo_inicial_conta||0);
+  var v = prompt('Saldo que a conta bancária tinha ANTES do primeiro movimento registado no programa.\n\nEx: se a conta tinha 2450€ quando começaste a usar o Cond.OS, escreve 2450.\n\nSaldo de abertura (€):', atual || '');
+  if (v === null) return;
+  var num = parseFloat(String(v).replace(',','.'));
+  if (isNaN(num)) { toast('Valor inválido','err'); return; }
+  var dt = prompt('Data desse saldo (AAAA-MM-DD)? Deixa vazio para ignorar a data:', currentCondo.saldo_inicial_data || '');
+  var upd = { saldo_inicial_conta: num };
+  if (dt !== null && dt.trim()) upd.saldo_inicial_data = dt.trim();
+  var res = await sb.from('condominios').update(upd).eq('id', currentCondo.id);
+  if (res.error) { toast('Erro (corre o sql_saldo_inicial.sql): ' + res.error.message,'err'); return; }
+  currentCondo.saldo_inicial_conta = num;
+  if (upd.saldo_inicial_data) currentCondo.saldo_inicial_data = upd.saldo_inicial_data;
+  toast('Saldo de abertura definido: ' + num.toFixed(2) + '€','ok');
+  _extratoMesAberto = null;
+  carregarExtrato(_contasAno);
+}
+
 function abrirExtratoMes(mes, ano) {
   var doMes = _extratoMovs.filter(function(mv){ return new Date(mv.data_movimento).getMonth()+1 === mes; });
   var det = document.getElementById('extrato-detalhe');
@@ -14226,9 +14305,11 @@ function abrirExtratoMes(mes, ano) {
   carregarExtrato(ano);
 
   var MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-  // Saldo inicial = tudo o que aconteceu ANTES deste mês
-  var antes = _extratoMovs.filter(function(mv){ return new Date(mv.data_movimento).getMonth()+1 < mes; });
-  var saldoIni = antes.reduce(function(s,mv){ return s + (mv.tipo==='receita' ? parseFloat(mv.valor||0) : -parseFloat(mv.valor||0)); }, 0);
+  // Saldo inicial = saldo de abertura da conta + TUDO o que aconteceu antes deste mês (qualquer ano)
+  var limiteMes = new Date(ano, mes-1, 1);
+  var antes = _extratoMovsTodos.filter(function(mv){ return mv.data_movimento && new Date(mv.data_movimento) < limiteMes; });
+  var saldoIni = parseFloat(currentCondo.saldo_inicial_conta||0) +
+    antes.reduce(function(s,mv){ return s + (mv.tipo==='receita' ? parseFloat(mv.valor||0) : -parseFloat(mv.valor||0)); }, 0);
 
   var eur = function(v){ return parseFloat(v||0).toFixed(2).replace('.',',')+'€'; };
   var saldo = saldoIni;
@@ -14299,8 +14380,10 @@ async function exportarExtratoPDF(mes, ano) {
   doMes.sort(function(a,b){ return new Date(a.data_movimento) - new Date(b.data_movimento); });
 
   var MESES = ['Janeiro','Fevereiro','Marco','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-  var antes = _extratoMovs.filter(function(mv){ return new Date(mv.data_movimento).getMonth()+1 < mes; });
-  var saldoIni = antes.reduce(function(s,mv){ return s + (mv.tipo==='receita' ? parseFloat(mv.valor||0) : -parseFloat(mv.valor||0)); }, 0);
+  var limiteMesPdf = new Date(ano, mes-1, 1);
+  var antes = _extratoMovsTodos.filter(function(mv){ return mv.data_movimento && new Date(mv.data_movimento) < limiteMesPdf; });
+  var saldoIni = parseFloat(currentCondo.saldo_inicial_conta||0) +
+    antes.reduce(function(s,mv){ return s + (mv.tipo==='receita' ? parseFloat(mv.valor||0) : -parseFloat(mv.valor||0)); }, 0);
 
   var { jsPDF } = window.jspdf;
   var doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
@@ -15744,7 +15827,7 @@ if (!window._msgInterval) { window._msgInterval = setInterval(function(){ if (cu
 
 function escaparHtml(s){ var d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
 
-// 💰 Barra de navegação do dinheiro — orienta entre as 5 páginas financeiras
+// 💰 Barra de navegação das finanças — orienta entre as 5 páginas financeiras
 function injetarBarraDinheiro(pAtual) {
   var paginasDinheiro = {
     quotas:    { ic:'🧾', nome:'Quotas · Receber', dica:'pagamentos + extrato do banco' },
@@ -15763,7 +15846,7 @@ function injetarBarraDinheiro(pAtual) {
     barra.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;padding:8px 10px;background:var(--s1);border:1px solid var(--b1);border-radius:10px;align-items:center;';
     pg.insertBefore(barra, pg.firstChild);
   }
-  var h = '<span style="font-size:9.5px;color:var(--t3);font-weight:700;letter-spacing:1px;margin-right:4px;">💰 DINHEIRO:</span>';
+  var h = '<span style="font-size:9.5px;color:var(--t3);font-weight:700;letter-spacing:1px;margin-right:4px;">💰 FINANÇAS:</span>';
   Object.keys(paginasDinheiro).forEach(function(k){
     var pd = paginasDinheiro[k];
     var ativo = (k === pAtual);
