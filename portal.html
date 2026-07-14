@@ -660,11 +660,13 @@ async function carregarContas() {
   const c = rc.data[0];
   const orc=parseFloat(c.orcamento_total||0), rec=parseFloat(c.receitas_cobradas||0), desp=parseFloat(c.despesas_pagas||0), cobrar=parseFloat(c.por_cobrar_total||0), saldo=parseFloat(c.saldo||0);
   let html = '<div class="kpis">' +
-    '<div class="kpi"><div class="l">Recebido</div><div class="v" style="color:var(--green);">'+eur(rec)+'</div></div>' +
-    '<div class="kpi"><div class="l">Gasto</div><div class="v" style="color:var(--red);">'+eur(desp)+'</div></div>' +
+    '<div class="kpi" style="cursor:pointer;" onclick="verDetalheContas(\'receita\')"><div class="l">Recebido 👁️</div><div class="v" style="color:var(--green);">'+eur(rec)+'</div></div>' +
+    '<div class="kpi" style="cursor:pointer;" onclick="verDetalheContas(\'despesa\')"><div class="l">Gasto 👁️</div><div class="v" style="color:var(--red);">'+eur(desp)+'</div></div>' +
     '<div class="kpi"><div class="l">Saldo do ano</div><div class="v" style="color:'+(saldo>=0?'var(--cyan)':'var(--red)')+';">'+eur(saldo)+'</div></div>' +
-    '<div class="kpi"><div class="l">Por cobrar (total)</div><div class="v" style="color:var(--amber);">'+eur(cobrar)+'</div></div>' +
-    '</div>';
+    '<div class="kpi" style="cursor:pointer;" onclick="verDetalheContas(\'cobrar\')"><div class="l">Por cobrar 👁️</div><div class="v" style="color:var(--amber);">'+eur(cobrar)+'</div></div>' +
+    '</div>' +
+    '<div style="font-size:10.5px;color:var(--t3);text-align:center;margin-top:8px;">👁️ Toca num valor para ver o detalhe, movimento a movimento.</div>' +
+    '<div id="c-detalhe"></div>';
   if (orc > 0) {
     const pct = Math.min(100,(desp/orc)*100);
     html += '<div class="card" style="margin-top:12px;"><div class="bar-lab"><span style="color:var(--t2);">Execução do orçamento ('+eur(orc)+' previstos)</span><span style="font-weight:700;color:'+(desp>orc?'var(--red)':'var(--green)')+';">'+pct.toFixed(0)+'%</span></div><div class="bar-track"><div class="bar-fill" style="width:'+pct+'%;background:'+(desp>orc?'var(--red)':'linear-gradient(90deg,var(--cyan),var(--green))')+';"></div></div></div>';
@@ -774,21 +776,146 @@ async function enviarAvaliacao(id) {
   carregarAvaliaveis();
 }
 
+// 👁️ Ver o detalhe das contas — movimento a movimento (transparência total)
+var _detalheAberto = null;
+
+async function verDetalheContas(tipo) {
+  const box = document.getElementById('c-detalhe');
+  if (!box) return;
+  // Toggle: se já está aberto o mesmo, fecha
+  if (_detalheAberto === tipo) { _detalheAberto = null; box.innerHTML = ''; return; }
+  _detalheAberto = tipo;
+  box.innerHTML = '<div class="card" style="margin-top:12px;"><div class="skel">A carregar detalhe…</div></div>';
+  const ano = new Date().getFullYear();
+
+  // POR COBRAR — mostra as frações em dívida (sem nomes, RGPD)
+  if (tipo === 'cobrar') {
+    const r = await sb.rpc('portal_por_cobrar', { p_token: token, p_ano: ano });
+    if (r.error || !r.data || !r.data.length) {
+      box.innerHTML = '<div class="card" style="margin-top:12px;"><div style="text-align:center;color:var(--green);font-size:13px;padding:10px;">✅ Não há quotas por cobrar. Todos em dia!</div></div>';
+      return;
+    }
+    let h = '<div class="card" style="margin-top:12px;">';
+    h += '<div class="sec-h">💰 Quotas por cobrar</div>';
+    h += '<div style="font-size:11px;color:var(--t3);margin-bottom:10px;">Frações com quotas em atraso. Identificadas apenas pelo código, sem nomes.</div>';
+    r.data.forEach(function(d){
+      const minha = d.e_minha;
+      h += '<div class="li" style="' + (minha?'background:rgba(0,212,255,.07);border-radius:8px;':'') + '">';
+      h += '<div class="m"><div class="t" style="' + (minha?'color:var(--cyan);':'') + '">' + (minha?'👉 ':'') + 'Fração ' + escapar(d.fracao_codigo||'?') + (minha?' (a tua)':'') + '</div>';
+      h += '<div class="s">' + d.n_quotas + ' quota' + (d.n_quotas>1?'s':'') + ' em atraso</div></div>';
+      h += '<div style="font-weight:700;color:var(--red);font-size:14px;">' + eur(d.total_divida) + '</div>';
+      h += '</div>';
+    });
+    h += '</div>';
+    box.innerHTML = h;
+    box.scrollIntoView({behavior:'smooth', block:'nearest'});
+    return;
+  }
+
+  // RECEBIDO / GASTO — extrato de movimentos
+  const r = await sb.rpc('portal_movimentos', { p_token: token, p_ano: ano, p_tipo: tipo });
+  if (r.error || !r.data || !r.data.length) {
+    box.innerHTML = '<div class="card" style="margin-top:12px;"><div style="text-align:center;color:var(--t3);font-size:12px;padding:10px;">Sem movimentos registados.</div></div>';
+    return;
+  }
+  const entrada = (tipo === 'receita');
+  let h = '<div class="card" style="margin-top:12px;">';
+  h += '<div class="sec-h">' + (entrada ? '💰 De onde veio o dinheiro' : '💸 Para onde foi o dinheiro') + '</div>';
+  h += '<div style="font-size:11px;color:var(--t3);margin-bottom:10px;">' + r.data.length + ' movimentos em ' + ano + (entrada ? '. As quotas aparecem por fração, sem nomes.' : '.') + '</div>';
+
+  // Agrupar por mês
+  const porMes = {};
+  r.data.forEach(function(m){
+    const mes = new Date(m.data_movimento).getMonth();
+    if (!porMes[mes]) porMes[mes] = [];
+    porMes[mes].push(m);
+  });
+  const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  Object.keys(porMes).sort(function(a,b){ return b-a; }).forEach(function(mes){
+    const movs = porMes[mes];
+    const tot = movs.reduce(function(s,m){ return s + parseFloat(m.valor||0); }, 0);
+    h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0 6px;border-bottom:1px solid var(--b);margin-top:6px;">';
+    h += '<span style="font-size:11.5px;font-weight:700;color:var(--t2);">' + MESES[mes] + '</span>';
+    h += '<span style="font-size:12px;font-weight:700;color:' + (entrada?'var(--green)':'var(--red)') + ';">' + (entrada?'+':'-') + eur(tot) + '</span>';
+    h += '</div>';
+    movs.forEach(function(m){
+      h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:7px 0;font-size:12px;border-bottom:1px solid rgba(30,47,77,.4);">';
+      h += '<div style="flex:1;padding-right:10px;">';
+      h += '<div style="color:var(--t1);">' + escapar(m.descricao||'—') + '</div>';
+      h += '<div style="font-size:10px;color:var(--t3);margin-top:1px;">' + dataCurta(m.data_movimento) + (m.categoria ? ' · ' + escapar(m.categoria) : '') + '</div>';
+      h += '</div>';
+      h += '<div style="font-weight:600;color:' + (entrada?'var(--green)':'var(--red)') + ';white-space:nowrap;">' + (entrada?'+':'-') + eur(m.valor) + '</div>';
+      h += '</div>';
+    });
+  });
+  h += '<div style="font-size:10px;color:var(--t3);margin-top:12px;line-height:1.5;">Se vires algo que não percebes, fala com a administração pelas Mensagens. A transparência das contas é um direito (Art. 1436.º CC).</div>';
+  h += '</div>';
+  box.innerHTML = h;
+  box.scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+function ocCopiarRegisto(url) {
+  if (navigator.share) {
+    navigator.share({ title: 'Registo da ocorrência', url: url }).catch(function(){ copiarTexto(url); });
+  } else {
+    copiarTexto(url);
+  }
+}
+function copiarTexto(t) {
+  navigator.clipboard.writeText(t).then(function(){
+    alert('📋 Link copiado! Já podes colar onde quiseres.');
+  }).catch(function(){
+    prompt('Copia este link:', t);
+  });
+}
+
+var _ocAba = 'abertas';
+
+function ocMudarAba(aba) {
+  _ocAba = aba;
+  carregarHistOcorrencias();
+}
+
 async function carregarHistOcorrencias() {
   const cont = document.getElementById('r-hist');
-  const res = await sb.rpc('portal_ocorrencias_ativas', { p_token: token });
-  if (res.error || !res.data || !res.data.length) { cont.innerHTML = '<div class="empty">Ainda não há ocorrências.<br>Toca em "+ Reportar" para comunicar um problema.</div>'; return; }
-  const estLabel = { aberta:'Recebida', parceiro_contactado:'Parceiro contactado', aguarda_orcamento:'A aguardar orçamento', aguarda_votacao:'Em votação', aprovada:'Aprovada', em_reparacao:'Em reparação', resolvida:'Resolvida' };
+  const encerradas = (_ocAba === 'encerradas');
+
+  // Contadores para as abas
+  const rc = await sb.rpc('portal_ocorrencias_contagem', { p_token: token });
+  const nAb = (rc.data && rc.data[0]) ? (rc.data[0].abertas||0) : 0;
+  const nEn = (rc.data && rc.data[0]) ? (rc.data[0].encerradas||0) : 0;
+
+  let abas = '<div style="display:flex;gap:6px;margin-bottom:12px;">';
+  abas += '<button onclick="ocMudarAba(\'abertas\')" style="flex:1;background:' + (!encerradas?'rgba(0,212,255,.14)':'transparent') + ';border:1px solid ' + (!encerradas?'var(--cyan)':'var(--b)') + ';color:' + (!encerradas?'var(--cyan)':'var(--t2)') + ';border-radius:10px;padding:9px;font-size:12px;font-weight:700;cursor:pointer;">🔧 Em curso (' + nAb + ')</button>';
+  abas += '<button onclick="ocMudarAba(\'encerradas\')" style="flex:1;background:' + (encerradas?'rgba(0,212,255,.14)':'transparent') + ';border:1px solid ' + (encerradas?'var(--cyan)':'var(--b)') + ';color:' + (encerradas?'var(--cyan)':'var(--t2)') + ';border-radius:10px;padding:9px;font-size:12px;font-weight:700;cursor:pointer;">✅ Resolvidas (' + nEn + ')</button>';
+  abas += '</div>';
+
+  const res = await sb.rpc('portal_ocorrencias_todas', { p_token: token, p_encerradas: encerradas });
+  if (res.error || !res.data || !res.data.length) {
+    cont.innerHTML = abas + '<div class="empty">' +
+      (encerradas ? 'Ainda não há ocorrências resolvidas.' : 'Sem ocorrências em curso.<br>Toca em "+ Reportar" para comunicar um problema.') +
+      '</div>';
+    return;
+  }
+  const estLabel = { aberta:'Recebida', parceiro_contactado:'Parceiro contactado', aguarda_orcamento:'A aguardar orçamento', aguarda_votacao:'Em votação', aprovada:'Aprovada', em_reparacao:'Em reparação', resolvida:'Resolvida', fechada:'Fechada' };
   _ocCache = {};
-  cont.innerHTML = res.data.map(function(o){
+  cont.innerHTML = abas + res.data.map(function(o){
     _ocCache[o.id] = o;
     const precisaVoto = o.precisa_votacao && o.estado==='aguarda_votacao' && !o.meu_voto && o.posso_votar !== false;
-    return '<div class="li" style="cursor:pointer;" onclick="abrirOcorrencia(\''+o.id+'\')">' +
-      '<div class="est" style="background:rgba(0,212,255,.08);">'+categoriaIcon(o.categoria)+'</div>' +
-      '<div class="m"><div class="t">'+categoriaLabel(o.categoria)+(precisaVoto?' <span style="color:var(--amber);font-size:10px;">● precisa do teu voto</span>':'')+'</div>' +
-      '<div class="s">'+(o.local_ocorrencia?o.local_ocorrencia+' · ':'')+'Última atualização: '+dataCurta(o.criado_em)+'</div></div>' +
-      '<span class="badge '+estadoClasse(o.estado)+'">'+(estLabel[o.estado]||o.estado)+'</span></div>';
+    const quando = encerradas && o.data_resolucao ? ('Resolvida a ' + dataCurta(o.data_resolucao)) : ('Última atualização: ' + dataCurta(o.criado_em));
+    let h = '<div class="li" style="cursor:pointer;" onclick="abrirOcorrencia(\''+o.id+'\')">';
+    h += '<div class="est" style="background:rgba(0,212,255,.08);">'+categoriaIcon(o.categoria)+'</div>';
+    h += '<div class="m"><div class="t">'+categoriaLabel(o.categoria)+(precisaVoto?' <span style="color:var(--amber);font-size:10px;">● precisa do teu voto</span>':'')+'</div>';
+    h += '<div class="s">'+(o.local_ocorrencia?o.local_ocorrencia+' · ':'')+quando;
+    if (encerradas && o.orcamento_valor) h += ' · ' + parseFloat(o.orcamento_valor).toFixed(2).replace('.',',') + '€';
+    h += '</div></div>';
+    h += '<span class="badge '+estadoClasse(o.estado)+'">'+(estLabel[o.estado]||o.estado)+'</span></div>';
+    return h;
   }).join('');
+
+  if (encerradas) {
+    cont.innerHTML += '<div style="font-size:10.5px;color:var(--t3);text-align:center;margin-top:12px;line-height:1.5;">📜 O histórico fica sempre disponível.<br>Abre qualquer ocorrência para ver a votação e partilhar o registo oficial.</div>';
+  }
 }
 
 async function abrirOcorrencia(id) {
@@ -798,8 +925,15 @@ async function abrirOcorrencia(id) {
   let o = _ocCache[id];
   // Se não está no cache, buscar da lista de novo
   if (!o) {
-    const r = await sb.rpc('portal_ocorrencias_ativas', { p_token: token });
-    if (!r.error && r.data) { r.data.forEach(function(x){ _ocCache[x.id]=x; }); o = _ocCache[id]; }
+    // Procurar nas abertas E nas encerradas
+    const [ra, re] = await Promise.all([
+      sb.rpc('portal_ocorrencias_todas', { p_token: token, p_encerradas: false }),
+      sb.rpc('portal_ocorrencias_todas', { p_token: token, p_encerradas: true })
+    ]);
+    [ra, re].forEach(function(r){
+      if (!r.error && r.data) r.data.forEach(function(x){ _ocCache[x.id]=x; });
+    });
+    o = _ocCache[id];
   }
   if (!o) { cont.innerHTML='<div class="empty">Não foi possível abrir esta ocorrência.<br><button onclick="ocVista(\'lista\')" style="margin-top:10px;background:none;border:1px solid var(--b2);color:var(--cyan);border-radius:8px;padding:8px 14px;cursor:pointer;">‹ Voltar</button></div>'; return; }
   const estLabel = { aberta:'Recebida', parceiro_contactado:'Parceiro contactado', aguarda_orcamento:'A aguardar orçamento', aguarda_votacao:'Em votação', aprovada:'Aprovada', em_reparacao:'Em reparação', resolvida:'Resolvida' };
@@ -850,6 +984,19 @@ async function abrirOcorrencia(id) {
   // Timeline (histórico do que aconteceu)
   html += '<div class="sec-h">📋 HISTÓRICO</div>';
   html += '<div id="oc-timeline"><div class="skel">A carregar histórico…</div></div>';
+
+  // 🔗 Partilhar o registo oficial (a prova verificável)
+  if (o.token_publico) {
+    const urlPub = location.href.substring(0, location.href.lastIndexOf('/') + 1) + 'ocorrencia.html?t=' + o.token_publico;
+    html += '<div class="card" style="margin-top:14px;border-color:rgba(0,212,255,.25);">';
+    html += '<div style="font-size:12px;font-weight:700;color:var(--cyan);margin-bottom:4px;">🔗 Registo oficial</div>';
+    html += '<div style="font-size:11px;color:var(--t3);margin-bottom:10px;">Link só de leitura com a votação, os custos e o histórico com datas. Podes partilhar com quem quiseres.</div>';
+    html += '<div style="display:flex;gap:8px;">';
+    html += '<button onclick="ocCopiarRegisto(\'' + urlPub + '\')" style="flex:1;background:rgba(0,212,255,.1);border:1px solid rgba(0,212,255,.35);color:var(--cyan);border-radius:8px;padding:10px;font-size:12px;font-weight:600;cursor:pointer;">📋 Copiar link</button>';
+    html += '<button onclick="window.open(\'' + urlPub + '\',\'_blank\')" style="flex:1;background:transparent;border:1px solid var(--b2);color:var(--t2);border-radius:8px;padding:10px;font-size:12px;font-weight:600;cursor:pointer;">👁️ Abrir</button>';
+    html += '</div></div>';
+  }
+
   cont.innerHTML = html;
 
   // Buscar a timeline
