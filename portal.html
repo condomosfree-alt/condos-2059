@@ -361,6 +361,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script>
 const SB_URL = 'https://iopkxoabszhzjimjltir.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlvcGt4b2Fic3poemppbWpsdGlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEyNzc5MjQsImV4cCI6MjA5Njg1MzkyNH0.PwopXnx0v7kSXUeua1Y3fI3xPDIS8S62SzGBfwPwLSA';
@@ -854,6 +855,38 @@ async function verDetalheContas(tipo) {
   box.scrollIntoView({behavior:'smooth', block:'nearest'});
 }
 
+// 📱 Mostrar o QR em grande — para outro telemóvel ler na hora (assembleia)
+function ocMostrarQR(url) {
+  let ov = document.getElementById('qr-overlay');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.id = 'qr-overlay';
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(6,10,20,.96);backdrop-filter:blur(8px);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;';
+    ov.onclick = function(e){ if (e.target === ov) ocFecharQR(); };
+    document.body.appendChild(ov);
+  }
+  ov.innerHTML =
+    '<div style="font-size:13px;font-weight:700;color:var(--cyan);letter-spacing:1px;margin-bottom:6px;">REGISTO OFICIAL</div>' +
+    '<div style="font-size:11.5px;color:var(--t2);margin-bottom:18px;text-align:center;max-width:280px;line-height:1.5;">Aponta a câmara de outro telemóvel para veres a votação, os custos e o histórico.</div>' +
+    '<div id="qr-big" style="background:#fff;padding:16px;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.5);"></div>' +
+    '<button onclick="ocFecharQR()" style="margin-top:24px;background:transparent;border:1px solid var(--b2);color:var(--t2);border-radius:10px;padding:11px 26px;font-size:13px;font-weight:600;cursor:pointer;">Fechar</button>';
+  ov.style.display = 'flex';
+  // brilho máximo ajuda a leitura por outra câmara
+  setTimeout(function(){
+    const box = document.getElementById('qr-big');
+    if (box && window.QRCode) {
+      box.innerHTML = '';
+      const lado = Math.min(240, window.innerWidth - 100);
+      new QRCode(box, { text: url, width: lado, height: lado, colorDark:'#000000', colorLight:'#ffffff', correctLevel: QRCode.CorrectLevel.M });
+    }
+  }, 60);
+}
+
+function ocFecharQR() {
+  const ov = document.getElementById('qr-overlay');
+  if (ov) ov.style.display = 'none';
+}
+
 function ocCopiarRegisto(url) {
   if (navigator.share) {
     navigator.share({ title: 'Registo da ocorrência', url: url }).catch(function(){ copiarTexto(url); });
@@ -992,9 +1025,11 @@ async function abrirOcorrencia(id) {
     html += '<div style="font-size:12px;font-weight:700;color:var(--cyan);margin-bottom:4px;">🔗 Registo oficial</div>';
     html += '<div style="font-size:11px;color:var(--t3);margin-bottom:10px;">Link só de leitura com a votação, os custos e o histórico com datas. Podes partilhar com quem quiseres.</div>';
     html += '<div style="display:flex;gap:8px;">';
-    html += '<button onclick="ocCopiarRegisto(\'' + urlPub + '\')" style="flex:1;background:rgba(0,212,255,.1);border:1px solid rgba(0,212,255,.35);color:var(--cyan);border-radius:8px;padding:10px;font-size:12px;font-weight:600;cursor:pointer;">📋 Copiar link</button>';
-    html += '<button onclick="window.open(\'' + urlPub + '\',\'_blank\')" style="flex:1;background:transparent;border:1px solid var(--b2);color:var(--t2);border-radius:8px;padding:10px;font-size:12px;font-weight:600;cursor:pointer;">👁️ Abrir</button>';
-    html += '</div></div>';
+    html += '<button onclick="ocMostrarQR(\'' + urlPub + '\')" style="flex:1;background:rgba(0,212,255,.14);border:1px solid rgba(0,212,255,.4);color:var(--cyan);border-radius:8px;padding:10px;font-size:12px;font-weight:700;cursor:pointer;">📱 Mostrar QR</button>';
+    html += '<button onclick="ocCopiarRegisto(\'' + urlPub + '\')" style="flex:1;background:transparent;border:1px solid var(--b2);color:var(--t2);border-radius:8px;padding:10px;font-size:12px;font-weight:600;cursor:pointer;">📋 Partilhar</button>';
+    html += '</div>';
+    html += '<div style="font-size:9.5px;color:var(--t3);margin-top:8px;line-height:1.4;">💡 Numa assembleia: mostra o QR e quem quiser lê com o telemóvel — vê a votação e o histórico na hora.</div>';
+    html += '</div>';
   }
 
   cont.innerHTML = html;
