@@ -632,7 +632,7 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.15-1240</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.15-1738</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -3768,6 +3768,21 @@ async function verificarAvisosGerais() {
         detalhe: 'Há ' + totalPorPagar.toFixed(2) + '€ aprovados mas ainda não pagos. Quando pagares, clica em "💸 Pagar" para o movimento entrar no extrato.' });
     }
 
+    // 5e) Fundo de reserva em falta (quotas por pagar prendem a parte do fundo)
+    try {
+      var pctF = parseFloat(currentCondo.fundo_percentagem); if (isNaN(pctF)) pctF = 10;
+      if (pctF > 0) {
+        var qDivR = await sb.from('quotas').select('valor_emitido,valor_pago').eq('condominio_id', currentCondo.id).neq('estado','pago');
+        var dividaT = (qDivR.data||[]).reduce(function(s,q){ return s + (parseFloat(q.valor_emitido||0) - parseFloat(q.valor_pago||0)); }, 0);
+        var fundoFalta = Math.round(dividaT * (pctF/100) * 100) / 100;
+        if (fundoFalta >= 10) {
+          avisos.push({ pagina:'contas', badge:'🏦', cor:'#b48cff',
+            texto: 'Faltam ' + fundoFalta.toFixed(2) + '€ ao fundo de reserva',
+            detalhe: 'Parte das quotas por pagar pertence ao fundo de reserva (DL 268/94). Quando os devedores regularizarem, entra automaticamente. Entretanto, a poupança para obras está enfraquecida.' });
+        }
+      }
+    } catch(e) { console.error('aviso fundo:', e); }
+
     // 6) Mensagens não lidas de condóminos
     var msgRes = await sb.from('mensagens').select('id', {count:'exact', head:true}).eq('condominio_id', currentCondo.id).eq('autor','condomino').eq('lida_admin', false);
     if ((msgRes.count||0) > 0) {
@@ -6412,6 +6427,17 @@ async function confirmarAssociacaoTransacao() {
         data_pagamento: tr.data || new Date().toISOString().split('T')[0],
         notas: 'Associado manualmente: ' + (tr.descricao||'')
       }).eq('id', qExist[0].id);
+      // 💰 Movimento de receita + 🏦 fundo (sem isto o extrato não bate!)
+      var frA = fracoes.find(function(f){ return f.id === fracaoId; });
+      var mesesNA = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+      var descA = 'Quota ' + mesesNA[mes-1] + '/' + ano + ' — ' + (frA ? frA.codigo : '') + ' (associado)';
+      await sb.from('movimentos').insert({
+        condominio_id: currentCondo.id, tipo: 'receita', categoria: 'Quota',
+        descricao: descA, valor: parseFloat(qExist[0].valor_emitido),
+        data_movimento: tr.data || new Date().toISOString().split('T')[0],
+        conta: 'operacional', fracao_id: fracaoId
+      });
+      await transferirParaFundo(parseFloat(qExist[0].valor_emitido), descA, tr.data, fracaoId);
       await loadQuotas();
     }
   }
@@ -7290,7 +7316,23 @@ async function exportarQuotasPDF() {
 
 
 async function markPago(qid, val) {
-  await sb.from('quotas').update({valor_pago:val,estado:'pago',data_pagamento:new Date().toISOString().split('T')[0]}).eq('id',qid);
+  // Buscar os dados da quota (para o movimento e o fundo)
+  var qR = await sb.from('quotas').select('*, fracoes(codigo)').eq('id', qid).single();
+  var q = qR.data;
+  var hoje = new Date().toISOString().split('T')[0];
+  await sb.from('quotas').update({valor_pago:val,estado:'pago',data_pagamento:hoje}).eq('id',qid);
+  // 💰 Criar o movimento de receita (sem isto o extrato nunca bate com o banco!)
+  if (q) {
+    var mesesN = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+    var descQ = (q.tipo==='extraordinaria'?'Quota extraordinária ':'Quota ') + mesesN[(q.mes||1)-1] + '/' + (q.ano||'') + ' — ' + (q.fracoes ? q.fracoes.codigo : '');
+    await sb.from('movimentos').insert({
+      condominio_id: currentCondo.id, tipo: 'receita', categoria: 'Quota',
+      descricao: descQ, valor: parseFloat(val),
+      data_movimento: hoje, conta: 'operacional', fracao_id: q.fracao_id
+    });
+    // 🏦 Fundo de reserva
+    await transferirParaFundo(parseFloat(val), descQ, hoje, q.fracao_id);
+  }
   toast('Quota marcada como paga!','ok');
   loadQuotas(); updateBadges();
 }
