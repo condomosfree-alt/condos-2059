@@ -632,7 +632,7 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.13-2056</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.15-1240</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -1294,7 +1294,7 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
         </div>
 
         <!-- KPIs do ano -->
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;">
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:16px;">
           <div class="kpi" style="border-top:2px solid var(--green);">
             <div class="kpi-label">Receitas (quotas pagas)</div>
             <div class="kpi-val" id="c-receitas">0<span>€</span></div>
@@ -1310,6 +1310,11 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
           <div class="kpi" style="border-top:2px solid var(--amber);">
             <div class="kpi-label">Por cobrar (quotas)</div>
             <div class="kpi-val" id="c-divida">0<span>€</span></div>
+          </div>
+          <div class="kpi" style="border-top:2px solid #b48cff;cursor:pointer;" onclick="abrirFundoReserva()" title="Fundo Comum de Reserva — obrigatório (DL 268/94, Art. 4.º)">
+            <div class="kpi-label">🏦 Fundo de Reserva</div>
+            <div class="kpi-val" id="c-fundo">0<span>€</span></div>
+            <div style="font-size:9px;color:var(--t3);margin-top:2px;">clica para ver</div>
           </div>
         </div>
 
@@ -6330,6 +6335,7 @@ async function saveQuota() {
     await sb.from('quotas').insert({condominio_id:currentCondo.id,fracao_id:fracId,mes,ano,valor_emitido:quota_base,valor_pago:val,estado,metodo_pagamento:document.getElementById('qp-metodo').value,data_pagamento:document.getElementById('qp-data').value,notas:document.getElementById('qp-notas').value});
   }
   await sb.from('movimentos').insert({condominio_id:currentCondo.id,tipo:'receita',categoria:'Quota',descricao:`Quota ${['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][mes-1]}/${ano} — ${frac?frac.codigo:''}`,valor:val,data_movimento:document.getElementById('qp-data').value,conta:'operacional',fracao_id:fracId});
+  await transferirParaFundo(val, `Quota ${['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][mes-1]}/${ano} — ${frac?frac.codigo:''}`, document.getElementById('qp-data').value, fracId);
   closeModal('mo-quota');
   toast('Pagamento registado!','ok');
   loadQuotas(); loadDashboard(); loadMovimentos(); updateBadges();
@@ -6663,6 +6669,7 @@ async function importarExtratoBancario(input) {
             conta: 'operacional',
             fracao_id: qg.fracao_id
           });
+          await transferirParaFundo(parseFloat(qg.valor_emitido), TIPO_LABEL(qg) + ' ' + mesesNomes[(qg.mes||mes)-1] + '/' + (qg.ano||ano) + ' — ' + (qg.fracoes ? qg.fracoes.codigo : ''), dataP, qg.fracao_id);
           marcadas.push({ tr: tr, quota: qg, agrupado: true });
         }
       }
@@ -6686,6 +6693,7 @@ async function importarExtratoBancario(input) {
           conta: 'operacional',
           fracao_id: matched.fracao_id
         });
+        await transferirParaFundo(parseFloat(matched.valor_emitido), TIPO_LABEL(matched) + ' ' + mesesNomes[(matched.mes||mes)-1] + '/' + (matched.ano||ano) + ' — ' + (matched.fracoes ? matched.fracoes.codigo : ''), dataP, matched.fracao_id);
         marcadas.push({ tr: tr, quota: matched });
       } else {
         naoCruzadas.push(tr);
@@ -7422,6 +7430,138 @@ async function apagarMovimento(id) {
   if (res.error) { toast('Erro: ' + res.error.message,'err'); return; }
   toast('Movimento apagado','ok');
   loadMovimentos();
+}
+
+// ═══════════════ 🏦 FUNDO COMUM DE RESERVA (DL 268/94, Art. 4.º) ═══════════════
+// Quando uma quota é paga, a percentagem legal (mín. 10%) vai para a conta de reserva.
+async function transferirParaFundo(valorQuota, descricao, dataMov, fracaoId) {
+  var pct = parseFloat(currentCondo.fundo_percentagem);
+  if (isNaN(pct)) pct = 10;              // por defeito, o mínimo legal
+  if (pct <= 0) return 0;
+  var valorFundo = Math.round(parseFloat(valorQuota||0) * (pct/100) * 100) / 100;
+  if (valorFundo <= 0) return 0;
+  try {
+    await sb.from('movimentos').insert({
+      condominio_id: currentCondo.id, tipo: 'receita', categoria: 'Fundo de Reserva',
+      descricao: '🏦 ' + pct + '% p/ fundo — ' + (descricao||'quota'),
+      valor: valorFundo, data_movimento: dataMov || new Date().toISOString().split('T')[0],
+      conta: 'reserva', fracao_id: fracaoId || null
+    });
+    return valorFundo;
+  } catch(e) { console.error('fundo reserva:', e); return 0; }
+}
+
+async function saldoFundoReserva() {
+  var res = await sb.from('movimentos').select('tipo,valor').eq('condominio_id', currentCondo.id).eq('conta','reserva');
+  var movs = res.data || [];
+  var ini = parseFloat(currentCondo.fundo_saldo_inicial||0);
+  return ini + movs.reduce(function(s,m){ return s + (m.tipo==='receita' ? parseFloat(m.valor||0) : -parseFloat(m.valor||0)); }, 0);
+}
+
+// Quanto o fundo DEVIA ter (inclui a parte presa nas quotas por pagar)
+async function fundoEmFalta() {
+  var pct = parseFloat(currentCondo.fundo_percentagem); if (isNaN(pct)) pct = 10;
+  var qRes = await sb.from('quotas').select('valor_emitido,valor_pago,estado').eq('condominio_id', currentCondo.id).neq('estado','pago');
+  var divida = (qRes.data||[]).reduce(function(s,q){ return s + (parseFloat(q.valor_emitido||0) - parseFloat(q.valor_pago||0)); }, 0);
+  return Math.round(divida * (pct/100) * 100) / 100;  // a parte do fundo que está presa na dívida
+}
+
+async function abrirFundoReserva() {
+  var res = await sb.from('movimentos').select('*').eq('condominio_id', currentCondo.id).eq('conta','reserva').order('data_movimento',{ascending:false});
+  var movs = res.data || [];
+  var ini = parseFloat(currentCondo.fundo_saldo_inicial||0);
+  var entradas = movs.filter(function(m){return m.tipo==='receita';}).reduce(function(s,m){return s+parseFloat(m.valor||0);},0);
+  var saidas = movs.filter(function(m){return m.tipo!=='receita';}).reduce(function(s,m){return s+parseFloat(m.valor||0);},0);
+  var saldo = ini + entradas - saidas;
+  var pct = parseFloat(currentCondo.fundo_percentagem); if (isNaN(pct)) pct = 10;
+  var emFalta = await fundoEmFalta();
+  var eur = function(v){ return parseFloat(v||0).toFixed(2).replace('.',',')+'€'; };
+
+  var h = '<div style="padding:2px;">';
+  h += '<div style="background:rgba(139,92,246,.1);border:1px solid rgba(139,92,246,.3);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:11px;color:var(--t2);">';
+  h += '⚖️ <strong style="color:var(--violet);">Obrigação legal</strong> — DL 268/94, Art. 4.º: o condomínio deve constituir um fundo comum de reserva com <strong>pelo menos 10%</strong> da quota de cada condómino. Serve para obras e imprevistos, deve estar em <strong>conta bancária separada</strong>, e o que se usar deve ser reposto em 12 meses.';
+  h += '</div>';
+
+  h += '<div style="text-align:center;padding:18px;background:linear-gradient(160deg,var(--s2),var(--s1));border:1px solid var(--b1);border-radius:12px;margin-bottom:14px;">';
+  h += '<div style="font-size:11px;color:var(--t3);letter-spacing:1px;">SALDO DO FUNDO</div>';
+  h += '<div style="font-size:32px;font-weight:700;color:#b48cff;font-family:monospace;margin:4px 0;">' + eur(saldo) + '</div>';
+  h += '<div style="font-size:10.5px;color:var(--t3);">a acumular ' + pct + '% de cada quota paga</div>';
+  h += '</div>';
+
+  // ⚠️ Fundo em falta — a parte presa na dívida (pressão sobre devedores)
+  if (emFalta > 0) {
+    h += '<div style="background:rgba(255,84,112,.08);border:1px solid rgba(255,84,112,.3);border-radius:10px;padding:12px 14px;margin-bottom:14px;">';
+    h += '<div style="font-size:12px;font-weight:700;color:var(--red);">⚠️ Faltam ' + eur(emFalta) + ' ao fundo</div>';
+    h += '<div style="font-size:10.5px;color:var(--t2);margin-top:3px;">Este valor devia estar no fundo, mas está preso em quotas por pagar. Quem não paga a quota não enfraquece só o condomínio — enfraquece a poupança de todos para obras. Assim que os devedores regularizarem, entra automaticamente.</div>';
+    h += '</div>';
+  }
+
+  h += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;">';
+  h += '<div style="text-align:center;background:var(--s2);border-radius:8px;padding:10px;"><div style="font-size:15px;font-weight:700;color:var(--green);font-family:monospace;">' + eur(entradas) + '</div><div style="font-size:9.5px;color:var(--t3);">entradas</div></div>';
+  h += '<div style="text-align:center;background:var(--s2);border-radius:8px;padding:10px;"><div style="font-size:15px;font-weight:700;color:var(--red);font-family:monospace;">' + eur(saidas) + '</div><div style="font-size:9.5px;color:var(--t3);">usado em obras</div></div>';
+  h += '<div style="text-align:center;background:var(--s2);border-radius:8px;padding:10px;"><div style="font-size:15px;font-weight:700;color:var(--t2);font-family:monospace;">' + eur(ini) + '</div><div style="font-size:9.5px;color:var(--t3);">saldo inicial</div></div>';
+  h += '</div>';
+
+  h += '<div style="display:flex;gap:8px;margin-bottom:14px;">';
+  h += '<button class="btn-ghost" style="flex:1;font-size:11px;" onclick="configurarFundo()">⚙️ Configurar</button>';
+  h += '<button class="btn-ghost" style="flex:1;font-size:11px;color:var(--red);border-color:rgba(255,84,112,.3);" onclick="usarFundo()">💸 Usar o fundo (obra)</button>';
+  h += '</div>';
+
+  if (movs.length) {
+    h += '<div style="font-size:11px;font-weight:700;color:var(--t2);margin-bottom:8px;">MOVIMENTOS DO FUNDO (' + movs.length + ')</div>';
+    h += '<div style="max-height:240px;overflow-y:auto;">';
+    movs.slice(0,40).forEach(function(m){
+      var ent = m.tipo === 'receita';
+      h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--b1);font-size:11.5px;">';
+      h += '<div style="flex:1;"><div>' + (m.descricao||'—') + '</div><div style="font-size:9.5px;color:var(--t3);">' + (m.data_movimento||'') + '</div></div>';
+      h += '<div style="font-weight:700;color:' + (ent?'var(--green)':'var(--red)') + ';">' + (ent?'+':'-') + eur(m.valor) + '</div>';
+      h += '</div>';
+    });
+    h += '</div>';
+  } else {
+    h += '<div style="text-align:center;padding:20px;color:var(--t3);font-size:12px;">Ainda sem movimentos. O fundo começa a acumular quando as quotas forem pagas.</div>';
+  }
+  h += '</div>';
+  abrirModalGenerico('🏦 Fundo Comum de Reserva', h);
+}
+
+async function configurarFundo() {
+  var pctAtual = parseFloat(currentCondo.fundo_percentagem); if (isNaN(pctAtual)) pctAtual = 10;
+  var p = prompt('Percentagem da quota que vai para o fundo de reserva.\n\n⚖️ O MÍNIMO LEGAL é 10% (DL 268/94, Art. 4.º).\nPodes subir se a assembleia aprovar.\n\nPercentagem (%):', pctAtual);
+  if (p === null) return;
+  var pct = parseFloat(String(p).replace(',','.'));
+  if (isNaN(pct) || pct < 0) { toast('Valor inválido','err'); return; }
+  if (pct < 10 && !confirm('⚠️ ATENÇÃO: ' + pct + '% está ABAIXO do mínimo legal de 10%.\n\nO DL 268/94 obriga a pelo menos 10%. Continuar mesmo assim?')) return;
+  var s = prompt('Saldo que o fundo JÁ TINHA antes de usares o programa (€):', parseFloat(currentCondo.fundo_saldo_inicial||0));
+  if (s === null) return;
+  var saldoIni = parseFloat(String(s).replace(',','.')) || 0;
+  var res = await sb.from('condominios').update({ fundo_percentagem: pct, fundo_saldo_inicial: saldoIni }).eq('id', currentCondo.id);
+  if (res.error) { toast('Erro (corre o sql_fundo_reserva_legal.sql): ' + res.error.message,'err'); return; }
+  currentCondo.fundo_percentagem = pct;
+  currentCondo.fundo_saldo_inicial = saldoIni;
+  toast('✅ Fundo configurado: ' + pct + '% · saldo inicial ' + saldoIni.toFixed(2) + '€','ok');
+  fecharModalGenerico();
+  abrirFundoReserva();
+}
+
+async function usarFundo() {
+  var saldo = await saldoFundoReserva();
+  var v = prompt('Usar dinheiro do fundo de reserva para uma obra.\n\n⚠️ O fundo só deve ser usado em obras e imprevistos — não em despesas correntes.\n⚖️ O valor usado deve ser REPOSTO no prazo de 12 meses (DL 268/94).\nA assembleia deve aprovar.\n\nSaldo disponível: ' + saldo.toFixed(2) + '€\n\nValor a usar (€):');
+  if (v === null) return;
+  var valor = parseFloat(String(v).replace(',','.'));
+  if (isNaN(valor) || valor <= 0) { toast('Valor inválido','err'); return; }
+  if (valor > saldo) { toast('O fundo só tem ' + saldo.toFixed(2) + '€','err'); return; }
+  var desc = prompt('Descrição da obra/despesa:');
+  if (!desc) return;
+  var res = await sb.from('movimentos').insert({
+    condominio_id: currentCondo.id, tipo: 'despesa', categoria: 'Fundo de Reserva',
+    descricao: '🏦 Uso do fundo: ' + desc + ' (repor em 12 meses)', valor: valor,
+    data_movimento: new Date().toISOString().split('T')[0], conta: 'reserva'
+  });
+  if (res.error) { toast('Erro: ' + res.error.message,'err'); return; }
+  toast('Registado o uso de ' + valor.toFixed(2) + '€ do fundo. Lembra-te: repor em 12 meses.','ok');
+  fecharModalGenerico();
+  abrirFundoReserva();
 }
 
 async function loadMovimentos() {
@@ -14423,6 +14563,11 @@ async function loadContas() {
   document.getElementById('c-saldo').innerHTML = saldo.toFixed(2) + '<span>€</span>';
   document.getElementById('c-saldo').style.color = saldo >= 0 ? 'var(--green)' : 'var(--red)';
   document.getElementById('c-divida').innerHTML = porCobrar.toFixed(2) + '<span>€</span>';
+  // 🏦 Fundo de reserva
+  saldoFundoReserva().then(function(sf){
+    var el = document.getElementById('c-fundo');
+    if (el) el.innerHTML = sf.toFixed(2) + '<span>€</span>';
+  });
 
   renderContasOVR(rubricas, despesas, emitido, receitas, despTodas);
   renderContasMapa(quotas, despesas, ano);
