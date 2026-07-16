@@ -14,7 +14,7 @@
 }
 *{margin:0;padding:0;box-sizing:border-box;}
 body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:14px;min-height:100vh;padding-bottom:30px;}
-.header{background:var(--s1);border-bottom:1px solid var(--b1);padding:20px;text-align:center;}
+.header{background:var(--s1);border-bottom:1px solid var(--b1);padding:20px;text-align:center;position:relative;}
 .header-brand{font-size:24px;font-weight:900;color:var(--cyan);letter-spacing:-1px;font-family:monospace;}
 .header-sub{font-size:10px;color:var(--t3);letter-spacing:2px;text-transform:uppercase;margin-top:2px;}
 .header-fracao{margin-top:12px;background:var(--cdim);border:1px solid rgba(0,212,255,.2);border-radius:8px;padding:8px 16px;display:inline-block;}
@@ -102,6 +102,7 @@ select.fi option{background:var(--s2);}
 <body>
 
 <div class="header">
+  <a id="btn-voltar-portal" href="#" onclick="voltarAoPortal(event)" style="display:none;position:absolute;top:14px;left:14px;color:#fff;text-decoration:none;font-size:13px;background:rgba(255,255,255,.12);padding:8px 14px;border-radius:20px;backdrop-filter:blur(6px);">‹ Voltar</a>
   <div class="header-brand">COND.OS</div>
   <div class="header-sub">Gestão de Condomínios</div>
   <div style="margin-top:12px;">
@@ -112,6 +113,26 @@ select.fi option{background:var(--s2);}
     </div>
   </div>
 </div>
+
+<script>
+// Mostrar botão voltar se veio do portal (tem token) e ligar ao portal
+(function(){
+  var params = new URLSearchParams(location.search);
+  var t = params.get('t');
+  var btn = document.getElementById('btn-voltar-portal');
+  if (t && btn) btn.style.display = 'inline-block';
+})();
+function voltarAoPortal(e) {
+  if (e) e.preventDefault();
+  var params = new URLSearchParams(location.search);
+  var t = params.get('t');
+  var base = location.href.substring(0, location.href.lastIndexOf('/') + 1);
+  if (t) location.href = base + 'portal.html?t=' + encodeURIComponent(t);
+  else if (history.length > 1) history.back();
+  else location.href = base + 'portal.html';
+}
+</script>
+
 
 <div id="app">
 

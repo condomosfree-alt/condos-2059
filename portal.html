@@ -254,6 +254,7 @@
     <div id="h-feed"><div class="skel">A carregar…</div></div>
 
     <a id="h-link-ficha" href="#" style="display:block;text-align:center;margin-top:18px;font-size:12.5px;color:var(--t2);text-decoration:none;padding:13px;border:1px dashed var(--b2);border-radius:12px;">✏️ Atualizar os meus dados (NIF, contacto, morada)</a>
+    <a href="#" onclick="mostrarInstalar(event)" style="display:block;text-align:center;margin-top:10px;font-size:12.5px;color:var(--cyan);text-decoration:none;padding:13px;border:1px solid rgba(0,212,255,.3);border-radius:12px;background:rgba(0,212,255,.04);">📲 Adicionar ao ecrã do telemóvel (acesso rápido)</a>
     <div class="rodape">Este portal mostra apenas os dados da sua fração.<br>COND.OS 2059 · Gestão de Condomínios</div>
   </div>
 
@@ -371,6 +372,72 @@ const mN = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agost
 const eur = v => parseFloat(v||0).toFixed(2).replace('.',',') + '€';
 let _loaded = {};
 let _ocCache = {};
+
+// 📲 Instruções para adicionar o portal ao ecrã inicial (por dispositivo)
+function mostrarInstalar(e) {
+  if (e) e.preventDefault();
+  var ua = navigator.userAgent || '';
+  var isIOS = /iPad|iPhone|iPod/.test(ua);
+  var isAndroid = /Android/.test(ua);
+  var isMac = /Macintosh/.test(ua) && !isIOS;
+  var isWin = /Windows/.test(ua);
+
+  var passos, titulo, icone;
+  if (isIOS) {
+    titulo = 'iPhone / iPad (Safari)'; icone = '📱';
+    passos = ['Toca no botão <strong>Partilhar</strong> ⬆️ (o quadrado com a seta, em baixo).',
+              'Desliza para baixo e toca em <strong>"Adicionar ao ecrã principal"</strong>.',
+              'Toca em <strong>"Adicionar"</strong> no canto superior direito.',
+              'Pronto! O ícone do condomínio fica no teu ecrã, como uma app. 🎉'];
+  } else if (isAndroid) {
+    titulo = 'Android (Chrome)'; icone = '🤖';
+    passos = ['Toca nos <strong>três pontos</strong> ⋮ no canto superior direito.',
+              'Toca em <strong>"Adicionar ao ecrã principal"</strong> (ou "Instalar app").',
+              'Confirma em <strong>"Adicionar"</strong>.',
+              'Pronto! O atalho fica no teu ecrã inicial. 🎉'];
+  } else if (isMac) {
+    titulo = 'Mac (Safari)'; icone = '💻';
+    passos = ['Com o portal aberto no Safari, clica em <strong>Ficheiro</strong> na barra de cima.',
+              'Escolhe <strong>"Adicionar à Dock"</strong>.',
+              'O portal fica na tua Dock, como uma app. 🎉',
+              '<span style="color:var(--t3);">(No Chrome: menu ⋮ → "Guardar e partilhar" → "Criar atalho".)</span>'];
+  } else if (isWin) {
+    titulo = 'Windows (Chrome / Edge)'; icone = '🖥️';
+    passos = ['Clica nos <strong>três pontos</strong> ⋮ no canto superior direito do navegador.',
+              'No Chrome: <strong>"Guardar e partilhar" → "Instalar página como app"</strong>.',
+              'No Edge: <strong>"Aplicações" → "Instalar este site como aplicação"</strong>.',
+              'O portal fica no ambiente de trabalho e no menu Iniciar. 🎉'];
+  } else {
+    titulo = 'No teu dispositivo'; icone = '📲';
+    passos = ['Abre o menu do teu navegador (⋮ ou ⬆️).',
+              'Procura <strong>"Adicionar ao ecrã inicial"</strong> ou <strong>"Instalar app"</strong>.',
+              'Confirma. O atalho fica guardado para acesso rápido. 🎉'];
+  }
+
+  var ov = document.getElementById('instalar-overlay');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.id = 'instalar-overlay';
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(6,10,20,.92);backdrop-filter:blur(6px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+    ov.onclick = function(ev){ if (ev.target === ov) ov.style.display='none'; };
+    document.body.appendChild(ov);
+  }
+  var h = '<div style="background:var(--card2);border:1px solid var(--b);border-radius:16px;max-width:380px;width:100%;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.5);">';
+  h += '<div style="text-align:center;font-size:34px;margin-bottom:6px;">' + icone + '</div>';
+  h += '<div style="text-align:center;font-size:15px;font-weight:700;color:var(--cyan);margin-bottom:4px;">Adicionar ao ecrã</div>';
+  h += '<div style="text-align:center;font-size:12px;color:var(--t3);margin-bottom:18px;">' + titulo + '</div>';
+  passos.forEach(function(p, i){
+    h += '<div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:12px;">';
+    h += '<div style="flex-shrink:0;width:24px;height:24px;border-radius:50%;background:rgba(0,212,255,.15);color:var(--cyan);font-weight:700;font-size:12px;display:flex;align-items:center;justify-content:center;">' + (i+1) + '</div>';
+    h += '<div style="font-size:13px;color:var(--t1);line-height:1.5;padding-top:2px;">' + p + '</div>';
+    h += '</div>';
+  });
+  h += '<div style="font-size:11px;color:var(--t3);text-align:center;margin-top:12px;line-height:1.5;">Depois é só tocar no ícone — abre direto, sem procurar links. E o teu acesso fica guardado.</div>';
+  h += '<button onclick="document.getElementById(\'instalar-overlay\').style.display=\'none\'" style="width:100%;margin-top:16px;background:var(--cyan);border:none;color:#02121d;border-radius:10px;padding:12px;font-size:13px;font-weight:700;cursor:pointer;">Percebi 👍</button>';
+  h += '</div>';
+  ov.innerHTML = h;
+  ov.style.display = 'flex';
+}
 
 function irPara(pg) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
