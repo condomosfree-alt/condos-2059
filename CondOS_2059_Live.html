@@ -637,7 +637,7 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.16-2213</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.16-2250</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -3789,6 +3789,22 @@ async function verificarAvisosGerais() {
         texto: porPagarForn.length + ' despesa(s) por pagar ao fornecedor',
         detalhe: 'Há ' + totalPorPagar.toFixed(2) + '€ aprovados mas ainda não pagos. Quando pagares, clica em "💸 Pagar" para o movimento entrar no extrato.' });
     }
+
+    // 5g) Dados de condóminos desatualizados (>1 ano ou nunca) — Lei 8/2022
+    try {
+      var fracsR = await sb.from('fracoes').select('id,codigo,proprietario_nome,dados_atualizados_em').eq('condominio_id', currentCondo.id);
+      var umAnoAtras = new Date(); umAnoAtras.setFullYear(umAnoAtras.getFullYear() - 1);
+      var desatualizados = (fracsR.data||[]).filter(function(f){
+        if (!f.dados_atualizados_em) return true; // nunca atualizou
+        return new Date(f.dados_atualizados_em) < umAnoAtras; // há mais de 1 ano
+      });
+      if (desatualizados.length > 0) {
+        var nomesD = desatualizados.slice(0,4).map(function(f){ return (f.proprietario_nome || 'Fração ' + f.codigo); }).join(', ');
+        avisos.push({ pagina:'fracoes', badge:String(desatualizados.length), cor:'#ffb300',
+          texto: desatualizados.length + ' condómino(s) com dados por atualizar',
+          detalhe: 'Sem atualização há mais de 1 ano (ou nunca): ' + nomesD + (desatualizados.length>4?'…':'') + '. A Lei 8/2022 obriga à atualização. Usa "Convidar p/ Portal" ou "Notificar Todos" para pedir a revisão dos dados.' });
+      }
+    } catch(e) { console.error('aviso dados desatualizados:', e); }
 
     // 5f) Recibos pendentes de CARTA (condóminos sem email — o admin tem de imprimir)
     try {
