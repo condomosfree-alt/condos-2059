@@ -637,7 +637,7 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.16-2152</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.16-2203</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -1145,6 +1145,7 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
           <div style="display:flex;gap:8px;">
             <button class="btn-ghost" onclick="exportarCondominosPDF()" style="display:inline-flex;align-items:center;gap:6px;" title="Exportar lista em PDF profissional"><i class="ti ti-file-type-pdf"></i>Exportar PDF</button>
             <button class="btn-ghost" onclick="gerarQRTodosPDF()" style="display:inline-flex;align-items:center;gap:6px;" title="Gerar PDF com 1 QR Code por página para distribuir em cada caixa de correio"><i class="ti ti-qrcode"></i>Gerar QR (carta)</button>
+            <button class="btn-ghost" style="display:inline-flex;align-items:center;gap:6px;background:rgba(180,140,255,.08);border-color:rgba(180,140,255,.35);color:#b48cff;" onclick="convidarPortalTodos()" title="Enviar o acesso ao Portal: email aos que têm, PDF/carta aos que não"><span>🔗</span>Convidar p/ Portal</button>
             <button class="btn-ghost" style="display:inline-flex;align-items:center;gap:6px;background:rgba(0,212,255,.06);border-color:rgba(0,212,255,.3);color:var(--cyan);" onclick="notificarTodos()"><i class="ti ti-send"></i>Notificar Todos</button>
             <button class="btn-primary" onclick="abrirNovoCondomino()"><i class="ti ti-plus"></i>Adicionar</button>
           </div>
@@ -11761,6 +11762,144 @@ function notificacaoEmailHTML(f, condoNome, url) {
       '<div style="border-top:1px solid #eee;padding-top:14px;"><p style="font-size:12px;color:#555;margin:0;">Com os melhores cumprimentos,</p><p style="font-size:13px;color:#222;font-weight:700;margin:6px 0 0;">'+(currentCondo.administrador_nome||'A Administração')+'</p></div>'+
     '</div>'+
     '<div style="background:#0d1825;padding:12px 28px;text-align:center;border-radius:0 0 10px 10px;"><div style="color:#5a6a79;font-size:10px;">COND.OS 2059 Pro · '+new Date().toLocaleDateString('pt-PT')+'</div></div></div>';
+}
+
+// 🔗 CONVIDAR PARA O PORTAL — envia o acesso a todos (email aos que têm; PDF/carta aos que não)
+async function convidarPortalTodos() {
+  if (!currentCondo || !fracoes.length) { toast('Sem frações','warn'); return; }
+  if (!window.jspdf || !window.jspdf.jsPDF) { toast('Biblioteca PDF não carregada','err'); return; }
+
+  var comEmail = fracoes.filter(function(f){ return f.proprietario_email && f.token_acesso; });
+  var semEmail = fracoes.filter(function(f){ return (!f.proprietario_email) && f.token_acesso; });
+  var semToken = fracoes.filter(function(f){ return !f.token_acesso; });
+
+  if (semToken.length === fracoes.length) {
+    toast('As frações ainda não têm token de acesso. Corre o SQL da Fase 2 (token por fração).','err');
+    return;
+  }
+
+  var msg = '🔗 CONVIDAR CONDÓMINOS PARA O PORTAL\n\n';
+  msg += 'O portal permite a cada condómino ver as suas quotas, as contas, reportar avarias e votar.\n\n';
+  if (comEmail.length) msg += '📧 ' + comEmail.length + ' com email → recebem o convite com link e QR\n';
+  if (semEmail.length) msg += '📄 ' + semEmail.length + ' sem email → gero um PDF com QR para imprimir/enviar por carta\n';
+  if (semToken.length) msg += '⚠️ ' + semToken.length + ' sem token (corre o SQL da Fase 2)\n';
+  msg += '\nContinuar?';
+  if (!await confirmar(msg, {titulo:'Convidar para o Portal', tipo:'info', icon:'🔗', okTexto:'Sim, convidar'})) return;
+
+  var baseUrl = location.href.substring(0, location.href.lastIndexOf('/'));
+  var enviadosEmail = 0;
+
+  // 1) EMAIL aos que têm
+  if (comEmail.length && _gmailToken) {
+    for (var i = 0; i < comEmail.length; i++) {
+      var f = comEmail[i];
+      var url = baseUrl + '/portal.html?t=' + encodeURIComponent(f.token_acesso);
+      var assunto = '🔑 Acesso ao Portal do Condómino — ' + displayNomeCondo(currentCondo.nome||'');
+      var corpo = '<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">' +
+        '<div style="background:#0d1825;color:#fff;padding:22px;text-align:center;"><h2 style="margin:0;color:#00d4ff;">Portal do Condómino</h2><p style="margin:6px 0 0;">' + displayNomeCondo(currentCondo.nome||'') + '</p></div>' +
+        '<div style="padding:24px;background:#f4f6f8;color:#333;">' +
+        '<p>Olá ' + (f.proprietario_nome||'') + ',</p>' +
+        '<p>Foi criado o seu acesso pessoal ao Portal do Condómino da <strong>Fração ' + f.codigo + '</strong>. No portal pode:</p>' +
+        '<ul style="line-height:1.7;"><li>Ver as suas quotas e o histórico de pagamentos</li><li>Consultar as contas do condomínio</li><li>Reportar avarias e acompanhar reparações</li><li>Votar em decisões e falar com a administração</li></ul>' +
+        '<div style="text-align:center;margin:24px 0;"><a href="' + url + '" style="background:#00d4ff;color:#02121d;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:bold;font-size:15px;">Entrar no Portal</a></div>' +
+        '<p style="font-size:12px;color:#888;">Este link é pessoal e dá acesso apenas à informação da sua fração. Não o partilhe com terceiros. Guarde este email — é a sua chave de acesso.</p>' +
+        '<p style="font-size:11px;color:#aaa;word-break:break-all;">Ou copie: ' + url + '</p>' +
+        '</div></div>';
+      var ok = await enviarEmailGmail(f.proprietario_email, assunto, corpo);
+      if (ok) {
+        enviadosEmail++;
+        // Prova no portal
+        try { await sb.from('mensagens').insert({ condominio_id: currentCondo.id, fracao_id: f.id, autor: 'admin', texto: '🔑 Convite de acesso ao Portal enviado por email para ' + f.proprietario_email + '.', lida_admin: true, lida_condomino: false }); } catch(e){}
+      }
+    }
+  } else if (comEmail.length && !_gmailToken) {
+    toast('⚠️ Liga o Gmail em Definições → Integrações para enviar os convites por email.','warn');
+  }
+
+  // 2) PDF com QR para os SEM email (imprimir e enviar por carta)
+  if (semEmail.length) {
+    await gerarCartoesPortalPDF(semEmail);
+  }
+
+  var resumo = '';
+  if (enviadosEmail > 0) resumo += '📧 ' + enviadosEmail + ' convites enviados por email. ';
+  if (semEmail.length > 0) resumo += '📄 PDF com ' + semEmail.length + ' cartões gerado (para carta). ';
+  toast(resumo || 'Nada a enviar.', 'ok');
+}
+
+// 📄 Gera um PDF com um cartão de acesso (QR + instruções) por fração
+async function gerarCartoesPortalPDF(lista) {
+  if (typeof QRCode === 'undefined') { toast('Biblioteca QR não carregada','err'); return; }
+  var { jsPDF } = window.jspdf;
+  var doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+  var W = 210, M = 20;
+  var baseUrl = location.href.substring(0, location.href.lastIndexOf('/'));
+  var condoNome = displayNomeCondo(currentCondo.nome||'');
+
+  for (var i = 0; i < lista.length; i++) {
+    var f = lista[i];
+    if (i > 0) doc.addPage();
+    var url = baseUrl + '/portal.html?t=' + encodeURIComponent(f.token_acesso);
+
+    // Cabeçalho
+    doc.setFillColor(13,24,37); doc.rect(0,0,W,42,'F');
+    doc.setFillColor(0,212,255); doc.rect(0,42,W,1.2,'F');
+    doc.setTextColor(0,212,255); doc.setFont('helvetica','bold'); doc.setFontSize(10);
+    doc.text('PORTAL DO CONDOMINO', W/2, 16, {align:'center'});
+    doc.setTextColor(255,255,255); doc.setFontSize(15);
+    doc.text(condoNome, W/2, 27, {align:'center'});
+    doc.setTextColor(190,195,205); doc.setFont('helvetica','normal'); doc.setFontSize(11);
+    doc.text('Fracao ' + (f.codigo||'') + '  ·  ' + (f.proprietario_nome||''), W/2, 36, {align:'center'});
+
+    // QR grande e centrado
+    var y = 58;
+    try {
+      var tmp = document.createElement('div');
+      new QRCode(tmp, { text: url, width: 260, height: 260, colorDark:'#000000', colorLight:'#ffffff', correctLevel: QRCode.CorrectLevel.M });
+      await new Promise(function(r){ setTimeout(r, 240); });
+      var img = tmp.querySelector('img') || tmp.querySelector('canvas');
+      var data = img.tagName === 'IMG' ? img.src : img.toDataURL('image/png');
+      var qrSize = 72;
+      doc.setDrawColor(220,220,220); doc.setLineWidth(0.5);
+      doc.roundedRect(W/2-qrSize/2-4, y-4, qrSize+8, qrSize+8, 3, 3, 'S');
+      doc.addImage(data, 'PNG', W/2-qrSize/2, y, qrSize, qrSize);
+      y += qrSize + 14;
+    } catch(e) { console.error('QR cartao:', e); }
+
+    // Instruções
+    doc.setTextColor(30,30,30); doc.setFont('helvetica','bold'); doc.setFontSize(14);
+    doc.text('Como aceder ao seu portal', W/2, y, {align:'center'}); y += 10;
+    doc.setFont('helvetica','normal'); doc.setFontSize(10.5); doc.setTextColor(70,70,70);
+    var passos = [
+      '1. Abra a camara do seu telemovel.',
+      '2. Aponte ao codigo QR acima.',
+      '3. Toque na ligacao que aparece.',
+      '4. Pronto! Ja pode ver as suas quotas e mais.'
+    ];
+    passos.forEach(function(p){ doc.text(p, M+6, y); y += 7; });
+    y += 6;
+
+    // Link escrito (alternativa)
+    doc.setFillColor(245,248,250); doc.roundedRect(M, y, W-2*M, 20, 2, 2, 'F');
+    doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(60,60,60);
+    doc.text('Ou escreva este endereco no navegador:', M+5, y+7);
+    doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(0,120,160);
+    var urlLines = doc.splitTextToSize(url, W-2*M-10);
+    doc.text(urlLines, M+5, y+13);
+    y += 28;
+
+    // Aviso de segurança
+    doc.setFont('helvetica','italic'); doc.setFontSize(8.5); doc.setTextColor(120,120,120);
+    var seg = doc.splitTextToSize('Este codigo e pessoal da sua fracao e da acesso apenas a sua informacao. Nao o partilhe com terceiros. Guarde este documento.', W-2*M);
+    doc.text(seg, M, y);
+
+    // Rodapé
+    doc.setDrawColor(220,220,220); doc.line(M, 285, W-M, 285);
+    doc.setFontSize(7); doc.setTextColor(150,150,150);
+    doc.text('COND.OS 2059 Pro · Portal do Condomino · ' + condoNome, M, 290);
+  }
+
+  doc.save('Acessos_Portal_' + condoNome.replace(/[^a-zA-Z0-9]/g,'_') + '.pdf');
 }
 
 async function notificarTodos() {
