@@ -112,6 +112,10 @@ textarea.fi{resize:vertical;min-height:60px;}
 /* KPIs */
 .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;}
 .kpi{background:var(--s1);border:1px solid var(--b1);border-radius:10px;padding:14px 16px;}
+.kpi-click{transition:transform .12s ease, box-shadow .12s ease, border-color .12s ease;position:relative;}
+.kpi-click:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(0,0,0,.25);border-color:var(--cyan);}
+.kpi-click::after{content:'›';position:absolute;top:10px;right:12px;color:var(--t3);font-size:16px;opacity:0;transition:opacity .12s ease;}
+.kpi-click:hover::after{opacity:.7;}
 .kpi-label{font-size:9px;color:var(--t3);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px;}
 .kpi-val{font-size:28px;font-weight:800;font-family:var(--mono);line-height:1;}
 .kpi-val span{font-size:14px;font-weight:400;color:var(--t2);}
@@ -632,7 +636,7 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.16-1555</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.16-1606</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -705,22 +709,22 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
       <div class="page active" id="page-dashboard">
         <div id="avisos-gerais-dash"></div>
         <div class="kpi-grid">
-          <div class="kpi" style="border-top:2px solid var(--cyan);">
+          <div class="kpi kpi-click" style="border-top:2px solid var(--cyan);cursor:pointer;" onclick="nav('quotas')" title="Ir para Quotas · Receber">
             <div class="kpi-label">Taxa Cobrança</div>
             <div class="kpi-val" id="kpi-taxa">0<span>%</span></div>
             <div class="kpi-sub" id="kpi-taxa-sub">A calcular...</div>
           </div>
-          <div class="kpi" style="border-top:2px solid var(--green);">
+          <div class="kpi kpi-click" style="border-top:2px solid var(--green);cursor:pointer;" onclick="nav('contas')" title="Ir para Fecho do Ano">
             <div class="kpi-label">Saldo Total</div>
             <div class="kpi-val" id="kpi-saldo">0<span>€</span></div>
             <div class="kpi-sub" id="kpi-saldo-sub">—</div>
           </div>
-          <div class="kpi" style="border-top:2px solid var(--amber);">
+          <div class="kpi kpi-click" style="border-top:2px solid var(--amber);cursor:pointer;" onclick="nav('ocorrencias')" title="Ir para Gestão de Problemas">
             <div class="kpi-label">Ocorrências Abertas</div>
             <div class="kpi-val" id="kpi-oc">0<span></span></div>
             <div class="kpi-sub" id="kpi-oc-sub">0 por resolver</div>
           </div>
-          <div class="kpi" style="border-top:2px solid var(--violet);">
+          <div class="kpi kpi-click" style="border-top:2px solid var(--violet);cursor:pointer;" onclick="nav('fracoes')" title="Ir para Moradores & Frações">
             <div class="kpi-label">Frações</div>
             <div class="kpi-val" id="kpi-frac">0<span></span></div>
             <div class="kpi-sub" id="kpi-frac-sub">0 frações ativas</div>
@@ -1295,11 +1299,11 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
 
         <!-- KPIs do ano -->
         <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:16px;">
-          <div class="kpi" style="border-top:2px solid var(--green);">
+          <div class="kpi kpi-click" style="border-top:2px solid var(--green);cursor:pointer;" onclick="nav('financeiro')" title="Ver os movimentos de entrada">
             <div class="kpi-label">Receitas (quotas pagas)</div>
             <div class="kpi-val" id="c-receitas">0<span>€</span></div>
           </div>
-          <div class="kpi" style="border-top:2px solid var(--red);">
+          <div class="kpi kpi-click" style="border-top:2px solid var(--red);cursor:pointer;" onclick="nav('financeiro')" title="Ver os movimentos de saída">
             <div class="kpi-label">Despesas pagas</div>
             <div class="kpi-val" id="c-despesas">0<span>€</span></div>
           </div>
@@ -1307,11 +1311,11 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
             <div class="kpi-label">Saldo do ano</div>
             <div class="kpi-val" id="c-saldo">0<span>€</span></div>
           </div>
-          <div class="kpi" style="border-top:2px solid var(--amber);">
+          <div class="kpi kpi-click" style="border-top:2px solid var(--amber);cursor:pointer;" onclick="nav('quotas')" title="Ver quem tem quotas por pagar">
             <div class="kpi-label">Por cobrar (quotas)</div>
             <div class="kpi-val" id="c-divida">0<span>€</span></div>
           </div>
-          <div class="kpi" style="border-top:2px solid #b48cff;cursor:pointer;" onclick="abrirFundoReserva()" title="Fundo Comum de Reserva — obrigatório (DL 268/94, Art. 4.º)">
+          <div class="kpi kpi-click" style="border-top:2px solid #b48cff;cursor:pointer;" onclick="abrirFundoReserva()" title="Fundo Comum de Reserva — obrigatório (DL 268/94, Art. 4.º)">
             <div class="kpi-label">🏦 Fundo de Reserva</div>
             <div class="kpi-val" id="c-fundo">0<span>€</span></div>
             <div style="font-size:9px;color:var(--t3);margin-top:2px;">clica para ver</div>
