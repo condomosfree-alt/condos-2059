@@ -573,10 +573,10 @@ async function carregarMapaQuotas() {
 
   const mAbrev = ['J','F','M','A','M','J','J','A','S','O','N','D'];
   let h = '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">';
-  h += '<table style="width:100%;border-collapse:collapse;font-size:11px;min-width:340px;">';
+  h += '<table style="width:100%;border-collapse:collapse;font-size:11px;table-layout:fixed;">';
   h += '<thead><tr>';
-  h += '<th style="text-align:left;padding:6px 4px;color:var(--t3);font-size:9.5px;font-weight:600;position:sticky;left:0;background:var(--bg);">FRAÇÃO</th>';
-  for (let m = 1; m <= 12; m++) h += '<th style="padding:6px 2px;color:var(--t3);font-size:9px;font-weight:600;">' + mAbrev[m-1] + '</th>';
+  h += '<th style="text-align:left;padding:6px 2px;color:var(--t3);font-size:9px;font-weight:600;position:sticky;left:0;background:var(--bg);width:42px;">Fr.</th>';
+  for (let m = 1; m <= 12; m++) h += '<th style="padding:6px 0;color:var(--t3);font-size:8.5px;font-weight:600;">' + mAbrev[m-1] + '</th>';
   h += '</tr></thead><tbody>';
 
   const chaves = Object.keys(porFracao).sort();
@@ -584,8 +584,8 @@ async function carregarMapaQuotas() {
     const f = porFracao[k];
     const destaque = f.minha;
     h += '<tr style="' + (destaque ? 'background:rgba(0,212,255,.07);' : '') + '">';
-    h += '<td style="padding:7px 4px;font-weight:' + (destaque?'700':'500') + ';color:' + (destaque?'var(--cyan)':'var(--t2)') + ';white-space:nowrap;position:sticky;left:0;background:' + (destaque?'rgba(10,18,32,.98)':'var(--bg)') + ';font-size:10.5px;">';
-    h += (destaque ? '👉 ' : '') + (f.codigo||'').split(' ')[0] + (f.bloco ? ' <span style="opacity:.5;font-size:9px;">' + f.bloco + '</span>' : '');
+    h += '<td style="padding:7px 2px;font-weight:' + (destaque?'700':'500') + ';color:' + (destaque?'var(--cyan)':'var(--t2)') + ';white-space:nowrap;position:sticky;left:0;background:' + (destaque?'rgba(10,18,32,.98)':'var(--bg)') + ';font-size:10px;overflow:hidden;text-overflow:ellipsis;" title="' + escapar(f.codigo||'') + (f.bloco?' · Bloco '+f.bloco:'') + '">';
+    h += (destaque ? '👉' : '') + (f.codigo||'').split(' ')[0].split('-')[0].trim();
     h += '</td>';
     for (let m = 1; m <= 12; m++) {
       const qs = f.meses[m];
@@ -598,7 +598,7 @@ async function carregarMapaQuotas() {
         else if (pagas > 0) { bola = '◐'; cor = 'var(--amber)'; tit = 'Parcial — falta ' + emDivida.toFixed(2) + '€'; }
         else { bola = '●'; cor = 'var(--red)'; tit = 'Por pagar — ' + emDivida.toFixed(2) + '€'; }
       }
-      h += '<td style="text-align:center;padding:6px 2px;color:' + cor + ';font-size:13px;" title="' + tit + '">' + bola + '</td>';
+      h += '<td style="text-align:center;padding:6px 0;color:' + cor + ';font-size:12px;" title="' + tit + '">' + bola + '</td>';
     }
     h += '</tr>';
   });
