@@ -632,7 +632,7 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.15-1738</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.16-0837</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -3768,6 +3768,18 @@ async function verificarAvisosGerais() {
         detalhe: 'Há ' + totalPorPagar.toFixed(2) + '€ aprovados mas ainda não pagos. Quando pagares, clica em "💸 Pagar" para o movimento entrar no extrato.' });
     }
 
+    // 5f) Recibos pendentes de CARTA (condóminos sem email — o admin tem de imprimir)
+    try {
+      var recCarta = await sb.from('quotas').select('mes,ano,fracao_id,fracoes(codigo,proprietario_nome)').eq('condominio_id', currentCondo.id).eq('recibo_via','carta');
+      var nCarta = (recCarta.data||[]).length;
+      if (nCarta > 0) {
+        var nomesC = (recCarta.data||[]).slice(0,5).map(function(r){ return (r.fracoes ? r.fracoes.proprietario_nome || r.fracoes.codigo : 'Fração'); }).join(', ');
+        avisos.push({ pagina:'quotas', badge:String(nCarta), cor:'#8b5cf6',
+          texto: nCarta + ' recibo(s) por imprimir e enviar por carta',
+          detalhe: 'Sem email registado: ' + nomesC + (nCarta>5?'…':'') + '. Gera o PDF de cada um (botão 📄 nas Quotas) e envia por correio.' });
+      }
+    } catch(e) { console.error('aviso recibos carta:', e); }
+
     // 5e) Fundo de reserva em falta (quotas por pagar prendem a parte do fundo)
     try {
       var pctF = parseFloat(currentCondo.fundo_percentagem); if (isNaN(pctF)) pctF = 10;
@@ -6329,7 +6341,7 @@ async function loadQuotas() {
         <td class="mn" style="color:${saldo>0?'var(--red)':'var(--green)'}">${saldo>0?'-':''}${saldo.toFixed(2)}€</td>
         <td>${pills[q.estado]||q.estado}</td>
         <td style="color:var(--t2);font-size:11px">${q.metodo_pagamento||'—'}</td>
-        <td style="display:flex;gap:4px;align-items:center;">${saldo>0?`<button class="tb-btn" style="font-size:10px;padding:3px 7px;" onclick="markPago('${q.id}',${q.valor_emitido})"><i class="ti ti-check"></i>Pago</button>`:``}${q.estado==='pago'?`<button class="tb-btn" style="font-size:10px;padding:3px 7px;background:rgba(0,212,255,.1);border-color:rgba(0,212,255,.3);color:var(--cyan);" onclick="enviarRecibo('${q.id}')"><i class="ti ti-mail"></i>Recibo</button>`:``}</td>
+        <td style="display:flex;gap:4px;align-items:center;">${saldo>0?`<button class="tb-btn" style="font-size:10px;padding:3px 7px;" onclick="markPago('${q.id}',${q.valor_emitido})"><i class="ti ti-check"></i>Pago</button>`:``}${q.estado==='pago'?`<button class="tb-btn" style="font-size:10px;padding:3px 7px;background:rgba(0,212,255,.1);border-color:rgba(0,212,255,.3);color:var(--cyan);" onclick="enviarRecibo('${q.id}')" title="Enviar recibo por email"><i class="ti ti-mail"></i>Recibo</button><button class="tb-btn" style="font-size:10px;padding:3px 7px;" onclick="gerarReciboPDF('${q.id}')" title="Descarregar recibo em PDF">📄</button>`:``}</td>
       </tr>`;
     }).join('')+`</tbody></table>`;
 }
@@ -6351,6 +6363,13 @@ async function saveQuota() {
   }
   await sb.from('movimentos').insert({condominio_id:currentCondo.id,tipo:'receita',categoria:'Quota',descricao:`Quota ${['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][mes-1]}/${ano} — ${frac?frac.codigo:''}`,valor:val,data_movimento:document.getElementById('qp-data').value,conta:'operacional',fracao_id:fracId});
   await transferirParaFundo(val, `Quota ${['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][mes-1]}/${ano} — ${frac?frac.codigo:''}`, document.getElementById('qp-data').value, fracId);
+  // 🧾 Recibo automático (só se ficou totalmente pago)
+  if (estado === 'pago') {
+    await processarRecibo(
+      { id: existing?existing.id:null, fracao_id: fracId, mes: mes, ano: ano, valor_pago: val, valor_emitido: quota_base, data_pagamento: document.getElementById('qp-data').value, metodo_pagamento: document.getElementById('qp-metodo').value, tipo: 'ordinaria' },
+      frac || {}
+    );
+  }
   closeModal('mo-quota');
   toast('Pagamento registado!','ok');
   loadQuotas(); loadDashboard(); loadMovimentos(); updateBadges();
@@ -6876,6 +6895,165 @@ async function notificarDevedores() {
   );
 }
 
+// 🧾 PROCESSAR RECIBO — corre automaticamente quando uma quota é marcada paga.
+// Portal SEMPRE (prova para todos) · Email se houver · Carta (PDF) para quem não tem email.
+async function processarRecibo(q, f) {
+  if (!q || !f) return;
+  var c = currentCondo || {};
+  var mN = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  var mAnoNome = mN[(q.mes||1)-1]+' de '+(q.ano||2026);
+  var nRec = (q.ano||2026)+'/'+String(q.mes||1).padStart(2,'0')+'-'+(f.codigo||'?');
+  var dataPag = q.data_pagamento ? new Date(q.data_pagamento).toLocaleDateString('pt-PT') : new Date().toLocaleDateString('pt-PT');
+  var valor = parseFloat(q.valor_pago||q.valor_emitido||0);
+  var tipoQuota = q.tipo === 'extraordinaria' ? 'Quota extraordinária' : 'Quota';
+  var via = 'portal';
+
+  // 1) PORTAL — sempre (a prova que fica para todos)
+  try {
+    await sb.from('mensagens').insert({
+      condominio_id: c.id, fracao_id: q.fracao_id, autor: 'admin',
+      texto: '🧾 RECIBO N.º ' + nRec + ' — ' + tipoQuota + ' de ' + mAnoNome + ' recebida.\n\nValor: ' + valor.toFixed(2).replace('.',',') + '€\nData de pagamento: ' + dataPag + '\nMétodo: ' + (q.metodo_pagamento||'Transferência') + '\n\nIsento de IVA (Art. 9.º CIVA).',
+      lida_admin: true, lida_condomino: false
+    });
+  } catch(e) { console.error('recibo portal:', e); }
+
+  // 2) EMAIL — se tiver email e o Gmail estiver ligado
+  if (f.proprietario_email && typeof _gmailToken !== 'undefined' && _gmailToken) {
+    try {
+      var assunto = '✅ Recibo ' + nRec + ' — ' + mAnoNome + ' — ' + displayNomeCondo(c.nome||'');
+      var corpo = '<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">' +
+        '<div style="background:#0d1825;color:#fff;padding:20px;text-align:center;"><h2 style="margin:0;color:#00d4ff;">RECIBO ' + nRec + '</h2><p style="margin:6px 0 0;">' + displayNomeCondo(c.nome||'') + '</p></div>' +
+        '<div style="padding:24px;background:#f4f6f8;">' +
+        '<p>Confirmamos a receção do pagamento de <strong>' + f.proprietario_nome + '</strong> (Fração ' + f.codigo + '):</p>' +
+        '<table style="width:100%;border-collapse:collapse;margin:16px 0;">' +
+        '<tr><td style="padding:8px;border-bottom:1px solid #ddd;">Referente a</td><td style="padding:8px;border-bottom:1px solid #ddd;text-align:right;"><strong>' + tipoQuota + ' — ' + mAnoNome + '</strong></td></tr>' +
+        '<tr><td style="padding:8px;border-bottom:1px solid #ddd;">Data de pagamento</td><td style="padding:8px;border-bottom:1px solid #ddd;text-align:right;">' + dataPag + '</td></tr>' +
+        '<tr><td style="padding:12px 8px;font-size:18px;"><strong>Valor</strong></td><td style="padding:12px 8px;text-align:right;font-size:22px;color:#0090bf;"><strong>' + valor.toFixed(2).replace('.',',') + '€</strong></td></tr>' +
+        '</table>' +
+        '<p style="font-size:12px;color:#888;">Isento de IVA nos termos do artigo 9.º do CIVA (gestão de condomínios). Documento gerado pelo COND.OS 2059.</p>' +
+        '</div></div>';
+      var ok = await enviarEmailGmail(f.proprietario_email, assunto, corpo);
+      if (ok) via = 'email';
+    } catch(e) { console.error('recibo email:', e); }
+  } else if (!f.proprietario_email) {
+    // 3) SEM EMAIL → marca para CARTA (o admin gera o PDF depois)
+    via = 'carta';
+  }
+
+  // Registar como foi entregue
+  try {
+    await sb.from('quotas').update({ recibo_via: via, recibo_data: new Date().toISOString() }).eq('id', q.id);
+  } catch(e) { console.error('recibo tracking:', e); }
+  return via;
+}
+
+// 🧾 Recibo formal em PDF (numerado, descarregável)
+async function gerarReciboPDF(qid) {
+  if (!window.jspdf || !window.jspdf.jsPDF) { toast('Biblioteca PDF não carregada','err'); return; }
+  var _qr = await carregarQuotasComFracoes({quotaId:qid}); var q = _qr[0];
+  if (!q) { toast('Quota não encontrada','err'); return; }
+  if (q.estado !== 'pago') { toast('Só se emite recibo de quotas já pagas.','err'); return; }
+  var f = q.fracoes||{};
+  var c = currentCondo || {};
+  var mN = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  var mAnoNome = mN[(q.mes||1)-1]+' de '+(q.ano||2026);
+  var nRec = (q.ano||2026)+'/'+String(q.mes||1).padStart(2,'0')+'-'+(f.codigo||'?');
+  var dataPag = q.data_pagamento ? new Date(q.data_pagamento).toLocaleDateString('pt-PT') : new Date().toLocaleDateString('pt-PT');
+  var valor = parseFloat(q.valor_pago||0);
+  var condoNome = displayNomeCondo(c.nome||'');
+  var tipoQuota = q.tipo === 'extraordinaria' ? 'Quota extraordinária' : 'Quota de condomínio';
+
+  var { jsPDF } = window.jspdf;
+  var doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+  var W = 210, M = 20, y = 0;
+
+  // Cabeçalho
+  doc.setFillColor(13,24,37); doc.rect(0,0,W,40,'F');
+  doc.setFillColor(0,212,255); doc.rect(0,40,W,1.2,'F');
+  doc.setTextColor(0,212,255); doc.setFont('helvetica','bold'); doc.setFontSize(9);
+  doc.text('RECIBO', W/2, 13, {align:'center'});
+  doc.setTextColor(255,255,255); doc.setFontSize(15);
+  doc.text(condoNome, W/2, 24, {align:'center'});
+  doc.setTextColor(190,195,205); doc.setFont('helvetica','normal'); doc.setFontSize(9);
+  var moradaCondo = [c.morada, [c.codigo_postal, c.cidade].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+  if (moradaCondo) doc.text(moradaCondo, W/2, 32, {align:'center'});
+
+  y = 54;
+  // Número e data
+  doc.setFillColor(245,248,250); doc.roundedRect(M, y, W-2*M, 18, 2, 2, 'F');
+  doc.setTextColor(40,40,40); doc.setFont('helvetica','bold'); doc.setFontSize(11);
+  doc.text('Recibo n.º ' + nRec, M+5, y+7);
+  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(90,90,90);
+  doc.text('Data de emissão: ' + new Date().toLocaleDateString('pt-PT'), M+5, y+13);
+  doc.text('Data de pagamento: ' + dataPag, W-M-5, y+13, {align:'right'});
+  y += 28;
+
+  // Recebemos de
+  doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(40,40,40);
+  doc.text('Recebemos de:', M, y); y += 6;
+  doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(60,60,60);
+  doc.text(f.proprietario_nome || 'Condómino', M+2, y); y += 5;
+  doc.text('Fração ' + (f.codigo||'—') + (f.permilagem ? '  ·  ' + f.permilagem + '‰' : ''), M+2, y); y += 5;
+  if (f.proprietario_nif) { doc.text('NIF: ' + f.proprietario_nif, M+2, y); y += 5; }
+  y += 6;
+
+  // Referente a
+  doc.setFont('helvetica','bold'); doc.text('Referente a:', M, y); y += 6;
+  doc.setFont('helvetica','normal'); doc.setTextColor(60,60,60);
+  doc.text(tipoQuota + ' — ' + mAnoNome, M+2, y); y += 5;
+  doc.text('Método de pagamento: ' + (q.metodo_pagamento||'Transferência Bancária'), M+2, y); y += 12;
+
+  // Valor em destaque
+  doc.setFillColor(0,212,255); doc.setDrawColor(0,180,220);
+  doc.roundedRect(M, y, W-2*M, 22, 3, 3, 'F');
+  doc.setTextColor(2,18,29); doc.setFont('helvetica','normal'); doc.setFontSize(10);
+  doc.text('VALOR RECEBIDO', M+6, y+8);
+  doc.setFont('helvetica','bold'); doc.setFontSize(22);
+  doc.text(valor.toFixed(2).replace('.',',') + ' EUR', W-M-6, y+14, {align:'right'});
+  y += 32;
+
+  // Por extenso
+  doc.setFont('helvetica','italic'); doc.setFontSize(9); doc.setTextColor(90,90,90);
+  doc.text('Quantia de ' + valorPorExtenso(valor) + '.', M, y); y += 12;
+
+  // Declaração de quitação
+  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(70,70,70);
+  var quitacao = doc.splitTextToSize('Para os devidos efeitos, declara-se quitada a importância acima referente à fração identificada. Este documento serve de recibo do pagamento efetuado ao condomínio. Isento de IVA nos termos do artigo 9.º do CIVA (gestão de condomínios).', W-2*M);
+  doc.text(quitacao, M, y); y += quitacao.length*5 + 14;
+
+  // Assinatura
+  doc.setDrawColor(180,180,180); doc.line(M, y, M+70, y); y += 5;
+  doc.setFontSize(9); doc.setTextColor(90,90,90);
+  doc.text('A Administração do Condomínio', M, y);
+
+  // Rodapé
+  doc.setDrawColor(220,220,220); doc.line(M, 285, W-M, 285);
+  doc.setFontSize(7); doc.setTextColor(150,150,150);
+  doc.text('COND.OS 2059 Pro · Documento gerado automaticamente · ' + condoNome, M, 290);
+  doc.text('Recibo ' + nRec, W-M, 290, {align:'right'});
+
+  doc.save('Recibo_' + nRec.replace(/\//g,'-') + '.pdf');
+  toast('🧾 Recibo ' + nRec + ' gerado!','ok');
+
+  // Registar no log de prova do portal
+  try {
+    await sb.from('mensagens').insert({
+      condominio_id: c.id, fracao_id: q.fracao_id, autor: 'admin',
+      texto: '🧾 RECIBO N.º ' + nRec + ' emitido — ' + tipoQuota + ' de ' + mAnoNome + ', valor ' + valor.toFixed(2).replace('.',',') + '€, pago a ' + dataPag + '.',
+      lida_admin: true, lida_condomino: false
+    });
+  } catch(e) { console.error('log recibo pdf:', e); }
+}
+
+// Valor por extenso (simplificado, para recibos)
+function valorPorExtenso(valor) {
+  var euros = Math.floor(valor);
+  var cent = Math.round((valor - euros) * 100);
+  var txt = euros + (euros === 1 ? ' euro' : ' euros');
+  if (cent > 0) txt += ' e ' + cent + (cent === 1 ? ' cêntimo' : ' cêntimos');
+  return txt;
+}
+
 async function enviarRecibo(qid) {
   var _qr = await carregarQuotasComFracoes({quotaId:qid}); var q = _qr[0];
   if (!q) { toast('Quota não encontrada','err'); return; }
@@ -7332,8 +7510,12 @@ async function markPago(qid, val) {
     });
     // 🏦 Fundo de reserva
     await transferirParaFundo(parseFloat(val), descQ, hoje, q.fracao_id);
+    // 🧾 Recibo automático (portal sempre; email se houver; carta se não)
+    var viaR = await processarRecibo(q, q.fracoes || {});
+    toast('Quota paga! Recibo ' + (viaR==='email'?'enviado por email':(viaR==='carta'?'pronto p/ carta':'no portal')) + '.','ok');
+  } else {
+    toast('Quota marcada como paga!','ok');
   }
-  toast('Quota marcada como paga!','ok');
   loadQuotas(); updateBadges();
 }
 
