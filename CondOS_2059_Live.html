@@ -637,7 +637,7 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.16-2203</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.16-2213</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -10739,7 +10739,18 @@ async function enviarConvocatoriaTodos(assembleiaId) {
         if (combinado) { anexoBase64 = combinado; anexoNome = 'Convocatoria_' + (anexarProcuracao?'Procuracao_':'') + (anexarNota?'NotaLegal_':'') + (f.codigo||'') + '.pdf'; }
       }
       var ok = await enviarEmailGmailComAnexo(f.proprietario_email, assunto, corpo, anexoBase64, anexoNome);
-      if (ok) enviados++; else falhas++;
+      if (ok) {
+        enviados++;
+        // 🛡️ PROVA no log do portal: convocatória enviada por email
+        try {
+          var dataConvE = a.data_assembleia ? new Date(a.data_assembleia).toLocaleDateString('pt-PT') : '';
+          await sb.from('mensagens').insert({
+            condominio_id: currentCondo.id, fracao_id: f.id, autor: 'admin',
+            texto: '📨 CONVOCATÓRIA enviada por email para ' + f.proprietario_email + '.\n\nAssembleia' + (dataConvE ? ' de ' + dataConvE : '') + '. Enviada a ' + new Date().toLocaleDateString('pt-PT') + ' às ' + new Date().toLocaleTimeString('pt-PT',{hour:'2-digit',minute:'2-digit'}) + '.',
+            lida_admin: true, lida_condomino: false
+          });
+        } catch(e) { console.error('log convocatoria email:', e); }
+      } else falhas++;
       await new Promise(function(r){ setTimeout(r, 400); });
     }
   }
@@ -10762,6 +10773,23 @@ async function enviarConvocatoriaTodos(assembleiaId) {
   }
   resumo += '<div style="font-size:11px;color:var(--t3);margin-top:12px;padding-top:10px;border-top:1px solid var(--b1);">A convocatória foi descarregada em PDF — imprime as cópias necessárias para as cartas registadas. Guarda os comprovativos de envio dos CTT.</div>';
   resumo += '</div>';
+
+  // 🛡️ PROVA no log do portal: convocatória enviada por carta (com a morada)
+  if (totalCartas > 0) {
+    var dataConvC = a.data_assembleia ? new Date(a.data_assembleia).toLocaleDateString('pt-PT') : '';
+    var hojeConvC = new Date().toLocaleDateString('pt-PT');
+    for (var ci = 0; ci < porCarta.concat(semContacto).length; ci++) {
+      var fc = porCarta.concat(semContacto)[ci];
+      var moradaFc = [fc.morada, fc.codigo_postal].filter(Boolean).join(', ') || '(morada por preencher)';
+      try {
+        await sb.from('mensagens').insert({
+          condominio_id: currentCondo.id, fracao_id: fc.id, autor: 'admin',
+          texto: '📬 CONVOCATÓRIA enviada por carta registada' + (tipoLabel==='Reg+AR'?' com aviso de receção':'') + '.\n\nMorada: ' + moradaFc + '\nAssembleia' + (dataConvC ? ' de ' + dataConvC : '') + '. Expedida a ' + hojeConvC + '.',
+          lida_admin: true, lida_condomino: false
+        });
+      } catch(e) { console.error('log convocatoria carta:', e); }
+    }
+  }
 
   // Descarregar o PDF das cartas personalizadas (folha de rosto + 1 convocatória por destinatário)
   if (totalCartas > 0) { gerarPDFCartasConvocatoria(a, porCarta.concat(semContacto), dados, anexarProcuracao, anexarNota); }
@@ -10883,8 +10911,32 @@ async function enviarAtaAusentes(assembleiaId) {
         '</div>'+
         '<div style="background:#0d1825;padding:12px 28px;text-align:center;border-radius:0 0 10px 10px;"><div style="color:#5a6a79;font-size:10px;">COND.OS 2059 Pro · '+new Date().toLocaleDateString('pt-PT')+'</div></div></div>';
       var ok = await enviarEmailGmailComAnexo(f.proprietario_email, assunto, corpo, pdfBase64, nomePdf);
-      if (ok) enviados++; else falhas++;
+      if (ok) {
+        enviados++;
+        try {
+          await sb.from('mensagens').insert({
+            condominio_id: currentCondo.id, fracao_id: f.id, autor: 'admin',
+            texto: '📨 ATA enviada por email para ' + f.proprietario_email + ' (condómino ausente).\n\nDispõe do prazo legal para se pronunciar. Enviada a ' + new Date().toLocaleDateString('pt-PT') + ' às ' + new Date().toLocaleTimeString('pt-PT',{hour:'2-digit',minute:'2-digit'}) + '.',
+            lida_admin: true, lida_condomino: false
+          });
+        } catch(e) { console.error('log ata email:', e); }
+      } else falhas++;
       await new Promise(function(r){ setTimeout(r, 400); });
+    }
+  }
+
+  // 🛡️ PROVA no log: ata enviada por carta reg+AR aos ausentes (com morada)
+  if (porCarta.length > 0) {
+    for (var ai = 0; ai < porCarta.length; ai++) {
+      var fa = porCarta[ai];
+      var moradaFa = [fa.morada, fa.codigo_postal].filter(Boolean).join(', ') || '(morada por preencher)';
+      try {
+        await sb.from('mensagens').insert({
+          condominio_id: currentCondo.id, fracao_id: fa.id, autor: 'admin',
+          texto: '📬 ATA enviada por carta registada com aviso de receção (condómino ausente).\n\nMorada: ' + moradaFa + '\nExpedida a ' + new Date().toLocaleDateString('pt-PT') + '. Dispõe do prazo legal para se pronunciar.',
+          lida_admin: true, lida_condomino: false
+        });
+      } catch(e) { console.error('log ata carta:', e); }
     }
   }
 
