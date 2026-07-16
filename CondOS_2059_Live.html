@@ -12,6 +12,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.x/tabler-icons.min.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -636,7 +637,7 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.16-1619</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.16-1635</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -8347,6 +8348,7 @@ function abrirModalGenerico(titulo, html) {
   document.getElementById('mo-generico').style.display = 'flex';
 }
 function fecharModalGenerico() {
+  if (typeof pararLeitorQR === 'function') pararLeitorQR();
   document.getElementById('mo-generico').style.display = 'none';
 }
 
@@ -9328,10 +9330,98 @@ function salaTab(tab) {
   else if (tab === 'livro') renderSalaLivro(c);
 }
 
+// 📷 Leitor de QR para validar presenças na assembleia
+var _qrScanner = null;
+
+function abrirLeitorQRPresenca() {
+  if (typeof Html5Qrcode === 'undefined') { toast('Leitor de QR não carregou. Verifica a ligação.','err'); return; }
+  var h = '<div style="padding:2px;">';
+  h += '<div style="font-size:11.5px;color:var(--t2);margin-bottom:12px;">Aponta a câmara ao QR que o condómino tem na convocatória. Assim que for lido, a presença é marcada automaticamente.</div>';
+  h += '<div id="qr-reader" style="width:100%;border-radius:10px;overflow:hidden;"></div>';
+  h += '<div id="qr-reader-status" style="text-align:center;font-size:12px;color:var(--t2);margin-top:12px;min-height:20px;"></div>';
+  h += '<div id="qr-reader-lidos" style="margin-top:8px;"></div>';
+  h += '</div>';
+  abrirModalGenerico('📷 Validar Presenças por QR', h);
+
+  setTimeout(function(){
+    _qrScanner = new Html5Qrcode('qr-reader');
+    _qrScanner.start(
+      { facingMode: 'environment' },
+      { fps: 10, qrbox: { width: 220, height: 220 } },
+      onQRPresencaLido,
+      function(){} // ignora erros de leitura por frame
+    ).catch(function(err){
+      document.getElementById('qr-reader-status').innerHTML = '<span style="color:var(--red);">Não consegui aceder à câmara. Verifica as permissões do navegador.</span>';
+    });
+  }, 200);
+}
+
+var _qrUltimoLido = '';
+var _qrLidosSet = {};
+
+async function onQRPresencaLido(texto) {
+  // Evitar ler o mesmo repetidamente em milissegundos
+  if (texto === _qrUltimoLido) return;
+  _qrUltimoLido = texto;
+  setTimeout(function(){ if (_qrUltimoLido === texto) _qrUltimoLido = ''; }, 2500);
+
+  // O QR contém o link do portal com ?t=TOKEN — extrair o token
+  var token = texto;
+  var m = texto.match(/[?&]t=([^&]+)/);
+  if (m) token = decodeURIComponent(m[1]);
+
+  // Encontrar a fração por token
+  var f = fracoes.find(function(fr){ return fr.token_acesso === token; });
+  var statusEl = document.getElementById('qr-reader-status');
+
+  if (!f) {
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--amber);">⚠️ QR não reconhecido neste condomínio.</span>';
+    return;
+  }
+  if (_qrLidosSet[f.id]) {
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--cyan);">' + f.codigo + ' — ' + (f.proprietario_nome||'') + ' já estava marcado ✓</span>';
+    return;
+  }
+
+  // Marcar presente!
+  _qrLidosSet[f.id] = true;
+  await marcarPresenca(f.id, 'presente');
+  try { navigator.vibrate && navigator.vibrate(120); } catch(e){}
+  if (statusEl) statusEl.innerHTML = '<span style="color:var(--green);font-weight:700;">✅ ' + f.codigo + ' — ' + (f.proprietario_nome||'') + ' marcado PRESENTE!</span>';
+
+  // Lista dos lidos nesta sessão
+  var lidosEl = document.getElementById('qr-reader-lidos');
+  if (lidosEl) {
+    var linha = document.createElement('div');
+    linha.style.cssText = 'display:flex;align-items:center;gap:8px;padding:7px 10px;background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.25);border-radius:8px;margin-bottom:6px;font-size:12px;';
+    linha.innerHTML = '<span style="font-size:15px;">✅</span><div><strong style="color:var(--green);">' + f.codigo + '</strong> · ' + (f.proprietario_nome||'') + '</div>';
+    lidosEl.insertBefore(linha, lidosEl.firstChild);
+  }
+}
+
+function pararLeitorQR() {
+  if (_qrScanner) {
+    try { _qrScanner.stop().then(function(){ _qrScanner.clear(); }).catch(function(){}); } catch(e){}
+    _qrScanner = null;
+  }
+  _qrLidosSet = {};
+  _qrUltimoLido = '';
+}
+
 function renderSalaPresencas() {
   // Contar pré-confirmações do portal (ainda por confirmar na sala)
   var preConf = Object.keys(_salaPortalAnuncio);
   var html = '<div style="max-height:340px;overflow-y:auto;">';
+
+  // 📷 Leitor de QR para validar presenças (o condómino mostra o QR da convocatória)
+  var bloqueadoSessao = (_salaAssembleia && _salaAssembleia.estado_sessao === 'encerrada');
+  if (!bloqueadoSessao) {
+    html += '<div style="background:rgba(139,92,246,.08);border:1px solid rgba(139,92,246,.3);border-radius:8px;padding:10px 13px;margin-bottom:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">';
+    html += '<div style="flex:1;min-width:160px;"><div style="font-size:12px;font-weight:700;color:#b48cff;">📷 Validar presença por QR</div><div style="font-size:10.5px;color:var(--t2);margin-top:2px;">O condómino mostra o QR da convocatória. Lês e fica presente automaticamente — sem enganos.</div></div>';
+    html += '<button onclick="abrirLeitorQRPresenca()" style="background:#b48cff;border:none;color:#1a1030;border-radius:8px;padding:9px 16px;font-size:12px;font-weight:700;cursor:pointer;">📷 Abrir leitor</button>';
+    html += '</div>';
+  }
+
   if (preConf.length) {
     html += '<div style="background:rgba(0,212,255,.08);border:1px solid rgba(0,212,255,.25);border-radius:8px;padding:9px 13px;margin-bottom:10px;font-size:11.5px;color:var(--cyan);line-height:1.5;">📱 <strong>' + preConf.length + ' pré-confirmação(ões) pelo portal</strong> — isto é uma <strong>previsão</strong>, não conta para o quórum. Marca "Presente" só quando o condómino chegar mesmo à sala.</div>';
   }
@@ -10369,6 +10459,30 @@ async function gerarConvocatoriaPDF(dados, assembleiaId) {
   });
   y += 10;
 
+  // 📷 QR de presença (só na versão individual por fração)
+  if (dados._fracaoQR && dados._fracaoQR.token_acesso && window.QRCode) {
+    if (y > 235) { doc.addPage(); y = 30; }
+    y += 6;
+    var baseConv = location.href.substring(0, location.href.lastIndexOf('/') + 1);
+    var urlQR = baseConv + 'portal.html?t=' + dados._fracaoQR.token_acesso;
+    try {
+      var tmpQRc = document.createElement('div');
+      new QRCode(tmpQRc, { text: urlQR, width: 200, height: 200, colorDark:'#000000', colorLight:'#ffffff', correctLevel: QRCode.CorrectLevel.M });
+      await new Promise(function(r){ setTimeout(r, 260); });
+      var imgQc = tmpQRc.querySelector('img') || tmpQRc.querySelector('canvas');
+      var dataQc = imgQc.tagName === 'IMG' ? imgQc.src : imgQc.toDataURL('image/png');
+      doc.setDrawColor(139,92,246); doc.setLineWidth(0.4);
+      doc.roundedRect(M, y, W-2*M, 44, 2, 2, 'S');
+      doc.addImage(dataQc, 'PNG', M+4, y+4, 36, 36);
+      doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(110,80,200);
+      doc.text('O seu codigo de presenca', M+46, y+11);
+      doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(90,90,90);
+      var notaQc = doc.splitTextToSize('Fracao ' + (dados._fracaoQR.codigo||'') + '. Apresente este codigo QR a entrada da assembleia. A administracao le-o e a sua presenca fica registada automaticamente, sem enganos. Este codigo e pessoal da sua fracao.', W-2*M-50);
+      doc.text(notaQc, M+46, y+18);
+      y += 48;
+    } catch(e) { console.error('QR convocatoria:', e); }
+  }
+
   // Assinatura
   if (y > 250) { doc.addPage(); y = 30; }
   doc.setFontSize(10); doc.setTextColor(40,45,50);
@@ -10903,7 +11017,7 @@ function gerarNotaInformativaNoDoc(doc) {
 async function combinarConvocatoriaProcuracao(a, f, dadosConv, comProcuracao, comNota) {
   try {
     // Gerar uma convocatória FRESCA (para não acumular no mesmo doc entre condóminos)
-    var dadosFresh = Object.assign({}, dadosConv, { _retornarDoc: true });
+    var dadosFresh = Object.assign({}, dadosConv, { _retornarDoc: true, _fracaoQR: f });
     var convRes = await gerarConvocatoriaPDF(dadosFresh, a.id);
     if (!convRes || !convRes.doc) return null;
     var docFinal = convRes.doc;
