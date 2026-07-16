@@ -636,7 +636,7 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.16-1606</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.16-1613</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -1299,11 +1299,11 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
 
         <!-- KPIs do ano -->
         <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:16px;">
-          <div class="kpi kpi-click" style="border-top:2px solid var(--green);cursor:pointer;" onclick="nav('financeiro')" title="Ver os movimentos de entrada">
+          <div class="kpi kpi-click" style="border-top:2px solid var(--green);cursor:pointer;" onclick="irMovimentosFiltrado('entradas')" title="Ver os movimentos de entrada">
             <div class="kpi-label">Receitas (quotas pagas)</div>
             <div class="kpi-val" id="c-receitas">0<span>€</span></div>
           </div>
-          <div class="kpi kpi-click" style="border-top:2px solid var(--red);cursor:pointer;" onclick="nav('financeiro')" title="Ver os movimentos de saída">
+          <div class="kpi kpi-click" style="border-top:2px solid var(--red);cursor:pointer;" onclick="irMovimentosFiltrado('saidas')" title="Ver os movimentos de saída">
             <div class="kpi-label">Despesas pagas</div>
             <div class="kpi-val" id="c-despesas">0<span>€</span></div>
           </div>
@@ -7875,6 +7875,12 @@ async function apagarDuplicado(id, btn) {
 
 var _movFiltro = 'tudo';
 function filtrarMovimentos(f) { _movFiltro = f; renderMovimentos(); }
+// Navegar para Movimentos já com um filtro aplicado (usado pelos KPIs do Fecho do Ano)
+function irMovimentosFiltrado(f) {
+  _movFiltro = f;
+  nav('financeiro');
+  setTimeout(function(){ if (typeof renderMovimentos === 'function') renderMovimentos(); }, 350);
+}
 
 function renderMovimentos() {
   var movs = window._movsCache || [];
