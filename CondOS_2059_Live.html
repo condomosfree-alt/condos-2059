@@ -637,7 +637,7 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.16-1635</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.16-2152</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -8184,7 +8184,13 @@ async function imprimirDespesa(despesaId) {
 // 💸 Marcar despesa como PAGA → cria o movimento de SAÍDA (o dinheiro sai da conta = aparece no extrato)
 async function marcarDespesaPaga(despesaId) {
   var d = _despesasAll.find(function(x){ return x.id === despesaId; });
-  if (!d) return;
+  // Se não está em memória, buscar da BD (evita falha silenciosa)
+  if (!d) {
+    var dR = await sb.from('despesas').select('*').eq('id', despesaId).single();
+    if (dR.error || !dR.data) { toast('Despesa não encontrada','err'); return; }
+    d = dR.data;
+  }
+  if (d.estado === 'paga') { toast('Esta despesa já está paga.','ok'); return; }
   var valor = parseFloat(d.valor_total||0);
   if (!valor) { toast('A despesa não tem valor','err'); return; }
 
@@ -8195,10 +8201,14 @@ async function marcarDespesaPaga(despesaId) {
   if (!await confirmar(msg, {titulo:'Registar pagamento', tipo:'info', icon:'💸', okTexto:'Sim, foi pago'})) return;
 
   // 1) Criar o MOVIMENTO de saída (é isto que faz o extrato bater certo com o banco)
+  var catMov = 'Despesa';
+  if (d.tipo === 'reparacao') catMov = 'Manutenção';
+  else if (d.tipo === 'obra') catMov = 'Obras';
+  else if (/postal|convocat|ata|correio|CTT|carta/i.test(d.descricao||'')) catMov = 'Correio';
   var mov = await sb.from('movimentos').insert({
     condominio_id: currentCondo.id,
     tipo: 'despesa',
-    categoria: (d.tipo === 'reparacao' ? 'Manutenção' : (d.tipo === 'obra' ? 'Obras' : 'Despesa')),
+    categoria: catMov,
     descricao: d.descricao || 'Despesa',
     valor: valor,
     data_movimento: hoje,
@@ -8208,10 +8218,12 @@ async function marcarDespesaPaga(despesaId) {
   if (mov.error) { toast('Erro ao registar movimento: ' + mov.error.message, 'err'); return; }
 
   // 2) Marcar a despesa como paga
-  await sb.from('despesas').update({ estado: 'paga' }).eq('id', d.id);
+  var upd = await sb.from('despesas').update({ estado: 'paga' }).eq('id', d.id);
+  if (upd.error) { toast('Movimento criado, mas erro ao marcar paga: ' + upd.error.message, 'err'); }
 
   toast('💸 Pagamento registado! Saiu ' + valor.toFixed(2).replace('.',',') + '€ — já aparece no extrato.','ok');
-  loadDespesas();
+  await loadDespesas();
+  if (typeof loadMovimentos === 'function') loadMovimentos();
   verificarAvisosGerais();
 }
 
