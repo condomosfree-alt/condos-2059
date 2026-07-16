@@ -632,7 +632,7 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.16-0837</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.16-1555</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -1341,6 +1341,22 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
             <div id="extrato-meses" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
           </div>
           <div id="extrato-detalhe" style="padding:8px 16px 16px;"></div>
+        </div>
+
+        <!-- Prestação de Contas Anual -->
+        <div class="panel" style="margin-top:16px;border:1px solid rgba(0,212,255,.25);">
+          <div class="ph">
+            <span class="pt">📊 Prestação de Contas Anual</span>
+            <span class="pm">Documento oficial para aprovar em assembleia (Art. 1436.º CC)</span>
+          </div>
+          <div style="padding:14px 16px 16px;">
+            <div style="font-size:11.5px;color:var(--t2);margin-bottom:12px;line-height:1.5;">O síndico é obrigado a prestar contas à assembleia até <strong>31 de março</strong> de cada ano. Este documento reúne receitas, despesas, saldo, fundo de reserva e devedores do ano — pronto a apresentar e aprovar.</div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <label style="font-size:11px;color:var(--t2);">Ano:</label>
+              <select id="pc-ano" class="fi" style="width:100px;font-size:12px;padding:6px;"></select>
+              <button class="btn-primary" style="font-size:12px;" onclick="gerarPrestacaoContas()">📊 Gerar Prestação de Contas</button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -14794,6 +14810,19 @@ async function loadContas() {
   });
 
   renderContasOVR(rubricas, despesas, emitido, receitas, despTodas);
+  // Preencher anos da prestação de contas
+  var selPC = document.getElementById('pc-ano');
+  if (selPC && !selPC.options.length) {
+    var anoAtual = new Date().getFullYear();
+    for (var aPC = anoAtual; aPC >= anoAtual-5; aPC--) {
+      var opt = document.createElement('option');
+      opt.value = aPC; opt.textContent = aPC;
+      if (aPC === anoAtual-1) opt.selected = true; // por defeito, o ano anterior (é o que se presta)
+      selPC.appendChild(opt);
+    }
+    // se não houver ano anterior selecionável, fica o atual
+    if (selPC.selectedIndex < 0) selPC.selectedIndex = 0;
+  }
   renderContasMapa(quotas, despesas, ano);
   carregarExtrato(ano);
 
@@ -15138,6 +15167,190 @@ function abrirExtratoMes(mes, ano) {
 
   det.innerHTML = h;
   det.scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+// 📊 PRESTAÇÃO DE CONTAS ANUAL (Art. 1436.º CC) — documento oficial para assembleia
+async function gerarPrestacaoContas() {
+  if (!window.jspdf || !window.jspdf.jsPDF) { toast('Biblioteca PDF não carregada','err'); return; }
+  var ano = parseInt(document.getElementById('pc-ano').value) || new Date().getFullYear();
+  toast('A preparar a prestação de contas de ' + ano + '…','ok');
+
+  var c = currentCondo || {};
+  var condoNome = displayNomeCondo(c.nome||'');
+  var eur = function(v){ return parseFloat(v||0).toFixed(2).replace('.',',') + ' EUR'; };
+
+  // ---- RECOLHA DE DADOS ----
+  // Movimentos do ano
+  var iniAno = ano + '-01-01', fimAno = ano + '-12-31';
+  var mvR = await sb.from('movimentos').select('*').eq('condominio_id', c.id).gte('data_movimento', iniAno).lte('data_movimento', fimAno);
+  var movs = mvR.data || [];
+  var receitas = movs.filter(function(m){ return m.tipo === 'receita' && m.conta !== 'reserva'; });
+  var despesas = movs.filter(function(m){ return m.tipo !== 'receita' && m.conta !== 'reserva'; });
+  var totRec = receitas.reduce(function(s,m){ return s + parseFloat(m.valor||0); }, 0);
+  var totDesp = despesas.reduce(function(s,m){ return s + parseFloat(m.valor||0); }, 0);
+
+  // Receitas por categoria
+  var recCat = {}; receitas.forEach(function(m){ var k = m.categoria||'Outros'; recCat[k] = (recCat[k]||0) + parseFloat(m.valor||0); });
+  // Despesas por categoria
+  var despCat = {}; despesas.forEach(function(m){ var k = m.categoria||'Outros'; despCat[k] = (despCat[k]||0) + parseFloat(m.valor||0); });
+
+  // Saldo inicial da conta (antes do ano) + movimentos até fim do ano
+  var todosR = await sb.from('movimentos').select('tipo,valor,data_movimento,conta').eq('condominio_id', c.id).lte('data_movimento', fimAno);
+  var todos = todosR.data || [];
+  var antesAno = todos.filter(function(m){ return m.data_movimento < iniAno && m.conta !== 'reserva'; });
+  var saldoInicialConta = parseFloat(c.saldo_inicial_conta||0) + antesAno.reduce(function(s,m){ return s + (m.tipo==='receita'?parseFloat(m.valor||0):-parseFloat(m.valor||0)); }, 0);
+  var saldoFinalConta = saldoInicialConta + totRec - totDesp;
+
+  // Fundo de reserva
+  var fundoR = await sb.from('movimentos').select('tipo,valor,data_movimento').eq('condominio_id', c.id).eq('conta','reserva').lte('data_movimento', fimAno);
+  var fundoMovs = fundoR.data || [];
+  var fundoSaldo = parseFloat(c.fundo_saldo_inicial||0) + fundoMovs.reduce(function(s,m){ return s + (m.tipo==='receita'?parseFloat(m.valor||0):-parseFloat(m.valor||0)); }, 0);
+  var fundoAnoEnt = fundoMovs.filter(function(m){ return m.tipo==='receita' && m.data_movimento>=iniAno; }).reduce(function(s,m){ return s+parseFloat(m.valor||0); }, 0);
+
+  // Devedores (quotas por pagar até fim do ano)
+  var qDivR = await sb.from('quotas').select('mes,ano,valor_emitido,valor_pago,fracoes(codigo,proprietario_nome)').eq('condominio_id', c.id).neq('estado','pago').lte('ano', ano);
+  var devedores = {};
+  (qDivR.data||[]).forEach(function(q){
+    var div = parseFloat(q.valor_emitido||0) - parseFloat(q.valor_pago||0);
+    if (div <= 0) return;
+    var cod = q.fracoes ? q.fracoes.codigo : '?';
+    if (!devedores[cod]) devedores[cod] = { nome: q.fracoes ? q.fracoes.proprietario_nome : '', total: 0, n: 0 };
+    devedores[cod].total += div; devedores[cod].n++;
+  });
+  var totalDivida = Object.keys(devedores).reduce(function(s,k){ return s + devedores[k].total; }, 0);
+
+  // ---- GERAR PDF ----
+  var { jsPDF } = window.jspdf;
+  var doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+  var W = 210, M = 15, y = 0;
+
+  // Cabeçalho
+  doc.setFillColor(13,24,37); doc.rect(0,0,W,38,'F');
+  doc.setFillColor(0,212,255); doc.rect(0,38,W,1.2,'F');
+  doc.setTextColor(0,212,255); doc.setFont('helvetica','bold'); doc.setFontSize(9);
+  doc.text('PRESTACAO DE CONTAS', W/2, 12, {align:'center'});
+  doc.setTextColor(255,255,255); doc.setFontSize(16);
+  doc.text(condoNome, W/2, 22, {align:'center'});
+  doc.setTextColor(190,195,205); doc.setFont('helvetica','normal'); doc.setFontSize(10);
+  doc.text('Exercicio de ' + ano, W/2, 31, {align:'center'});
+  y = 48;
+
+  // Nota legal
+  doc.setFillColor(245,248,250); doc.roundedRect(M, y, W-2*M, 14, 2, 2, 'F');
+  doc.setTextColor(70,70,70); doc.setFont('helvetica','normal'); doc.setFontSize(8);
+  var nota = doc.splitTextToSize('Documento apresentado a Assembleia de Condominos nos termos do artigo 1436.o do Codigo Civil. Resume as receitas e despesas do exercicio, o saldo de tesouraria e o fundo comum de reserva.', W-2*M-6);
+  doc.text(nota, M+3, y+5);
+  y += 20;
+
+  // ---- RESUMO (os 4 números-chave) ----
+  doc.setTextColor(20,20,20); doc.setFont('helvetica','bold'); doc.setFontSize(12);
+  doc.text('1. Resumo do Exercicio', M, y); y += 7;
+  doc.autoTable({
+    startY: y, margin:{left:M, right:M},
+    head: [['', 'Valor']],
+    body: [
+      ['Saldo inicial (1 de janeiro)', eur(saldoInicialConta)],
+      ['(+) Total de receitas', eur(totRec)],
+      ['(-) Total de despesas', eur(totDesp)],
+      ['(=) Saldo final (31 de dezembro)', eur(saldoFinalConta)]
+    ],
+    theme:'grid', headStyles:{fillColor:[13,24,37], fontSize:9},
+    bodyStyles:{fontSize:9},
+    columnStyles:{0:{cellWidth:120}, 1:{halign:'right', fontStyle:'bold'}},
+    didParseCell:function(d){ if(d.row.index===3 && d.section==='body'){ d.cell.styles.fillColor=[230,245,250]; d.cell.styles.textColor=[0,120,160]; } }
+  });
+  y = doc.lastAutoTable.finalY + 8;
+
+  // ---- RECEITAS POR RUBRICA ----
+  doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(20,20,20);
+  doc.text('2. Receitas por rubrica', M, y); y += 2;
+  var recBody = Object.keys(recCat).sort(function(a,b){ return recCat[b]-recCat[a]; }).map(function(k){ return [k, eur(recCat[k])]; });
+  if (!recBody.length) recBody = [['(sem receitas registadas)', '']];
+  doc.autoTable({
+    startY: y+3, margin:{left:M, right:M},
+    head: [['Rubrica', 'Valor']], body: recBody,
+    foot: [['TOTAL', eur(totRec)]],
+    theme:'striped', headStyles:{fillColor:[34,180,110], fontSize:9}, bodyStyles:{fontSize:9},
+    footStyles:{fillColor:[230,248,238], textColor:[20,120,70], fontStyle:'bold', fontSize:9},
+    columnStyles:{1:{halign:'right'}}
+  });
+  y = doc.lastAutoTable.finalY + 8;
+
+  // ---- DESPESAS POR CATEGORIA ----
+  if (y > 235) { doc.addPage(); y = 20; }
+  doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(20,20,20);
+  doc.text('3. Despesas por categoria', M, y); y += 2;
+  var despBody = Object.keys(despCat).sort(function(a,b){ return despCat[b]-despCat[a]; }).map(function(k){ return [k, eur(despCat[k])]; });
+  if (!despBody.length) despBody = [['(sem despesas registadas)', '']];
+  doc.autoTable({
+    startY: y+3, margin:{left:M, right:M},
+    head: [['Categoria', 'Valor']], body: despBody,
+    foot: [['TOTAL', eur(totDesp)]],
+    theme:'striped', headStyles:{fillColor:[220,70,90], fontSize:9}, bodyStyles:{fontSize:9},
+    footStyles:{fillColor:[250,235,238], textColor:[150,30,50], fontStyle:'bold', fontSize:9},
+    columnStyles:{1:{halign:'right'}}
+  });
+  y = doc.lastAutoTable.finalY + 8;
+
+  // ---- FUNDO DE RESERVA ----
+  if (y > 245) { doc.addPage(); y = 20; }
+  doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(20,20,20);
+  doc.text('4. Fundo Comum de Reserva', M, y); y += 2;
+  doc.autoTable({
+    startY: y+3, margin:{left:M, right:M},
+    head: [['Fundo de Reserva (DL 268/94, Art. 4.o)', 'Valor']],
+    body: [
+      ['Contribuicoes recebidas em ' + ano, eur(fundoAnoEnt)],
+      ['Saldo acumulado do fundo (31 dez)', eur(fundoSaldo)]
+    ],
+    theme:'grid', headStyles:{fillColor:[139,92,246], fontSize:9}, bodyStyles:{fontSize:9},
+    columnStyles:{0:{cellWidth:120}, 1:{halign:'right', fontStyle:'bold'}}
+  });
+  y = doc.lastAutoTable.finalY + 8;
+
+  // ---- DEVEDORES ----
+  if (y > 230) { doc.addPage(); y = 20; }
+  doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(20,20,20);
+  doc.text('5. Quotas por cobrar', M, y); y += 2;
+  var devBody = Object.keys(devedores).sort(function(a,b){ return devedores[b].total-devedores[a].total; }).map(function(k){
+    return ['Fracao ' + k, devedores[k].nome || '—', devedores[k].n + ' quota(s)', eur(devedores[k].total)];
+  });
+  if (!devBody.length) devBody = [['Todas as quotas cobradas', '', '', eur(0)]];
+  doc.autoTable({
+    startY: y+3, margin:{left:M, right:M},
+    head: [['Fracao', 'Proprietario', 'Em atraso', 'Divida']],
+    body: devBody,
+    foot: [['TOTAL EM DIVIDA', '', '', eur(totalDivida)]],
+    theme:'striped', headStyles:{fillColor:[255,150,0], fontSize:9}, bodyStyles:{fontSize:8.5},
+    footStyles:{fillColor:[255,244,225], textColor:[150,90,0], fontStyle:'bold', fontSize:9},
+    columnStyles:{3:{halign:'right'}}
+  });
+  y = doc.lastAutoTable.finalY + 12;
+
+  // ---- APROVAÇÃO EM ASSEMBLEIA ----
+  if (y > 250) { doc.addPage(); y = 20; }
+  doc.setDrawColor(180,180,180); doc.setLineWidth(0.3);
+  doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(40,40,40);
+  doc.text('Aprovacao em Assembleia', M, y); y += 8;
+  doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(70,70,70);
+  doc.text('Estas contas foram apresentadas e submetidas a votacao da Assembleia de Condominos.', M, y); y += 12;
+  doc.line(M, y, M+70, y); doc.line(W-M-70, y, W-M, y); y += 5;
+  doc.setFontSize(8); doc.setTextColor(90,90,90);
+  doc.text('O Administrador / Sindico', M, y);
+  doc.text('Data: ____ / ____ / ________', W-M-70, y);
+
+  // Rodapé em todas as páginas
+  var nPag = doc.internal.getNumberOfPages();
+  for (var p=1; p<=nPag; p++) {
+    doc.setPage(p);
+    doc.setDrawColor(220,220,220); doc.line(M, 288, W-M, 288);
+    doc.setFontSize(7); doc.setTextColor(150,150,150);
+    doc.text('COND.OS 2059 Pro · Prestacao de Contas ' + ano + ' · ' + condoNome, M, 292);
+    doc.text('Pag. ' + p + '/' + nPag, W-M, 292, {align:'right'});
+  }
+
+  doc.save('Prestacao_Contas_' + ano + '_' + condoNome.replace(/[^a-zA-Z0-9]/g,'_') + '.pdf');
+  toast('📊 Prestação de contas de ' + ano + ' gerada!','ok');
 }
 
 async function exportarExtratoPDF(mes, ano) {
