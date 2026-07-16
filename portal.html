@@ -649,10 +649,27 @@ async function carregarQuotas() {
   }).join('');
 }
 
+var _contasAno = new Date().getFullYear();
+
+function mudarAnoContas(d) {
+  _contasAno += d;
+  _detalheAberto = null; // fecha detalhe aberto
+  carregarContas();
+}
+
 async function carregarContas() {
   const cont = document.getElementById('c-conteudo');
-  const ano = new Date().getFullYear();
-  document.getElementById('c-ano').textContent = '· ' + ano;
+  const ano = _contasAno;
+  const anoAtual = new Date().getFullYear();
+  // Cabeçalho com navegação de ano
+  const elAno = document.getElementById('c-ano');
+  if (elAno) {
+    elAno.innerHTML = '<span style="display:inline-flex;align-items:center;gap:8px;">' +
+      '<button onclick="mudarAnoContas(-1)" style="background:transparent;border:1px solid var(--b);color:var(--t2);border-radius:6px;width:22px;height:22px;font-size:12px;cursor:pointer;">‹</button>' +
+      '<span style="font-weight:700;color:var(--cyan);">' + ano + '</span>' +
+      (ano < anoAtual ? '<button onclick="mudarAnoContas(1)" style="background:transparent;border:1px solid var(--b);color:var(--t2);border-radius:6px;width:22px;height:22px;font-size:12px;cursor:pointer;">›</button>' : '<span style="width:22px;"></span>') +
+      '</span>';
+  }
   const [rc, rd] = await Promise.all([
     sb.rpc('portal_contas', { p_token: token, p_ano: ano }),
     sb.rpc('portal_despesas_tipo', { p_token: token, p_ano: ano })
@@ -841,7 +858,7 @@ async function verDetalheContas(tipo) {
   if (_detalheAberto === tipo) { _detalheAberto = null; box.innerHTML = ''; return; }
   _detalheAberto = tipo;
   box.innerHTML = '<div class="card" style="margin-top:12px;"><div class="skel">A carregar detalhe…</div></div>';
-  const ano = new Date().getFullYear();
+  const ano = _contasAno;
 
   // POR COBRAR — mostra as frações em dívida (sem nomes, RGPD)
   if (tipo === 'cobrar') {
@@ -878,35 +895,95 @@ async function verDetalheContas(tipo) {
   h += '<div class="sec-h">' + (entrada ? '💰 De onde veio o dinheiro' : '💸 Para onde foi o dinheiro') + '</div>';
   h += '<div style="font-size:11px;color:var(--t3);margin-bottom:10px;">' + r.data.length + ' movimentos em ' + ano + (entrada ? '. As quotas aparecem por fração, sem nomes.' : '.') + '</div>';
 
-  // Agrupar por mês
-  const porMes = {};
-  r.data.forEach(function(m){
-    const mes = new Date(m.data_movimento).getMonth();
-    if (!porMes[mes]) porMes[mes] = [];
-    porMes[mes].push(m);
-  });
+  // Normalizar nome da categoria (agrupa variantes e dá nomes amigáveis)
+  function nomeCategoria(cat) {
+    const c = (cat || '').toLowerCase();
+    if (/quota/.test(c)) return { nome: 'Quotas', emoji: '💰' };
+    if (/manuten|servi|repara/.test(c)) return { nome: 'Manutenção e reparações', emoji: '🔧' };
+    if (/obra/.test(c)) return { nome: 'Obras', emoji: '🔨' };
+    if (/energia|luz|edp|eletric/.test(c)) return { nome: 'Energia', emoji: '⚡' };
+    if (/agua|água/.test(c)) return { nome: 'Água', emoji: '💧' };
+    if (/limpeza/.test(c)) return { nome: 'Limpeza', emoji: '🧹' };
+    if (/seguro/.test(c)) return { nome: 'Seguro', emoji: '🛡️' };
+    if (/correio|postal|ctt|carta/.test(c)) return { nome: 'Correio', emoji: '📮' };
+    if (/banco|comiss/.test(c)) return { nome: 'Encargos bancários', emoji: '🏧' };
+    if (/gest|honorar|administ/.test(c)) return { nome: 'Gestão', emoji: '📋' };
+    if (/elevador/.test(c)) return { nome: 'Elevador', emoji: '🛗' };
+    if (/jardin/.test(c)) return { nome: 'Jardinagem', emoji: '🌳' };
+    return { nome: cat || 'Outros', emoji: '📌' };
+  }
+
   const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-  Object.keys(porMes).sort(function(a,b){ return b-a; }).forEach(function(mes){
-    const movs = porMes[mes];
-    const tot = movs.reduce(function(s,m){ return s + parseFloat(m.valor||0); }, 0);
-    h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0 6px;border-bottom:1px solid var(--b);margin-top:6px;">';
-    h += '<span style="font-size:11.5px;font-weight:700;color:var(--t2);">' + MESES[mes] + '</span>';
-    h += '<span style="font-size:12px;font-weight:700;color:' + (entrada?'var(--green)':'var(--red)') + ';">' + (entrada?'+':'-') + eur(tot) + '</span>';
-    h += '</div>';
-    movs.forEach(function(m){
-      h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:7px 0;font-size:12px;border-bottom:1px solid rgba(30,47,77,.4);">';
-      h += '<div style="flex:1;padding-right:10px;">';
-      h += '<div style="color:var(--t1);">' + escapar(m.descricao||'—') + '</div>';
-      h += '<div style="font-size:10px;color:var(--t3);margin-top:1px;">' + dataCurta(m.data_movimento) + (m.categoria ? ' · ' + escapar(m.categoria) : '') + '</div>';
-      h += '</div>';
-      h += '<div style="font-weight:600;color:' + (entrada?'var(--green)':'var(--red)') + ';white-space:nowrap;">' + (entrada?'+':'-') + eur(m.valor) + '</div>';
-      h += '</div>';
+
+  if (!entrada) {
+    // 💸 DESPESAS: agrupar por CATEGORIA (visão limpa) com expansão para detalhe
+    const porCat = {};
+    r.data.forEach(function(m){
+      const info = nomeCategoria(m.categoria);
+      if (!porCat[info.nome]) porCat[info.nome] = { emoji: info.emoji, total: 0, itens: [] };
+      porCat[info.nome].total += parseFloat(m.valor||0);
+      porCat[info.nome].itens.push(m);
     });
-  });
-  h += '<div style="font-size:10px;color:var(--t3);margin-top:12px;line-height:1.5;">Se vires algo que não percebes, fala com a administração pelas Mensagens. A transparência das contas é um direito (Art. 1436.º CC).</div>';
+    const totalGeral = Object.keys(porCat).reduce(function(s,k){ return s + porCat[k].total; }, 0);
+
+    const cats = Object.keys(porCat).sort(function(a,b){ return porCat[b].total - porCat[a].total; });
+    cats.forEach(function(cat, idx){
+      const g = porCat[cat];
+      const pct = totalGeral > 0 ? (g.total / totalGeral * 100) : 0;
+      const catId = 'cat-' + idx;
+      h += '<div style="margin-top:8px;">';
+      h += '<div onclick="togglePortalCat(\'' + catId + '\')" style="display:flex;justify-content:space-between;align-items:center;padding:10px 8px;background:rgba(255,84,112,.05);border-radius:8px;cursor:pointer;">';
+      h += '<div style="display:flex;align-items:center;gap:8px;"><span style="font-size:16px;">' + g.emoji + '</span><div><div style="font-size:12.5px;font-weight:700;color:var(--t1);">' + escapar(cat) + '</div><div style="font-size:9.5px;color:var(--t3);">' + g.itens.length + ' movimento' + (g.itens.length>1?'s':'') + ' · ' + pct.toFixed(0) + '% do total</div></div></div>';
+      h += '<div style="display:flex;align-items:center;gap:6px;"><span style="font-weight:700;color:var(--red);font-size:13px;">-' + eur(g.total) + '</span><span style="color:var(--t3);font-size:11px;">▾</span></div>';
+      h += '</div>';
+      // Detalhe (escondido por defeito)
+      h += '<div id="' + catId + '" style="display:none;padding:2px 8px 8px;">';
+      g.itens.sort(function(a,b){ return new Date(b.data_movimento) - new Date(a.data_movimento); }).forEach(function(m){
+        h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:6px 0;font-size:11.5px;border-bottom:1px solid rgba(30,47,77,.4);">';
+        h += '<div style="flex:1;padding-right:10px;"><div style="color:var(--t2);">' + escapar(m.descricao||'—') + '</div><div style="font-size:9.5px;color:var(--t3);">' + dataCurta(m.data_movimento) + '</div></div>';
+        h += '<div style="font-weight:600;color:var(--red);white-space:nowrap;">-' + eur(m.valor) + '</div>';
+        h += '</div>';
+      });
+      h += '</div></div>';
+    });
+    // Total geral
+    h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 8px;margin-top:10px;border-top:2px solid var(--b);">';
+    h += '<span style="font-size:13px;font-weight:700;color:var(--t1);">TOTAL GASTO</span>';
+    h += '<span style="font-size:15px;font-weight:700;color:var(--red);">-' + eur(totalGeral) + '</span>';
+    h += '</div>';
+  } else {
+    // 💰 RECEITAS: por mês (quotas)
+    const porMes = {};
+    r.data.forEach(function(m){
+      const mes = new Date(m.data_movimento).getMonth();
+      if (!porMes[mes]) porMes[mes] = [];
+      porMes[mes].push(m);
+    });
+    Object.keys(porMes).sort(function(a,b){ return b-a; }).forEach(function(mes){
+      const movs = porMes[mes];
+      const tot = movs.reduce(function(s,m){ return s + parseFloat(m.valor||0); }, 0);
+      h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0 6px;border-bottom:1px solid var(--b);margin-top:6px;">';
+      h += '<span style="font-size:11.5px;font-weight:700;color:var(--t2);">' + MESES[mes] + '</span>';
+      h += '<span style="font-size:12px;font-weight:700;color:var(--green);">+' + eur(tot) + '</span>';
+      h += '</div>';
+      movs.forEach(function(m){
+        h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:7px 0;font-size:12px;border-bottom:1px solid rgba(30,47,77,.4);">';
+        h += '<div style="flex:1;padding-right:10px;"><div style="color:var(--t1);">' + escapar(m.descricao||'—') + '</div><div style="font-size:10px;color:var(--t3);margin-top:1px;">' + dataCurta(m.data_movimento) + '</div></div>';
+        h += '<div style="font-weight:600;color:var(--green);white-space:nowrap;">+' + eur(m.valor) + '</div>';
+        h += '</div>';
+      });
+    });
+  }
+
+  h += '<div style="font-size:10px;color:var(--t3);margin-top:12px;line-height:1.5;">' + (entrada ? '' : 'Toca numa categoria para ver os movimentos. ') + 'Se vires algo que não percebes, fala com a administração pelas Mensagens. A transparência das contas é um direito (Art. 1436.º CC).</div>';
   h += '</div>';
   box.innerHTML = h;
   box.scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+function togglePortalCat(id) {
+  const el = document.getElementById(id);
+  if (el) el.style.display = (el.style.display === 'none') ? 'block' : 'none';
 }
 
 // 📱 Mostrar o QR em grande — para outro telemóvel ler na hora (assembleia)
