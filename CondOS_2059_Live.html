@@ -636,7 +636,7 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.16-1613</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.16-1619</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -7827,7 +7827,7 @@ async function loadMovimentos() {
   window._movsCache = movs;
   renderMovimentos();
   document.getElementById('dash-movimentos').innerHTML = movs.length ?
-    movs.slice(0,5).map(m=>`<div class="fin-row"><div class="fin-ico" style="background:${m.tipo==='receita'?'var(--gdim)':'var(--rdim)'};color:${m.tipo==='receita'?'var(--green)':'var(--red)'}"><i class="ti ti-arrow-${m.tipo==='receita'?'down':'up'}"></i></div><div><div class="fin-lbl">${m.descricao}</div><div class="fin-sub">${m.data_movimento}</div></div><div class="fin-amt ${m.tipo==='receita'?'pos':'neg'}">${m.tipo==='receita'?'+':'-'}${parseFloat(m.valor).toFixed(2)}€</div></div>`).join('') :
+    movs.slice(0,5).map(m=>`<div class="fin-row"><div class="fin-ico" style="background:${m.tipo==='receita'?'var(--gdim)':'var(--rdim)'};color:${m.tipo==='receita'?'var(--green)':'var(--red)'};font-weight:800;font-size:18px;">${m.tipo==='receita'?'↓':'↑'}</div><div><div class="fin-lbl">${m.descricao}</div><div class="fin-sub">${m.data_movimento}</div></div><div class="fin-amt ${m.tipo==='receita'?'pos':'neg'}">${m.tipo==='receita'?'+':'-'}${parseFloat(m.valor).toFixed(2)}€</div></div>`).join('') :
     emptyState('ti-chart-bar','Sem movimentos','');
 }
 
@@ -7884,7 +7884,7 @@ function irMovimentosFiltrado(f) {
 
 function renderMovimentos() {
   var movs = window._movsCache || [];
-  var catIco = {Quota:'ti-arrow-down',Serviço:'ti-tools',Seguro:'ti-shield',Obra:'ti-hammer',Energia:'ti-bolt',Limpeza:'ti-brush',Outro:'ti-dots'};
+  var catEmoji = {Quota:'💰','Fundo de Reserva':'🏦',Serviço:'🔧',Seguro:'🛡️',Obra:'🔨',Obras:'🔨',Manutenção:'🔧',Energia:'⚡',Limpeza:'🧹',Banco:'🏧',Água:'💧','A identificar':'❓',Legal:'⚖️',Ata:'📄'};
   var lista = movs;
   if (_movFiltro === 'entradas') lista = movs.filter(function(m){ return m.tipo === 'receita'; });
   if (_movFiltro === 'saidas') lista = movs.filter(function(m){ return m.tipo !== 'receita'; });
@@ -7908,7 +7908,7 @@ function renderMovimentos() {
 
   var html = lista.length ? lista.map(function(m){ return `
     <div class="fin-row">
-      <div class="fin-ico" style="background:${m.tipo==='receita'?'var(--gdim)':'var(--rdim)'};color:${m.tipo==='receita'?'var(--green)':'var(--red)'}"><i class="ti ${catIco[m.categoria]||'ti-circle'}" style="font-size:13px"></i></div>
+      <div class="fin-ico" style="background:${m.tipo==='receita'?'var(--gdim)':'var(--rdim)'};color:${m.tipo==='receita'?'var(--green)':'var(--red)'};font-size:16px;">${catEmoji[m.categoria] || (m.tipo==='receita'?'↓':'↑')}</div>
       <div><div class="fin-lbl">${m.descricao}</div><div class="fin-sub">${m.data_movimento||''} · ${m.categoria||''} · ${m.conta}</div></div>
       <div class="fin-amt ${m.tipo==='receita'?'pos':'neg'}">${m.tipo==='receita'?'+':'-'}${parseFloat(m.valor).toFixed(2)}€</div>
       <button class="tb-btn" style="font-size:10px;padding:3px 7px;margin-left:8px;opacity:.6;" onclick="editarMovimento('${m.id}')" title="Modificar este movimento (ex: identificar a quem pertence)">✏️</button>
