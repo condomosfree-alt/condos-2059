@@ -274,7 +274,7 @@ body{
 .sec-t::after{content:'';position:absolute;left:0;bottom:-4px;width:34px;height:2px;border-radius:2px;background:linear-gradient(90deg,var(--cyan),transparent)}
 
 /* 9 · Topbar com vidro */
-.topbar{backdrop-filter:blur(10px);background:rgba(8,13,20,.82)}
+.topbar{backdrop-filter:blur(10px);background:rgba(8,13,20,.82);position:relative;z-index:600;}
 
 /* 10 · Modais com profundidade */
 .mo-box,.modal-box,[class*="mo-"] .box{box-shadow:0 40px 100px rgba(0,0,0,.6)}
@@ -637,7 +637,7 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.17-1807</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.17-1813</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -3944,7 +3944,22 @@ function toggleSino(forcar) {
   var p = document.getElementById('sino-painel');
   if (!p) return;
   if (forcar === true) { p.style.display = 'none'; return; }
-  p.style.display = (p.style.display === 'block') ? 'none' : 'block';
+  var abrir = (p.style.display !== 'block');
+  if (abrir) {
+    // Posicionar com FIXED relativo ao botão do sino — escapa ao backdrop-filter da topbar
+    var btn = document.querySelector('button[onclick="toggleSino()"]');
+    if (btn) {
+      var r = btn.getBoundingClientRect();
+      p.style.position = 'fixed';
+      p.style.top = (r.bottom + 8) + 'px';
+      p.style.right = (window.innerWidth - r.right) + 'px';
+      p.style.left = 'auto';
+      p.style.zIndex = '10050';
+    }
+    p.style.display = 'block';
+  } else {
+    p.style.display = 'none';
+  }
 }
 
 async function loadCondData() {
