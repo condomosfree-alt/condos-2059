@@ -637,7 +637,7 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.16-2250</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.17-1323</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -11728,7 +11728,7 @@ async function saveAssembleia() {
     );
     if (!forcar) return;
   }
-  const { error } = await sb.from('assembleias').insert({condominio_id:currentCondo.id,tipo:document.getElementById('as-tipo').value,data_assembleia:dataVal,local_assembleia:document.getElementById('as-local').value,ordem_trabalhos:document.getElementById('as-ot').value,total_fracoes:fracoes.length,estado:'agendada'});
+  const { error } = await sb.from('assembleias').insert({condominio_id:currentCondo.id,tipo:document.getElementById('as-tipo').value,data_assembleia:dataVal,hora_assembleia:(document.getElementById('as-hora')?document.getElementById('as-hora').value:'20:00'),local_assembleia:document.getElementById('as-local').value,ordem_trabalhos:document.getElementById('as-ot').value,total_fracoes:fracoes.length,estado:'agendada'});
   if (error) { toast('Erro: '+error.message,'err'); return; }
   closeModal('mo-assembleia'); toast('Assembleia convocada!','ok');
   loadAssembleias();
