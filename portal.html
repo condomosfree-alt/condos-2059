@@ -980,24 +980,39 @@ async function toggleFundoDetalhe() {
 
 async function carregarDocumentos() {
   const cont = document.getElementById('d-lista');
-  const [res, resAtas] = await Promise.all([
+  const [res, resAtas, resConv] = await Promise.all([
     sb.rpc('portal_documentos', { p_token: token }),
-    sb.rpc('portal_atas', { p_token: token })
+    sb.rpc('portal_atas', { p_token: token }),
+    sb.rpc('portal_convocatorias', { p_token: token })
   ]);
   const docs = (!res.error && res.data) ? res.data : [];
   const atas = (!resAtas.error && resAtas.data) ? resAtas.data : [];
+  const convs = (!resConv.error && resConv.data) ? resConv.data : [];
   _atasCache = atas;
+  _convsCache = convs;
 
-  if (!docs.length && !atas.length) { cont.innerHTML = '<div class="empty">Ainda não há documentos partilhados.</div>'; return; }
+  if (!docs.length && !atas.length && !convs.length) { cont.innerHTML = '<div class="empty">Ainda não há documentos partilhados.</div>'; return; }
   // Marcar todos como vistos (o badge de novidade desaparece)
   try { localStorage.setItem('docs_vistos_' + token, String(docs.length)); } catch(e){}
   const bd = document.getElementById('badge-docs'); if (bd) bd.style.display = 'none';
 
   let h = '';
 
+  // 📨 CONVOCATÓRIAS — retiráveis (a próxima assembleia primeiro)
+  if (convs.length) {
+    h += '<div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;margin:4px 0 8px;">📨 Convocatórias</div>';
+    h += convs.map(function(cv, ci){
+      const dt = cv.data_assembleia ? new Date(cv.data_assembleia).toLocaleDateString('pt-PT') : '';
+      const futura = cv.data_assembleia && new Date(cv.data_assembleia) >= new Date(new Date().toDateString());
+      return '<div class="li"><div class="est" style="background:rgba(0,212,255,.12);">📨</div>' +
+        '<div class="m"><div class="t">Assembleia ' + (cv.tipo||'') + (futura?' <span style="font-size:9px;color:var(--green);font-weight:800;">· PRÓXIMA</span>':'') + '</div><div class="s">' + dt + (cv.hora_assembleia?' às '+cv.hora_assembleia:'') + '</div></div>' +
+        '<button onclick="retirarConvocatoriaPDF(' + ci + ')" style="background:rgba(0,212,255,.1);border:1px solid rgba(0,212,255,.4);color:var(--cyan);border-radius:8px;padding:5px 11px;font-size:10.5px;font-weight:700;cursor:pointer;white-space:nowrap;">🧾 Retirar</button></div>';
+    }).join('');
+  }
+
   // 📜 ATAS — retiráveis na hora (geradas no dispositivo)
   if (atas.length) {
-    h += '<div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;margin:4px 0 8px;">📜 Atas das assembleias</div>';
+    h += '<div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;margin:' + (convs.length?'14px':'4px') + ' 0 8px;">📜 Atas das assembleias</div>';
     h += atas.map(function(a, ai){
       const dt = a.data_assembleia ? new Date(a.data_assembleia).toLocaleDateString('pt-PT') : '';
       return '<div class="li"><div class="est" style="background:rgba(180,140,255,.12);">📋</div>' +
@@ -1009,8 +1024,13 @@ async function carregarDocumentos() {
   // 📄 Outros documentos (registos)
   if (docs.length) {
     const icons = { ata:'📋', regulamento:'📜', seguro:'🛡️', orcamento:'📊', balancete:'📈', conta:'💰', convocatoria:'📨' };
-    // Evitar duplicar: esconder registos de "Ata" se já temos as atas reais acima
-    const docsFiltrados = atas.length ? docs.filter(function(d){ return !(d.categoria||'').toLowerCase().includes('ata'); }) : docs;
+    // Evitar duplicar: esconder registos de "Ata"/"Convocatória" se já temos as versões retiráveis acima
+    const docsFiltrados = docs.filter(function(d){
+      const cat = (d.categoria||'').toLowerCase();
+      if (atas.length && cat.includes('ata')) return false;
+      if (convs.length && cat.includes('convocat')) return false;
+      return true;
+    });
     if (docsFiltrados.length) {
       h += '<div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 8px;">📄 Outros documentos</div>';
       h += docsFiltrados.map(function(d){
@@ -1026,6 +1046,73 @@ async function carregarDocumentos() {
 }
 
 var _atasCache = [];
+var _convsCache = [];
+
+// 📨 Gerar o PDF da convocatória na hora
+function retirarConvocatoriaPDF(ci) {
+  const cv = _convsCache[ci];
+  if (!cv) return;
+  if (!window.jspdf || !window.jspdf.jsPDF) { alert('O gerador de PDF ainda está a carregar. Tenta outra vez.'); return; }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+  const W = 210, M = 20;
+  const condoNome = window._condoNome || '';
+  const dt = cv.data_assembleia ? new Date(cv.data_assembleia).toLocaleDateString('pt-PT', {weekday:'long', day:'numeric', month:'long', year:'numeric'}) : '';
+
+  // Cabeçalho
+  doc.setFillColor(13,24,37); doc.rect(0,0,W,38,'F');
+  doc.setFillColor(0,212,255); doc.rect(0,38,W,1.2,'F');
+  doc.setTextColor(0,212,255); doc.setFont('helvetica','bold'); doc.setFontSize(10);
+  doc.text('CONVOCATORIA', W/2, 14, {align:'center'});
+  doc.setTextColor(255,255,255); doc.setFontSize(13);
+  doc.text(condoNome || 'Condominio', W/2, 24, {align:'center'});
+  doc.setTextColor(190,195,205); doc.setFont('helvetica','normal'); doc.setFontSize(9);
+  doc.text('Assembleia ' + (cv.tipo || 'de Condominos'), W/2, 32, {align:'center'});
+
+  let y = 52;
+  doc.setTextColor(30,30,30); doc.setFont('helvetica','normal'); doc.setFontSize(10.5);
+  const intro = 'Nos termos do artigo 1432.o do Codigo Civil, convocam-se os senhores condominos para a Assembleia ' + (cv.tipo||'') + ' a realizar:';
+  doc.splitTextToSize(intro, W-2*M).forEach(function(l){ doc.text(l, M, y); y += 6; });
+  y += 4;
+
+  // Caixa com data/hora/local
+  doc.setFillColor(245,248,250); doc.roundedRect(M, y, W-2*M, 26, 2, 2, 'F');
+  doc.setFont('helvetica','bold'); doc.setFontSize(10);
+  doc.text('📅 ' , M+5, y+9);
+  doc.text('Data:  ' + dt, M+6, y+9);
+  doc.text('Hora:  ' + (cv.hora_assembleia || '') + '  (2.a convocatoria: 30 minutos depois, com qualquer numero de presentes)', M+6, y+16);
+  doc.setFont('helvetica','normal');
+  doc.text('Local: ' + (cv.local_assembleia || ''), M+6, y+23);
+  y += 34;
+
+  // Ordem de trabalhos
+  doc.setFont('helvetica','bold'); doc.setFontSize(11.5);
+  doc.text('Ordem de Trabalhos', M, y); y += 8;
+  doc.setFont('helvetica','normal'); doc.setFontSize(10);
+  const pontos = String(cv.ordem_trabalhos||'').split('\n').filter(function(p){ return p.trim(); });
+  pontos.forEach(function(p){
+    const linhas = doc.splitTextToSize(p.trim(), W-2*M-6);
+    linhas.forEach(function(l, li){
+      if (y > 265) { doc.addPage(); y = 25; }
+      doc.text((li===0?'':'   ') + l, M+3, y);
+      y += 5.8;
+    });
+    y += 2;
+  });
+
+  y += 6;
+  if (y > 250) { doc.addPage(); y = 25; }
+  doc.setFontSize(8.5); doc.setTextColor(110,110,110);
+  const nota = 'Caso nao possa estar presente, podera fazer-se representar por procuracao. Esta copia foi retirada do Portal do Condomino; a convocatoria oficial foi enviada nos termos legais.';
+  doc.splitTextToSize(nota, W-2*M).forEach(function(l){ doc.text(l, M, y); y += 4.5; });
+
+  doc.setDrawColor(220,220,220); doc.line(M, 285, W-M, 285);
+  doc.setFontSize(7); doc.setTextColor(150,150,150);
+  doc.text('COND.OS 2059 Pro · Portal do Condomino · retirada em ' + new Date().toLocaleDateString('pt-PT'), M, 290);
+
+  const dtCurta = cv.data_assembleia ? new Date(cv.data_assembleia).toLocaleDateString('pt-PT').replace(/\//g,'-') : 'assembleia';
+  doc.save('Convocatoria_' + dtCurta + '.pdf');
+}
 
 // 📜 Gerar o PDF da ata na hora — "retirar" em vez de "abrir"
 function retirarAtaPDF(ai) {
