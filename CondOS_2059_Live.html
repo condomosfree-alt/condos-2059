@@ -637,7 +637,7 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.17-1830</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.17-1836</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -1577,6 +1577,7 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
         </div>
         <div id="orc-alertas" style="display:none;margin-bottom:16px;"></div>
         <div id="orc-alertas-cruzados" style="display:none;margin-bottom:16px;"></div>
+        <div id="orc-previsiveis" style="display:none;margin-bottom:16px;"></div>
         <div class="panel" style="margin-bottom:16px;">
           <div class="ph"><span class="pt">Rubricas Comuns — distribuídas por todos os blocos</span>
             <div id="orc-dist-blocos" style="display:flex;gap:12px;"></div>
@@ -14217,6 +14218,101 @@ function classLabel(r) {
   return '<span style="font-size:10px;background:rgba(0,230,118,.1);color:var(--green);padding:2px 7px;border-radius:4px;">✅ Comum</span>';
 }
 
+// 🗓️ CUSTOS PREVISÍVEIS — projeta manutenções periódicas para o ano do orçamento
+// Liga o Perfil do Edifício (manutenção) → Orçamento. A tua ideia: nunca ser
+// apanhado por uma despesa que já era esperada.
+function renderCustosPrevisiveis() {
+  var el = document.getElementById('orc-previsiveis');
+  if (!el) return;
+  var c = currentCondo || {};
+  var anoOrc = parseInt(document.getElementById('orc-ano-sel').value) || new Date().getFullYear();
+  var itens = [];
+
+  // Helper: dada uma última data e periodicidade em ANOS, cai no ano do orçamento?
+  function caiNoAno(ultimaData, proxData, periodoAnos) {
+    // Se há próxima data marcada, usa-a
+    if (proxData) {
+      var ano = new Date(proxData).getFullYear();
+      return ano === anoOrc;
+    }
+    // Senão, calcula a partir da última + periodicidade
+    if (ultimaData && periodoAnos) {
+      var base = new Date(ultimaData).getFullYear();
+      var n = anoOrc - base;
+      return n > 0 && (n % periodoAnos === 0);
+    }
+    return false;
+  }
+
+  // 1. Controlo de pragas (periodicidade típica: 1-2 anos)
+  if (caiNoAno(c.pragas_data, c.pragas_prox, 2)) {
+    var custoP = parseFloat(c.pragas_custo || 0) || 250;
+    itens.push({ nome:'🐜 Controlo de pragas', custo:custoP, motivo: c.pragas_prox ? 'Próxima intervenção agendada para ' + anoOrc : 'Ciclo ~2 anos desde ' + new Date(c.pragas_data).getFullYear() });
+  }
+  // 2. Limpeza de cisternas/depósitos de água (anual/bianual)
+  if (caiNoAno(c.cisternas_data, c.cisternas_prox, 1)) {
+    var custoC = parseFloat(c.cisternas_custo || 0) || 180;
+    itens.push({ nome:'💧 Limpeza de cisternas', custo:custoC, motivo: c.cisternas_prox ? 'Próxima limpeza agendada para ' + anoOrc : 'Ciclo anual' });
+  }
+  // 3. Inspeção de elevadores (BIANUAL — DL 320/2002)
+  var nElev = parseInt(c.num_elevadores || 0) || 0;
+  if (nElev > 0) {
+    // inspeção bianual — assume anos pares como referência se não houver data
+    var custoInsp = nElev * 120;
+    itens.push({ nome:'🛗 Inspeção periódica de elevador(es)', custo:custoInsp, motivo: nElev + ' elevador(es) · inspeção bianual obrigatória (verifica o ano exato do contrato)', incerto:true });
+  }
+  // 4. Certificado energético (validade ~10 anos) — renovar no ano em que caduca
+  if (c.cert_validade) {
+    var anoCad = new Date(c.cert_validade).getFullYear();
+    if (anoCad === anoOrc || (anoCad < anoOrc && anoCad >= new Date().getFullYear())) {
+      itens.push({ nome:'📋 Renovação do certificado energético', custo:250, motivo:'Caduca em ' + anoCad, incerto:true });
+    }
+  }
+  // 5. Manutenção de fachada (ciclo ~10 anos)
+  if (c.fachada_ano) {
+    var baseF = parseInt(c.fachada_ano);
+    var nF = anoOrc - baseF;
+    if (nF > 0 && nF % 10 === 0) {
+      var custoF = parseFloat(c.fachada_custo || 0) || (fracoes.length * 350);
+      itens.push({ nome:'🏛️ Pintura/reparação de fachada', custo:custoF, motivo:'Ciclo ~10 anos desde ' + baseF, incerto:true });
+    }
+  }
+
+  if (!itens.length) { el.style.display = 'none'; return; }
+
+  var total = itens.reduce(function(s,i){ return s + i.custo; }, 0);
+  var h = '<div class="panel" style="border:1px solid rgba(180,140,255,.3);">';
+  h += '<div class="ph"><span class="pt">🗓️ Custos previsíveis para ' + anoOrc + '</span><span class="pm">manutenções periódicas que já são esperadas este ano</span></div>';
+  h += '<div style="padding:14px 16px;">';
+  h += '<div style="font-size:11.5px;color:var(--t2);margin-bottom:12px;line-height:1.5;">Estes custos vêm do <strong>Perfil do Edifício → Manutenção</strong>. Se ainda não estão no orçamento acima, considera adicioná-los para não seres apanhado de surpresa.</div>';
+  itens.forEach(function(i){
+    h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid rgba(30,47,77,.4);">';
+    h += '<div style="flex:1;"><div style="font-size:13px;color:var(--text);font-weight:600;">' + i.nome + (i.incerto?' <span style="font-size:9px;color:var(--amber);">≈ estimado</span>':'') + '</div><div style="font-size:10.5px;color:var(--t3);">' + i.motivo + '</div></div>';
+    h += '<div style="display:flex;align-items:center;gap:10px;"><span style="font-weight:700;color:#b48cff;">' + i.custo.toFixed(2).replace('.',',') + '€</span>';
+    h += '<button onclick="adicionarRubricaPrevisivel(\'' + i.nome.replace(/'/g,"") + '\',' + i.custo + ')" style="background:rgba(180,140,255,.15);border:1px solid rgba(180,140,255,.4);color:#b48cff;border-radius:7px;padding:5px 11px;font-size:10.5px;font-weight:700;cursor:pointer;white-space:nowrap;">+ Orçamento</button></div>';
+    h += '</div>';
+  });
+  h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0 4px;margin-top:6px;border-top:2px solid var(--b1);">';
+  h += '<span style="font-size:12px;font-weight:700;color:var(--text);">Total previsível ' + anoOrc + '</span>';
+  h += '<span style="font-size:15px;font-weight:700;color:#b48cff;">' + total.toFixed(2).replace('.',',') + '€</span></div>';
+  h += '</div></div>';
+  el.innerHTML = h;
+  el.style.display = 'block';
+}
+
+// Adicionar um custo previsível como rubrica do orçamento
+async function adicionarRubricaPrevisivel(nome, valor) {
+  var ano = parseInt(document.getElementById('orc-ano-sel').value) || new Date().getFullYear();
+  if (!await confirmar('Adicionar "' + nome + '" (' + valor.toFixed(2).replace('.',',') + '€) ao orçamento de ' + ano + '?\n\nFica como rubrica comum. Podes ajustar o valor depois.', {titulo:'Adicionar ao orçamento', tipo:'info', icon:'🗓️', okTexto:'Sim, adicionar'})) return;
+  var ins = await sb.from('orcamento_rubricas').insert({
+    condominio_id: currentCondo.id, ano: ano, nome: nome,
+    valor_total: valor, tipo_distribuicao: 'comum', metodo_divisao: 'permilagem'
+  });
+  if (ins.error) { toast('Erro: ' + ins.error.message, 'err'); return; }
+  toast('🗓️ "' + nome + '" adicionado ao orçamento de ' + ano + '!', 'ok');
+  loadOrcamento();
+}
+
 function renderOrcamento() {
   try {
   const fcr = parseFloat(currentCondo.fcr_pct || 10);
@@ -14364,6 +14460,8 @@ function renderOrcamento() {
 
   // Resumo final
   renderResumoOrcamento(totalComum, totalBloco, totalBase, totalFCR, totalGeral);
+  // 🗓️ Custos previsíveis (manutenções periódicas → orçamento)
+  try { renderCustosPrevisiveis(); } catch(e) { console.error('custos previsíveis:', e); }
   } catch(e) {
     console.error('Erro renderOrcamento:', e.message, e.stack);
     toast('Erro ao renderizar orçamento — ver F12', 'err');
