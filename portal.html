@@ -372,6 +372,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
 const SB_URL = 'https://iopkxoabszhzjimjltir.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlvcGt4b2Fic3poemppbWpsdGlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEyNzc5MjQsImV4cCI6MjA5Njg1MzkyNH0.PwopXnx0v7kSXUeua1Y3fI3xPDIS8S62SzGBfwPwLSA';
@@ -515,6 +516,7 @@ async function iniciar() {
   if (res.error || !res.data || !res.data.length) { document.getElementById('invalido').style.display='block'; return; }
   const d = res.data[0];
   document.getElementById('app').style.display = 'block';
+  window._condoNome = d.condominio_nome || '';
   const nome = (d.proprietario_nome || 'Condómino');
   document.getElementById('t-nome').textContent = nome.split(' ').slice(0,2).join(' ');
   document.getElementById('t-av').textContent = (nome[0]||'C').toUpperCase();
@@ -760,16 +762,113 @@ async function carregarQuotas() {
   const cont = document.getElementById('q-lista');
   const res = await sb.rpc('portal_quotas', { p_token: token });
   if (res.error || !res.data || !res.data.length) { cont.innerHTML = '<div class="empty">Ainda não há quotas registadas.</div>'; return; }
-  cont.innerHTML = res.data.map(function(q){
+  _quotasCache = res.data;
+  cont.innerHTML = res.data.map(function(q, qi){
     const em = parseFloat(q.valor_emitido||0), pg = parseFloat(q.valor_pago||0), saldo = em - pg;
     let ic,bg,vTxt,vCor;
     if (saldo<=0.005 && pg>0) { ic='✅'; bg='rgba(34,229,132,.12)'; vTxt=eur(pg); vCor='var(--green)'; }
     else if (pg>0) { ic='🟡'; bg='rgba(255,179,0,.12)'; vTxt='falta '+eur(saldo); vCor='var(--amber)'; }
     else { ic='🔴'; bg='rgba(255,84,112,.12)'; vTxt=eur(em); vCor='var(--red)'; }
+    const pagoTotal = (saldo<=0.005 && pg>0);
     return '<div class="li"><div class="est" style="background:'+bg+';">'+ic+'</div>' +
       '<div class="m"><div class="t">'+mN[(q.mes||1)-1]+' '+q.ano+'</div><div class="s">'+(q.data_pagamento?('pago em '+new Date(q.data_pagamento).toLocaleDateString('pt-PT')):'por pagar')+'</div></div>' +
-      '<div class="v" style="color:'+vCor+';">'+vTxt+'</div></div>';
+      '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px;">' +
+      '<div class="v" style="color:'+vCor+';">'+vTxt+'</div>' +
+      (pagoTotal ? '<button onclick="gerarReciboPortal('+qi+')" style="background:rgba(0,212,255,.1);border:1px solid rgba(0,212,255,.35);color:var(--cyan);border-radius:8px;padding:4px 10px;font-size:10.5px;font-weight:700;cursor:pointer;">🧾 Recibo</button>' : '') +
+      '</div></div>';
   }).join('');
+}
+
+var _quotasCache = [];
+
+// Valor por extenso em português (para o recibo)
+function valorPorExtenso(v) {
+  v = Math.round(parseFloat(v||0) * 100) / 100;
+  const unid = ['','um','dois','três','quatro','cinco','seis','sete','oito','nove','dez','onze','doze','treze','catorze','quinze','dezasseis','dezassete','dezoito','dezanove'];
+  const dez = ['','','vinte','trinta','quarenta','cinquenta','sessenta','setenta','oitenta','noventa'];
+  const cent = ['','cento','duzentos','trezentos','quatrocentos','quinhentos','seiscentos','setecentos','oitocentos','novecentos'];
+  function ate999(n) {
+    if (n === 0) return '';
+    if (n === 100) return 'cem';
+    let s = '';
+    const c = Math.floor(n/100), r = n%100;
+    if (c) s += cent[c] + (r ? ' e ' : '');
+    if (r < 20) s += unid[r];
+    else { s += dez[Math.floor(r/10)]; if (r%10) s += ' e ' + unid[r%10]; }
+    return s;
+  }
+  const inteiro = Math.floor(v), cents = Math.round((v - inteiro) * 100);
+  let s = '';
+  if (inteiro >= 1000) {
+    const milhares = Math.floor(inteiro/1000);
+    s += (milhares === 1 ? 'mil' : ate999(milhares) + ' mil');
+    if (inteiro % 1000) s += (inteiro % 1000 < 100 ? ' e ' : ' ') + ate999(inteiro % 1000);
+  } else s = ate999(inteiro);
+  s += (inteiro === 1 ? ' euro' : ' euros');
+  if (cents) s += ' e ' + ate999(cents) + (cents === 1 ? ' cêntimo' : ' cêntimos');
+  return s || 'zero euros';
+}
+
+// 🧾 Gerar o recibo oficial da quota — na hora, no dispositivo do condómino
+function gerarReciboPortal(qi) {
+  const q = _quotasCache[qi];
+  if (!q) return;
+  if (!window.jspdf || !window.jspdf.jsPDF) { alert('O gerador de PDF ainda está a carregar. Tenta outra vez.'); return; }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+  const W = 210, M = 20;
+  const condoNome = window._condoNome || '';
+  const fracao = (document.getElementById('t-frac') ? document.getElementById('t-frac').textContent : '').replace('FRAÇÃO','').trim();
+  const nome = document.getElementById('t-nome') ? document.getElementById('t-nome').textContent : '';
+  const valor = parseFloat(q.valor_pago||0);
+  const numRecibo = q.ano + '/' + String(q.mes).padStart(2,'0') + '-' + fracao.split('·')[0].trim();
+
+  // Cabeçalho
+  doc.setFillColor(13,24,37); doc.rect(0,0,W,40,'F');
+  doc.setFillColor(0,212,255); doc.rect(0,40,W,1.2,'F');
+  doc.setTextColor(0,212,255); doc.setFont('helvetica','bold'); doc.setFontSize(10);
+  doc.text('RECIBO DE QUOTA DE CONDOMINIO', W/2, 15, {align:'center'});
+  doc.setTextColor(255,255,255); doc.setFontSize(14);
+  doc.text(condoNome || 'Condominio', W/2, 25, {align:'center'});
+  doc.setTextColor(190,195,205); doc.setFont('helvetica','normal'); doc.setFontSize(9);
+  doc.text('Recibo n.o ' + numRecibo, W/2, 33, {align:'center'});
+
+  let y = 56;
+  doc.setTextColor(30,30,30); doc.setFont('helvetica','normal'); doc.setFontSize(11);
+  const mesNome = mN[(q.mes||1)-1];
+  const dataPag = q.data_pagamento ? new Date(q.data_pagamento).toLocaleDateString('pt-PT') : '—';
+
+  const linhas = [
+    ['Fracao:', fracao],
+    ['Condomino:', nome || '—'],
+    ['Quota referente a:', mesNome + ' de ' + q.ano],
+    ['Valor pago:', valor.toFixed(2).replace('.',',') + ' EUR'],
+    ['(' + valorPorExtenso(valor) + ')', ''],
+    ['Data do pagamento:', dataPag]
+  ];
+  linhas.forEach(function(l){
+    doc.setFont('helvetica','bold'); doc.text(l[0], M, y);
+    doc.setFont('helvetica','normal'); doc.text(l[1], M+55, y);
+    y += 9;
+  });
+
+  y += 6;
+  doc.setFillColor(240,250,244); doc.roundedRect(M, y, W-2*M, 22, 2, 2, 'F');
+  doc.setTextColor(20,120,70); doc.setFont('helvetica','bold'); doc.setFontSize(11);
+  doc.text('QUITACAO', M+6, y+9);
+  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(60,60,60);
+  doc.text('Declara-se, para os devidos efeitos, que a quota acima identificada se encontra paga.', M+6, y+16);
+  y += 32;
+
+  doc.setFontSize(8); doc.setTextColor(120,120,120);
+  doc.text('Operacao isenta de IVA nos termos do artigo 9.o do CIVA.', M, y); y += 5;
+  doc.text('Documento gerado eletronicamente pelo Portal do Condomino em ' + new Date().toLocaleDateString('pt-PT') + ' as ' + new Date().toLocaleTimeString('pt-PT',{hour:'2-digit',minute:'2-digit'}) + '.', M, y);
+
+  doc.setDrawColor(220,220,220); doc.line(M, 280, W-M, 280);
+  doc.setFontSize(7); doc.setTextColor(150,150,150);
+  doc.text('COND.OS 2059 Pro · Portal do Condomino', M, 285);
+
+  doc.save('Recibo_' + numRecibo.replace(/[\/\s]/g,'_') + '.pdf');
 }
 
 var _contasAno = new Date().getFullYear();
@@ -881,18 +980,99 @@ async function toggleFundoDetalhe() {
 
 async function carregarDocumentos() {
   const cont = document.getElementById('d-lista');
-  const res = await sb.rpc('portal_documentos', { p_token: token });
-  if (res.error || !res.data || !res.data.length) { cont.innerHTML = '<div class="empty">Ainda não há documentos partilhados.</div>'; return; }
+  const [res, resAtas] = await Promise.all([
+    sb.rpc('portal_documentos', { p_token: token }),
+    sb.rpc('portal_atas', { p_token: token })
+  ]);
+  const docs = (!res.error && res.data) ? res.data : [];
+  const atas = (!resAtas.error && resAtas.data) ? resAtas.data : [];
+  _atasCache = atas;
+
+  if (!docs.length && !atas.length) { cont.innerHTML = '<div class="empty">Ainda não há documentos partilhados.</div>'; return; }
   // Marcar todos como vistos (o badge de novidade desaparece)
-  try { localStorage.setItem('docs_vistos_' + token, String(res.data.length)); } catch(e){}
+  try { localStorage.setItem('docs_vistos_' + token, String(docs.length)); } catch(e){}
   const bd = document.getElementById('badge-docs'); if (bd) bd.style.display = 'none';
-  const icons = { ata:'📋', regulamento:'📜', seguro:'🛡️', orcamento:'📊', balancete:'📈', conta:'💰', convocatoria:'📨' };
-  cont.innerHTML = res.data.map(function(d){
-    let ic='📄'; for (const k in icons) { if ((d.categoria||'').toLowerCase().includes(k)) { ic=icons[k]; break; } }
-    const dt = d.data_documento ? new Date(d.data_documento).toLocaleDateString('pt-PT') : '';
-    return '<div class="li"><div class="est" style="background:rgba(0,212,255,.1);">'+ic+'</div>' +
-      '<div class="m"><div class="t">'+(d.nome||'Documento')+'</div><div class="s" style="text-transform:capitalize;">'+(d.categoria||'')+(dt?' · '+dt:'')+'</div></div></div>';
-  }).join('') + '<div class="rodape" style="margin-top:8px;">Para receber uma cópia de qualquer documento, contacte a administração.</div>';
+
+  let h = '';
+
+  // 📜 ATAS — retiráveis na hora (geradas no dispositivo)
+  if (atas.length) {
+    h += '<div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;margin:4px 0 8px;">📜 Atas das assembleias</div>';
+    h += atas.map(function(a, ai){
+      const dt = a.data_assembleia ? new Date(a.data_assembleia).toLocaleDateString('pt-PT') : '';
+      return '<div class="li"><div class="est" style="background:rgba(180,140,255,.12);">📋</div>' +
+        '<div class="m"><div class="t">Ata' + (a.numero_ata ? ' n.º ' + a.numero_ata : '') + '</div><div class="s">Assembleia de ' + dt + '</div></div>' +
+        '<button onclick="retirarAtaPDF(' + ai + ')" style="background:rgba(180,140,255,.1);border:1px solid rgba(180,140,255,.4);color:#b48cff;border-radius:8px;padding:5px 11px;font-size:10.5px;font-weight:700;cursor:pointer;white-space:nowrap;">🧾 Retirar</button></div>';
+    }).join('');
+  }
+
+  // 📄 Outros documentos (registos)
+  if (docs.length) {
+    const icons = { ata:'📋', regulamento:'📜', seguro:'🛡️', orcamento:'📊', balancete:'📈', conta:'💰', convocatoria:'📨' };
+    // Evitar duplicar: esconder registos de "Ata" se já temos as atas reais acima
+    const docsFiltrados = atas.length ? docs.filter(function(d){ return !(d.categoria||'').toLowerCase().includes('ata'); }) : docs;
+    if (docsFiltrados.length) {
+      h += '<div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 8px;">📄 Outros documentos</div>';
+      h += docsFiltrados.map(function(d){
+        let ic='📄'; for (const k in icons) { if ((d.categoria||'').toLowerCase().includes(k)) { ic=icons[k]; break; } }
+        const dt = d.data_documento ? new Date(d.data_documento).toLocaleDateString('pt-PT') : '';
+        return '<div class="li"><div class="est" style="background:rgba(0,212,255,.1);">'+ic+'</div>' +
+          '<div class="m"><div class="t">'+(d.nome||'Documento')+'</div><div class="s" style="text-transform:capitalize;">'+(d.categoria||'')+(dt?' · '+dt:'')+'</div></div></div>';
+      }).join('');
+    }
+  }
+  h += '<div class="rodape" style="margin-top:8px;">As atas podem ser descarregadas a qualquer momento. Para outros documentos, contacte a administração.</div>';
+  cont.innerHTML = h;
+}
+
+var _atasCache = [];
+
+// 📜 Gerar o PDF da ata na hora — "retirar" em vez de "abrir"
+function retirarAtaPDF(ai) {
+  const a = _atasCache[ai];
+  if (!a || !a.ata_texto) { alert('Esta ata ainda não tem texto disponível.'); return; }
+  if (!window.jspdf || !window.jspdf.jsPDF) { alert('O gerador de PDF ainda está a carregar. Tenta outra vez.'); return; }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+  const W = 210, M = 20;
+  const condoNome = window._condoNome || '';
+  const dt = a.data_assembleia ? new Date(a.data_assembleia).toLocaleDateString('pt-PT') : '';
+
+  // Cabeçalho formal
+  doc.setFillColor(13,24,37); doc.rect(0,0,W,38,'F');
+  doc.setFillColor(180,140,255); doc.rect(0,38,W,1.2,'F');
+  doc.setTextColor(180,140,255); doc.setFont('helvetica','bold'); doc.setFontSize(10);
+  doc.text('ATA DA ASSEMBLEIA DE CONDOMINOS', W/2, 14, {align:'center'});
+  doc.setTextColor(255,255,255); doc.setFontSize(13);
+  doc.text(condoNome || 'Condominio', W/2, 24, {align:'center'});
+  doc.setTextColor(190,195,205); doc.setFont('helvetica','normal'); doc.setFontSize(9);
+  doc.text((a.numero_ata ? 'Ata n.o ' + a.numero_ata + ' · ' : '') + 'Assembleia de ' + dt, W/2, 32, {align:'center'});
+
+  // Texto da ata (multi-página)
+  let y = 50;
+  doc.setTextColor(30,30,30); doc.setFont('helvetica','normal'); doc.setFontSize(10);
+  const paragrafos = String(a.ata_texto).split('\n');
+  paragrafos.forEach(function(p){
+    const linhas = doc.splitTextToSize(p || ' ', W - 2*M);
+    linhas.forEach(function(l){
+      if (y > 275) { doc.addPage(); y = 25; }
+      doc.text(l, M, y);
+      y += 5.5;
+    });
+    y += 2;
+  });
+
+  // Rodapé com aviso de cópia digital
+  const nPag = doc.internal.getNumberOfPages();
+  for (let p = 1; p <= nPag; p++) {
+    doc.setPage(p);
+    doc.setDrawColor(220,220,220); doc.line(M, 285, W-M, 285);
+    doc.setFontSize(7); doc.setTextColor(140,140,140);
+    doc.text('Copia digital retirada do Portal do Condomino em ' + new Date().toLocaleDateString('pt-PT') + ' · O original consta do livro de atas.', M, 290);
+    doc.text('Pag. ' + p + '/' + nPag, W-M, 290, {align:'right'});
+  }
+
+  doc.save('Ata_' + (a.numero_ata || dt.replace(/\//g,'-')) + '.pdf');
 }
 
 function ocVista(v) {
