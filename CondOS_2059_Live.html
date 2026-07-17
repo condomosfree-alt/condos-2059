@@ -637,7 +637,7 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.17-1824</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.17-1830</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -10665,6 +10665,32 @@ async function sugerirOrdemTrabalhos() {
     var qAnoRes = await sb.from('quotas').select('id', {count:'exact', head:true}).eq('condominio_id', c.id).eq('ano', anoPassado);
     if ((qAnoRes.count||0) > 0) {
       contexto.situacoes.push('Existem contas do exercício de ' + anoPassado + ' registadas no programa — a prestação e aprovação de contas é obrigatória (Art. 1436.º CC). O programa gera o documento no módulo Contas → Fecho de Contas.');
+    }
+
+    // 9. EDIFÍCIO — dados energéticos e de conservação (EPBD + Fundo de Reserva)
+    var idadeEd = c.ano_construcao ? (hoje.getFullYear() - parseInt(c.ano_construcao)) : null;
+    // Certificado energético
+    if (c.cert_validade && new Date(c.cert_validade) < hoje) {
+      contexto.situacoes.push('O certificado energético do edifício está CADUCADO (validade ' + new Date(c.cert_validade).toLocaleDateString('pt-PT') + '). A sua renovação pode ser deliberada — é necessário para apoios e transações.');
+    }
+    if (['E','F'].indexOf(c.cert_classe) > -1) {
+      contexto.situacoes.push('O edifício tem classe energética ' + c.cert_classe + ' (baixa). A EPBD prevê Passaportes de Renovação e normas mínimas; um ponto para estudar a renovação energética (com apoios do Estado) valoriza todas as frações.');
+    }
+    // Aquecimento fóssil
+    if (c.aquecimento_tipo === 'gasoleo') {
+      contexto.situacoes.push('O aquecimento/AQS do edifício é a gasóleo (fóssil). A EPBD prevê o fim das caldeiras fósseis; um ponto para avaliar a substituição por bomba de calor (elegível para apoios) reduz custos e antecipa a lei.');
+    }
+    // Idade + isolamento/janelas
+    if (idadeEd && idadeEd >= 30 && (c.isolamento === 'nao' || c.janelas_tipo === 'simples')) {
+      contexto.situacoes.push('O edifício tem ' + idadeEd + ' anos e apresenta lacunas de eficiência (isolamento/janelas). Há programas de apoio (Bairros Mais Sustentáveis, até 15.000€/fração) — um ponto para deliberar uma candidatura pode ser oportuno.');
+    }
+    // Painéis solares
+    if ((c.paineis_solares === 'nao' || !c.paineis_solares)) {
+      contexto.situacoes.push('O edifício não tem painéis solares. O DL 130/2026 simplificou o licenciamento e há apoios previstos; a instalação para autoconsumo das partes comuns pode ser deliberada e reduz a fatura elétrica comum.');
+    }
+    // Carregadores EV
+    if (c.ev_carregadores === 'nao') {
+      contexto.situacoes.push('O edifício não tem carregadores para veículos elétricos. O Fundo Ambiental apoia a instalação; a pré-instalação/instalação pode ser deliberada em assembleia.');
     }
 
     var tipoAss = document.getElementById('as-tipo').value;
