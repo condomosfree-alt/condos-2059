@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>COND.OS — Portal do Parceiro</title>
+<meta name="theme-color" content="#0a1220">
+<style>
+  :root {
+    --bg:#0a1220; --card:#111d31; --card2:#16233a; --b:#233350; --b2:#2d4062;
+    --text:#e8eaf0; --t2:#9aa5b8; --t3:#647087;
+    --cyan:#00d4ff; --cyan2:#0091ff; --green:#22e584; --red:#ff5470; --amber:#ffb300; --purple:#a78bfa;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
+  body { font-family:system-ui,-apple-system,'Segoe UI',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+  #app { max-width:520px; margin:0 auto; min-height:100vh; display:none; padding:0 0 40px; }
+  #loading, #invalido { max-width:520px; margin:0 auto; padding:60px 24px; text-align:center; }
+  .spin { width:34px; height:34px; border:3px solid var(--b); border-top-color:var(--cyan); border-radius:50%; margin:0 auto 16px; animation:sp 0.8s linear infinite; }
+  @keyframes sp { to { transform:rotate(360deg); } }
+
+  .topbar { background:linear-gradient(180deg,#0d1a30,#0a1524); border-bottom:1px solid var(--b); padding:18px 20px 16px; }
+  .brand { font-family:'Courier New',monospace; font-weight:700; letter-spacing:3px; font-size:12px; color:var(--cyan); display:flex; align-items:center; gap:7px; margin-bottom:14px; }
+  .brand .dot { width:7px; height:7px; border-radius:50%; background:var(--cyan); box-shadow:0 0 8px var(--cyan); }
+  .p-row { display:flex; align-items:center; gap:13px; }
+  .p-av { width:50px; height:50px; border-radius:14px; background:linear-gradient(135deg,var(--amber),#ff8c42); display:flex; align-items:center; justify-content:center; font-weight:800; font-size:20px; color:#1a1004; flex-shrink:0; }
+  .p-info { flex:1; min-width:0; }
+  .p-info .nome { font-size:17px; font-weight:800; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .p-info .cat { font-size:11.5px; color:var(--t2); margin-top:2px; }
+  .p-stars { font-size:12px; color:var(--amber); margin-top:3px; }
+
+  .page { padding:18px 16px; }
+  .sec-h { font-size:12px; font-weight:800; letter-spacing:.5px; color:var(--t2); text-transform:uppercase; margin:4px 0 12px; }
+  .card { background:var(--card); border:1px solid var(--b); border-radius:14px; padding:16px; margin-bottom:12px; }
+  .li { display:flex; align-items:center; gap:12px; padding:13px 14px; background:var(--card); border:1px solid var(--b); border-radius:12px; margin-bottom:10px; }
+  .est { width:40px; height:40px; border-radius:11px; display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0; }
+  .m { flex:1; min-width:0; }
+  .m .t { font-size:13.5px; font-weight:700; }
+  .m .s { font-size:11px; color:var(--t3); margin-top:2px; }
+  .empty { text-align:center; color:var(--t3); font-size:12.5px; padding:30px 16px; }
+  .pill { font-size:9.5px; font-weight:800; padding:4px 9px; border-radius:12px; white-space:nowrap; }
+  .pill.pedido { background:rgba(255,179,0,.14); color:var(--amber); }
+  .pill.submetido { background:rgba(0,212,255,.14); color:var(--cyan); }
+  .pill.escolhido { background:rgba(34,229,132,.14); color:var(--green); }
+  .pill.recusado { background:rgba(255,84,112,.12); color:var(--red); }
+  .fi { width:100%; background:var(--card2); border:1px solid var(--b2); border-radius:9px; padding:11px 13px; color:var(--text); font-size:13px; margin-top:6px; }
+  .fi:focus { outline:none; border-color:var(--cyan); }
+  .btn { width:100%; background:var(--cyan); border:none; color:#02121d; border-radius:10px; padding:13px; font-size:13.5px; font-weight:800; cursor:pointer; margin-top:12px; }
+  .btn:disabled { opacity:.5; }
+  .lbl { font-size:11px; color:var(--t2); font-weight:600; margin-top:12px; display:block; }
+  .legal { font-size:10.5px; color:var(--t3); line-height:1.5; background:rgba(0,212,255,.05); border:1px solid rgba(0,212,255,.15); border-radius:8px; padding:10px 12px; margin-top:12px; }
+</style>
+</head>
+<body>
+<div id="loading"><div class="spin"></div><div style="color:var(--t2);font-size:13px;">A carregar o teu portal…</div></div>
+
+<div id="invalido" style="display:none;">
+  <div style="font-size:40px;margin-bottom:12px;">🔒</div>
+  <div style="font-size:16px;font-weight:700;margin-bottom:8px;">Link inválido</div>
+  <div style="font-size:13px;color:var(--t2);">Este link de acesso não é válido. Contacta a administração do condomínio.</div>
+</div>
+
+<div id="app">
+  <div class="topbar">
+    <div class="brand"><span class="dot"></span>COND.OS · PARCEIRO</div>
+    <div class="p-row">
+      <div class="p-av" id="p-av">—</div>
+      <div class="p-info">
+        <div class="nome" id="p-nome">—</div>
+        <div class="cat" id="p-cat">—</div>
+        <div class="p-stars" id="p-stars"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="page">
+    <!-- Pedidos de orçamento -->
+    <div class="sec-h">📋 Pedidos de orçamento</div>
+    <div id="pedidos-lista"><div class="empty">A carregar…</div></div>
+
+    <!-- Trabalhos atribuídos -->
+    <div class="sec-h" style="margin-top:22px;">🔧 Trabalhos atribuídos</div>
+    <div id="trabalhos-lista"><div class="empty">A carregar…</div></div>
+
+    <div class="legal" style="margin-top:20px;">⚖️ <strong>Nota:</strong> a lei portuguesa (Lei 8/2022) obriga o condomínio a recolher pelo menos 3 orçamentos de proveniências diferentes para obras extraordinárias. O teu orçamento será comparado com outros — a transparência protege todos.</div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const SB_URL = 'https://iopkxoabszhzjimjltir.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlvcGt4b2Fic3poemppbWpsdGlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEyNzc5MjQsImV4cCI6MjA5Njg1MzkyNH0.PwopXnx0v7kSXUeua1Y3fI3xPDIS8S62SzGBfwPwLSA';
+const sb = supabase.createClient(SB_URL, SB_KEY);
+const params = new URLSearchParams(location.search);
+const token = params.get('t');
+
+function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function eur(v){ return parseFloat(v||0).toFixed(2).replace('.',',') + '€'; }
+
+async function init() {
+  if (!token) { document.getElementById('loading').style.display='none'; document.getElementById('invalido').style.display='block'; return; }
+  const r = await sb.rpc('parceiro_situacao', { p_token: token });
+  if (r.error || !r.data || !r.data.length) {
+    document.getElementById('loading').style.display='none';
+    document.getElementById('invalido').style.display='block';
+    return;
+  }
+  const p = r.data[0];
+  document.getElementById('p-nome').textContent = p.nome || 'Parceiro';
+  document.getElementById('p-cat').textContent = p.categoria || '—';
+  document.getElementById('p-av').textContent = (p.nome||'P')[0].toUpperCase();
+  if (p.num_avaliacoes > 0) {
+    const estrelas = '★'.repeat(Math.round(p.media_estrelas)) + '☆'.repeat(5 - Math.round(p.media_estrelas));
+    document.getElementById('p-stars').textContent = estrelas + ' ' + p.media_estrelas + ' (' + p.num_avaliacoes + ')';
+  } else {
+    document.getElementById('p-stars').textContent = 'Ainda sem avaliações';
+  }
+  document.getElementById('loading').style.display='none';
+  document.getElementById('app').style.display='block';
+  carregarPedidos();
+}
+
+async function carregarPedidos() {
+  const r = await sb.rpc('parceiro_pedidos', { p_token: token });
+  const pedidos = (!r.error && r.data) ? r.data : [];
+  const porResponder = pedidos.filter(p => p.estado === 'pedido');
+  const submetidos = pedidos.filter(p => p.estado === 'submetido');
+  const escolhidos = pedidos.filter(p => p.estado === 'escolhido');
+
+  // Pedidos por responder + submetidos
+  const cont = document.getElementById('pedidos-lista');
+  const abertos = porResponder.concat(submetidos);
+  if (!abertos.length) {
+    cont.innerHTML = '<div class="empty">Sem pedidos de orçamento neste momento.</div>';
+  } else {
+    cont.innerHTML = abertos.map(p => {
+      const podeResponder = p.estado === 'pedido';
+      let h = '<div class="card">';
+      h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">';
+      h += '<div style="flex:1;"><div style="font-size:14px;font-weight:700;">' + esc(p.descricao_obra || 'Pedido de orçamento') + '</div>';
+      h += '<div style="font-size:11px;color:var(--t3);margin-top:3px;">' + esc(p.categoria||'') + ' · pedido em ' + new Date(p.criado_em).toLocaleDateString('pt-PT') + '</div></div>';
+      h += '<span class="pill ' + p.estado + '">' + (p.estado === 'pedido' ? 'Por responder' : 'Enviado') + '</span></div>';
+      if (podeResponder) {
+        h += '<label class="lbl">Valor do orçamento (€)</label><input class="fi" type="number" step="0.01" id="v-' + p.orcamento_id + '" placeholder="Ex: 850.00">';
+        h += '<div style="display:flex;gap:8px;">';
+        h += '<div style="flex:1;"><label class="lbl">Prazo (dias)</label><input class="fi" type="number" id="pz-' + p.orcamento_id + '" placeholder="Ex: 7"></div>';
+        h += '<div style="flex:1;"><label class="lbl">Validade (dias)</label><input class="fi" type="number" id="val-' + p.orcamento_id + '" placeholder="Ex: 30"></div>';
+        h += '</div>';
+        h += '<label class="lbl">Notas (o que inclui)</label><textarea class="fi" id="nt-' + p.orcamento_id + '" rows="2" placeholder="Ex: material e mão de obra incluídos"></textarea>';
+        h += '<button class="btn" onclick="submeter(\'' + p.orcamento_id + '\')">📤 Enviar orçamento</button>';
+      } else {
+        h += '<div style="margin-top:10px;font-size:13px;color:var(--cyan);">✓ Orçamento enviado: <strong>' + eur(p.valor) + '</strong>' + (p.prazo_dias ? ' · ' + p.prazo_dias + ' dias' : '') + '</div>';
+        h += '<div style="font-size:10.5px;color:var(--t3);margin-top:4px;">A aguardar a decisão do condomínio (comparação com outros orçamentos).</div>';
+      }
+      h += '</div>';
+      return h;
+    }).join('');
+  }
+
+  // Trabalhos escolhidos (atribuídos)
+  const tc = document.getElementById('trabalhos-lista');
+  if (!escolhidos.length) {
+    tc.innerHTML = '<div class="empty">Sem trabalhos atribuídos de momento.</div>';
+  } else {
+    tc.innerHTML = escolhidos.map(p => {
+      let h = '<div class="li"><div class="est" style="background:rgba(34,229,132,.14);">🔧</div>';
+      h += '<div class="m"><div class="t">' + esc(p.descricao_obra || 'Trabalho') + '</div>';
+      h += '<div class="s">' + eur(p.valor) + ' · adjudicado</div></div>';
+      h += '<span class="pill escolhido">Adjudicado</span></div>';
+      return h;
+    }).join('');
+  }
+}
+
+async function submeter(orcId) {
+  const valor = parseFloat(document.getElementById('v-' + orcId).value);
+  if (!valor || valor <= 0) { alert('Indica um valor válido.'); return; }
+  const prazo = parseInt(document.getElementById('pz-' + orcId).value) || null;
+  const validade = parseInt(document.getElementById('val-' + orcId).value) || null;
+  const notas = document.getElementById('nt-' + orcId).value || '';
+  const r = await sb.rpc('parceiro_submeter_orcamento', {
+    p_token: token, p_orcamento_id: orcId, p_valor: valor,
+    p_prazo: prazo, p_validade: validade, p_notas: notas
+  });
+  if (r.error || r.data === false) { alert('Erro ao enviar. Tenta novamente.'); return; }
+  alert('✅ Orçamento enviado! O condomínio vai compará-lo com os outros.');
+  carregarPedidos();
+}
+
+init();
+</script>
+</body>
+</html>
