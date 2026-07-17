@@ -637,7 +637,7 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.17-1813</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.17-1824</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -901,6 +901,10 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
               <div class="form-row">
                 <div class="fl"><label>Carregadores para veículos elétricos</label><select class="fi" id="ed-ev"><option value="nao">Não tem</option><option value="sim">Sim</option><option value="pre">Pré-instalação</option></select></div>
                 <div class="fl"><label>Gás canalizado</label><select class="fi" id="ed-gas-canalizado"><option value="">Desconhecido</option><option value="sim">Sim</option><option value="nao">Não</option></select></div>
+              </div>
+              <div class="form-row">
+                <div class="fl"><label>Aquecimento / AQS predominante <span style="color:var(--t3);font-weight:400;font-size:10px;">(águas quentes)</span></label><select class="fi" id="ed-aquecimento"><option value="">Desconhecido</option><option value="gas">Gás (natural/botija)</option><option value="eletrico">Elétrico (resistência)</option><option value="bomba_calor">Bomba de calor</option><option value="gasoleo">Gasóleo/caldeira fóssil</option><option value="solar_termico">Solar térmico</option><option value="biomassa">Biomassa/pellets</option><option value="misto">Misto</option></select></div>
+                <div class="fl"><label>Ventilação</label><select class="fi" id="ed-ventilacao"><option value="">Desconhecido</option><option value="natural">Natural</option><option value="mecanica">Mecânica (VMC)</option><option value="mista">Mista</option></select></div>
               </div>
               <button class="btn-ghost" style="width:100%;margin-top:10px;background:linear-gradient(135deg,rgba(255,214,0,.12),rgba(0,212,255,.12));border-color:rgba(255,214,0,.4);color:#ffd600;font-weight:600;" onclick="diagnosticoEnergetico()">⚡ Diagnóstico Energético (analisar o edifício)</button>
               <div id="ed-diagnostico-energia" style="margin-top:12px;"></div>
@@ -3789,6 +3793,16 @@ async function verificarAvisosGerais() {
         texto: porPagarForn.length + ' despesa(s) por pagar ao fornecedor',
         detalhe: 'Há ' + totalPorPagar.toFixed(2) + '€ aprovados mas ainda não pagos. Quando pagares, clica em "💸 Pagar" para o movimento entrar no extrato.' });
     }
+
+    // 5h) Certificado energético caducado (EPBD) — ligação Perfil→Sino
+    try {
+      var certVal = currentCondo.cert_validade;
+      if (certVal && new Date(certVal) < new Date()) {
+        avisos.push({ pagina:'edificio', badge:'⏰', cor:'#f87171',
+          texto: 'Certificado energético caducado',
+          detalhe: 'A validade do certificado (' + new Date(certVal).toLocaleDateString('pt-PT') + ') já passou. Sem certificado válido não há candidaturas a apoios energéticos nem transações tranquilas. Renova-o e atualiza no Perfil do Edifício → Energia.' });
+      }
+    } catch(e) { console.error('aviso certificado:', e); }
 
     // 5g) Dados de condóminos desatualizados (>1 ano ou nunca) — Lei 8/2022
     try {
@@ -12757,6 +12771,7 @@ function loadEdificio() {
   set('ed-janelas', c.janelas_tipo); set('ed-isolamento', c.isolamento);
   set('ed-paineis', c.paineis_solares || 'nao'); set('ed-paineis-potencia', c.paineis_potencia);
   set('ed-ev', c.ev_carregadores || 'nao'); set('ed-gas-canalizado', c.gas_canalizado);
+  set('ed-aquecimento', c.aquecimento_tipo); set('ed-ventilacao', c.ventilacao_tipo);
   // Mostrar info de blocos
   var infoEl = document.getElementById('ed-blocos-info');
   var infoTxt = document.getElementById('ed-blocos-info-texto');
@@ -12853,6 +12868,19 @@ async function diagnosticoEnergetico() {
       texto:'O Fundo Ambiental tem apoiado carregadores em condomínios: 80% do equipamento até 800€ + 80% da instalação até 1000€ por lugar. A procura de carregamento em casa só vai crescer — antecipar valoriza o prédio.' });
   }
 
+  // 5. Aquecimento / AQS — a EPBD foca-se no phase-out de combustíveis fósseis
+  var aquec = g('ed-aquecimento');
+  if (aquec === 'gasoleo') {
+    achados.push({ nivel:'alto', icone:'🛢️', titulo:'Aquecimento a gasóleo — fim à vista pela EPBD',
+      texto:'A EPBD prevê o phase-out de caldeiras a combustíveis fósseis (apoios a fósseis terminam e há data-limite europeia para as eliminar). Substituir por bomba de calor é elegível para apoios (Fundo Ambiental / Bairros Mais Sustentáveis) e corta a fatura. Vale a pena orçamentar já.' });
+  } else if (aquec === 'gas') {
+    achados.push({ nivel:'medio', icone:'🔥', titulo:'Aquecimento/AQS a gás — a transição está a chegar',
+      texto:'A tendência da EPBD é desincentivar o gás em edifícios. A bomba de calor (com o solar que talvez já tenhas) é a alternativa apoiada. Não é urgente, mas é bom teres presente para futuras substituições de equipamento.' });
+  } else if (aquec === 'bomba_calor') {
+    achados.push({ nivel:'ok', icone:'♨️', titulo:'Bomba de calor — alinhado com o futuro',
+      texto:'Estás já no caminho que a EPBD incentiva. Combinada com solar fotovoltaico, é das soluções mais eficientes e valoriza o edifício.' });
+  }
+
   // Parceiros disponíveis (para sugerir quem resolve cada achado)
   var parceirosLista = [];
   try {
@@ -12900,6 +12928,7 @@ async function saveEdificio() {
     janelas_tipo: g('ed-janelas'), isolamento: g('ed-isolamento'),
     paineis_solares: g('ed-paineis'), paineis_potencia: gn('ed-paineis-potencia'),
     ev_carregadores: g('ed-ev'), gas_canalizado: g('ed-gas-canalizado'),
+    aquecimento_tipo: g('ed-aquecimento'), ventilacao_tipo: g('ed-ventilacao'),
     taxa_juro_mora: gn('ed-taxa-juro'), juro_ata: g('ed-juro-ata'),
     ano_inscricao: gi('ed-ano-inscricao'), artigo_matricial: g('ed-artigo-matricial'),
     vpt: gn('ed-vpt'), area_total: gn('ed-area-total'),
