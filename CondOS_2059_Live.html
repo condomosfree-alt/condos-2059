@@ -637,7 +637,7 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.17-1857</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.18-1255</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -950,6 +950,16 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
                 <div class="fl"><label>Deliberação (ata)</label><input class="fi" id="ed-juro-ata" placeholder="Ex: Ata nº 12, 15/03/2024"></div>
               </div>
               <div style="font-size:10px;color:var(--t3);background:rgba(0,212,255,.05);border:1px solid rgba(0,212,255,.15);border-radius:6px;padding:7px 10px;margin-top:2px;">💡 A taxa de juro de mora é deliberada em assembleia. Se não preencheres, aplica-se a taxa legal civil (4%/ano, Art. 559.º CC). <span id="ed-taxa-juro-info" style="color:var(--cyan);font-weight:600;"></span></div>
+
+              <div style="margin-top:16px;font-size:10px;color:var(--cyan);font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">⚖️ Limites de Decisão do Administrador</div>
+              <div class="form-row">
+                <div class="fl"><label>Até que valor decide sozinho (€)</label><input class="fi" id="ed-limite-admin" type="number" step="1" placeholder="Ex: 200"></div>
+                <div class="fl"><label>Acima de que valor exige 3 orçamentos (€)</label><input class="fi" id="ed-limite-orcamentos" type="number" step="1" placeholder="Ex: 1000"></div>
+              </div>
+              <div class="form-row">
+                <div class="fl"><label>Deliberação destes limites (ata)</label><input class="fi" id="ed-limites-ata" placeholder="Ex: Ata nº 14, 20/03/2026"></div>
+              </div>
+              <div style="font-size:10px;color:var(--t3);background:rgba(255,179,0,.06);border:1px solid rgba(255,179,0,.2);border-radius:6px;padding:8px 10px;margin-top:2px;line-height:1.5;">⚖️ <strong>A lei não fixa valores</strong> — é a assembleia (ou o regulamento) que define até quanto o administrador decide sozinho na gestão corrente. Regista aqui o que foi deliberado. <strong>Independentemente do valor</strong>, obras de conservação extraordinária e de inovação exigem sempre 3 orçamentos de proveniências diferentes (Lei 8/2022) e deliberação da assembleia.</div>
               <div style="margin-top:16px;font-size:10px;color:var(--cyan);font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Alertas Automáticos por Email</div>
               <div style="display:flex;gap:12px;flex-wrap:wrap;">
                 <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--t2);cursor:pointer;"><input type="checkbox" id="ed-alerta-dia1" style="accent-color:var(--cyan);"> 📅 Dia 1 — lembrete extrato</label>
@@ -8433,6 +8443,102 @@ function fecharModalGenerico() {
   document.getElementById('mo-generico').style.display = 'none';
 }
 
+// ⚖️ CLASSIFICAÇÃO LEGAL DA INTERVENÇÃO (Lei 8/2022 + Código Civil)
+// Diz o que a lei exige consoante o tipo e o valor: 3 orçamentos? votação? qual maioria?
+function classificarIntervencao(tipo, valor) {
+  var c = currentCondo || {};
+  var limAdmin = parseFloat(c.limite_admin) || 0;
+  var v = parseFloat(valor) || 0;
+
+  var r = {
+    tipo: tipo,
+    precisaOrcamentos: false,
+    minOrcamentos: 0,
+    precisaVotacao: false,
+    maioria: null,
+    label: '',
+    cor: '',
+    explicacao: '',
+    base: ''
+  };
+
+  if (tipo === 'urgente') {
+    r.label = '🚨 Reparação urgente';
+    r.cor = '#ff5470';
+    r.precisaVotacao = false;
+    r.explicacao = 'Há risco para pessoas ou agravamento de danos. O administrador pode mandar executar de imediato, SEM deliberação prévia e sem 3 orçamentos. Depois é obrigatório convocar assembleia extraordinária para ratificar a despesa e prestar contas.';
+    r.base = 'Art. 1427.º CC · Lei 8/2022';
+    r.ratificar = true;
+  } else if (tipo === 'contrato') {
+    r.label = '📄 Contrato em vigor';
+    r.cor = '#8b95a8';
+    r.explicacao = 'Execução de um contrato de manutenção já aprovado pela assembleia (ex: elevadores, AVAC). O fornecedor já foi escolhido quando o contrato foi deliberado — não são precisos 3 orçamentos agora. Só na renovação/mudança de contrato.';
+    r.base = 'Contrato aprovado em assembleia';
+  } else if (tipo === 'corrente') {
+    if (limAdmin > 0 && v > limAdmin) {
+      r.label = '⚠️ Acima do limite do administrador';
+      r.cor = '#ffb300';
+      r.precisaVotacao = true;
+      r.maioria = 'simples';
+      r.explicacao = 'O valor (' + v.toFixed(2).replace('.',',') + '€) ultrapassa o limite deliberado para o administrador decidir sozinho (' + limAdmin.toFixed(2).replace('.',',') + '€). Deve ir a deliberação da assembleia.';
+      r.base = c.limites_ata ? ('Limite deliberado: ' + c.limites_ata) : 'Limite definido no Perfil do Edifício';
+    } else {
+      r.label = '🔧 Manutenção corrente';
+      r.cor = '#22e584';
+      r.explicacao = 'Gestão corrente do edifício, dentro das funções normais do administrador' + (limAdmin > 0 ? ' (limite deliberado: ' + limAdmin.toFixed(2).replace('.',',') + '€)' : '') + '. Não precisa de assembleia nem de 3 orçamentos. Deve na mesma ser registada nas contas.';
+      r.base = c.limites_ata ? ('Limite deliberado: ' + c.limites_ata) : 'Funções do administrador (Art. 1436.º CC)';
+    }
+  } else if (tipo === 'conservacao') {
+    r.label = '🏗️ Conservação extraordinária';
+    r.cor = '#00d4ff';
+    r.precisaOrcamentos = true;
+    r.minOrcamentos = 3;
+    r.precisaVotacao = true;
+    r.maioria = 'simples';
+    r.explicacao = 'Obra de conservação extraordinária. A lei obriga o administrador a apresentar PELO MENOS 3 orçamentos de proveniências diferentes. Aprova-se por maioria simples (mais de metade do valor total do prédio).';
+    r.base = 'Lei 8/2022 · Art. 1436.º CC';
+  } else if (tipo === 'inovacao') {
+    r.label = '✨ Inovação / melhoria';
+    r.cor = '#b48cff';
+    r.precisaOrcamentos = true;
+    r.minOrcamentos = 3;
+    r.precisaVotacao = true;
+    r.maioria = 'dois_tercos';
+    r.explicacao = 'Obra de inovação (acrescenta algo que não existia). Exige PELO MENOS 3 orçamentos de proveniências diferentes E aprovação por maioria de DOIS TERÇOS do valor total do prédio — não basta a maioria simples.';
+    r.base = 'Lei 8/2022 · Art. 1425.º CC';
+  }
+  return r;
+}
+
+// Painel visual da classificação (mostrado na ocorrência)
+function htmlClassificacao(cl) {
+  if (!cl || !cl.label) return '';
+  var h = '<div style="background:linear-gradient(135deg,' + cl.cor + '14,transparent);border:1px solid ' + cl.cor + '55;border-radius:10px;padding:13px 15px;margin-bottom:12px;">';
+  h += '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">';
+  h += '<div style="font-size:13px;font-weight:800;color:' + cl.cor + ';">' + cl.label + '</div>';
+  var tags = '';
+  if (cl.precisaOrcamentos) tags += '<span style="font-size:9.5px;font-weight:700;background:rgba(0,212,255,.15);color:var(--cyan);padding:3px 8px;border-radius:10px;">≥' + cl.minOrcamentos + ' orçamentos</span> ';
+  if (cl.precisaVotacao) tags += '<span style="font-size:9.5px;font-weight:700;background:rgba(180,140,255,.15);color:#b48cff;padding:3px 8px;border-radius:10px;">' + (cl.maioria === 'dois_tercos' ? 'Maioria 2/3' : 'Maioria simples') + '</span> ';
+  if (cl.ratificar) tags += '<span style="font-size:9.5px;font-weight:700;background:rgba(255,84,112,.15);color:var(--red);padding:3px 8px;border-radius:10px;">Ratificar depois</span>';
+  if (!cl.precisaOrcamentos && !cl.precisaVotacao && !cl.ratificar) tags += '<span style="font-size:9.5px;font-weight:700;background:rgba(34,229,132,.15);color:var(--green);padding:3px 8px;border-radius:10px;">Admin decide</span>';
+  h += '<div>' + tags + '</div>';
+  h += '</div>';
+  h += '<div style="font-size:11px;color:var(--t2);line-height:1.55;margin-top:8px;">' + cl.explicacao + '</div>';
+  h += '<div style="font-size:9.5px;color:var(--t3);margin-top:6px;font-style:italic;">⚖️ ' + cl.base + '</div>';
+  h += '</div>';
+  return h;
+}
+
+// Ao mudar o tipo/valor na ocorrência, recalcula o painel
+function atualizarClassificacao() {
+  var tipoEl = document.getElementById('oc-tipo-legal');
+  var valEl = document.getElementById('oc-orc-valor');
+  var box = document.getElementById('oc-classificacao');
+  if (!tipoEl || !box) return;
+  var cl = classificarIntervencao(tipoEl.value, valEl ? valEl.value : 0);
+  box.innerHTML = htmlClassificacao(cl);
+}
+
 async function gerirOcorrencia(id) {
   var oRes = await sb.from('ocorrencias').select('*').eq('id', id).single();
   if (oRes.error) { toast('Erro ao abrir ocorrência', 'err'); return; }
@@ -8467,6 +8573,19 @@ async function gerirOcorrencia(id) {
   });
   h += '</div>';
 
+  // 0. CLASSIFICAÇÃO LEGAL — define o caminho (3 orçamentos? votação? qual maioria?)
+  h += '<div style="background:var(--s1);border:1px solid var(--b1);border-radius:10px;padding:14px;margin-bottom:12px;">';
+  h += '<div style="font-size:12px;font-weight:700;color:var(--cyan);margin-bottom:8px;">⚖️ 0 · TIPO DE INTERVENÇÃO</div>';
+  h += '<div style="font-size:10.5px;color:var(--t2);margin-bottom:8px;line-height:1.5;">O tipo determina o que a lei exige. Escolhe com cuidado — é isto que protege o síndico.</div>';
+  h += '<select id="oc-tipo-legal" class="fi" style="width:100%;font-size:12px;" onchange="atualizarClassificacao()">';
+  var tipoAtual = _ocAtual.tipo_legal || '';
+  [['','— classificar a intervenção —'],['corrente','🔧 Manutenção corrente (lâmpada, pequena reparação)'],['urgente','🚨 Urgente (risco/segurança — agir já)'],['contrato','📄 Contrato em vigor (elevador, AVAC…)'],['conservacao','🏗️ Conservação extraordinária (obra maior)'],['inovacao','✨ Inovação / melhoria (algo novo)']].forEach(function(t){
+    h += '<option value="'+t[0]+'"'+(tipoAtual===t[0]?' selected':'')+'>'+t[1]+'</option>';
+  });
+  h += '</select>';
+  h += '<div id="oc-classificacao" style="margin-top:10px;"></div>';
+  h += '</div>';
+
   // 1. PARCEIRO
   h += '<div style="background:var(--s1);border:1px solid var(--b1);border-radius:10px;padding:14px;margin-bottom:12px;">';
   h += '<div style="font-size:12px;font-weight:700;color:var(--cyan);margin-bottom:8px;">1 · PARCEIRO</div>';
@@ -8486,7 +8605,7 @@ async function gerirOcorrencia(id) {
   h += '<div style="background:var(--s1);border:1px solid var(--b1);border-radius:10px;padding:14px;margin-bottom:12px;">';
   h += '<div style="font-size:12px;font-weight:700;color:var(--cyan);margin-bottom:8px;">2 · ORÇAMENTO DO PARCEIRO</div>';
   h += '<div style="display:flex;gap:8px;">';
-  h += '<input id="oc-orc-valor" class="fi" type="number" step="0.01" placeholder="Valor €" style="flex:0 0 110px;font-size:12px;" value="'+(_ocAtual.orcamento_valor||'')+'">';
+  h += '<input id="oc-orc-valor" class="fi" type="number" step="0.01" placeholder="Valor €" style="flex:0 0 110px;font-size:12px;" oninput="atualizarClassificacao()" value="'+(_ocAtual.orcamento_valor||'')+'">';
   h += '<input id="oc-orc-nota" class="fi" placeholder="O que o parceiro disse (ex: troca do motor)" style="flex:1;font-size:12px;" value="'+((_ocAtual.orcamento_nota||'').replace(/"/g,'&quot;'))+'">';
   h += '</div>';
   // Método de divisão do custo
@@ -8576,6 +8695,7 @@ async function gerirOcorrencia(id) {
 
   h += '</div>';
   abrirModalGenerico('Gerir Ocorrência', h);
+  setTimeout(function(){ try { atualizarClassificacao(); } catch(e){} }, 60);
 }
 
 async function exportarOcorrenciaPDF() {
@@ -8759,11 +8879,31 @@ async function ocRegistarOrcamento(limite) {
   var valor = parseFloat(document.getElementById('oc-orc-valor').value);
   var nota = document.getElementById('oc-orc-nota').value.trim();
   var metodo = document.getElementById('oc-divisao').value;
+  var tipoEl = document.getElementById('oc-tipo-legal');
+  var tipoLegal = tipoEl ? tipoEl.value : '';
   if (!valor || valor <= 0) { toast('Indica o valor do orçamento','err'); return; }
-  var novoEstado = valor <= limite ? 'aguarda_orcamento' : 'aguarda_votacao';
-  await sb.from('ocorrencias').update({ orcamento_valor:valor, orcamento_nota:nota, divisao_metodo:metodo, estado:novoEstado }).eq('id',_ocAtual.id);
+
+  // ⚖️ A lei decide o caminho, não só o valor
+  var cl = classificarIntervencao(tipoLegal, valor);
+  if (cl.precisaOrcamentos) {
+    var avisoLei = '⚖️ Esta intervenção está classificada como "' + cl.label.replace(/[^\wÀ-ÿ \/]/g,'').trim() + '".\n\n';
+    avisoLei += 'A lei obriga a apresentar PELO MENOS ' + cl.minOrcamentos + ' orçamentos de proveniências diferentes antes da deliberação.\n\n';
+    avisoLei += 'Estás a registar apenas um. Queres continuar mesmo assim?\n(Podes usar o painel de 3 orçamentos para pedir aos parceiros.)';
+    if (!await confirmar(avisoLei, {titulo:'Faltam orçamentos', tipo:'aviso', icon:'⚖️', okTexto:'Continuar mesmo assim', cancelarTexto:'Voltar'})) return;
+  }
+
+  var novoEstado;
+  if (cl.precisaVotacao) novoEstado = 'aguarda_votacao';
+  else if (cl.tipo === 'urgente' || cl.tipo === 'contrato' || cl.tipo === 'corrente') novoEstado = 'aprovada';
+  else novoEstado = (valor <= limite ? 'aguarda_orcamento' : 'aguarda_votacao');
+
+  var upd = { orcamento_valor:valor, orcamento_nota:nota, divisao_metodo:metodo, estado:novoEstado };
+  if (tipoLegal) upd.tipo_legal = tipoLegal;
+  await sb.from('ocorrencias').update(upd).eq('id',_ocAtual.id);
   var divTxt = metodo && metodo.indexOf('bloco:')===0 ? 'só o Bloco ' + metodo.split(':')[1] : 'todos os condóminos (permilagem)';
-  await ocEvento('orcamento', 'Orçamento recebido: ' + valor.toFixed(2) + '€' + (nota?' — '+nota:'') + '. Custo a dividir por: ' + divTxt + '.');
+  var evTxt = 'Orçamento recebido: ' + valor.toFixed(2) + '€' + (nota?' — '+nota:'') + '. Custo a dividir por: ' + divTxt + '.';
+  if (cl.label) evTxt += ' Classificação: ' + cl.label + ' (' + cl.base + ').';
+  await ocEvento('orcamento', evTxt);
   toast('Orçamento registado','ok');
   gerirOcorrencia(_ocAtual.id);
 }
@@ -12781,6 +12921,7 @@ function loadEdificio() {
   popularSalaBlocos();
   set('ed-ano2', c.ano_construcao); set('ed-ano-inscricao', c.ano_inscricao);
   set('ed-taxa-juro', c.taxa_juro_mora); set('ed-juro-ata', c.juro_ata);
+  set('ed-limite-admin', c.limite_admin); set('ed-limite-orcamentos', c.limite_orcamentos); set('ed-limites-ata', c.limites_ata);
   set('ed-artigo-matricial', c.artigo_matricial); set('ed-vpt', c.vpt);
   set('ed-area-total', c.area_total); set('ed-area-privativa', c.area_privativa);
   set('ed-imi-anual', c.imi_anual); set('ed-conservacao', c.conservacao);
@@ -12979,6 +13120,7 @@ async function saveEdificio() {
     ev_carregadores: g('ed-ev'), gas_canalizado: g('ed-gas-canalizado'),
     aquecimento_tipo: g('ed-aquecimento'), ventilacao_tipo: g('ed-ventilacao'),
     taxa_juro_mora: gn('ed-taxa-juro'), juro_ata: g('ed-juro-ata'),
+    limite_admin: gn('ed-limite-admin'), limite_orcamentos: gn('ed-limite-orcamentos'), limites_ata: g('ed-limites-ata'),
     ano_inscricao: gi('ed-ano-inscricao'), artigo_matricial: g('ed-artigo-matricial'),
     vpt: gn('ed-vpt'), area_total: gn('ed-area-total'),
     area_privativa: gn('ed-area-privativa'), imi_anual: gn('ed-imi-anual'),
