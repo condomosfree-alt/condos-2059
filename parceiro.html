@@ -48,6 +48,11 @@
   .btn:disabled { opacity:.5; }
   .lbl { font-size:11px; color:var(--t2); font-weight:600; margin-top:12px; display:block; }
   .legal { font-size:10.5px; color:var(--t3); line-height:1.5; background:rgba(0,212,255,.05); border:1px solid rgba(0,212,255,.15); border-radius:8px; padding:10px 12px; margin-top:12px; }
+  .toast-box { position:fixed; left:50%; bottom:26px; transform:translateX(-50%) translateY(80px); background:var(--card2); border:1px solid var(--b2); border-radius:12px; padding:13px 18px; font-size:13px; font-weight:600; box-shadow:0 10px 34px rgba(0,0,0,.5); z-index:9999; opacity:0; transition:opacity .22s ease, transform .22s ease; max-width:88%; text-align:center; line-height:1.45; }
+  .toast-box.show { opacity:1; transform:translateX(-50%) translateY(0); }
+  .toast-box.ok { border-color:rgba(34,229,132,.5); color:var(--green); }
+  .toast-box.err { border-color:rgba(255,84,112,.5); color:var(--red); }
+  .toast-box.info { border-color:rgba(0,212,255,.5); color:var(--cyan); }
 </style>
 </head>
 <body>
@@ -90,6 +95,22 @@
 const SB_URL = 'https://iopkxoabszhzjimjltir.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlvcGt4b2Fic3poemppbWpsdGlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEyNzc5MjQsImV4cCI6MjA5Njg1MzkyNH0.PwopXnx0v7kSXUeua1Y3fI3xPDIS8S62SzGBfwPwLSA';
 const sb = supabase.createClient(SB_URL, SB_KEY);
+
+function toastP(msg, tipo) {
+  var t = document.getElementById('toast-box');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = 'toast-box';
+    document.body.appendChild(t);
+  }
+  t.className = 'toast-box ' + (tipo || 'info');
+  t.textContent = msg;
+  void t.offsetWidth;
+  t.classList.add('show');
+  clearTimeout(window._toastT);
+  window._toastT = setTimeout(function(){ t.classList.remove('show'); }, 3200);
+}
+
 const params = new URLSearchParams(location.search);
 const token = params.get('t');
 
@@ -176,7 +197,7 @@ async function carregarPedidos() {
 
 async function submeter(orcId) {
   const valor = parseFloat(document.getElementById('v-' + orcId).value);
-  if (!valor || valor <= 0) { alert('Indica um valor válido.'); return; }
+  if (!valor || valor <= 0) { toastP('Indica um valor válido.','err'); return; }
   const prazo = parseInt(document.getElementById('pz-' + orcId).value) || null;
   const validade = parseInt(document.getElementById('val-' + orcId).value) || null;
   const notas = document.getElementById('nt-' + orcId).value || '';
@@ -184,8 +205,8 @@ async function submeter(orcId) {
     p_token: token, p_orcamento_id: orcId, p_valor: valor,
     p_prazo: prazo, p_validade: validade, p_notas: notas
   });
-  if (r.error || r.data === false) { alert('Erro ao enviar. Tenta novamente.'); return; }
-  alert('✅ Orçamento enviado! O condomínio vai compará-lo com os outros.');
+  if (r.error || r.data === false) { toastP('Não foi possível enviar. Tenta novamente.','err'); return; }
+  toastP('✅ Orçamento enviado — vai ser comparado com as restantes propostas.','ok');
   carregarPedidos();
 }
 

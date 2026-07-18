@@ -197,6 +197,11 @@
     border-style:solid !important;
     font-weight:600 !important;
   }
+  .toast-box { position:fixed; left:50%; bottom:26px; transform:translateX(-50%) translateY(80px); background:var(--card2,#16233a); border:1px solid var(--b2,#2d4062); border-radius:12px; padding:13px 18px; font-size:13px; font-weight:600; box-shadow:0 10px 34px rgba(0,0,0,.5); z-index:99999; opacity:0; transition:opacity .22s ease, transform .22s ease; max-width:88%; text-align:center; line-height:1.45; color:#e8eaf0; }
+  .toast-box.show { opacity:1; transform:translateX(-50%) translateY(0); }
+  .toast-box.ok { border-color:rgba(34,229,132,.5); color:#22e584; }
+  .toast-box.err { border-color:rgba(255,84,112,.5); color:#ff5470; }
+  .toast-box.info { border-color:rgba(0,212,255,.5); color:#00d4ff; }
 </style>
 </head>
 <body>
@@ -377,6 +382,18 @@
 const SB_URL = 'https://iopkxoabszhzjimjltir.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlvcGt4b2Fic3poemppbWpsdGlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEyNzc5MjQsImV4cCI6MjA5Njg1MzkyNH0.PwopXnx0v7kSXUeua1Y3fI3xPDIS8S62SzGBfwPwLSA';
 const sb = supabase.createClient(SB_URL, SB_KEY);
+
+function toastP(msg, tipo) {
+  var t = document.getElementById('toast-box');
+  if (!t) { t = document.createElement('div'); t.id = 'toast-box'; document.body.appendChild(t); }
+  t.className = 'toast-box ' + (tipo || 'info');
+  t.textContent = msg;
+  void t.offsetWidth;
+  t.classList.add('show');
+  clearTimeout(window._toastT);
+  window._toastT = setTimeout(function(){ t.classList.remove('show'); }, 3200);
+}
+
 const token = new URLSearchParams(window.location.search).get('t');
 const mN = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 const eur = v => parseFloat(v||0).toFixed(2).replace('.',',') + '€';
@@ -652,7 +669,7 @@ function fecharModal() { document.getElementById('modal-ass').style.display = 'n
 async function confirmarPresenca(estado) {
   if (!window._assembleiaId) return;
   const res = await sb.rpc('portal_confirmar_presenca', { p_token: token, p_assembleia: window._assembleiaId, p_estado: estado });
-  if (res.error || res.data === false) { alert('Não foi possível registar. Tenta de novo.'); return; }
+  if (res.error || res.data === false) { toastP('Não foi possível registar. Tenta de novo.','err'); return; }
   window._assembleiaConf = estado;
   const ok = document.getElementById('a-ok'); if (ok) ok.style.display = 'block';
   setTimeout(function(){ fecharModal(); carregarFeed(); }, 1100);
@@ -813,7 +830,7 @@ function valorPorExtenso(v) {
 function gerarReciboPortal(qi) {
   const q = _quotasCache[qi];
   if (!q) return;
-  if (!window.jspdf || !window.jspdf.jsPDF) { alert('O gerador de PDF ainda está a carregar. Tenta outra vez.'); return; }
+  if (!window.jspdf || !window.jspdf.jsPDF) { toastP('O gerador de PDF ainda está a carregar. Tenta outra vez.','err'); return; }
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
   const W = 210, M = 20;
@@ -1052,7 +1069,7 @@ var _convsCache = [];
 function retirarConvocatoriaPDF(ci) {
   const cv = _convsCache[ci];
   if (!cv) return;
-  if (!window.jspdf || !window.jspdf.jsPDF) { alert('O gerador de PDF ainda está a carregar. Tenta outra vez.'); return; }
+  if (!window.jspdf || !window.jspdf.jsPDF) { toastP('O gerador de PDF ainda está a carregar. Tenta outra vez.','err'); return; }
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
   const W = 210, M = 20;
@@ -1117,8 +1134,8 @@ function retirarConvocatoriaPDF(ci) {
 // 📜 Gerar o PDF da ata na hora — "retirar" em vez de "abrir"
 function retirarAtaPDF(ai) {
   const a = _atasCache[ai];
-  if (!a || !a.ata_texto) { alert('Esta ata ainda não tem texto disponível.'); return; }
-  if (!window.jspdf || !window.jspdf.jsPDF) { alert('O gerador de PDF ainda está a carregar. Tenta outra vez.'); return; }
+  if (!a || !a.ata_texto) { toastP('Esta ata ainda não tem texto disponível.','err'); return; }
+  if (!window.jspdf || !window.jspdf.jsPDF) { toastP('O gerador de PDF ainda está a carregar. Tenta outra vez.','err'); return; }
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
   const W = 210, M = 20;
@@ -1234,10 +1251,10 @@ function escolherRecomenda(id, val) {
 }
 async function enviarAvaliacao(id) {
   const est = _avalEstado[id] || {};
-  if (!est.estrelas) { alert('Escolhe quantas estrelas (1 a 5).'); return; }
+  if (!est.estrelas) { toastP('Escolhe quantas estrelas (1 a 5).','err'); return; }
   const coment = document.getElementById('coment-'+id).value.trim();
   const res = await sb.rpc('portal_avaliar_parceiro', { p_token: token, p_ocorrencia: id, p_estrelas: est.estrelas, p_recomenda: (est.recomenda===undefined?null:est.recomenda), p_comentario: coment });
-  if (res.error || res.data === false) { alert('Não foi possível enviar a avaliação.'); return; }
+  if (res.error || res.data === false) { toastP('Não foi possível enviar a avaliação.','err'); return; }
   carregarAvaliaveis();
 }
 
@@ -1420,7 +1437,7 @@ function ocCopiarRegisto(url) {
 }
 function copiarTexto(t) {
   navigator.clipboard.writeText(t).then(function(){
-    alert('📋 Link copiado! Já podes colar onde quiseres.');
+    toastP('📋 Link copiado! Já podes colar onde quiseres.','ok');
   }).catch(function(){
     prompt('Copia este link:', t);
   });
@@ -1590,7 +1607,7 @@ async function abrirOcorrencia(id) {
 
 async function votarOcorrencia(id, voto) {
   const res = await sb.rpc('portal_votar_ocorrencia', { p_token: token, p_ocorrencia: id, p_voto: voto });
-  if (res.error || res.data === false) { alert('Não foi possível registar o voto.'); return; }
+  if (res.error || res.data === false) { toastP('Não foi possível registar o voto.','err'); return; }
   // Atualizar o cache e reabrir o detalhe
   if (_ocCache[id]) _ocCache[id].meu_voto = voto;
   abrirOcorrencia(id);
@@ -1638,7 +1655,7 @@ async function enviarMensagem() {
   if (!txt) return;
   inp.value = '';
   const res = await sb.rpc('portal_enviar_mensagem', { p_token: token, p_texto: txt });
-  if (res.error || res.data === false) { alert('Não foi possível enviar (limite diário atingido ou link inválido).'); inp.value = txt; return; }
+  if (res.error || res.data === false) { toastP('Não foi possível enviar (limite diário atingido ou link inválido).','err'); inp.value = txt; return; }
   carregarMensagens();
 }
 

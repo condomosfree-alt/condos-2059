@@ -97,6 +97,11 @@ select.fi option{background:var(--s2);}
 /* CARGO SECTION */
 .cargo-divider{height:1px;background:var(--b1);margin:14px 0;}
 .cargo-badge{display:inline-block;font-size:9px;padding:2px 7px;border-radius:4px;margin-left:6px;background:rgba(124,58,237,.15);color:var(--violet);font-weight:600;letter-spacing:.5px;}
+  .toast-box { position:fixed; left:50%; bottom:26px; transform:translateX(-50%) translateY(80px); background:var(--card2,#16233a); border:1px solid var(--b2,#2d4062); border-radius:12px; padding:13px 18px; font-size:13px; font-weight:600; box-shadow:0 10px 34px rgba(0,0,0,.5); z-index:99999; opacity:0; transition:opacity .22s ease, transform .22s ease; max-width:88%; text-align:center; line-height:1.45; color:#e8eaf0; }
+  .toast-box.show { opacity:1; transform:translateX(-50%) translateY(0); }
+  .toast-box.ok { border-color:rgba(34,229,132,.5); color:#22e584; }
+  .toast-box.err { border-color:rgba(255,84,112,.5); color:#ff5470; }
+  .toast-box.info { border-color:rgba(0,212,255,.5); color:#00d4ff; }
 </style>
 </head>
 <body>
@@ -379,6 +384,18 @@ const SB_URL = 'https://iopkxoabszhzjimjltir.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlvcGt4b2Fic3poemppbWpsdGlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEyNzc5MjQsImV4cCI6MjA5Njg1MzkyNH0.PwopXnx0v7kSXUeua1Y3fI3xPDIS8S62SzGBfwPwLSA';
 const sb = supabase.createClient(SB_URL, SB_KEY);
 
+function toastP(msg, tipo) {
+  var t = document.getElementById('toast-box');
+  if (!t) { t = document.createElement('div'); t.id = 'toast-box'; document.body.appendChild(t); }
+  t.className = 'toast-box ' + (tipo || 'info');
+  t.textContent = msg;
+  void t.offsetWidth;
+  t.classList.add('show');
+  clearTimeout(window._toastT);
+  window._toastT = setTimeout(function(){ t.classList.remove('show'); }, 3200);
+}
+
+
 const params = new URLSearchParams(window.location.search);
 // Fase 2: acesso por TOKEN seguro (não mais pelo id da fração à vista)
 const token = params.get('t') || params.get('token');
@@ -445,14 +462,14 @@ async function submeter() {
   var email = document.getElementById('f-email').value.trim();
   var papelLegal = document.getElementById('f-papel-legal').value;
 
-  if (!nome) { alert('Por favor preencha o nome completo.'); return; }
-  if (!nif || nif.length < 9) { alert('Por favor preencha o NIF (9 dígitos).'); return; }
-  if (!tel) { alert('Por favor preencha o telefone.'); return; }
-  if (!email || !email.includes('@')) { alert('Por favor preencha o email.'); return; }
-  if (!papelLegal) { alert('Por favor seleccione o seu papel legal no condomínio.'); return; }
-  if (notifSel.size === 0) { alert('Por favor escolha pelo menos um método de contacto.'); return; }
-  if (pagSel.size === 0) { alert('Por favor escolha pelo menos um método de pagamento.'); return; }
-  if (!seguroOpcao) { alert('Por favor indique se o seu seguro cobre as partes comuns do edifício.'); return; }
+  if (!nome) { toastP('Por favor preencha o nome completo.','err'); return; }
+  if (!nif || nif.length < 9) { toastP('Por favor preencha o NIF (9 dígitos).','err'); return; }
+  if (!tel) { toastP('Por favor preencha o telefone.','err'); return; }
+  if (!email || !email.includes('@')) { toastP('Por favor preencha o email.','err'); return; }
+  if (!papelLegal) { toastP('Por favor seleccione o seu papel legal no condomínio.','err'); return; }
+  if (notifSel.size === 0) { toastP('Por favor escolha pelo menos um método de contacto.','err'); return; }
+  if (pagSel.size === 0) { toastP('Por favor escolha pelo menos um método de pagamento.','err'); return; }
+  if (!seguroOpcao) { toastP('Por favor indique se o seu seguro cobre as partes comuns do edifício.','err'); return; }
 
   document.getElementById('btn-submit').disabled = true;
   document.getElementById('btn-txt').style.display = 'none';

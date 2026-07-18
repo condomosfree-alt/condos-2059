@@ -33,6 +33,11 @@
   #loading, #erro { text-align:center; padding:60px 24px; }
   .spin { width:32px; height:32px; border:3px solid var(--b); border-top-color:var(--cyan); border-radius:50%; margin:0 auto 14px; animation:sp .8s linear infinite; }
   @keyframes sp { to { transform:rotate(360deg); } }
+  .toast-box { position:fixed; left:50%; bottom:26px; transform:translateX(-50%) translateY(80px); background:var(--card2); border:1px solid var(--b2); border-radius:12px; padding:13px 18px; font-size:13px; font-weight:600; box-shadow:0 10px 34px rgba(0,0,0,.5); z-index:9999; opacity:0; transition:opacity .22s ease, transform .22s ease; max-width:88%; text-align:center; line-height:1.45; }
+  .toast-box.show { opacity:1; transform:translateX(-50%) translateY(0); }
+  .toast-box.ok { border-color:rgba(34,229,132,.5); color:var(--green); }
+  .toast-box.err { border-color:rgba(255,84,112,.5); color:var(--red); }
+  .toast-box.info { border-color:rgba(0,212,255,.5); color:var(--cyan); }
 </style>
 </head>
 <body>
@@ -104,6 +109,22 @@
 const SB_URL = 'https://iopkxoabszhzjimjltir.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlvcGt4b2Fic3poemppbWpsdGlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEyNzc5MjQsImV4cCI6MjA5Njg1MzkyNH0.PwopXnx0v7kSXUeua1Y3fI3xPDIS8S62SzGBfwPwLSA';
 const sb = supabase.createClient(SB_URL, SB_KEY);
+
+function toastP(msg, tipo) {
+  var t = document.getElementById('toast-box');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = 'toast-box';
+    document.body.appendChild(t);
+  }
+  t.className = 'toast-box ' + (tipo || 'info');
+  t.textContent = msg;
+  void t.offsetWidth;
+  t.classList.add('show');
+  clearTimeout(window._toastT);
+  window._toastT = setTimeout(function(){ t.classList.remove('show'); }, 3200);
+}
+
 const token = new URLSearchParams(location.search).get('t');
 
 async function init() {
@@ -135,9 +156,9 @@ async function enviar() {
   const nome = document.getElementById('f-nome').value.trim();
   const tel = document.getElementById('f-tel').value.trim();
   const valor = parseFloat(document.getElementById('f-valor').value);
-  if (nome.length < 2) { alert('Indique o nome da empresa ou profissional.'); return; }
-  if (!tel) { alert('Indique um telefone de contacto.'); return; }
-  if (!valor || valor <= 0) { alert('Indique um valor válido para a proposta.'); return; }
+  if (nome.length < 2) { toastP('Indique o nome da empresa ou profissional.','err'); return; }
+  if (!tel) { toastP('Indique um telefone de contacto.','err'); return; }
+  if (!valor || valor <= 0) { toastP('Indique um valor válido para a proposta.','err'); return; }
 
   const btn = document.getElementById('btn-enviar');
   btn.disabled = true; btn.textContent = 'A enviar…';
@@ -155,7 +176,7 @@ async function enviar() {
 
   if (r.error || r.data === false) {
     btn.disabled = false; btn.textContent = '📤 Submeter proposta';
-    alert('Não foi possível submeter. O prazo pode ter terminado.');
+    toastP('Não foi possível submeter. O prazo pode ter terminado.','err');
     return;
   }
   document.getElementById('form-area').style.display = 'none';
