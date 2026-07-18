@@ -637,7 +637,7 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.18-1848</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.18-2321</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -8640,7 +8640,7 @@ async function gerirOcorrencia(id) {
   var catOc = (_ocAtual.categoria||'').toLowerCase();
   var mapaCat = { elétrico:'electr', eletrico:'electr', canalização:'canaliz|água|agua', canalizacao:'canaliz', elevador:'elevador', limpeza:'limpeza', segurança:'seguran', seguranca:'seguran', obra:'obra|constru', água:'canaliz|água', avaria:'', outro:'' };
   var rx = mapaCat[catOc];
-  var sugeridos = rx ? parceiros.filter(function(p){ return new RegExp(rx,'i').test((p.especialidade||'')+' '+(p.nome||'')); }) : [];
+  var sugeridos = rx ? parceiros.filter(function(p){ return new RegExp(rx,'i').test((p.categoria||p.especialidade||'')+' '+(p.nome||'')); }) : [];
   var limite = parseFloat(currentCondo.limite_reparacao) || 100;
 
   // Timeline (eventos)
@@ -8686,8 +8686,8 @@ async function gerirOcorrencia(id) {
   h += '<select id="oc-parceiro" class="fi" style="width:100%;font-size:12px;">';
   h += '<option value="">— escolher parceiro —</option>';
   // sugeridos primeiro
-  sugeridos.forEach(function(p){ h += '<option value="'+p.id+'"'+(_ocAtual.parceiro_id===p.id?' selected':'')+'>⭐ '+p.nome+' ('+(p.especialidade||'')+')</option>'; });
-  parceiros.filter(function(p){ return !sugeridos.find(function(s){return s.id===p.id;}); }).forEach(function(p){ h += '<option value="'+p.id+'"'+(_ocAtual.parceiro_id===p.id?' selected':'')+'>'+p.nome+' ('+(p.especialidade||'')+')</option>'; });
+  sugeridos.forEach(function(p){ h += '<option value="'+p.id+'"'+(_ocAtual.parceiro_id===p.id?' selected':'')+'>⭐ '+p.nome+' ('+(p.categoria||'')+')</option>'; });
+  parceiros.filter(function(p){ return !sugeridos.find(function(s){return s.id===p.id;}); }).forEach(function(p){ h += '<option value="'+p.id+'"'+(_ocAtual.parceiro_id===p.id?' selected':'')+'>'+p.nome+' ('+(p.categoria||'')+')</option>'; });
   h += '</select>';
   h += '<button class="btn-ghost" style="width:100%;margin-top:8px;font-size:11px;" onclick="ocContactarParceiro()">📞 Marcar como contactado</button>';
   h += '</div>';
@@ -8989,7 +8989,7 @@ async function ocPedirOrcamentos() {
     h += '<label style="display:flex;align-items:center;gap:10px;padding:9px 11px;background:var(--s1);border:1px solid var(--b1);border-radius:8px;margin-bottom:7px;cursor:' + (ja?'default':'pointer') + ';opacity:' + (ja?'.55':'1') + ';">';
     h += '<input type="checkbox" class="po-parc" value="' + p.id + '"' + (ja?' disabled':'') + ' style="accent-color:var(--cyan);">';
     h += '<div style="flex:1;"><div style="font-size:12.5px;font-weight:600;color:var(--text);">' + (p.nome||'') + '</div>';
-    h += '<div style="font-size:10px;color:var(--t3);">' + (p.especialidade||p.categoria||'') + (p.autorizado_ata?' · ⚖️ '+p.autorizado_ata:'') + (ja?' · já pedido':'') + '</div></div>';
+    h += '<div style="font-size:10px;color:var(--t3);">' + (p.categoria||'') + (p.autorizado_ata?' · ⚖️ '+p.autorizado_ata:'') + (ja?' · já pedido':'') + '</div></div>';
     if (!p.token_acesso) h += '<span style="font-size:9px;color:var(--amber);">sem portal</span>';
     h += '</label>';
   });
@@ -9111,7 +9111,8 @@ async function ocReabrirConcurso() {
 }
 
 async function ocAbrirEnvelopes() {
-  var r = await sb.from('orcamentos_obra').select('*, parceiros(nome, especialidade, autorizado_ata)').eq('ocorrencia_id', _ocAtual.id);
+  var r = await sb.from('orcamentos_obra').select('*, parceiros(nome, categoria, autorizado_ata)').eq('ocorrencia_id', _ocAtual.id);
+  if (r.error) { console.error('comparar orçamentos:', r.error); toast('Erro ao ler os orçamentos: ' + r.error.message, 'err'); return; }
   var orcs = r.data || [];
   var porValidar = orcs.filter(function(o){ return o.validado === false && o.estado === 'submetido'; });
   var submetidos = orcs.filter(function(o){ return (o.estado === 'submetido' || o.estado === 'escolhido') && o.validado !== false; });
@@ -9183,7 +9184,7 @@ async function ocAbrirEnvelopes() {
     h += '<div style="background:var(--s1);border:1px solid ' + (barato?'rgba(34,229,132,.4)':'var(--b1)') + ';border-radius:10px;padding:13px;margin-bottom:10px;">';
     h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">';
     h += '<div style="flex:1;"><div style="font-size:13.5px;font-weight:700;color:var(--text);">' + (p.nome||'Parceiro') + (barato?' <span style="font-size:9px;color:var(--green);">MAIS BARATO</span>':'') + '</div>';
-    h += '<div style="font-size:10.5px;color:var(--t3);">' + (p.especialidade||'') + (p.autorizado_ata?' · ⚖️ '+p.autorizado_ata:'') + '</div></div>';
+    h += '<div style="font-size:10.5px;color:var(--t3);">' + (p.categoria||'') + (p.autorizado_ata?' · ⚖️ '+p.autorizado_ata:'') + '</div></div>';
     h += '<div style="text-align:right;"><div style="font-size:17px;font-weight:800;color:' + (barato?'var(--green)':'var(--cyan)') + ';">' + parseFloat(o.valor||0).toFixed(2).replace('.',',') + '€</div>';
     if (o.prazo_dias) h += '<div style="font-size:10px;color:var(--t3);">' + o.prazo_dias + ' dias</div>';
     h += '</div></div>';
@@ -9240,7 +9241,7 @@ async function ocValidarExterno(orcId, aceitar) {
         nif: o.externo_nif || null,
         telefone: o.externo_contacto || null,
         email: o.externo_email || null,
-        especialidade: _ocAtual.categoria || null,
+        categoria: _ocAtual.categoria || null,
         notas: 'Registado automaticamente ao submeter proposta pelo link aberto.'
       }).select('id').single();
       if (!novo.error && novo.data) parceiroId = novo.data.id;
