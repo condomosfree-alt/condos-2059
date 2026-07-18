@@ -637,7 +637,7 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.18-1814</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.18-1819</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -8999,7 +8999,15 @@ async function ocEnviarPedidosOrcamento() {
     var ins = await sb.from('orcamentos_obra').insert(linhas);
     if (ins.error) {
       console.error('insert orcamentos_obra:', ins.error);
-      toast('Erro ao criar pedidos: ' + ins.error.message + ' — corre o SQL sql_portal_parceiro.sql', 'err');
+      var msgErr = ins.error.message || '';
+      var cod = ins.error.code || '';
+      if (cod === '42P01' || /does not exist|relation/i.test(msgErr)) {
+        toast('A tabela de orçamentos não existe — corre o SQL sql_portal_parceiro.sql no Supabase.', 'err');
+      } else if (cod === '42501' || /policy|permission|row-level/i.test(msgErr)) {
+        toast('A base de dados bloqueou a escrita (RLS) — corre o SQL sql_rls_orcamentos_obra.sql no Supabase.', 'err');
+      } else {
+        toast('Erro ao criar pedidos: ' + msgErr, 'err');
+      }
       return;
     }
 
