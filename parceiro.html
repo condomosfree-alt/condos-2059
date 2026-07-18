@@ -138,6 +138,7 @@ async function init() {
   document.getElementById('loading').style.display='none';
   document.getElementById('app').style.display='block';
   carregarPedidos();
+  pIniciarPolling();
 }
 
 async function carregarPedidos() {
@@ -208,6 +209,66 @@ async function submeter(orcId) {
   if (r.error || r.data === false) { toastP('Não foi possível enviar. Tenta novamente.','err'); return; }
   toastP('✅ Orçamento enviado — vai ser comparado com as restantes propostas.','ok');
   carregarPedidos();
+}
+
+
+// 🔄 Polling — avisa o parceiro quando chega um pedido novo ou o trabalho é adjudicado
+var _pBase = null, _pAvisado = false, _pTimer = null;
+
+async function _pFoto() {
+  try {
+    const r = await sb.rpc('parceiro_pedidos', { p_token: token });
+    const d = (!r.error && r.data) ? r.data : [];
+    return {
+      pedidos: d.filter(p => p.estado === 'pedido').length,
+      adjudicados: d.filter(p => p.estado === 'escolhido').length
+    };
+  } catch(e) { return null; }
+}
+
+async function pVerificar() {
+  if (document.hidden || _pAvisado) return;
+  const agora = await _pFoto();
+  if (!agora) return;
+  if (!_pBase) { _pBase = agora; return; }
+  let msg = '';
+  if (agora.pedidos > _pBase.pedidos) msg = '📋 Novo pedido de orçamento!';
+  else if (agora.adjudicados > _pBase.adjudicados) msg = '🎉 Um trabalho seu foi selecionado!';
+  if (msg) mostrarBarraP(msg);
+}
+
+function mostrarBarraP(txt) {
+  _pAvisado = true;
+  let b = document.getElementById('barra-nov');
+  if (!b) {
+    b = document.createElement('div');
+    b.id = 'barra-nov';
+    b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:linear-gradient(90deg,#ffb300,#ff8c42);color:#1a1004;padding:10px 16px;display:flex;align-items:center;justify-content:center;gap:12px;font-size:12.5px;font-weight:700;box-shadow:0 4px 18px rgba(0,0,0,.4);transform:translateY(-100%);transition:transform .3s ease;';
+    document.body.appendChild(b);
+  }
+  b.innerHTML = '<span>' + txt + '</span><button onclick="pAtualizar()" style="background:#1a1004;border:none;color:#ffb300;border-radius:7px;padding:6px 13px;font-size:11.5px;font-weight:800;cursor:pointer;">Ver</button>';
+  b.style.display = 'flex';
+  void b.offsetWidth;
+  b.style.transform = 'translateY(0)';
+}
+
+async function pAtualizar() {
+  const b = document.getElementById('barra-nov');
+  if (b) { b.style.transform = 'translateY(-100%)'; setTimeout(function(){ b.style.display='none'; }, 300); }
+  await carregarPedidos();
+  _pBase = await _pFoto();
+  _pAvisado = false;
+  toastP('Atualizado','ok');
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+function pIniciarPolling() {
+  _pFoto().then(f => { _pBase = f; });
+  if (_pTimer) clearInterval(_pTimer);
+  _pTimer = setInterval(pVerificar, 60000);
+  document.addEventListener('visibilitychange', function(){
+    if (!document.hidden) setTimeout(pVerificar, 800);
+  });
 }
 
 init();

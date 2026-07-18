@@ -1669,7 +1669,74 @@ function tempoRelativo(ts){ if(!ts)return''; const d=Math.floor((Date.now()-new 
 function dataCurta(ts){ if(!ts)return''; return new Date(ts).toLocaleDateString('pt-PT',{day:'2-digit',month:'short',year:'numeric'}); }
 function dataHora(ts){ if(!ts)return''; return new Date(ts).toLocaleDateString('pt-PT',{day:'2-digit',month:'short'})+' às '+new Date(ts).toLocaleTimeString('pt-PT',{hour:'2-digit',minute:'2-digit'}); }
 
+
+// 🔄 Polling — avisa o condómino quando há algo novo à espera dele
+var _cBase = null, _cAvisado = false, _cTimer = null;
+
+async function _cFoto() {
+  try {
+    const [rm, ro] = await Promise.all([
+      sb.rpc('portal_mensagens_nao_lidas', { p_token: token }),
+      sb.rpc('portal_ocorrencias_ativas', { p_token: token })
+    ]);
+    const msgs = (!rm.error && rm.data != null) ? (typeof rm.data === 'number' ? rm.data : (rm.data[0] ? Object.values(rm.data[0])[0] : 0)) : 0;
+    const ocs = (!ro.error && ro.data) ? ro.data : [];
+    return {
+      mensagens: parseInt(msgs) || 0,
+      votacoes: ocs.filter(o => o.precisa_votacao && o.estado === 'aguarda_votacao' && !o.meu_voto && o.posso_votar !== false).length,
+      ocorrencias: ocs.length
+    };
+  } catch(e) { return null; }
+}
+
+async function cVerificar() {
+  if (document.hidden || _cAvisado) return;
+  const agora = await _cFoto();
+  if (!agora) return;
+  if (!_cBase) { _cBase = agora; return; }
+  let msg = '';
+  if (agora.mensagens > _cBase.mensagens) msg = '💬 Nova mensagem da administração';
+  else if (agora.votacoes > _cBase.votacoes) msg = '🗳️ Há uma votação à sua espera';
+  else if (agora.ocorrencias > _cBase.ocorrencias) msg = '🔧 Nova ocorrência no edifício';
+  if (msg) mostrarBarraC(msg);
+}
+
+function mostrarBarraC(txt) {
+  _cAvisado = true;
+  let b = document.getElementById('barra-nov');
+  if (!b) {
+    b = document.createElement('div');
+    b.id = 'barra-nov';
+    b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:linear-gradient(90deg,#00d4ff,#0091ff);color:#02121d;padding:10px 16px;display:flex;align-items:center;justify-content:center;gap:12px;font-size:12.5px;font-weight:700;box-shadow:0 4px 18px rgba(0,0,0,.4);transform:translateY(-100%);transition:transform .3s ease;';
+    document.body.appendChild(b);
+  }
+  b.innerHTML = '<span>' + txt + '</span><button onclick="cAtualizar()" style="background:#02121d;border:none;color:#00d4ff;border-radius:7px;padding:6px 13px;font-size:11.5px;font-weight:800;cursor:pointer;">Ver</button>';
+  b.style.display = 'flex';
+  void b.offsetWidth;
+  b.style.transform = 'translateY(0)';
+}
+
+async function cAtualizar() {
+  const b = document.getElementById('barra-nov');
+  if (b) { b.style.transform = 'translateY(-100%)'; setTimeout(function(){ b.style.display='none'; }, 300); }
+  await iniciar();
+  _cBase = await _cFoto();
+  _cAvisado = false;
+  toastP('Atualizado','ok');
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+function cIniciarPolling() {
+  _cFoto().then(f => { _cBase = f; });
+  if (_cTimer) clearInterval(_cTimer);
+  _cTimer = setInterval(cVerificar, 60000);
+  document.addEventListener('visibilitychange', function(){
+    if (!document.hidden) setTimeout(cVerificar, 800);
+  });
+}
+
 iniciar();
+cIniciarPolling();
 </script>
 </body>
 </html>
