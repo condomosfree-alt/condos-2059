@@ -637,7 +637,7 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.18-1837</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.18-1848</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -3693,6 +3693,57 @@ async function checkSession() {
 // ===== SISTEMA GERAL DE AVISOS ("o que tens de fazer") =====
 // Verifica pendências em todo o programa: badges no menu + bloco no dashboard
 var _avisosGerais = [];
+
+// 🔔 Enviar notificação push ao condómino (silencioso — nunca bloqueia o fluxo)
+async function enviarPush(fracaoId, titulo, corpo) {
+  if (!fracaoId) return;
+  try {
+    var baseP = location.href.substring(0, location.href.lastIndexOf('/') + 1);
+    var fr = fracoes.find(function(f){ return f.id === fracaoId; });
+    var urlP = fr && fr.token_acesso ? (baseP + 'portal.html?t=' + fr.token_acesso) : baseP;
+    await sb.functions.invoke('enviar-push', {
+      body: { fracao_id: fracaoId, titulo: titulo || 'COND.OS', corpo: corpo || '', url: urlP }
+    });
+  } catch(e) { console.log('push (ignorado):', e.message || e); }
+}
+
+// Interceta TODOS os inserts em 'mensagens' e dispara o push automaticamente.
+// Assim não é preciso mexer nos 16 sítios que criam mensagens.
+var _pushInstalado = false;
+function instalarInterceptorPush() {
+  if (_pushInstalado || !sb || !sb.from) return;
+  _pushInstalado = true;
+  var _from = sb.from.bind(sb);
+  sb.from = function(tabela) {
+    var q = _from(tabela);
+    if (tabela === 'mensagens' && q && typeof q.insert === 'function') {
+      var _insert = q.insert.bind(q);
+      q.insert = function(linhas) {
+        try {
+          var arr = Array.isArray(linhas) ? linhas : [linhas];
+          arr.forEach(function(m) {
+            // só notifica mensagens DO ADMIN para o condómino
+            if (m && m.autor === 'admin' && m.fracao_id && m.texto) {
+              var titulo = 'Nova mensagem do condomínio';
+              var t = String(m.texto);
+              if (/RECIBO/i.test(t)) titulo = '🧾 Recibo disponível';
+              else if (/QUOTA EM ATRASO|dívida/i.test(t)) titulo = '⚠️ Aviso de quota';
+              else if (/CONVOCAT/i.test(t)) titulo = '📨 Convocatória de assembleia';
+              else if (/ATA /i.test(t)) titulo = '📋 Ata da assembleia';
+              else if (/vota/i.test(t)) titulo = '🗳️ Votação à sua espera';
+              else if (/quota extraordinária/i.test(t)) titulo = '💶 Quota extraordinária';
+              var resumo = t.replace(/\n+/g, ' ').substring(0, 110);
+              enviarPush(m.fracao_id, titulo, resumo);
+            }
+          });
+        } catch(e) { /* nunca bloquear o insert */ }
+        return _insert(linhas);
+      };
+    }
+    return q;
+  };
+}
+
 async function verificarAvisosGerais() {
   if (!currentCondo) return;
   var avisos = [];
@@ -4034,6 +4085,7 @@ async function loadCondData() {
   loadOrcamento();
   // 🔄 arranca (ou reinicia) a deteção de novidades
   try { iniciarPolling(); } catch(e) { console.error('polling:', e); }
+  try { instalarInterceptorPush(); } catch(e) { console.error('push:', e); }
 }
 
 async function loadFracoes() {
