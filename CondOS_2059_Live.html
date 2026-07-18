@@ -637,7 +637,7 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.18-1255</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.18-1257</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -8604,6 +8604,11 @@ async function gerirOcorrencia(id) {
   // 2. ORÇAMENTO
   h += '<div style="background:var(--s1);border:1px solid var(--b1);border-radius:10px;padding:14px;margin-bottom:12px;">';
   h += '<div style="font-size:12px;font-weight:700;color:var(--cyan);margin-bottom:8px;">2 · ORÇAMENTO DO PARCEIRO</div>';
+  h += '<div style="display:flex;gap:8px;margin-bottom:10px;">';
+  h += '<button class="btn-ghost" style="flex:1;font-size:11px;background:rgba(0,212,255,.08);border-color:rgba(0,212,255,.3);color:var(--cyan);" onclick="ocPedirOrcamentos()">📨 Pedir orçamentos aos parceiros</button>';
+  h += '<button class="btn-ghost" style="flex:1;font-size:11px;background:rgba(180,140,255,.08);border-color:rgba(180,140,255,.3);color:#b48cff;" onclick="ocAbrirEnvelopes()">🔓 Comparar recebidos</button>';
+  h += '</div>';
+  h += '<div style="font-size:10px;color:var(--t3);margin-bottom:10px;line-height:1.45;">Os parceiros recebem o pedido no portal deles e submetem a proposta sem verem as dos outros (concorrência justa). Ou regista aqui um orçamento recebido por fora:</div>';
   h += '<div style="display:flex;gap:8px;">';
   h += '<input id="oc-orc-valor" class="fi" type="number" step="0.01" placeholder="Valor €" style="flex:0 0 110px;font-size:12px;" oninput="atualizarClassificacao()" value="'+(_ocAtual.orcamento_valor||'')+'">';
   h += '<input id="oc-orc-nota" class="fi" placeholder="O que o parceiro disse (ex: troca do motor)" style="flex:1;font-size:12px;" value="'+((_ocAtual.orcamento_nota||'').replace(/"/g,'&quot;'))+'">';
@@ -8862,6 +8867,136 @@ function ocPreverDivisao() {
   var min = Math.min.apply(null, Object.values(r.partes));
   var max = Math.max.apply(null, Object.values(r.partes));
   el.innerHTML = '↳ dividido por ' + n + ' fração(ões) — cada uma paga entre ' + min.toFixed(2) + '€ e ' + max.toFixed(2) + '€ (conforme permilagem)';
+}
+
+// 📨 PEDIR ORÇAMENTOS AOS PARCEIROS (envelope fechado — ninguém vê os dos outros)
+async function ocPedirOrcamentos() {
+  if (!_ocAtual) return;
+  var pRes = await sb.from('parceiros').select('*').eq('condominio_id', currentCondo.id).order('nome');
+  var parceiros = pRes.data || [];
+  if (!parceiros.length) { toast('Ainda não tens parceiros registados. Vai a Parceiros e adiciona.','warn'); return; }
+
+  // Já pedidos para esta ocorrência
+  var jaRes = await sb.from('orcamentos_obra').select('parceiro_id').eq('ocorrencia_id', _ocAtual.id);
+  var jaPedidos = (jaRes.data||[]).map(function(o){ return o.parceiro_id; });
+
+  var tipoEl = document.getElementById('oc-tipo-legal');
+  var cl = classificarIntervencao(tipoEl ? tipoEl.value : '', _ocAtual.orcamento_valor);
+
+  var h = '<div style="max-height:70vh;overflow-y:auto;padding:2px;">';
+  h += '<div style="font-size:12px;color:var(--t2);line-height:1.55;margin-bottom:12px;">Escolhe os parceiros a quem pedir orçamento. Cada um recebe o pedido no <strong>portal dele</strong> e submete a proposta — <strong>sem ver as dos outros</strong>.</div>';
+  if (cl.precisaOrcamentos) {
+    h += '<div style="background:rgba(0,212,255,.08);border:1px solid rgba(0,212,255,.3);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:11.5px;color:var(--cyan);">⚖️ Esta intervenção exige <strong>pelo menos ' + cl.minOrcamentos + ' orçamentos de proveniências diferentes</strong> (Lei 8/2022). Seleciona 3 ou mais.</div>';
+  }
+  h += '<label style="font-size:11px;color:var(--t2);font-weight:600;">Descrição do que pedes orçamento</label>';
+  h += '<textarea id="po-desc" class="fi" style="width:100%;min-height:56px;font-size:12px;margin-bottom:12px;">' + ((_ocAtual.descricao||'').replace(/</g,'&lt;')) + '</textarea>';
+  h += '<label style="font-size:11px;color:var(--t2);font-weight:600;">Prazo para responderem (dias)</label>';
+  h += '<input id="po-prazo" class="fi" type="number" value="15" style="width:100%;font-size:12px;margin-bottom:14px;">';
+  h += '<div style="font-size:11px;color:var(--t2);font-weight:600;margin-bottom:8px;">Parceiros:</div>';
+  parceiros.forEach(function(p){
+    var ja = jaPedidos.indexOf(p.id) > -1;
+    h += '<label style="display:flex;align-items:center;gap:10px;padding:9px 11px;background:var(--s1);border:1px solid var(--b1);border-radius:8px;margin-bottom:7px;cursor:' + (ja?'default':'pointer') + ';opacity:' + (ja?'.55':'1') + ';">';
+    h += '<input type="checkbox" class="po-parc" value="' + p.id + '"' + (ja?' disabled':'') + ' style="accent-color:var(--cyan);">';
+    h += '<div style="flex:1;"><div style="font-size:12.5px;font-weight:600;color:var(--text);">' + (p.nome||'') + '</div>';
+    h += '<div style="font-size:10px;color:var(--t3);">' + (p.especialidade||p.categoria||'') + (p.autorizado_ata?' · ⚖️ '+p.autorizado_ata:'') + (ja?' · já pedido':'') + '</div></div>';
+    if (!p.token_acesso) h += '<span style="font-size:9px;color:var(--amber);">sem portal</span>';
+    h += '</label>';
+  });
+  h += '<button class="btn-primary" style="width:100%;margin-top:12px;" onclick="ocEnviarPedidosOrcamento()">📨 Enviar pedidos</button>';
+  h += '</div>';
+  abrirModalGenerico('📨 Pedir Orçamentos', h);
+}
+
+async function ocEnviarPedidosOrcamento() {
+  var sel = Array.prototype.slice.call(document.querySelectorAll('.po-parc:checked')).map(function(el){ return el.value; });
+  if (!sel.length) { toast('Escolhe pelo menos um parceiro','err'); return; }
+  var desc = document.getElementById('po-desc').value.trim();
+  var prazo = parseInt(document.getElementById('po-prazo').value) || 15;
+
+  var tipoEl = document.getElementById('oc-tipo-legal');
+  var cl = classificarIntervencao(tipoEl ? tipoEl.value : '', _ocAtual.orcamento_valor);
+  if (cl.precisaOrcamentos && sel.length < cl.minOrcamentos) {
+    if (!await confirmar('⚖️ Selecionaste ' + sel.length + ' parceiro(s), mas a lei exige pelo menos ' + cl.minOrcamentos + ' orçamentos de proveniências diferentes.\n\nQueres enviar assim mesmo e pedir aos restantes depois?', {titulo:'Faltam proveniências', tipo:'aviso', icon:'⚖️', okTexto:'Enviar assim', cancelarTexto:'Voltar'})) return;
+  }
+
+  var linhas = sel.map(function(pid){
+    return { condominio_id: currentCondo.id, ocorrencia_id: _ocAtual.id, parceiro_id: pid,
+             descricao_obra: desc, validade_dias: prazo, estado: 'pedido' };
+  });
+  var ins = await sb.from('orcamentos_obra').insert(linhas);
+  if (ins.error) { toast('Erro: ' + ins.error.message, 'err'); return; }
+
+  // Marcar a ocorrência como a aguardar orçamentos
+  await sb.from('ocorrencias').update({ estado: 'aguarda_orcamento' }).eq('id', _ocAtual.id);
+  await ocEvento('orcamento', 'Pedidos de orçamento enviados a ' + sel.length + ' parceiro(s), com prazo de ' + prazo + ' dias. As propostas ficam seladas até à abertura (concorrência justa).');
+  toast('📨 ' + sel.length + ' pedido(s) enviado(s)! Os parceiros veem no portal deles.','ok');
+  fecharModalGenerico();
+  gerirOcorrencia(_ocAtual.id);
+}
+
+// 🔓 Abrir os envelopes e comparar (só aqui os valores ficam visíveis)
+async function ocAbrirEnvelopes() {
+  var r = await sb.from('orcamentos_obra').select('*, parceiros(nome, especialidade, autorizado_ata)').eq('ocorrencia_id', _ocAtual.id);
+  var orcs = r.data || [];
+  var submetidos = orcs.filter(function(o){ return o.estado === 'submetido' || o.estado === 'escolhido'; });
+  if (!submetidos.length) { toast('Ainda não há orçamentos submetidos','warn'); return; }
+
+  var tipoEl = document.getElementById('oc-tipo-legal');
+  var cl = classificarIntervencao(tipoEl ? tipoEl.value : '', _ocAtual.orcamento_valor);
+
+  submetidos.sort(function(a,b){ return parseFloat(a.valor||0) - parseFloat(b.valor||0); });
+  var maisBarato = submetidos[0];
+
+  var h = '<div style="max-height:70vh;overflow-y:auto;padding:2px;">';
+  if (cl.precisaOrcamentos && submetidos.length < cl.minOrcamentos) {
+    h += '<div style="background:rgba(255,84,112,.1);border:1px solid rgba(255,84,112,.35);border-radius:8px;padding:11px 13px;margin-bottom:12px;font-size:11.5px;color:var(--red);">⚠️ <strong>Mínimo legal não reunido:</strong> tens ' + submetidos.length + ' orçamento(s), a lei exige pelo menos ' + cl.minOrcamentos + '. Podes ver as propostas, mas a deliberação pode ser contestada.</div>';
+  } else if (cl.precisaOrcamentos) {
+    h += '<div style="background:rgba(34,229,132,.1);border:1px solid rgba(34,229,132,.3);border-radius:8px;padding:11px 13px;margin-bottom:12px;font-size:11.5px;color:var(--green);">✅ <strong>Mínimo legal reunido:</strong> ' + submetidos.length + ' orçamentos de proveniências diferentes. Podes levar à assembleia com segurança.</div>';
+  }
+  h += '<div style="font-size:11px;color:var(--t2);margin-bottom:12px;">Ordenados do mais barato ao mais caro. O preço não é o único critério — pondera prazo, reputação e o que cada um inclui.</div>';
+
+  submetidos.forEach(function(o, i){
+    var p = o.parceiros || {};
+    var barato = (o.id === maisBarato.id);
+    h += '<div style="background:var(--s1);border:1px solid ' + (barato?'rgba(34,229,132,.4)':'var(--b1)') + ';border-radius:10px;padding:13px;margin-bottom:10px;">';
+    h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">';
+    h += '<div style="flex:1;"><div style="font-size:13.5px;font-weight:700;color:var(--text);">' + (p.nome||'Parceiro') + (barato?' <span style="font-size:9px;color:var(--green);">MAIS BARATO</span>':'') + '</div>';
+    h += '<div style="font-size:10.5px;color:var(--t3);">' + (p.especialidade||'') + (p.autorizado_ata?' · ⚖️ '+p.autorizado_ata:'') + '</div></div>';
+    h += '<div style="text-align:right;"><div style="font-size:17px;font-weight:800;color:' + (barato?'var(--green)':'var(--cyan)') + ';">' + parseFloat(o.valor||0).toFixed(2).replace('.',',') + '€</div>';
+    if (o.prazo_dias) h += '<div style="font-size:10px;color:var(--t3);">' + o.prazo_dias + ' dias</div>';
+    h += '</div></div>';
+    if (o.notas) h += '<div style="font-size:11.5px;color:var(--t2);margin-top:8px;padding-top:8px;border-top:1px solid var(--b1);">' + o.notas.replace(/</g,'&lt;') + '</div>';
+    if (o.estado === 'escolhido') {
+      h += '<div style="margin-top:9px;font-size:11px;color:var(--green);font-weight:700;">✅ Adjudicado a este parceiro</div>';
+    } else {
+      h += '<button class="btn-ghost" style="width:100%;margin-top:9px;font-size:11.5px;" onclick="ocEscolherOrcamento(\'' + o.id + '\')">✅ Escolher este</button>';
+    }
+    h += '</div>';
+  });
+
+  // Não submetidos
+  var pendentes = orcs.filter(function(o){ return o.estado === 'pedido'; });
+  if (pendentes.length) {
+    h += '<div style="font-size:11px;color:var(--t3);margin-top:10px;">⏳ ' + pendentes.length + ' parceiro(s) ainda não responderam.</div>';
+  }
+  h += '</div>';
+  abrirModalGenerico('🔓 Comparar Orçamentos', h);
+}
+
+async function ocEscolherOrcamento(orcId) {
+  var r = await sb.from('orcamentos_obra').select('*, parceiros(nome)').eq('id', orcId).single();
+  if (r.error || !r.data) { toast('Orçamento não encontrado','err'); return; }
+  var o = r.data;
+  var nomeP = o.parceiros ? o.parceiros.nome : 'parceiro';
+  if (!await confirmar('Adjudicar a obra a ' + nomeP + ' por ' + parseFloat(o.valor||0).toFixed(2).replace('.',',') + '€?\n\nOs outros orçamentos ficam registados como não escolhidos (prova de que houve comparação).', {titulo:'Escolher orçamento', tipo:'info', icon:'✅', okTexto:'Sim, adjudicar'})) return;
+
+  await sb.from('orcamentos_obra').update({ estado:'escolhido' }).eq('id', orcId);
+  await sb.from('orcamentos_obra').update({ estado:'recusado' }).eq('ocorrencia_id', o.ocorrencia_id).neq('id', orcId).eq('estado','submetido');
+  await sb.from('ocorrencias').update({ parceiro_id: o.parceiro_id, orcamento_valor: o.valor, orcamento_nota: (o.notas||'') }).eq('id', o.ocorrencia_id);
+  await ocEvento('orcamento', 'Orçamento escolhido: ' + nomeP + ' — ' + parseFloat(o.valor||0).toFixed(2) + '€. Comparado com as restantes propostas recebidas.');
+  toast('✅ Adjudicado a ' + nomeP,'ok');
+  fecharModalGenerico();
+  gerirOcorrencia(_ocAtual.id);
 }
 
 async function ocContactarParceiro() {
