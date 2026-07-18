@@ -637,7 +637,7 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.18-1257</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.18-1303</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -8903,8 +8903,37 @@ async function ocPedirOrcamentos() {
     h += '</label>';
   });
   h += '<button class="btn-primary" style="width:100%;margin-top:12px;" onclick="ocEnviarPedidosOrcamento()">📨 Enviar pedidos</button>';
+
+  // 🔗 Link aberto do concurso — para empresas fora do sistema
+  var baseC = location.href.substring(0, location.href.lastIndexOf('/') + 1);
+  var urlConc = baseC + 'orcamento.html?t=' + (_ocAtual.token_concurso || '');
+  h += '<div style="margin-top:16px;background:rgba(34,229,132,.05);border:1px solid rgba(34,229,132,.28);border-radius:10px;padding:13px;">';
+  h += '<div style="font-size:12px;font-weight:700;color:var(--green);">🔗 Link aberto (qualquer empresa)</div>';
+  h += '<div style="font-size:10.5px;color:var(--t2);margin:5px 0 9px;line-height:1.5;">Envia este link a qualquer empresa — mesmo que não esteja no sistema. Também serve para dar a um condómino que queira que a empresa dele orçamente. Todos entram em envelope fechado e ficam por validar até aprovares.</div>';
+  if (_ocAtual.token_concurso) {
+    h += '<button class="tb-btn" style="width:100%;font-size:11.5px;margin-bottom:6px;" onclick="copiarLinkParceiro(\'' + urlConc.replace(/'/g,"") + '\')">📋 Copiar link do concurso</button>';
+    h += '<button class="tb-btn" style="width:100%;font-size:11.5px;" onclick="ocQRConcurso(\'' + urlConc.replace(/'/g,"") + '\')">📱 Mostrar QR</button>';
+  } else {
+    h += '<div style="font-size:11px;color:var(--amber);">⚠️ Corre o SQL sql_orcamento_publico.sql para ativar o link aberto.</div>';
+  }
+  h += '</div>';
   h += '</div>';
   abrirModalGenerico('📨 Pedir Orçamentos', h);
+}
+
+// QR do concurso em grande (para mostrar/imprimir)
+function ocQRConcurso(url) {
+  if (typeof QRCode === 'undefined') { toast('Biblioteca QR não carregada','err'); return; }
+  var h = '<div style="text-align:center;padding:10px;">';
+  h += '<div style="font-size:12px;color:var(--t2);margin-bottom:14px;">Qualquer empresa pode ler este código e submeter a sua proposta.</div>';
+  h += '<div id="qr-conc" style="display:inline-block;background:#fff;padding:14px;border-radius:12px;"></div>';
+  h += '<div style="font-size:10px;color:var(--t3);margin-top:12px;word-break:break-all;">' + url + '</div>';
+  h += '</div>';
+  abrirModalGenerico('📱 QR do Concurso', h);
+  setTimeout(function(){
+    var el = document.getElementById('qr-conc');
+    if (el) new QRCode(el, { text: url, width: 220, height: 220, correctLevel: QRCode.CorrectLevel.M });
+  }, 100);
 }
 
 async function ocEnviarPedidosOrcamento() {
@@ -8938,8 +8967,9 @@ async function ocEnviarPedidosOrcamento() {
 async function ocAbrirEnvelopes() {
   var r = await sb.from('orcamentos_obra').select('*, parceiros(nome, especialidade, autorizado_ata)').eq('ocorrencia_id', _ocAtual.id);
   var orcs = r.data || [];
-  var submetidos = orcs.filter(function(o){ return o.estado === 'submetido' || o.estado === 'escolhido'; });
-  if (!submetidos.length) { toast('Ainda não há orçamentos submetidos','warn'); return; }
+  var porValidar = orcs.filter(function(o){ return o.validado === false && o.estado === 'submetido'; });
+  var submetidos = orcs.filter(function(o){ return (o.estado === 'submetido' || o.estado === 'escolhido') && o.validado !== false; });
+  if (!submetidos.length && !porValidar.length) { toast('Ainda não há orçamentos submetidos','warn'); return; }
 
   var tipoEl = document.getElementById('oc-tipo-legal');
   var cl = classificarIntervencao(tipoEl ? tipoEl.value : '', _ocAtual.orcamento_valor);
@@ -8948,6 +8978,33 @@ async function ocAbrirEnvelopes() {
   var maisBarato = submetidos[0];
 
   var h = '<div style="max-height:70vh;overflow-y:auto;padding:2px;">';
+
+  // ⚠️ Externos por validar (chegaram pelo link aberto)
+  if (porValidar.length) {
+    h += '<div style="background:rgba(255,179,0,.08);border:1px solid rgba(255,179,0,.35);border-radius:10px;padding:13px;margin-bottom:14px;">';
+    h += '<div style="font-size:12.5px;font-weight:700;color:var(--amber);margin-bottom:4px;">⚠️ ' + porValidar.length + ' proposta(s) por validar</div>';
+    h += '<div style="font-size:10.5px;color:var(--t2);margin-bottom:10px;line-height:1.5;">Chegaram pelo link aberto. Confirma que são empresas reais antes de entrarem na comparação.</div>';
+    porValidar.forEach(function(o){
+      h += '<div style="background:var(--s1);border:1px solid var(--b1);border-radius:8px;padding:11px;margin-bottom:8px;">';
+      h += '<div style="font-size:12.5px;font-weight:700;color:var(--text);">' + (o.externo_nome||'—') + '</div>';
+      h += '<div style="font-size:10.5px;color:var(--t3);margin-top:2px;">' + (o.externo_nif?'NIF '+o.externo_nif+' · ':'') + (o.externo_contacto||'') + (o.externo_email?' · '+o.externo_email:'') + '</div>';
+      h += '<div style="font-size:13px;font-weight:700;color:var(--cyan);margin-top:6px;">' + parseFloat(o.valor||0).toFixed(2).replace('.',',') + '€' + (o.prazo_dias?' · '+o.prazo_dias+' dias':'') + '</div>';
+      if (o.notas) h += '<div style="font-size:11px;color:var(--t2);margin-top:5px;">' + o.notas.replace(/</g,'&lt;') + '</div>';
+      h += '<div style="display:flex;gap:7px;margin-top:9px;">';
+      h += '<button class="btn-ghost" style="flex:1;font-size:11px;color:var(--green);border-color:rgba(34,229,132,.35);" onclick="ocValidarExterno(\'' + o.id + '\', true)">✅ Aceitar</button>';
+      h += '<button class="btn-ghost" style="flex:1;font-size:11px;color:var(--red);border-color:rgba(255,84,112,.3);" onclick="ocValidarExterno(\'' + o.id + '\', false)">🗑️ Rejeitar</button>';
+      h += '</div></div>';
+    });
+    h += '</div>';
+  }
+
+  if (!submetidos.length) {
+    h += '<div style="text-align:center;color:var(--t3);font-size:12px;padding:20px;">Nenhuma proposta validada ainda.</div>';
+    h += '</div>';
+    abrirModalGenerico('🔓 Comparar Orçamentos', h);
+    return;
+  }
+
   if (cl.precisaOrcamentos && submetidos.length < cl.minOrcamentos) {
     h += '<div style="background:rgba(255,84,112,.1);border:1px solid rgba(255,84,112,.35);border-radius:8px;padding:11px 13px;margin-bottom:12px;font-size:11.5px;color:var(--red);">⚠️ <strong>Mínimo legal não reunido:</strong> tens ' + submetidos.length + ' orçamento(s), a lei exige pelo menos ' + cl.minOrcamentos + '. Podes ver as propostas, mas a deliberação pode ser contestada.</div>';
   } else if (cl.precisaOrcamentos) {
@@ -8983,16 +9040,67 @@ async function ocAbrirEnvelopes() {
   abrirModalGenerico('🔓 Comparar Orçamentos', h);
 }
 
+// ✅ Validar (ou rejeitar) uma proposta que chegou pelo link aberto
+async function ocValidarExterno(orcId, aceitar) {
+  var r = await sb.from('orcamentos_obra').select('*').eq('id', orcId).single();
+  if (r.error || !r.data) { toast('Proposta não encontrada','err'); return; }
+  var o = r.data;
+
+  if (!aceitar) {
+    if (!await confirmar('Rejeitar a proposta de "' + (o.externo_nome||'—') + '"?\n\nFica registada como rejeitada (não desaparece — mantém-se o histórico).', {titulo:'Rejeitar proposta', tipo:'aviso', icon:'🗑️', okTexto:'Sim, rejeitar'})) return;
+    await sb.from('orcamentos_obra').update({ estado:'recusado', validado:true }).eq('id', orcId);
+    await ocEvento('orcamento', 'Proposta externa de "' + (o.externo_nome||'—') + '" rejeitada pela administração.');
+    toast('Proposta rejeitada','ok');
+    fecharModalGenerico();
+    setTimeout(function(){ ocAbrirEnvelopes(); }, 200);
+    return;
+  }
+
+  // Aceitar → criar parceiro automaticamente (fica no sistema para o futuro)
+  var msg = 'Aceitar a proposta de "' + (o.externo_nome||'—') + '" (' + parseFloat(o.valor||0).toFixed(2).replace('.',',') + '€)?\n\n';
+  msg += 'A empresa fica registada como parceiro do condomínio, para futuros pedidos.\n\n';
+  msg += 'A proposta entra na comparação com as restantes.';
+  if (!await confirmar(msg, {titulo:'Aceitar proposta', tipo:'info', icon:'✅', okTexto:'Sim, aceitar'})) return;
+
+  var parceiroId = o.parceiro_id;
+  if (!parceiroId && o.externo_nome) {
+    // Já existe um parceiro com este nome/NIF?
+    var exist = await sb.from('parceiros').select('id').eq('condominio_id', currentCondo.id).ilike('nome', o.externo_nome).limit(1);
+    if (exist.data && exist.data.length) {
+      parceiroId = exist.data[0].id;
+    } else {
+      var novo = await sb.from('parceiros').insert({
+        condominio_id: currentCondo.id,
+        nome: o.externo_nome,
+        nif: o.externo_nif || null,
+        telefone: o.externo_contacto || null,
+        email: o.externo_email || null,
+        especialidade: _ocAtual.categoria || null,
+        notas: 'Registado automaticamente ao submeter proposta pelo link aberto.'
+      }).select('id').single();
+      if (!novo.error && novo.data) parceiroId = novo.data.id;
+    }
+  }
+
+  var upd = { validado: true };
+  if (parceiroId) upd.parceiro_id = parceiroId;
+  await sb.from('orcamentos_obra').update(upd).eq('id', orcId);
+  await ocEvento('orcamento', 'Proposta externa de "' + (o.externo_nome||'—') + '" validada pela administração e incluída na comparação (' + parseFloat(o.valor||0).toFixed(2) + '€).');
+  toast('✅ Proposta aceite' + (parceiroId?' e parceiro registado':'') ,'ok');
+  fecharModalGenerico();
+  setTimeout(function(){ ocAbrirEnvelopes(); }, 200);
+}
+
 async function ocEscolherOrcamento(orcId) {
   var r = await sb.from('orcamentos_obra').select('*, parceiros(nome)').eq('id', orcId).single();
   if (r.error || !r.data) { toast('Orçamento não encontrado','err'); return; }
   var o = r.data;
-  var nomeP = o.parceiros ? o.parceiros.nome : 'parceiro';
+  var nomeP = (o.parceiros ? o.parceiros.nome : null) || o.externo_nome || 'parceiro';
   if (!await confirmar('Adjudicar a obra a ' + nomeP + ' por ' + parseFloat(o.valor||0).toFixed(2).replace('.',',') + '€?\n\nOs outros orçamentos ficam registados como não escolhidos (prova de que houve comparação).', {titulo:'Escolher orçamento', tipo:'info', icon:'✅', okTexto:'Sim, adjudicar'})) return;
 
   await sb.from('orcamentos_obra').update({ estado:'escolhido' }).eq('id', orcId);
   await sb.from('orcamentos_obra').update({ estado:'recusado' }).eq('ocorrencia_id', o.ocorrencia_id).neq('id', orcId).eq('estado','submetido');
-  await sb.from('ocorrencias').update({ parceiro_id: o.parceiro_id, orcamento_valor: o.valor, orcamento_nota: (o.notas||'') }).eq('id', o.ocorrencia_id);
+  var updOc = { orcamento_valor: o.valor, orcamento_nota: (o.notas||'') }; if (o.parceiro_id) updOc.parceiro_id = o.parceiro_id; await sb.from('ocorrencias').update(updOc).eq('id', o.ocorrencia_id);
   await ocEvento('orcamento', 'Orçamento escolhido: ' + nomeP + ' — ' + parseFloat(o.valor||0).toFixed(2) + '€. Comparado com as restantes propostas recebidas.');
   toast('✅ Adjudicado a ' + nomeP,'ok');
   fecharModalGenerico();

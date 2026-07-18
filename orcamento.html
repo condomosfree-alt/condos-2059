@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>COND.OS — Submeter Orçamento</title>
+<meta name="theme-color" content="#0a1220">
+<style>
+  :root { --bg:#0a1220; --card:#111d31; --card2:#16233a; --b:#233350; --b2:#2d4062;
+    --text:#e8eaf0; --t2:#9aa5b8; --t3:#647087; --cyan:#00d4ff; --green:#22e584; --red:#ff5470; --amber:#ffb300; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:system-ui,-apple-system,'Segoe UI',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+  .wrap { max-width:520px; margin:0 auto; padding:0 0 40px; }
+  .hdr { background:linear-gradient(180deg,#0d1a30,#0a1524); border-bottom:1px solid var(--b); padding:22px 20px 20px; text-align:center; }
+  .brand { font-family:'Courier New',monospace; font-weight:700; letter-spacing:3px; font-size:11px; color:var(--cyan); margin-bottom:12px; }
+  .h1 { font-size:19px; font-weight:800; }
+  .sub { font-size:12px; color:var(--t2); margin-top:5px; }
+  .page { padding:18px 16px; }
+  .card { background:var(--card); border:1px solid var(--b); border-radius:14px; padding:16px; margin-bottom:14px; }
+  .sec { font-size:11px; font-weight:800; letter-spacing:.5px; color:var(--t3); text-transform:uppercase; margin-bottom:10px; }
+  .lbl { font-size:11.5px; color:var(--t2); font-weight:600; margin-top:13px; display:block; }
+  .fi { width:100%; background:var(--card2); border:1px solid var(--b2); border-radius:9px; padding:12px 13px; color:var(--text); font-size:13.5px; margin-top:6px; font-family:inherit; }
+  .fi:focus { outline:none; border-color:var(--cyan); }
+  .btn { width:100%; background:var(--cyan); border:none; color:#02121d; border-radius:11px; padding:15px; font-size:14px; font-weight:800; cursor:pointer; margin-top:20px; }
+  .btn:disabled { opacity:.5; cursor:default; }
+  .selo { background:rgba(0,212,255,.06); border:1px solid rgba(0,212,255,.22); border-radius:10px; padding:12px 14px; font-size:11.5px; color:var(--t2); line-height:1.55; margin-bottom:14px; }
+  .obra { background:var(--card2); border-radius:10px; padding:13px 15px; margin-bottom:14px; }
+  .obra .t { font-size:10px; color:var(--t3); text-transform:uppercase; letter-spacing:.5px; }
+  .obra .d { font-size:14px; margin-top:4px; line-height:1.5; }
+  .ok-box { text-align:center; padding:50px 24px; }
+  .row { display:flex; gap:10px; }
+  .row > div { flex:1; }
+  #loading, #erro { text-align:center; padding:60px 24px; }
+  .spin { width:32px; height:32px; border:3px solid var(--b); border-top-color:var(--cyan); border-radius:50%; margin:0 auto 14px; animation:sp .8s linear infinite; }
+  @keyframes sp { to { transform:rotate(360deg); } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="loading"><div class="spin"></div><div style="color:var(--t2);font-size:13px;">A carregar…</div></div>
+
+  <div id="erro" style="display:none;">
+    <div style="font-size:40px;margin-bottom:12px;">🔒</div>
+    <div style="font-size:16px;font-weight:700;margin-bottom:8px;" id="erro-t">Link inválido</div>
+    <div style="font-size:13px;color:var(--t2);" id="erro-d">Este link não é válido ou o prazo já terminou.</div>
+  </div>
+
+  <div id="form-area" style="display:none;">
+    <div class="hdr">
+      <div class="brand">COND.OS · PEDIDO DE ORÇAMENTO</div>
+      <div class="h1" id="c-condo">—</div>
+      <div class="sub" id="c-cat">—</div>
+    </div>
+    <div class="page">
+      <div class="selo">🔒 <strong>Proposta em envelope fechado.</strong> O seu orçamento fica selado — nem você vê os das outras empresas, nem elas veem o seu. Todos são abertos ao mesmo tempo, no fim do prazo. Isto garante uma concorrência justa.</div>
+
+      <div class="obra">
+        <div class="t">Trabalho a orçamentar</div>
+        <div class="d" id="c-desc">—</div>
+        <div style="font-size:11px;color:var(--t3);margin-top:7px;" id="c-local"></div>
+      </div>
+
+      <div class="card">
+        <div class="sec">Identificação da empresa</div>
+        <label class="lbl">Nome da empresa / profissional *</label>
+        <input class="fi" id="f-nome" placeholder="Ex: Canalizações Silva, Lda.">
+        <div class="row">
+          <div><label class="lbl">NIF</label><input class="fi" id="f-nif" placeholder="Ex: 501234567"></div>
+          <div><label class="lbl">Telefone *</label><input class="fi" id="f-tel" placeholder="Ex: 912345678"></div>
+        </div>
+        <label class="lbl">Email</label>
+        <input class="fi" id="f-email" type="email" placeholder="empresa@exemplo.pt">
+      </div>
+
+      <div class="card">
+        <div class="sec">A sua proposta</div>
+        <label class="lbl">Valor total (€) *</label>
+        <input class="fi" id="f-valor" type="number" step="0.01" placeholder="Ex: 850.00">
+        <div class="row">
+          <div><label class="lbl">Prazo de execução (dias)</label><input class="fi" id="f-prazo" type="number" placeholder="Ex: 7"></div>
+          <div><label class="lbl">Validade da proposta (dias)</label><input class="fi" id="f-validade" type="number" placeholder="Ex: 30"></div>
+        </div>
+        <label class="lbl">O que inclui</label>
+        <textarea class="fi" id="f-notas" rows="3" placeholder="Ex: material e mão de obra, garantia de 2 anos, IVA incluído"></textarea>
+      </div>
+
+      <button class="btn" id="btn-enviar" onclick="enviar()">📤 Submeter proposta</button>
+      <div style="font-size:10.5px;color:var(--t3);text-align:center;margin-top:12px;line-height:1.5;">Ao submeter, os seus dados ficam registados para o condomínio o poder contactar. A proposta será comparada com as restantes recebidas.</div>
+    </div>
+  </div>
+
+  <div id="sucesso" style="display:none;">
+    <div class="ok-box">
+      <div style="font-size:52px;margin-bottom:14px;">✅</div>
+      <div style="font-size:19px;font-weight:800;margin-bottom:10px;">Proposta submetida!</div>
+      <div style="font-size:13.5px;color:var(--t2);line-height:1.6;max-width:340px;margin:0 auto;">A sua proposta ficou registada e selada. O condomínio vai analisá-la em conjunto com as restantes e entrará em contacto.</div>
+      <div style="font-size:11.5px;color:var(--t3);margin-top:20px;">Obrigado pela sua participação.</div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const SB_URL = 'https://iopkxoabszhzjimjltir.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlvcGt4b2Fic3poemppbWpsdGlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEyNzc5MjQsImV4cCI6MjA5Njg1MzkyNH0.PwopXnx0v7kSXUeua1Y3fI3xPDIS8S62SzGBfwPwLSA';
+const sb = supabase.createClient(SB_URL, SB_KEY);
+const token = new URLSearchParams(location.search).get('t');
+
+async function init() {
+  if (!token) { falhar(); return; }
+  const r = await sb.rpc('concurso_info', { p_token: token });
+  if (r.error || !r.data || !r.data.length) { falhar(); return; }
+  const c = r.data[0];
+  if (!c.aberto) {
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('erro').style.display = 'block';
+    document.getElementById('erro-t').textContent = 'Prazo encerrado';
+    document.getElementById('erro-d').textContent = 'O prazo para apresentar propostas para este trabalho já terminou.';
+    return;
+  }
+  document.getElementById('c-condo').textContent = c.condominio_nome || 'Condomínio';
+  document.getElementById('c-cat').textContent = c.categoria || '';
+  document.getElementById('c-desc').textContent = c.descricao || '—';
+  document.getElementById('c-local').textContent = c.local_ocorrencia ? ('📍 ' + c.local_ocorrencia) : '';
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('form-area').style.display = 'block';
+}
+
+function falhar() {
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('erro').style.display = 'block';
+}
+
+async function enviar() {
+  const nome = document.getElementById('f-nome').value.trim();
+  const tel = document.getElementById('f-tel').value.trim();
+  const valor = parseFloat(document.getElementById('f-valor').value);
+  if (nome.length < 2) { alert('Indique o nome da empresa ou profissional.'); return; }
+  if (!tel) { alert('Indique um telefone de contacto.'); return; }
+  if (!valor || valor <= 0) { alert('Indique um valor válido para a proposta.'); return; }
+
+  const btn = document.getElementById('btn-enviar');
+  btn.disabled = true; btn.textContent = 'A enviar…';
+
+  const r = await sb.rpc('concurso_submeter', {
+    p_token: token, p_nome: nome,
+    p_nif: document.getElementById('f-nif').value.trim(),
+    p_contacto: tel,
+    p_email: document.getElementById('f-email').value.trim(),
+    p_valor: valor,
+    p_prazo: parseInt(document.getElementById('f-prazo').value) || null,
+    p_validade: parseInt(document.getElementById('f-validade').value) || null,
+    p_notas: document.getElementById('f-notas').value.trim()
+  });
+
+  if (r.error || r.data === false) {
+    btn.disabled = false; btn.textContent = '📤 Submeter proposta';
+    alert('Não foi possível submeter. O prazo pode ter terminado.');
+    return;
+  }
+  document.getElementById('form-area').style.display = 'none';
+  document.getElementById('sucesso').style.display = 'block';
+  window.scrollTo(0,0);
+}
+
+init();
+</script>
+</body>
+</html>
