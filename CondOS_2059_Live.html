@@ -637,7 +637,7 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.18-1303</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.18-1309</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -8964,6 +8964,25 @@ async function ocEnviarPedidosOrcamento() {
 }
 
 // 🔓 Abrir os envelopes e comparar (só aqui os valores ficam visíveis)
+// 🔒 Fechar o concurso — bloqueia novas propostas pelo link aberto
+async function ocFecharConcurso() {
+  if (!await confirmar('Fechar o concurso de orçamentos?\n\nO link aberto deixa de aceitar propostas. Só depois do fecho é que a comparação garante o envelope fechado a 100%.\n\n(Podes reabrir se for preciso.)', {titulo:'Fechar concurso', tipo:'info', icon:'🔒', okTexto:'Sim, fechar'})) return;
+  await sb.from('ocorrencias').update({ concurso_aberto: false }).eq('id', _ocAtual.id);
+  _ocAtual.concurso_aberto = false;
+  await ocEvento('orcamento', 'Concurso de orçamentos ENCERRADO. A partir deste momento não entram novas propostas — abertura dos envelopes para comparação.');
+  toast('🔒 Concurso fechado','ok');
+  fecharModalGenerico();
+  setTimeout(function(){ ocAbrirEnvelopes(); }, 200);
+}
+
+async function ocReabrirConcurso() {
+  if (!await confirmar('Reabrir o concurso?\n\nO link aberto volta a aceitar propostas. Atenção: reabrir depois de teres visto os valores pode ser contestado (quebra do envelope fechado). Regista o motivo no histórico.', {titulo:'Reabrir concurso', tipo:'aviso', icon:'🔓', okTexto:'Sim, reabrir'})) return;
+  await sb.from('ocorrencias').update({ concurso_aberto: true }).eq('id', _ocAtual.id);
+  _ocAtual.concurso_aberto = true;
+  await ocEvento('orcamento', 'Concurso REABERTO pela administração após encerramento.');
+  toast('🔓 Concurso reaberto','ok');
+}
+
 async function ocAbrirEnvelopes() {
   var r = await sb.from('orcamentos_obra').select('*, parceiros(nome, especialidade, autorizado_ata)').eq('ocorrencia_id', _ocAtual.id);
   var orcs = r.data || [];
@@ -8978,6 +8997,17 @@ async function ocAbrirEnvelopes() {
   var maisBarato = submetidos[0];
 
   var h = '<div style="max-height:70vh;overflow-y:auto;padding:2px;">';
+
+  // 🔒 Estado do concurso — envelope fechado a sério
+  if (_ocAtual.concurso_aberto !== false) {
+    h += '<div style="background:rgba(255,179,0,.1);border:1px solid rgba(255,179,0,.4);border-radius:10px;padding:12px 14px;margin-bottom:14px;">';
+    h += '<div style="font-size:12px;font-weight:700;color:var(--amber);">🔓 O concurso ainda está ABERTO</div>';
+    h += '<div style="font-size:10.5px;color:var(--t2);margin:5px 0 9px;line-height:1.5;">Ainda podem entrar propostas pelo link. Para garantir o envelope fechado a 100% (ninguém pode ser beneficiado com informação), fecha o concurso <strong>antes</strong> de analisar os valores.</div>';
+    h += '<button class="btn-ghost" style="width:100%;font-size:11.5px;color:var(--amber);border-color:rgba(255,179,0,.4);" onclick="ocFecharConcurso()">🔒 Fechar concurso agora</button>';
+    h += '</div>';
+  } else {
+    h += '<div style="font-size:10.5px;color:var(--green);margin-bottom:10px;">🔒 Concurso encerrado — envelopes abertos em condições de igualdade.</div>';
+  }
 
   // ⚠️ Externos por validar (chegaram pelo link aberto)
   if (porValidar.length) {
@@ -9024,9 +9054,9 @@ async function ocAbrirEnvelopes() {
     h += '</div></div>';
     if (o.notas) h += '<div style="font-size:11.5px;color:var(--t2);margin-top:8px;padding-top:8px;border-top:1px solid var(--b1);">' + o.notas.replace(/</g,'&lt;') + '</div>';
     if (o.estado === 'escolhido') {
-      h += '<div style="margin-top:9px;font-size:11px;color:var(--green);font-weight:700;">✅ Adjudicado a este parceiro</div>';
+      h += '<div style="margin-top:9px;font-size:11px;color:var(--green);font-weight:700;">' + (cl.precisaVotacao ? '⚖️ Recomendado — aguarda deliberação da assembleia' : '✅ Adjudicado a este parceiro') + '</div>';
     } else {
-      h += '<button class="btn-ghost" style="width:100%;margin-top:9px;font-size:11.5px;" onclick="ocEscolherOrcamento(\'' + o.id + '\')">✅ Escolher este</button>';
+      h += '<button class="btn-ghost" style="width:100%;margin-top:9px;font-size:11.5px;" onclick="ocEscolherOrcamento(\'' + o.id + '\')">' + (cl.precisaVotacao ? '⚖️ Recomendar à assembleia' : '✅ Escolher este') + '</button>';
     }
     h += '</div>';
   });
@@ -9096,6 +9126,31 @@ async function ocEscolherOrcamento(orcId) {
   if (r.error || !r.data) { toast('Orçamento não encontrado','err'); return; }
   var o = r.data;
   var nomeP = (o.parceiros ? o.parceiros.nome : null) || o.externo_nome || 'parceiro';
+
+  // ⚖️ A lei decide QUEM escolhe: admin ou assembleia
+  var tipoEl = document.getElementById('oc-tipo-legal');
+  var tipoLegal = (tipoEl ? tipoEl.value : '') || _ocAtual.tipo_legal || '';
+  var cl = classificarIntervencao(tipoLegal, o.valor);
+
+  if (cl.precisaVotacao) {
+    // A escolha final é da ASSEMBLEIA — o admin só recomenda
+    var msgA = '⚖️ Esta intervenção (' + cl.label.replace(/[^\wÀ-ÿ \/]/g,'').trim() + ') exige DELIBERAÇÃO DA ASSEMBLEIA' + (cl.maioria==='dois_tercos' ? ' por maioria de 2/3' : ' por maioria simples') + '.\n\n';
+    msgA += 'Vou marcar a proposta de ' + nomeP + ' (' + parseFloat(o.valor||0).toFixed(2).replace('.',',') + '€) como a RECOMENDADA pela administração.\n\n';
+    msgA += 'A decisão final é da assembleia, com os ' + '3+ orçamentos apresentados. A adjudicação só se concretiza após a deliberação.';
+    if (!await confirmar(msgA, {titulo:'Recomendar à assembleia', tipo:'info', icon:'⚖️', okTexto:'Marcar como recomendada'})) return;
+
+    await sb.from('orcamentos_obra').update({ estado:'escolhido' }).eq('id', orcId);
+    var updOcA = { orcamento_valor: o.valor, orcamento_nota: (o.notas||''), estado:'aguarda_votacao' };
+    if (o.parceiro_id) updOcA.parceiro_id = o.parceiro_id;
+    await sb.from('ocorrencias').update(updOcA).eq('id', o.ocorrencia_id);
+    await ocEvento('orcamento', 'Proposta de ' + nomeP + ' (' + parseFloat(o.valor||0).toFixed(2) + '€) marcada como RECOMENDADA pela administração. A adjudicação depende de deliberação da assembleia (' + (cl.maioria==='dois_tercos'?'maioria de 2/3':'maioria simples') + '), perante os orçamentos apresentados.');
+    toast('⚖️ Proposta recomendada — a assembleia delibera','ok');
+    fecharModalGenerico();
+    gerirOcorrencia(_ocAtual.id);
+    return;
+  }
+
+  // Sem deliberação exigida → adjudicação direta pelo admin
   if (!await confirmar('Adjudicar a obra a ' + nomeP + ' por ' + parseFloat(o.valor||0).toFixed(2).replace('.',',') + '€?\n\nOs outros orçamentos ficam registados como não escolhidos (prova de que houve comparação).', {titulo:'Escolher orçamento', tipo:'info', icon:'✅', okTexto:'Sim, adjudicar'})) return;
 
   await sb.from('orcamentos_obra').update({ estado:'escolhido' }).eq('id', orcId);
