@@ -637,7 +637,7 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.18-1819</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.18-1837</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -4032,6 +4032,8 @@ async function loadCondData() {
   verificarAvisosGerais();
   atualizarBadgeMensagens();
   loadOrcamento();
+  // 🔄 arranca (ou reinicia) a deteção de novidades
+  try { iniciarPolling(); } catch(e) { console.error('polling:', e); }
 }
 
 async function loadFracoes() {
@@ -13821,6 +13823,103 @@ window.addEventListener('load', function() {
 });
 
 // ===== DASHBOARD =====
+// 🔄 POLLING — deteta novidades no servidor sem recarregar a página
+// Verifica de 60 em 60s, mas SÓ com o separador visível (não gasta nada em segundo plano).
+var _pollTimer = null;
+var _pollBase = null;      // fotografia do estado quando os dados foram carregados
+var _pollAvisado = false;
+
+async function _pollFotografia() {
+  if (!currentCondo || !currentCondo.id) return null;
+  try {
+    var cid = currentCondo.id;
+    var res = await Promise.all([
+      sb.from('ocorrencias').select('id', {count:'exact', head:true}).eq('condominio_id', cid),
+      sb.from('mensagens').select('id', {count:'exact', head:true}).eq('condominio_id', cid).eq('autor','condomino').eq('lida_admin', false),
+      sb.from('orcamentos_obra').select('id', {count:'exact', head:true}).eq('condominio_id', cid).eq('estado','submetido'),
+      sb.from('quotas').select('id', {count:'exact', head:true}).eq('condominio_id', cid).eq('estado','pago')
+    ]);
+    return {
+      ocorrencias: res[0].count || 0,
+      mensagens: res[1].count || 0,
+      propostas: res[2].count || 0,
+      quotasPagas: res[3].count || 0
+    };
+  } catch(e) { return null; }
+}
+
+// Guarda a fotografia atual (chamado quando os dados são (re)carregados)
+async function marcarEstadoAtual() {
+  _pollBase = await _pollFotografia();
+  _pollAvisado = false;
+  var b = document.getElementById('barra-novidades');
+  if (b) b.style.display = 'none';
+}
+
+async function verificarNovidades() {
+  if (document.hidden) return;              // separador em segundo plano → não gasta
+  if (!currentCondo || _pollAvisado) return;
+  var agora = await _pollFotografia();
+  if (!agora || !_pollBase) { if (agora) _pollBase = agora; return; }
+
+  var novidades = [];
+  if (agora.ocorrencias > _pollBase.ocorrencias) novidades.push((agora.ocorrencias - _pollBase.ocorrencias) + ' nova(s) ocorrência(s)');
+  if (agora.mensagens > _pollBase.mensagens) novidades.push((agora.mensagens - _pollBase.mensagens) + ' mensagem(ns) de condóminos');
+  if (agora.propostas > _pollBase.propostas) novidades.push((agora.propostas - _pollBase.propostas) + ' proposta(s) de orçamento');
+  if (agora.quotasPagas > _pollBase.quotasPagas) novidades.push((agora.quotasPagas - _pollBase.quotasPagas) + ' quota(s) paga(s)');
+
+  if (novidades.length) mostrarBarraNovidades(novidades.join(' · '));
+}
+
+function mostrarBarraNovidades(txt) {
+  _pollAvisado = true;
+  var b = document.getElementById('barra-novidades');
+  if (!b) {
+    b = document.createElement('div');
+    b.id = 'barra-novidades';
+    b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:11000;background:linear-gradient(90deg,rgba(0,212,255,.95),rgba(0,145,255,.95));color:#02121d;padding:9px 18px;display:flex;align-items:center;justify-content:center;gap:14px;font-size:12.5px;font-weight:700;box-shadow:0 4px 20px rgba(0,0,0,.4);transform:translateY(-100%);transition:transform .3s ease;';
+    document.body.appendChild(b);
+  }
+  b.innerHTML = '<span>🔄 Há novidades: ' + txt + '</span>' +
+    '<button onclick="atualizarDadosAgora()" style="background:#02121d;border:none;color:#00d4ff;border-radius:7px;padding:6px 14px;font-size:11.5px;font-weight:800;cursor:pointer;">Atualizar</button>' +
+    '<button onclick="dispensarBarraNovidades()" style="background:transparent;border:none;color:rgba(2,18,29,.6);font-size:16px;cursor:pointer;line-height:1;padding:0 4px;" title="Dispensar">×</button>';
+  b.style.display = 'flex';
+  void b.offsetWidth;
+  b.style.transform = 'translateY(0)';
+}
+
+function dispensarBarraNovidades() {
+  var b = document.getElementById('barra-novidades');
+  if (b) { b.style.transform = 'translateY(-100%)'; setTimeout(function(){ b.style.display='none'; }, 300); }
+  // volta a avisar se aparecerem MAIS novidades depois desta
+  _pollFotografia().then(function(f){ if (f) _pollBase = f; _pollAvisado = false; });
+}
+
+async function atualizarDadosAgora() {
+  var b = document.getElementById('barra-novidades');
+  if (b) { b.style.transform = 'translateY(-100%)'; setTimeout(function(){ b.style.display='none'; }, 300); }
+  toast('A atualizar…','');
+  try {
+    await loadCondData();
+    await verificarAvisosGerais();
+    await marcarEstadoAtual();
+    toast('✅ Atualizado','ok');
+  } catch(e) {
+    console.error('atualizar:', e);
+    location.reload();  // se algo falhar, recarrega mesmo
+  }
+}
+
+function iniciarPolling() {
+  if (_pollTimer) clearInterval(_pollTimer);
+  marcarEstadoAtual();
+  _pollTimer = setInterval(verificarNovidades, 60000);   // 60 segundos
+  // Ao voltar ao separador, verifica logo (café resolvido)
+  document.addEventListener('visibilitychange', function(){
+    if (!document.hidden) setTimeout(verificarNovidades, 800);
+  });
+}
+
 async function loadDashboard() {
   if (!currentCondo) return;
   const now = new Date();
