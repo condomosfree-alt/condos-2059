@@ -637,7 +637,7 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.18-1802</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.18-1808</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -3804,6 +3804,18 @@ async function verificarAvisosGerais() {
         texto: porPagarForn.length + ' despesa(s) por pagar ao fornecedor',
         detalhe: 'Há ' + totalPorPagar.toFixed(2) + '€ aprovados mas ainda não pagos. Quando pagares, clica em "💸 Pagar" para o movimento entrar no extrato.' });
     }
+
+    // 5j) Concursos com prazo terminado (ainda abertos)
+    try {
+      var hojeStr = new Date().toISOString().split('T')[0];
+      var prazRes = await sb.from('ocorrencias').select('id,descricao,concurso_prazo').eq('condominio_id', currentCondo.id).eq('concurso_aberto', true).not('concurso_prazo','is',null).lte('concurso_prazo', hojeStr);
+      var expirados = prazRes.data || [];
+      if (expirados.length) {
+        avisos.push({ pagina:'ocorrencias', badge:String(expirados.length), cor:'#ffb300',
+          texto: expirados.length + ' concurso(s) com prazo terminado',
+          detalhe: 'O prazo para receber propostas já passou mas o concurso continua aberto. Fecha-o para garantir o envelope fechado e comparar em condições de igualdade.' });
+      }
+    } catch(e) { console.error('aviso prazo concurso:', e); }
 
     // 5i) Concursos de orçamentos — propostas recebidas / por validar
     try {
@@ -8980,9 +8992,12 @@ async function ocEnviarPedidosOrcamento() {
   var ins = await sb.from('orcamentos_obra').insert(linhas);
   if (ins.error) { toast('Erro: ' + ins.error.message, 'err'); return; }
 
-  // Marcar a ocorrência como a aguardar orçamentos
-  await sb.from('ocorrencias').update({ estado: 'aguarda_orcamento' }).eq('id', _ocAtual.id);
-  await ocEvento('orcamento', 'Pedidos de orçamento enviados a ' + sel.length + ' parceiro(s), com prazo de ' + prazo + ' dias. As propostas ficam seladas até à abertura (concorrência justa).');
+  // Marcar a ocorrência como a aguardar orçamentos + guardar a data-limite do concurso
+  var limite = new Date(); limite.setDate(limite.getDate() + prazo);
+  var dataLimite = limite.toISOString().split('T')[0];
+  await sb.from('ocorrencias').update({ estado: 'aguarda_orcamento', concurso_prazo: dataLimite, concurso_aberto: true }).eq('id', _ocAtual.id);
+  _ocAtual.concurso_prazo = dataLimite; _ocAtual.concurso_aberto = true;
+  await ocEvento('orcamento', 'Pedidos de orçamento enviados a ' + sel.length + ' parceiro(s), com prazo até ' + limite.toLocaleDateString('pt-PT') + ' (' + prazo + ' dias). As propostas ficam seladas até à abertura (concorrência justa).');
   toast('📨 ' + sel.length + ' pedido(s) enviado(s)! Os parceiros veem no portal deles.','ok');
   fecharModalGenerico();
   gerirOcorrencia(_ocAtual.id);
@@ -9004,7 +9019,9 @@ async function ocReabrirConcurso() {
   if (!await confirmar('Reabrir o concurso?\n\nO link aberto volta a aceitar propostas. Atenção: reabrir depois de teres visto os valores pode ser contestado (quebra do envelope fechado). Regista o motivo no histórico.', {titulo:'Reabrir concurso', tipo:'aviso', icon:'🔓', okTexto:'Sim, reabrir'})) return;
   await sb.from('ocorrencias').update({ concurso_aberto: true }).eq('id', _ocAtual.id);
   _ocAtual.concurso_aberto = true;
-  await ocEvento('orcamento', 'Concurso REABERTO pela administração após encerramento.');
+  // Limpar a recomendação anterior — não faz sentido manter enquanto entram propostas novas
+  await sb.from('orcamentos_obra').update({ estado:'submetido' }).eq('ocorrencia_id', _ocAtual.id).eq('estado','escolhido');
+  await ocEvento('orcamento', 'Concurso REABERTO pela administração após encerramento. A recomendação anterior foi anulada — a comparação recomeça quando fechar de novo.');
   toast('🔓 Concurso reaberto','ok');
 }
 
@@ -9028,10 +9045,18 @@ async function ocAbrirEnvelopes() {
     h += '<div style="background:rgba(255,179,0,.1);border:1px solid rgba(255,179,0,.4);border-radius:10px;padding:12px 14px;margin-bottom:14px;">';
     h += '<div style="font-size:12px;font-weight:700;color:var(--amber);">🔓 O concurso ainda está ABERTO</div>';
     h += '<div style="font-size:10.5px;color:var(--t2);margin:5px 0 9px;line-height:1.5;">Ainda podem entrar propostas pelo link. Para garantir o envelope fechado a 100% (ninguém pode ser beneficiado com informação), fecha o concurso <strong>antes</strong> de analisar os valores.</div>';
+    if (_ocAtual.concurso_prazo) {
+      var pz = new Date(_ocAtual.concurso_prazo);
+      var expirou = pz < new Date(new Date().toDateString());
+      h += '<div style="font-size:10.5px;color:' + (expirou?'var(--red)':'var(--t2)') + ';margin-bottom:8px;">' + (expirou?'⏰ Prazo terminou em ':'📅 Prazo para propostas: até ') + pz.toLocaleDateString('pt-PT') + (expirou?' — deves fechar o concurso.':'') + '</div>';
+    }
     h += '<button class="btn-ghost" style="width:100%;font-size:11.5px;color:var(--amber);border-color:rgba(255,179,0,.4);" onclick="ocFecharConcurso()">🔒 Fechar concurso agora</button>';
     h += '</div>';
   } else {
-    h += '<div style="font-size:10.5px;color:var(--green);margin-bottom:10px;">🔒 Concurso encerrado — envelopes abertos em condições de igualdade.</div>';
+    h += '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;">';
+    h += '<span style="font-size:10.5px;color:var(--green);">🔒 Concurso encerrado — envelopes abertos em condições de igualdade.</span>';
+    h += '<button class="tb-btn" style="font-size:10px;padding:4px 9px;color:var(--t2);" onclick="ocReabrirConcurso()" title="Voltar a aceitar propostas">🔓 Reabrir</button>';
+    h += '</div>';
   }
 
   // ⚠️ Externos por validar (chegaram pelo link aberto)
@@ -9501,16 +9526,28 @@ async function ocAprovar() {
   if (window._ocPodeAprovar === false) {
     if (!confirm('⚠️ ATENÇÃO: A votação ainda NÃO atingiu a maioria legal (mais de 50% da permilagem a favor).\n\nAprovar mesmo assim pode ser juridicamente contestável. Só deves fazê-lo se tiveres outra base legal (ex: reparação urgente de conservação).\n\nTens a certeza que queres aprovar?')) return;
   }
-  // Regra legal: só aprova se a permilagem a favor > 50% (a menos que o admin force)
-  if (window._ocPodeAprovar === false) {
-    if (!confirm('⚠️ ATENÇÃO: A votação ainda NÃO atingiu a maioria legal (mais de 50% da permilagem a favor).\n\nAprovar mesmo assim pode ser juridicamente contestável. Só deves fazê-lo se tiveres outra base legal (ex: reparação urgente de conservação).\n\nTens a certeza que queres aprovar?')) return;
-  }
   var vRes = await sb.from('ocorrencia_votos').select('voto').eq('ocorrencia_id',_ocAtual.id);
   var votos = vRes.data || [];
   var sim = votos.filter(function(v){return v.voto==='sim';}).length;
   var nao = votos.filter(function(v){return v.voto==='nao';}).length;
   var votoTxt = votos.length ? ' (votação: ' + sim + ' a favor, ' + nao + ' contra)' : '';
   await sb.from('ocorrencias').update({ estado:'aprovada' }).eq('id',_ocAtual.id);
+
+  // ⚖️ Fechar o ciclo do concurso: a deliberação confirma a adjudicação
+  try {
+    var recRes = await sb.from('orcamentos_obra').select('id, valor, parceiro_id, externo_nome, parceiros(nome)').eq('ocorrencia_id', _ocAtual.id).eq('estado','escolhido').limit(1);
+    if (recRes.data && recRes.data.length) {
+      var rec = recRes.data[0];
+      var nomeAdj = (rec.parceiros ? rec.parceiros.nome : null) || rec.externo_nome || 'parceiro';
+      // Os restantes ficam formalmente recusados (prova de comparação)
+      await sb.from('orcamentos_obra').update({ estado:'recusado' }).eq('ocorrencia_id', _ocAtual.id).eq('estado','submetido');
+      // Garantir que o concurso fica fechado
+      await sb.from('ocorrencias').update({ concurso_aberto: false }).eq('id', _ocAtual.id);
+      _ocAtual.concurso_aberto = false;
+      await ocEvento('orcamento', 'Deliberação favorável: adjudicação CONFIRMADA a ' + nomeAdj + ' — ' + parseFloat(rec.valor||0).toFixed(2) + '€. As restantes propostas ficam registadas como não escolhidas.');
+    }
+  } catch(e) { console.error('fecho do concurso pós-aprovação:', e); }
+
   await ocEvento('estado', 'Reparação APROVADA' + votoTxt + '. Trabalho autorizado ao parceiro.');
   toast('Aprovada! Podes marcar como resolvida quando terminar.','ok');
   gerirOcorrencia(_ocAtual.id);
