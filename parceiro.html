@@ -133,7 +133,7 @@ async function carregarPedidos() {
     cont.innerHTML = '<div class="empty">Sem pedidos de orçamento neste momento.</div>';
   } else {
     cont.innerHTML = abertos.map(p => {
-      const podeResponder = p.estado === 'pedido';
+      const podeResponder = p.estado === 'pedido' && p.concurso_aberto !== false;
       let h = '<div class="card">';
       h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">';
       h += '<div style="flex:1;"><div style="font-size:14px;font-weight:700;">' + esc(p.descricao_obra || 'Pedido de orçamento') + '</div>';
@@ -147,6 +147,8 @@ async function carregarPedidos() {
         h += '</div>';
         h += '<label class="lbl">Notas (o que inclui)</label><textarea class="fi" id="nt-' + p.orcamento_id + '" rows="2" placeholder="Ex: material e mão de obra incluídos"></textarea>';
         h += '<button class="btn" onclick="submeter(\'' + p.orcamento_id + '\')">📤 Enviar orçamento</button>';
+      } else if (p.estado === 'pedido' && p.concurso_aberto === false) {
+        h += '<div style="margin-top:10px;font-size:12px;color:var(--amber);">⏰ O prazo deste concurso terminou — já não é possível submeter.</div>';
       } else {
         h += '<div style="margin-top:10px;font-size:13px;color:var(--cyan);">✓ Orçamento enviado: <strong>' + eur(p.valor) + '</strong>' + (p.prazo_dias ? ' · ' + p.prazo_dias + ' dias' : '') + '</div>';
         h += '<div style="font-size:10.5px;color:var(--t3);margin-top:4px;">A aguardar a decisão do condomínio (comparação com outros orçamentos).</div>';
@@ -162,10 +164,11 @@ async function carregarPedidos() {
     tc.innerHTML = '<div class="empty">Sem trabalhos atribuídos de momento.</div>';
   } else {
     tc.innerHTML = escolhidos.map(p => {
-      let h = '<div class="li"><div class="est" style="background:rgba(34,229,132,.14);">🔧</div>';
+      const aguardaAss = (p.ocorrencia_estado === 'aguarda_votacao');
+      let h = '<div class="li"><div class="est" style="background:' + (aguardaAss ? 'rgba(255,179,0,.14)' : 'rgba(34,229,132,.14)') + ';">' + (aguardaAss ? '⚖️' : '🔧') + '</div>';
       h += '<div class="m"><div class="t">' + esc(p.descricao_obra || 'Trabalho') + '</div>';
-      h += '<div class="s">' + eur(p.valor) + ' · adjudicado</div></div>';
-      h += '<span class="pill escolhido">Adjudicado</span></div>';
+      h += '<div class="s">' + eur(p.valor) + (aguardaAss ? ' · a sua proposta foi selecionada — falta a deliberação da assembleia' : ' · adjudicado') + '</div></div>';
+      h += '<span class="pill ' + (aguardaAss ? 'pedido' : 'escolhido') + '">' + (aguardaAss ? 'Aguarda assembleia' : 'Adjudicado') + '</span></div>';
       return h;
     }).join('');
   }

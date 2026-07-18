@@ -637,7 +637,7 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.18-1309</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.18-1802</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -3804,6 +3804,21 @@ async function verificarAvisosGerais() {
         texto: porPagarForn.length + ' despesa(s) por pagar ao fornecedor',
         detalhe: 'Há ' + totalPorPagar.toFixed(2) + '€ aprovados mas ainda não pagos. Quando pagares, clica em "💸 Pagar" para o movimento entrar no extrato.' });
     }
+
+    // 5i) Concursos de orçamentos — propostas recebidas / por validar
+    try {
+      var obRes = await sb.from('orcamentos_obra').select('id,estado,validado,ocorrencia_id').eq('condominio_id', currentCondo.id).eq('estado','submetido');
+      var props = obRes.data || [];
+      var porValidarN = props.filter(function(o){ return o.validado === false; }).length;
+      var recebidasN = props.length;
+      if (recebidasN > 0) {
+        var ocsDist = {}; props.forEach(function(o){ ocsDist[o.ocorrencia_id] = true; });
+        var nConc = Object.keys(ocsDist).length;
+        avisos.push({ pagina:'ocorrencias', badge:String(recebidasN), cor:'#b48cff',
+          texto: recebidasN + ' proposta(s) de orçamento recebida(s)',
+          detalhe: 'Em ' + nConc + ' concurso(s)' + (porValidarN ? ', das quais ' + porValidarN + ' externa(s) por validar' : '') + '. Abre a ocorrência → "🔓 Comparar recebidos". Se já tens o mínimo legal, fecha o concurso antes de comparar.' });
+      }
+    } catch(e) { console.error('aviso concursos:', e); }
 
     // 5h) Certificado energético caducado (EPBD) — ligação Perfil→Sino
     try {
@@ -8529,6 +8544,16 @@ function htmlClassificacao(cl) {
   return h;
 }
 
+// Grava o tipo legal na BD assim que o síndico o escolhe (não se perde)
+async function ocGuardarTipoLegal(tipo) {
+  atualizarClassificacao();
+  if (!_ocAtual) return;
+  try {
+    await sb.from('ocorrencias').update({ tipo_legal: tipo || null }).eq('id', _ocAtual.id);
+    _ocAtual.tipo_legal = tipo;
+  } catch(e) { console.error('guardar tipo legal:', e); }
+}
+
 // Ao mudar o tipo/valor na ocorrência, recalcula o painel
 function atualizarClassificacao() {
   var tipoEl = document.getElementById('oc-tipo-legal');
@@ -8577,7 +8602,7 @@ async function gerirOcorrencia(id) {
   h += '<div style="background:var(--s1);border:1px solid var(--b1);border-radius:10px;padding:14px;margin-bottom:12px;">';
   h += '<div style="font-size:12px;font-weight:700;color:var(--cyan);margin-bottom:8px;">⚖️ 0 · TIPO DE INTERVENÇÃO</div>';
   h += '<div style="font-size:10.5px;color:var(--t2);margin-bottom:8px;line-height:1.5;">O tipo determina o que a lei exige. Escolhe com cuidado — é isto que protege o síndico.</div>';
-  h += '<select id="oc-tipo-legal" class="fi" style="width:100%;font-size:12px;" onchange="atualizarClassificacao()">';
+  h += '<select id="oc-tipo-legal" class="fi" style="width:100%;font-size:12px;" onchange="ocGuardarTipoLegal(this.value)">';
   var tipoAtual = _ocAtual.tipo_legal || '';
   [['','— classificar a intervenção —'],['corrente','🔧 Manutenção corrente (lâmpada, pequena reparação)'],['urgente','🚨 Urgente (risco/segurança — agir já)'],['contrato','📄 Contrato em vigor (elevador, AVAC…)'],['conservacao','🏗️ Conservação extraordinária (obra maior)'],['inovacao','✨ Inovação / melhoria (algo novo)']].forEach(function(t){
     h += '<option value="'+t[0]+'"'+(tipoAtual===t[0]?' selected':'')+'>'+t[1]+'</option>';
