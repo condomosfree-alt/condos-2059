@@ -637,7 +637,7 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.18-1808</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.18-1814</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -8974,33 +8974,56 @@ function ocQRConcurso(url) {
 }
 
 async function ocEnviarPedidosOrcamento() {
-  var sel = Array.prototype.slice.call(document.querySelectorAll('.po-parc:checked')).map(function(el){ return el.value; });
-  if (!sel.length) { toast('Escolhe pelo menos um parceiro','err'); return; }
-  var desc = document.getElementById('po-desc').value.trim();
-  var prazo = parseInt(document.getElementById('po-prazo').value) || 15;
+  try {
+    if (!_ocAtual || !_ocAtual.id) { toast('Ocorrência não carregada — reabre a ocorrência','err'); return; }
+    if (!currentCondo || !currentCondo.id) { toast('Condomínio não carregado','err'); return; }
 
-  var tipoEl = document.getElementById('oc-tipo-legal');
-  var cl = classificarIntervencao(tipoEl ? tipoEl.value : '', _ocAtual.orcamento_valor);
-  if (cl.precisaOrcamentos && sel.length < cl.minOrcamentos) {
-    if (!await confirmar('⚖️ Selecionaste ' + sel.length + ' parceiro(s), mas a lei exige pelo menos ' + cl.minOrcamentos + ' orçamentos de proveniências diferentes.\n\nQueres enviar assim mesmo e pedir aos restantes depois?', {titulo:'Faltam proveniências', tipo:'aviso', icon:'⚖️', okTexto:'Enviar assim', cancelarTexto:'Voltar'})) return;
+    var sel = Array.prototype.slice.call(document.querySelectorAll('.po-parc:checked')).map(function(el){ return el.value; });
+    if (!sel.length) { toast('Escolhe pelo menos um parceiro','err'); return; }
+    var descEl = document.getElementById('po-desc');
+    var prazoEl = document.getElementById('po-prazo');
+    var desc = descEl ? descEl.value.trim() : '';
+    var prazo = prazoEl ? (parseInt(prazoEl.value) || 15) : 15;
+
+    // A classificação usa o tipo guardado na ocorrência (o seletor pertence ao outro modal)
+    var tipoLegal = _ocAtual.tipo_legal || '';
+    var cl = classificarIntervencao(tipoLegal, _ocAtual.orcamento_valor);
+    if (cl.precisaOrcamentos && sel.length < cl.minOrcamentos) {
+      if (!await confirmar('⚖️ Selecionaste ' + sel.length + ' parceiro(s), mas a lei exige pelo menos ' + cl.minOrcamentos + ' orçamentos de proveniências diferentes.\n\nQueres enviar assim mesmo e pedir aos restantes depois?', {titulo:'Faltam proveniências', tipo:'aviso', icon:'⚖️', okTexto:'Enviar assim', cancelarTexto:'Voltar'})) return;
+    }
+
+    var linhas = sel.map(function(pid){
+      return { condominio_id: currentCondo.id, ocorrencia_id: _ocAtual.id, parceiro_id: pid,
+               descricao_obra: desc, validade_dias: prazo, estado: 'pedido' };
+    });
+    var ins = await sb.from('orcamentos_obra').insert(linhas);
+    if (ins.error) {
+      console.error('insert orcamentos_obra:', ins.error);
+      toast('Erro ao criar pedidos: ' + ins.error.message + ' — corre o SQL sql_portal_parceiro.sql', 'err');
+      return;
+    }
+
+    // Data-limite do concurso (a coluna pode não existir se o SQL não foi corrido)
+    var limite = new Date(); limite.setDate(limite.getDate() + prazo);
+    var dataLimite = limite.toISOString().split('T')[0];
+    var updOc = await sb.from('ocorrencias').update({ estado: 'aguarda_orcamento', concurso_prazo: dataLimite, concurso_aberto: true }).eq('id', _ocAtual.id);
+    if (updOc.error) {
+      console.error('update ocorrencia (prazo):', updOc.error);
+      // tentar sem as colunas novas, para não perder os pedidos já criados
+      await sb.from('ocorrencias').update({ estado: 'aguarda_orcamento' }).eq('id', _ocAtual.id);
+      toast('Pedidos criados, mas falta correr o SQL do prazo/concurso: ' + updOc.error.message, 'warn');
+    } else {
+      _ocAtual.concurso_prazo = dataLimite; _ocAtual.concurso_aberto = true;
+    }
+
+    await ocEvento('orcamento', 'Pedidos de orçamento enviados a ' + sel.length + ' parceiro(s), com prazo até ' + limite.toLocaleDateString('pt-PT') + ' (' + prazo + ' dias). As propostas ficam seladas até à abertura (concorrência justa).');
+    toast('📨 ' + sel.length + ' pedido(s) enviado(s)! Os parceiros veem no portal deles.','ok');
+    fecharModalGenerico();
+    gerirOcorrencia(_ocAtual.id);
+  } catch(e) {
+    console.error('ocEnviarPedidosOrcamento:', e);
+    toast('Erro ao enviar pedidos: ' + (e.message || e), 'err');
   }
-
-  var linhas = sel.map(function(pid){
-    return { condominio_id: currentCondo.id, ocorrencia_id: _ocAtual.id, parceiro_id: pid,
-             descricao_obra: desc, validade_dias: prazo, estado: 'pedido' };
-  });
-  var ins = await sb.from('orcamentos_obra').insert(linhas);
-  if (ins.error) { toast('Erro: ' + ins.error.message, 'err'); return; }
-
-  // Marcar a ocorrência como a aguardar orçamentos + guardar a data-limite do concurso
-  var limite = new Date(); limite.setDate(limite.getDate() + prazo);
-  var dataLimite = limite.toISOString().split('T')[0];
-  await sb.from('ocorrencias').update({ estado: 'aguarda_orcamento', concurso_prazo: dataLimite, concurso_aberto: true }).eq('id', _ocAtual.id);
-  _ocAtual.concurso_prazo = dataLimite; _ocAtual.concurso_aberto = true;
-  await ocEvento('orcamento', 'Pedidos de orçamento enviados a ' + sel.length + ' parceiro(s), com prazo até ' + limite.toLocaleDateString('pt-PT') + ' (' + prazo + ' dias). As propostas ficam seladas até à abertura (concorrência justa).');
-  toast('📨 ' + sel.length + ' pedido(s) enviado(s)! Os parceiros veem no portal deles.','ok');
-  fecharModalGenerico();
-  gerirOcorrencia(_ocAtual.id);
 }
 
 // 🔓 Abrir os envelopes e comparar (só aqui os valores ficam visíveis)
