@@ -524,6 +524,7 @@ function irPara(pg) {
   }
   if (pg==='reportar') ocVista('lista'); // sempre abre na lista
   if (pg==='mensagens') carregarMensagens(); // recarrega sempre ao entrar
+  if (pg==='docs' && _loaded['docs']) { _docPasta = null; renderDocs(); } // volta sempre às pastas
 }
 
 function saudacao() { const h=new Date().getHours(); return h<12?'Bom dia':(h<20?'Boa tarde':'Boa noite'); }
@@ -828,8 +829,9 @@ function valorPorExtenso(v) {
 }
 
 // 🧾 Gerar o recibo oficial da quota — na hora, no dispositivo do condómino
-function gerarReciboPortal(qi) {
-  const q = _quotasCache[qi];
+function gerarReciboPortal(qi, fonte) {
+  const arr = (fonte === 'recibos') ? _recibosCache : _quotasCache;
+  const q = arr[qi];
   if (!q) return;
   if (!window.jspdf || !window.jspdf.jsPDF) { toastP('O gerador de PDF ainda está a carregar. Tenta outra vez.','err'); return; }
   const { jsPDF } = window.jspdf;
@@ -998,73 +1000,173 @@ async function toggleFundoDetalhe() {
 
 async function carregarDocumentos() {
   const cont = document.getElementById('d-lista');
-  const [res, resAtas, resConv] = await Promise.all([
+  cont.innerHTML = '<div class="skel">A carregar…</div>';
+  const [res, resAtas, resConv, resQuotas] = await Promise.all([
     sb.rpc('portal_documentos', { p_token: token }),
     sb.rpc('portal_atas', { p_token: token }),
-    sb.rpc('portal_convocatorias', { p_token: token })
+    sb.rpc('portal_convocatorias', { p_token: token }),
+    sb.rpc('portal_quotas', { p_token: token })
   ]);
-  const docs = (!res.error && res.data) ? res.data : [];
-  const atas = (!resAtas.error && resAtas.data) ? resAtas.data : [];
-  const convs = (!resConv.error && resConv.data) ? resConv.data : [];
-  _atasCache = atas;
-  _convsCache = convs;
+  _docsOutros = (!res.error && res.data) ? res.data : [];
+  _atasCache = (!resAtas.error && resAtas.data) ? resAtas.data : [];
+  _convsCache = (!resConv.error && resConv.data) ? resConv.data : [];
+  const quotas = (!resQuotas.error && resQuotas.data) ? resQuotas.data : [];
+  _recibosCache = quotas.filter(function(q){
+    const em = parseFloat(q.valor_emitido||0), pg = parseFloat(q.valor_pago||0);
+    return (em - pg) <= 0.005 && pg > 0;
+  });
 
-  if (!docs.length && !atas.length && !convs.length) { cont.innerHTML = '<div class="empty">Ainda não há documentos partilhados.</div>'; return; }
-  // Marcar todos como vistos (o badge de novidade desaparece)
-  try { localStorage.setItem('docs_vistos_' + token, String(docs.length)); } catch(e){}
+  try { localStorage.setItem('docs_vistos_' + token, String(_docsOutros.length)); } catch(e){}
   const bd = document.getElementById('badge-docs'); if (bd) bd.style.display = 'none';
+
+  if (!_docsOutros.length && !_atasCache.length && !_convsCache.length && !_recibosCache.length) {
+    cont.innerHTML = '<div class="empty">Ainda não há documentos disponíveis.</div>';
+    return;
+  }
+  _docPasta = null;
+  renderDocs();
+}
+
+// Anos disponíveis em todas as categorias
+function _anosDisponiveis() {
+  const anos = {};
+  _recibosCache.forEach(function(q){ if (q.ano) anos[q.ano] = true; });
+  _atasCache.forEach(function(a){ if (a.data_assembleia) anos[new Date(a.data_assembleia).getFullYear()] = true; });
+  _convsCache.forEach(function(c){ if (c.data_assembleia) anos[new Date(c.data_assembleia).getFullYear()] = true; });
+  _docsOutros.forEach(function(d){ if (d.data_documento) anos[new Date(d.data_documento).getFullYear()] = true; });
+  return Object.keys(anos).map(Number).sort(function(a,b){ return b - a; });
+}
+
+function _filtrarAno(lista, campoData, campoAno) {
+  if (!_docAno) return lista;
+  return lista.filter(function(x){
+    if (campoAno && x[campoAno]) return parseInt(x[campoAno]) === _docAno;
+    if (campoData && x[campoData]) return new Date(x[campoData]).getFullYear() === _docAno;
+    return false;
+  });
+}
+
+function renderDocs() {
+  const cont = document.getElementById('d-lista');
+  const anos = _anosDisponiveis();
+  if (_docAno === undefined) _docAno = null;
+
+  // Contagens já filtradas pelo ano escolhido
+  const nRec = _filtrarAno(_recibosCache, null, 'ano').length;
+  const nAtas = _filtrarAno(_atasCache, 'data_assembleia').length;
+  const nConv = _filtrarAno(_convsCache, 'data_assembleia').length;
+  const nOut = _filtrarAno(_docsOutros, 'data_documento').length;
 
   let h = '';
 
-  // 📨 CONVOCATÓRIAS — retiráveis (a próxima assembleia primeiro)
-  if (convs.length) {
-    h += '<div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;margin:4px 0 8px;">📨 Convocatórias</div>';
-    h += convs.map(function(cv, ci){
+  // ── Barra do ano ──
+  if (anos.length > 1 || _docAno) {
+    h += '<div style="display:flex;align-items:center;gap:7px;overflow-x:auto;padding-bottom:10px;margin-bottom:4px;-webkit-overflow-scrolling:touch;">';
+    h += '<button onclick="mudarAnoDoc(null)" style="flex:0 0 auto;background:' + (!_docAno?'var(--cyan)':'var(--card2)') + ';color:' + (!_docAno?'#02121d':'var(--t2)') + ';border:1px solid ' + (!_docAno?'var(--cyan)':'var(--b)') + ';border-radius:20px;padding:6px 14px;font-size:11.5px;font-weight:700;cursor:pointer;white-space:nowrap;">Todos</button>';
+    anos.forEach(function(a){
+      const on = (_docAno === a);
+      h += '<button onclick="mudarAnoDoc(' + a + ')" style="flex:0 0 auto;background:' + (on?'var(--cyan)':'var(--card2)') + ';color:' + (on?'#02121d':'var(--t2)') + ';border:1px solid ' + (on?'var(--cyan)':'var(--b)') + ';border-radius:20px;padding:6px 14px;font-size:11.5px;font-weight:700;cursor:pointer;white-space:nowrap;">' + a + '</button>';
+    });
+    h += '</div>';
+  }
+
+  // ── Vista de PASTAS ──
+  if (!_docPasta) {
+    const pastas = [
+      { id:'recibos', ic:'🧾', nome:'Recibos de quotas', n:nRec, cor:'34,229,132', desc:'Comprovativos das quotas pagas' },
+      { id:'atas', ic:'📜', nome:'Atas', n:nAtas, cor:'180,140,255', desc:'Atas das assembleias realizadas' },
+      { id:'convocatorias', ic:'📨', nome:'Convocatórias', n:nConv, cor:'0,212,255', desc:'Convocatórias de assembleia' },
+      { id:'outros', ic:'📄', nome:'Outros documentos', n:nOut, cor:'150,160,180', desc:'Seguros, regulamento, contas' }
+    ];
+    pastas.forEach(function(p){
+      const vazia = (p.n === 0);
+      h += '<div ' + (vazia?'':'onclick="abrirPastaDoc(\'' + p.id + '\')"') + ' style="display:flex;align-items:center;gap:13px;padding:15px 15px;background:var(--card);border:1px solid ' + (vazia?'var(--b)':'rgba(' + p.cor + ',.28)') + ';border-radius:13px;margin-bottom:10px;cursor:' + (vazia?'default':'pointer') + ';opacity:' + (vazia?'.45':'1') + ';">';
+      h += '<div style="width:44px;height:44px;border-radius:12px;background:rgba(' + p.cor + ',.12);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">' + p.ic + '</div>';
+      h += '<div style="flex:1;min-width:0;"><div style="font-size:14px;font-weight:700;">' + p.nome + '</div>';
+      h += '<div style="font-size:11px;color:var(--t3);margin-top:2px;">' + (vazia ? 'Nenhum documento' + (_docAno?' em ' + _docAno:'') : p.desc) + '</div></div>';
+      if (!vazia) {
+        h += '<div style="display:flex;align-items:center;gap:8px;"><span style="font-size:12px;font-weight:800;color:rgb(' + p.cor + ');">' + p.n + '</span>';
+        h += '<span style="color:var(--t3);font-size:17px;">›</span></div>';
+      }
+      h += '</div>';
+    });
+    h += '<div class="rodape" style="margin-top:10px;">Os documentos são gerados no momento em que os pedes, sempre atualizados.</div>';
+    cont.innerHTML = h;
+    return;
+  }
+
+  // ── Vista DENTRO de uma pasta ──
+  const titulos = { recibos:'🧾 Recibos de quotas', atas:'📜 Atas', convocatorias:'📨 Convocatórias', outros:'📄 Outros documentos' };
+  h += '<div onclick="abrirPastaDoc(null)" style="display:inline-flex;align-items:center;gap:6px;color:var(--cyan);font-size:12.5px;font-weight:700;cursor:pointer;margin-bottom:14px;">‹ Voltar às pastas</div>';
+  h += '<div style="font-size:13px;font-weight:800;margin-bottom:12px;">' + titulos[_docPasta] + (_docAno ? ' · ' + _docAno : '') + '</div>';
+
+  if (_docPasta === 'recibos') {
+    const lista = _filtrarAno(_recibosCache, null, 'ano');
+    if (!lista.length) h += '<div class="empty">Sem recibos' + (_docAno?' em ' + _docAno:'') + '.</div>';
+    else lista.forEach(function(q, i){
+      const idx = _recibosCache.indexOf(q);
+      h += '<div class="li"><div class="est" style="background:rgba(34,229,132,.12);">🧾</div>';
+      h += '<div class="m"><div class="t">' + mN[(q.mes||1)-1] + ' ' + q.ano + '</div><div class="s">' + eur(q.valor_pago) + (q.data_pagamento?' · pago em ' + new Date(q.data_pagamento).toLocaleDateString('pt-PT'):'') + '</div></div>';
+      h += '<button onclick="gerarReciboPortal(' + idx + ',\'recibos\')" style="background:rgba(34,229,132,.1);border:1px solid rgba(34,229,132,.4);color:var(--green);border-radius:8px;padding:5px 11px;font-size:10.5px;font-weight:700;cursor:pointer;white-space:nowrap;">🧾 Retirar</button></div>';
+    });
+  } else if (_docPasta === 'atas') {
+    const lista = _filtrarAno(_atasCache, 'data_assembleia');
+    if (!lista.length) h += '<div class="empty">Sem atas' + (_docAno?' em ' + _docAno:'') + '.</div>';
+    else lista.forEach(function(a){
+      const idx = _atasCache.indexOf(a);
+      const dt = a.data_assembleia ? new Date(a.data_assembleia).toLocaleDateString('pt-PT') : '';
+      h += '<div class="li"><div class="est" style="background:rgba(180,140,255,.12);">📋</div>';
+      h += '<div class="m"><div class="t">Ata' + (a.numero_ata ? ' n.º ' + a.numero_ata : '') + '</div><div class="s">Assembleia de ' + dt + '</div></div>';
+      h += '<button onclick="retirarAtaPDF(' + idx + ')" style="background:rgba(180,140,255,.1);border:1px solid rgba(180,140,255,.4);color:#b48cff;border-radius:8px;padding:5px 11px;font-size:10.5px;font-weight:700;cursor:pointer;white-space:nowrap;">🧾 Retirar</button></div>';
+    });
+  } else if (_docPasta === 'convocatorias') {
+    const lista = _filtrarAno(_convsCache, 'data_assembleia');
+    if (!lista.length) h += '<div class="empty">Sem convocatórias' + (_docAno?' em ' + _docAno:'') + '.</div>';
+    else lista.forEach(function(cv){
+      const idx = _convsCache.indexOf(cv);
       const dt = cv.data_assembleia ? new Date(cv.data_assembleia).toLocaleDateString('pt-PT') : '';
       const futura = cv.data_assembleia && new Date(cv.data_assembleia) >= new Date(new Date().toDateString());
-      return '<div class="li"><div class="est" style="background:rgba(0,212,255,.12);">📨</div>' +
-        '<div class="m"><div class="t">Assembleia ' + (cv.tipo||'') + (futura?' <span style="font-size:9px;color:var(--green);font-weight:800;">· PRÓXIMA</span>':'') + '</div><div class="s">' + dt + (cv.hora_assembleia?' às '+cv.hora_assembleia:'') + '</div></div>' +
-        '<button onclick="retirarConvocatoriaPDF(' + ci + ')" style="background:rgba(0,212,255,.1);border:1px solid rgba(0,212,255,.4);color:var(--cyan);border-radius:8px;padding:5px 11px;font-size:10.5px;font-weight:700;cursor:pointer;white-space:nowrap;">🧾 Retirar</button></div>';
-    }).join('');
-  }
-
-  // 📜 ATAS — retiráveis na hora (geradas no dispositivo)
-  if (atas.length) {
-    h += '<div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;margin:' + (convs.length?'14px':'4px') + ' 0 8px;">📜 Atas das assembleias</div>';
-    h += atas.map(function(a, ai){
-      const dt = a.data_assembleia ? new Date(a.data_assembleia).toLocaleDateString('pt-PT') : '';
-      return '<div class="li"><div class="est" style="background:rgba(180,140,255,.12);">📋</div>' +
-        '<div class="m"><div class="t">Ata' + (a.numero_ata ? ' n.º ' + a.numero_ata : '') + '</div><div class="s">Assembleia de ' + dt + '</div></div>' +
-        '<button onclick="retirarAtaPDF(' + ai + ')" style="background:rgba(180,140,255,.1);border:1px solid rgba(180,140,255,.4);color:#b48cff;border-radius:8px;padding:5px 11px;font-size:10.5px;font-weight:700;cursor:pointer;white-space:nowrap;">🧾 Retirar</button></div>';
-    }).join('');
-  }
-
-  // 📄 Outros documentos (registos)
-  if (docs.length) {
-    const icons = { ata:'📋', regulamento:'📜', seguro:'🛡️', orcamento:'📊', balancete:'📈', conta:'💰', convocatoria:'📨' };
-    // Evitar duplicar: esconder registos de "Ata"/"Convocatória" se já temos as versões retiráveis acima
-    const docsFiltrados = docs.filter(function(d){
-      const cat = (d.categoria||'').toLowerCase();
-      if (atas.length && cat.includes('ata')) return false;
-      if (convs.length && cat.includes('convocat')) return false;
-      return true;
+      h += '<div class="li"><div class="est" style="background:rgba(0,212,255,.12);">📨</div>';
+      h += '<div class="m"><div class="t">Assembleia ' + (cv.tipo||'') + (futura?' <span style="font-size:9px;color:var(--green);font-weight:800;">· PRÓXIMA</span>':'') + '</div><div class="s">' + dt + (cv.hora_assembleia?' às '+cv.hora_assembleia:'') + '</div></div>';
+      h += '<button onclick="retirarConvocatoriaPDF(' + idx + ')" style="background:rgba(0,212,255,.1);border:1px solid rgba(0,212,255,.4);color:var(--cyan);border-radius:8px;padding:5px 11px;font-size:10.5px;font-weight:700;cursor:pointer;white-space:nowrap;">🧾 Retirar</button></div>';
     });
-    if (docsFiltrados.length) {
-      h += '<div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 8px;">📄 Outros documentos</div>';
-      h += docsFiltrados.map(function(d){
+  } else {
+    const lista = _filtrarAno(_docsOutros, 'data_documento');
+    if (!lista.length) h += '<div class="empty">Sem outros documentos' + (_docAno?' em ' + _docAno:'') + '.</div>';
+    else {
+      const icons = { regulamento:'📜', seguro:'🛡️', orcamento:'📊', balancete:'📈', conta:'💰' };
+      lista.forEach(function(d){
         let ic='📄'; for (const k in icons) { if ((d.categoria||'').toLowerCase().includes(k)) { ic=icons[k]; break; } }
         const dt = d.data_documento ? new Date(d.data_documento).toLocaleDateString('pt-PT') : '';
-        return '<div class="li"><div class="est" style="background:rgba(0,212,255,.1);">'+ic+'</div>' +
-          '<div class="m"><div class="t">'+(d.nome||'Documento')+'</div><div class="s" style="text-transform:capitalize;">'+(d.categoria||'')+(dt?' · '+dt:'')+'</div></div></div>';
-      }).join('');
+        h += '<div class="li"><div class="est" style="background:rgba(150,160,180,.12);">'+ic+'</div>';
+        h += '<div class="m"><div class="t">'+(d.nome||'Documento')+'</div><div class="s" style="text-transform:capitalize;">'+(d.categoria||'')+(dt?' · '+dt:'')+'</div></div></div>';
+      });
+      h += '<div class="rodape" style="margin-top:8px;">Para receber uma cópia destes documentos, contacte a administração.</div>';
     }
   }
-  h += '<div class="rodape" style="margin-top:8px;">As atas podem ser descarregadas a qualquer momento. Para outros documentos, contacte a administração.</div>';
   cont.innerHTML = h;
 }
 
+function abrirPastaDoc(pasta) {
+  _docPasta = pasta;
+  renderDocs();
+  const p = document.getElementById('pg-docs');
+  if (p) p.scrollTop = 0;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function mudarAnoDoc(ano) {
+  _docAno = ano;
+  renderDocs();
+}
+
+
 var _atasCache = [];
 var _convsCache = [];
+var _docsOutros = [];
+var _recibosCache = [];
+var _docPasta = null;
+var _docAno = null;
 
 // 📨 Gerar o PDF da convocatória na hora
 function retirarConvocatoriaPDF(ci) {
@@ -1721,6 +1823,8 @@ async function cAtualizar() {
   const b = document.getElementById('barra-nov');
   if (b) { b.style.transform = 'translateY(-100%)'; setTimeout(function(){ b.style.display='none'; }, 300); }
   await iniciar();
+  _loaded['docs'] = false;   // documentos voltam a carregar do servidor
+  _loaded['quotas'] = false;
   _cBase = await _cFoto();
   _cAvisado = false;
   toastP('Atualizado','ok');
