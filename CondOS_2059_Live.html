@@ -655,7 +655,7 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.19-1338</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.19-2327</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -4087,7 +4087,7 @@ function toggleSino(forcar) {
       p.style.zIndex = '10050';
     }
     p.style.display = 'block';
-    if (btn) btn.classList.remove('sino-ativo','sino-urgente');   // pára de piscar enquanto lê
+    // continua a tremer enquanto houver avisos por resolver — só pára quando não há nada
   } else {
     p.style.display = 'none';
   }
