@@ -305,6 +305,32 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
 .sino-ativo #sino-badge { animation: badgePim 2s ease-in-out infinite; }
 .sino-urgente { animation: sinoPulsa 2.2s ease-in-out infinite; }
 .sino-urgente #sino-badge { animation: badgePim 1.2s ease-in-out infinite; background: #ff3b5c !important; }
+
+/* ✉️ Envelope a abrir (comparação de orçamentos) */
+@keyframes envPop { 0% { transform:scale(.55) rotate(-4deg); opacity:0; } 45% { transform:scale(1.12) rotate(2deg); opacity:1; } 100% { transform:scale(1) rotate(0); } }
+@keyframes envSome { to { opacity:0; height:0; margin:0; padding:0; overflow:hidden; } }
+@keyframes envConteudo { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+.env-anim { text-align:center; padding:26px 0 18px; animation: envPop .5s cubic-bezier(.34,1.4,.64,1), envSome .35s ease 1s forwards; }
+.env-anim .env-ico { font-size:46px; display:inline-block; }
+.env-anim .env-txt { font-size:11px; color:var(--t3); letter-spacing:1.5px; text-transform:uppercase; margin-top:8px; }
+.env-conteudo { opacity:0; animation: envConteudo .45s ease 1.15s forwards; }
+
+/* 💚 Flash verde — a linha que acabou de mudar */
+@keyframes flashVerde { 0% { background: rgba(34,229,132,.28); box-shadow: inset 3px 0 0 var(--green); } 100% { background: transparent; box-shadow: inset 0 0 0 transparent; } }
+.linha-flash { animation: flashVerde 1.6s ease-out forwards; border-radius: 8px; }
+
+/* ⏳ Toast com barra de tempo */
+.toast { overflow: hidden; }
+.toast::after { content:''; position:absolute; left:0; bottom:0; height:2.5px; width:100%; background: var(--cyan); opacity:.65; transform-origin: left; }
+.toast.show::after { animation: toastBarra 3.2s linear forwards; }
+.toast.ok::after { background: var(--green); }
+.toast.err::after { background: var(--red); }
+@keyframes toastBarra { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+
+/* 💀 Skeleton loading — a espera parece menor */
+@keyframes skelBrilho { 0% { background-position: -320px 0; } 100% { background-position: 320px 0; } }
+.skel-linha { background: linear-gradient(90deg, var(--s1) 25%, rgba(255,255,255,.045) 50%, var(--s1) 75%); background-size: 640px 100%; animation: skelBrilho 1.3s linear infinite; border-radius: 9px; margin-bottom: 9px; border: 1px solid var(--b1); }
+kbd { font-family: var(--mono, monospace); }
 </style>
 
 <script>
@@ -655,7 +681,7 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.19-2327</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.19-2335</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -1188,9 +1214,9 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
         <div class="panel">
           <div class="ph">
             <span class="pt">Base de Dados de Condóminos</span>
-            <input class="fi" id="cond-search" placeholder="Pesquisar nome, NIF, fração..." style="width:220px;padding:6px 10px;font-size:11px;" oninput="filtrarCondominos(this.value)">
+            <input class="fi" id="cond-search" placeholder="Pesquisar nome, NIF, fração..." style="width:220px;padding:6px 10px;font-size:11px;" oninput="buscaCondominosDebounced(this.value)">
           </div>
-          <div id="condominos-list"><div class="loading"><div class="spin"></div>A carregar...</div></div>
+          <div id="condominos-list"><div class="skel-linha" style="height:46px;"></div><div class="skel-linha" style="height:46px;"></div><div class="skel-linha" style="height:46px;"></div></div>
         </div>
         <!-- CUSTOS POSTAIS -->
         <div id="fracoes-custos-postais"></div>
@@ -1210,7 +1236,7 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
           </div>
         </div>
         <div id="fracoes-custos-postais"></div>
-        <div id="fracoes-list"><div class="loading"><div class="spin"></div>A carregar...</div></div>
+        <div id="fracoes-list"><div class="skel-linha" style="height:46px;"></div><div class="skel-linha" style="height:46px;"></div><div class="skel-linha" style="height:46px;"></div></div>
       </div>
 
       <!-- QUOTAS -->
@@ -1359,7 +1385,7 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
         <!-- Orçado vs Real -->
         <div class="panel" style="margin-bottom:16px;">
           <div class="ph"><span class="pt">Orçado vs Real</span><span class="pm" id="c-ovr-resumo">—</span></div>
-          <div id="contas-ovr" style="padding:16px;"><div class="loading"><div class="spin"></div>A carregar...</div></div>
+          <div id="contas-ovr" style="padding:16px;"><div class="skel-linha" style="height:46px;"></div><div class="skel-linha" style="height:46px;"></div><div class="skel-linha" style="height:46px;"></div></div>
         </div>
 
         <!-- Mapa mensal -->
@@ -1721,7 +1747,7 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
         </div>
         <div class="panel">
           <div class="ph"><span class="pt">Histórico de Assembleias</span></div>
-          <div id="assembleias-list"><div class="loading"><div class="spin"></div>A carregar...</div></div>
+          <div id="assembleias-list"><div class="skel-linha" style="height:46px;"></div><div class="skel-linha" style="height:46px;"></div><div class="skel-linha" style="height:46px;"></div></div>
         </div>
       </div>
 
@@ -2054,7 +2080,7 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
     </div>
     <div id="as-data-aviso" style="display:none;font-size:11px;line-height:1.5;border-radius:6px;padding:8px 11px;margin:-4px 0 4px;"></div>
     <div class="fl"><label>Local</label><input class="fi" id="as-local" placeholder="Ex: Sala do condomínio"></div>
-    <div class="fl"><label style="display:flex;justify-content:space-between;align-items:center;">Ordem de Trabalhos <button class="btn-ghost" onclick="sugerirOrdemTrabalhos()" style="font-size:10px;padding:3px 10px;background:linear-gradient(135deg,rgba(0,212,255,.15),rgba(180,140,255,.15));border-color:rgba(0,212,255,.4);color:var(--cyan);font-weight:600;"><i class="ti ti-sparkles"></i> Sugerir Pontos (IA)</button></label><textarea class="fi" id="as-ot" rows="6" placeholder="1. Aprovação do orçamento 2026&#10;2. Eleição da administração&#10;3. Diversos"></textarea></div>
+    <div class="fl"><label style="display:flex;justify-content:space-between;align-items:center;">Ordem de Trabalhos <button class="btn-ghost" onclick="sugerirOrdemTrabalhos()" style="font-size:10px;padding:3px 10px;background:linear-gradient(135deg,rgba(0,212,255,.15),rgba(180,140,255,.15));border-color:rgba(0,212,255,.4);color:var(--cyan);font-weight:600;"><i class="ti ti-sparkles"></i> Sugerir Pontos (IA)</button></label><textarea class="fi" id="as-ot" rows="6" placeholder="1. Aprovação do orçamento 2026&#10;2. Eleição da administração&#10;3. Diversos" onfocus="ativarAutosave('as-ot','ordem_trabalhos')"></textarea></div>
     <div class="btn-row"><button class="btn-ghost" onclick="closeModal('mo-assembleia')">Cancelar</button><button class="btn-ghost" onclick="gerarConvocatoriaDoModal()">📄 Gerar PDF</button><button class="btn-primary" onclick="saveAssembleia()">📨 Convocar</button></div>
   </div>
 </div>
@@ -4114,6 +4140,7 @@ async function loadCondData() {
   // 🔄 arranca (ou reinicia) a deteção de novidades
   try { iniciarPolling(); } catch(e) { console.error('polling:', e); }
   try { instalarInterceptorPush(); } catch(e) { console.error('push:', e); }
+  try { instalarAtalhos(); } catch(e) { console.error('atalhos:', e); }
 }
 
 async function loadFracoes() {
@@ -8138,7 +8165,7 @@ async function loadDespesas() {
     '<th>Descrição</th><th>Tipo</th><th>Origem</th><th>Valor</th><th>Distribuição</th><th>Estado</th><th>Data</th><th>Ações</th>' +
     '</tr></thead><tbody>' +
     _despesasAll.map(function(d) {
-      return '<tr>' +
+      return '<tr data-despesa-id="' + d.id + '">' +
         '<td><div style="font-weight:500;">' + (d.descricao||'—') + '</div>' + (d.motivo?'<div style="font-size:10px;color:var(--t3)">' + d.motivo + '</div>':'') + '</td>' +
         '<td><span style="font-size:11px;color:var(--t2)">' + (TIPO_LABEL[d.tipo]||d.tipo||'—') + '</span></td>' +
         '<td><span style="font-size:11px;">' + (ORIGEM_ICO[d.origem_tipo]||'') + ' ' + (d.origem_tipo||'manual') + '</span></td>' +
@@ -8392,6 +8419,13 @@ async function marcarDespesaPaga(despesaId) {
 
   toast('💸 Pagamento registado! Saiu ' + valor.toFixed(2).replace('.',',') + '€ — já aparece no extrato.','ok');
   await loadDespesas();
+  // 💚 flash na linha da despesa que acabou de ser paga
+  setTimeout(function(){
+    try {
+      var linhas = document.querySelectorAll('[data-despesa-id="' + despesaId + '"]');
+      linhas.forEach(flashElemento);
+    } catch(e){}
+  }, 120);
   if (typeof loadMovimentos === 'function') loadMovimentos();
   verificarAvisosGerais();
 }
@@ -9264,6 +9298,11 @@ async function ocAbrirEnvelopes() {
     h += '<div style="font-size:11px;color:var(--t3);margin-top:10px;">⏳ ' + pendentes.length + ' parceiro(s) ainda não responderam.</div>';
   }
   h += '</div>';
+  // ✉️ Cerimónia de abertura dos envelopes — só com o concurso fechado (tem significado legal)
+  if (_ocAtual.concurso_aberto === false) {
+    h = '<div class="env-anim"><span class="env-ico">✉️</span><div class="env-txt">A abrir os envelopes…</div></div>' +
+        '<div class="env-conteudo">' + h + '</div>';
+  }
   abrirModalGenerico('🔓 Comparar Orçamentos', h);
 }
 
@@ -10891,7 +10930,7 @@ function renderAtaGerada(ata) {
   var cont = document.getElementById('sala-conteudo');
   var html = '<div style="margin-bottom:12px;"><button class="btn-ghost" style="font-size:11px;" onclick="renderSala()">← Voltar à sala</button></div>';
   html += '<div style="background:rgba(180,140,255,.06);border:1px solid rgba(180,140,255,.2);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:11px;color:var(--t2);">📖 Esta ata foi redigida a partir do livro de atos imutável. Os factos são os registados durante a assembleia. Podes ajustar o texto antes de imprimir (ex: corrigir um nome), mas os factos e votações vêm do registo.</div>';
-  html += '<textarea id="ata-editavel" style="width:100%;min-height:340px;background:var(--s1);border:1px solid var(--b1);border-radius:8px;padding:18px;font-size:13px;line-height:1.7;color:var(--text);font-family:inherit;resize:vertical;">' + (ata||'').replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</textarea>';
+  html += '<textarea id="ata-editavel" onfocus="ativarAutosave(\'ata-editavel\',\'ata_'+(_salaAssembleia?_salaAssembleia.id:'x')+'\')" style="width:100%;min-height:340px;background:var(--s1);border:1px solid var(--b1);border-radius:8px;padding:18px;font-size:13px;line-height:1.7;color:var(--text);font-family:inherit;resize:vertical;">' + (ata||'').replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</textarea>';
   html += '<div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end;flex-wrap:wrap;">';
   html += '<button class="btn-ghost" onclick="verLivroCru()">📄 Ver Log Cru</button>';
   html += '<button class="btn-ghost" onclick="guardarAtaEditada()" style="color:var(--cyan);border-color:rgba(0,212,255,.3);">💾 Guardar alterações</button>';
@@ -12499,6 +12538,7 @@ async function saveAssembleia() {
   }
   const { error } = await sb.from('assembleias').insert({condominio_id:currentCondo.id,tipo:document.getElementById('as-tipo').value,data_assembleia:dataVal,hora_assembleia:(document.getElementById('as-hora')?document.getElementById('as-hora').value:'20:00'),local_assembleia:document.getElementById('as-local').value,ordem_trabalhos:document.getElementById('as-ot').value,total_fracoes:fracoes.length,estado:'agendada'});
   if (error) { toast('Erro: '+error.message,'err'); return; }
+  limparRascunho('ordem_trabalhos');
   closeModal('mo-assembleia'); toast('Assembleia convocada!','ok');
   loadAssembleias();
 }
@@ -14065,16 +14105,16 @@ async function loadDashboard() {
   const totalE = quotas.reduce((s,q)=>s+parseFloat(q.valor_emitido||0),0);
   const totalP = quotas.reduce((s,q)=>s+parseFloat(q.valor_pago||0),0);
   const taxa = totalE>0?Math.round(totalP/totalE*100):0;
-  document.getElementById('kpi-taxa').innerHTML = taxa+'<span>%</span>';
+  animarNumero('kpi-taxa', taxa, '<span>%</span>');
   document.getElementById('kpi-taxa-sub').textContent = totalE>0?(taxa>=80?'↑ Bom':'↓ Abaixo da meta'):'Sem quotas emitidas';
-  document.getElementById('kpi-frac').innerHTML = fracoes.length+'<span></span>';
+  animarNumero('kpi-frac', fracoes.length, '<span></span>');
   document.getElementById('kpi-frac-sub').textContent = fracoes.length+' frações ativas';
   // renderBlocos inline seguro
   try { const _bp=document.getElementById("blocos-panel"),_bt=document.getElementById("blocos-table"); if(_bp&&_bt&&currentCondo){const _tB=currentCondo.tem_blocos&&fracoes.some(f=>f.bloco);if(!_tB){_bp.style.display="none";}else{_bp.style.display="block";const _bL=[...new Set(fracoes.map(f=>f.bloco).filter(Boolean))].sort();_bt.innerHTML="<table style='width:100%;border-collapse:collapse'><tbody>"+_bL.map(b=>"<tr style='border-top:1px solid var(--b1)'><td style='padding:8px 12px;font-weight:600;color:var(--cyan)'>Bloco "+b+"</td><td style='padding:8px 12px;text-align:right'>"+fracoes.filter(f=>f.bloco===b).length+" frações</td></tr>").join("")+"</tbody></table>";}}} catch(e){console.warn("blocos panel:",e);}
   const { data: movs } = await sb.from('movimentos').select('tipo,valor,conta').eq('condominio_id',currentCondo.id);
   const ms = movs||[];
   const saldo = ms.filter(m=>m.tipo==='receita').reduce((s,m)=>s+parseFloat(m.valor),0) - ms.filter(m=>m.tipo==='despesa').reduce((s,m)=>s+parseFloat(m.valor),0);
-  document.getElementById('kpi-saldo').innerHTML = saldo.toFixed(0)+'<span>€</span>';
+  animarNumero('kpi-saldo', saldo.toFixed(0), '<span>€</span>');
   document.getElementById('kpi-saldo-sub').textContent = saldo>=0?'↑ Saldo positivo':'↓ Saldo negativo';
 }
 
@@ -14088,7 +14128,7 @@ async function updateBadges() {
   const ocN = (ocs||[]).length;
   document.getElementById('nb-oc').textContent = ocN;
   document.getElementById('nb-oc').style.display = ocN>0?'':'none';
-  document.getElementById('kpi-oc').textContent = ocN;
+  animarNumero('kpi-oc', ocN, '');
   document.getElementById('kpi-oc-sub').textContent = ocN+' por resolver';
 }
 
@@ -18236,6 +18276,183 @@ document.addEventListener('click',e=>{if(e.target.classList.contains('mo'))e.tar
 document.addEventListener('click',function(e){ var p=document.getElementById('sino-painel'); if(p&&p.style.display==='block'&&!e.target.closest('#sino-painel')&&!e.target.closest('[onclick*="toggleSino"]')) p.style.display='none'; });
 function showErr(el,msg){el.textContent=msg;el.style.display='block';}
 function emptyState(ico,title,sub){return `<div class="empty"><i class="ti ${ico}"></i><div class="empty-title">${title}</div>${sub?`<div class="empty-sub">${sub}</div>`:''}</div>`;}
+
+// 🎬 Animação: número a contar até ao valor final (dashboard vivo)
+function animarNumero(id, valorFinal, sufixoHTML, decimais) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  var fim = parseFloat(valorFinal) || 0;
+  var ini = 0, dur = 650, t0 = null;
+  function passo(t) {
+    if (!t0) t0 = t;
+    var p = Math.min((t - t0) / dur, 1);
+    var e = 1 - Math.pow(1 - p, 3);   // easing suave no fim
+    var v = ini + (fim - ini) * e;
+    el.innerHTML = (decimais ? v.toFixed(decimais) : Math.round(v)) + (sufixoHTML || '');
+    if (p < 1) requestAnimationFrame(passo);
+  }
+  requestAnimationFrame(passo);
+}
+
+// 💚 Flash verde num elemento (a linha que mudou)
+function flashElemento(el) {
+  if (!el) return;
+  el.classList.remove('linha-flash');
+  void el.offsetWidth;
+  el.classList.add('linha-flash');
+}
+
+
+// ═══════════════════════════════════════════════════════════
+// 🛠️ UTILITÁRIOS — padrões standard da programação web
+// ═══════════════════════════════════════════════════════════
+
+// ⏱️ DEBOUNCE — só corre depois de o utilizador parar de escrever
+// (sem isto, escrever "Fernando" dispara 8 pesquisas seguidas)
+function debounce(fn, espera) {
+  var t;
+  return function() {
+    var ctx = this, args = arguments;
+    clearTimeout(t);
+    t = setTimeout(function(){ fn.apply(ctx, args); }, espera || 300);
+  };
+}
+
+// 💾 AUTOSAVE — guarda rascunhos no dispositivo para não se perder trabalho
+var _rascunhoTimers = {};
+function ativarAutosave(elId, chave, aoRecuperar) {
+  var el = document.getElementById(elId);
+  if (!el || el.dataset.autosave === '1') return;
+  el.dataset.autosave = '1';
+  var k = 'rascunho_' + (currentCondo ? currentCondo.id : 'x') + '_' + chave;
+
+  // Recuperar rascunho anterior (se o campo estiver vazio ou diferente)
+  try {
+    var guardado = localStorage.getItem(k);
+    if (guardado) {
+      var d = JSON.parse(guardado);
+      var idade = Math.round((Date.now() - d.t) / 60000);
+      if (d.v && d.v.trim() && d.v !== el.value) {
+        mostrarBarraRascunho(el, d.v, idade, k, aoRecuperar);
+      }
+    }
+  } catch(e) {}
+
+  el.addEventListener('input', function() {
+    clearTimeout(_rascunhoTimers[k]);
+    _rascunhoTimers[k] = setTimeout(function() {
+      try {
+        if (el.value && el.value.trim()) localStorage.setItem(k, JSON.stringify({ v: el.value, t: Date.now() }));
+        else localStorage.removeItem(k);
+        marcarGuardado(el);
+      } catch(e) {}
+    }, 900);
+  });
+}
+
+function marcarGuardado(el) {
+  var id = 'rasc-ok-' + (el.id || 'x');
+  var ind = document.getElementById(id);
+  if (!ind) {
+    ind = document.createElement('div');
+    ind.id = id;
+    ind.style.cssText = 'font-size:10px;color:var(--t3);margin-top:4px;transition:opacity .4s;';
+    if (el.parentNode) el.parentNode.insertBefore(ind, el.nextSibling);
+  }
+  ind.textContent = '💾 rascunho guardado';
+  ind.style.opacity = '1';
+  clearTimeout(ind._t);
+  ind._t = setTimeout(function(){ ind.style.opacity = '0'; }, 2200);
+}
+
+function mostrarBarraRascunho(el, valor, idadeMin, chave, cb) {
+  var b = document.createElement('div');
+  b.style.cssText = 'background:rgba(255,179,0,.09);border:1px solid rgba(255,179,0,.35);border-radius:9px;padding:10px 13px;margin-bottom:9px;font-size:11.5px;color:var(--amber);display:flex;align-items:center;gap:10px;flex-wrap:wrap;';
+  var quando = idadeMin < 1 ? 'agora mesmo' : (idadeMin < 60 ? 'há ' + idadeMin + ' min' : 'há ' + Math.round(idadeMin/60) + 'h');
+  b.innerHTML = '<span style="flex:1;">💾 Tens um rascunho por terminar (' + quando + ').</span>';
+  var bt1 = document.createElement('button');
+  bt1.textContent = 'Recuperar';
+  bt1.style.cssText = 'background:var(--amber);border:none;color:#1a1004;border-radius:7px;padding:5px 12px;font-size:11px;font-weight:800;cursor:pointer;';
+  bt1.onclick = function(){ el.value = valor; b.remove(); if (cb) cb(valor); toast('💾 Rascunho recuperado','ok'); };
+  var bt2 = document.createElement('button');
+  bt2.textContent = 'Descartar';
+  bt2.style.cssText = 'background:transparent;border:1px solid rgba(255,179,0,.4);color:var(--amber);border-radius:7px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;';
+  bt2.onclick = function(){ try { localStorage.removeItem(chave); } catch(e){} b.remove(); };
+  b.appendChild(bt1); b.appendChild(bt2);
+  if (el.parentNode) el.parentNode.insertBefore(b, el);
+}
+
+function limparRascunho(chave) {
+  try { localStorage.removeItem('rascunho_' + (currentCondo ? currentCondo.id : 'x') + '_' + chave); } catch(e) {}
+}
+
+// ⚡ OPTIMISTIC UI — mostra o resultado já, reverte se falhar
+async function otimista(aplicar, reverter, guardar, msgErro) {
+  aplicar();
+  try {
+    var r = await guardar();
+    if (r && r.error) throw new Error(r.error.message);
+    return true;
+  } catch(e) {
+    reverter();
+    toast((msgErro || 'Não foi possível gravar') + ': ' + (e.message || e), 'err');
+    return false;
+  }
+}
+
+// 💀 SKELETON — placeholders com a forma do conteúdo (espera parece menor)
+function skeleton(n, altura) {
+  var h = '';
+  for (var i = 0; i < (n || 3); i++) {
+    h += '<div class="skel-linha" style="height:' + (altura || 46) + 'px;"></div>';
+  }
+  return h;
+}
+
+// ⌨️ ATALHOS DE TECLADO
+var buscaCondominosDebounced = debounce(function(v){ filtrarCondominos(v); }, 280);
+
+function instalarAtalhos() {
+  if (window._atalhosOn) return;
+  window._atalhosOn = true;
+  document.addEventListener('keydown', function(e) {
+    var alvo = e.target.tagName;
+    var aEscrever = (alvo === 'INPUT' || alvo === 'TEXTAREA' || e.target.isContentEditable);
+
+    // Esc fecha modais e o sino — funciona sempre
+    if (e.key === 'Escape') {
+      var m = document.getElementById('modal-generico');
+      if (m && m.style.display !== 'none') { fecharModalGenerico(); return; }
+      toggleSino(true);
+      return;
+    }
+    if (aEscrever) return;   // não roubar teclas a quem escreve
+
+    // / → pesquisar condóminos
+    if (e.key === '/') {
+      var busca = document.getElementById('cond-search');
+      if (busca) { e.preventDefault(); showPage('condominos'); setTimeout(function(){ busca.focus(); }, 120); }
+      return;
+    }
+    // n → nova ocorrência
+    if (e.key === 'n' || e.key === 'N') {
+      if (typeof novaOcorrencia === 'function') { e.preventDefault(); novaOcorrencia(); }
+      return;
+    }
+    // ? → ajuda dos atalhos
+    if (e.key === '?') { e.preventDefault(); mostrarAtalhos(); }
+  });
+}
+
+function mostrarAtalhos() {
+  var h = '<div style="font-size:12.5px;line-height:2;color:var(--t2);">';
+  [['/', 'Pesquisar condóminos'], ['N', 'Nova ocorrência'], ['Esc', 'Fechar janela / notificações'], ['?', 'Mostrar esta ajuda']].forEach(function(a){
+    h += '<div style="display:flex;align-items:center;gap:12px;padding:5px 0;"><kbd style="background:var(--s1);border:1px solid var(--b1);border-bottom-width:2px;border-radius:6px;padding:3px 9px;font-size:11px;font-weight:700;color:var(--cyan);min-width:38px;text-align:center;">' + a[0] + '</kbd><span>' + a[1] + '</span></div>';
+  });
+  h += '</div>';
+  abrirModalGenerico('⌨️ Atalhos de teclado', h);
+}
+
 function toast(msg,type){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+(type||'');t.classList.add('show');setTimeout(()=>t.classList.remove('show'),3200);}
 function updateClock(){const d=new Date();const p=n=>String(n).padStart(2,'0');const el=document.getElementById('clock');if(el)el.textContent=p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds());}
 
