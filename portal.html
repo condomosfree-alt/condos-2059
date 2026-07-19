@@ -1059,16 +1059,18 @@ function renderDocs() {
 
   let h = '';
 
-  // ── Barra do ano ──
+  // ── Seletor de ano  ‹ 2026 ›  (só navega entre anos que TÊM documentos) ──
   if (anos.length > 1 || _docAno) {
-    h += '<div style="display:flex;align-items:center;gap:7px;overflow-x:auto;padding-bottom:10px;margin-bottom:4px;-webkit-overflow-scrolling:touch;">';
-    h += '<button onclick="mudarAnoDoc(null)" style="flex:0 0 auto;background:' + (!_docAno?'var(--cyan)':'var(--card2)') + ';color:' + (!_docAno?'#02121d':'var(--t2)') + ';border:1px solid ' + (!_docAno?'var(--cyan)':'var(--b)') + ';border-radius:20px;padding:6px 14px;font-size:11.5px;font-weight:700;cursor:pointer;white-space:nowrap;">Todos</button>';
-    anos.forEach(function(a){
-      const on = (_docAno === a);
-      h += '<button onclick="mudarAnoDoc(' + a + ')" style="flex:0 0 auto;background:' + (on?'var(--cyan)':'var(--card2)') + ';color:' + (on?'#02121d':'var(--t2)') + ';border:1px solid ' + (on?'var(--cyan)':'var(--b)') + ';border-radius:20px;padding:6px 14px;font-size:11.5px;font-weight:700;cursor:pointer;white-space:nowrap;">' + a + '</button>';
-    });
+    const idx = _docAno ? anos.indexOf(_docAno) : -1;
+    const temAnt = (idx === -1) ? (anos.length > 0) : (idx < anos.length - 1);   // anos[] está do mais recente para o mais antigo
+    const temSeg = (idx > 0);
+    h += '<div style="display:flex;align-items:center;justify-content:center;gap:6px;margin-bottom:14px;">';
+    h += '<button onclick="passarAnoDoc(-1)" ' + (temAnt?'':'disabled') + ' style="background:var(--card2);border:1px solid var(--b);color:' + (temAnt?'var(--cyan)':'var(--t3)') + ';border-radius:9px;width:34px;height:32px;font-size:15px;font-weight:700;cursor:' + (temAnt?'pointer':'default') + ';opacity:' + (temAnt?'1':'.35') + ';">‹</button>';
+    h += '<div onclick="mudarAnoDoc(null)" style="min-width:104px;text-align:center;background:' + (_docAno?'rgba(0,212,255,.1)':'var(--card2)') + ';border:1px solid ' + (_docAno?'rgba(0,212,255,.4)':'var(--b)') + ';border-radius:9px;padding:7px 12px;font-size:13px;font-weight:800;color:' + (_docAno?'var(--cyan)':'var(--t2)') + ';cursor:pointer;" title="Tocar para ver todos os anos">' + (_docAno || 'Todos os anos') + '</div>';
+    h += '<button onclick="passarAnoDoc(1)" ' + (temSeg?'':'disabled') + ' style="background:var(--card2);border:1px solid var(--b);color:' + (temSeg?'var(--cyan)':'var(--t3)') + ';border-radius:9px;width:34px;height:32px;font-size:15px;font-weight:700;cursor:' + (temSeg?'pointer':'default') + ';opacity:' + (temSeg?'1':'.35') + ';">›</button>';
     h += '</div>';
   }
+
 
   // ── Vista de PASTAS ──
   if (!_docPasta) {
@@ -1157,6 +1159,22 @@ function abrirPastaDoc(pasta) {
 
 function mudarAnoDoc(ano) {
   _docAno = ano;
+  renderDocs();
+}
+
+// ‹ › — salta para o ano com documentos anterior/seguinte (nunca cai em anos vazios)
+function passarAnoDoc(dir) {
+  const anos = _anosDisponiveis();          // do mais recente para o mais antigo
+  if (!anos.length) return;
+  if (!_docAno) {                            // estava em "Todos"
+    _docAno = (dir < 0) ? anos[0] : anos[0];
+    renderDocs();
+    return;
+  }
+  const i = anos.indexOf(_docAno);
+  const novo = (dir < 0) ? i + 1 : i - 1;    // ‹ recua no tempo, › avança
+  if (novo < 0 || novo >= anos.length) return;
+  _docAno = anos[novo];
   renderDocs();
 }
 
