@@ -682,7 +682,7 @@ kbd { font-family: var(--mono, monospace); }
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.20-2012</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.20-2017</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -724,7 +724,7 @@ kbd { font-family: var(--mono, monospace); }
           <div class="sb-cond-name" id="sb-cond-name">—</div>
           <div class="sb-user-email" id="sb-user">—</div>
         </div>
-        <button class="sb-logout" onclick="doLogout()" title="Sair"><i class="ti ti-logout"></i></button>
+        <button class="sb-logout" onclick="doLogout()" title="Sair">🚪</button>
       </div>
       <div style="margin-top:8px;display:flex;gap:4px;align-items:center;">
         <span class="pro-badge">PRO</span>
@@ -1767,7 +1767,7 @@ kbd { font-family: var(--mono, monospace); }
           </div>
           <div class="ia-inp-row">
             <textarea class="ia-inp" id="ia-inp" rows="2" placeholder="Pergunta sobre legislação, quotas, assembleias..."></textarea>
-            <button class="btn-primary" id="ia-send-btn" onclick="sendIA()"><i class="ti ti-send"></i></button>
+            <button class="btn-primary" id="ia-send-btn" onclick="sendIA()" title="Enviar">➤</button>
           </div>
         </div>
       </div>
@@ -4051,7 +4051,8 @@ async function verificarAvisosGerais() {
     } else { b.style.display = 'none'; }
   });
   // Badges nos menus com 'nb-' (ocorrências, mensagens, assembleias)
-  [['ocorrencias','nb-oc'],['mensagens','nb-msg'],['assembleias','badge-assembleias'],['condominos','nb-cond'],['despesas','nb-despesas']].forEach(function(par){
+  // nb-oc e nb-msg são contagens (geridas por updateBadges/atualizarBadgeMensagens) — não mexer aqui
+  [['assembleias','badge-assembleias'],['condominos','nb-cond'],['despesas','nb-despesas']].forEach(function(par){
     var b = document.getElementById(par[1]);
     if (!b) return;
     var av = avisos.filter(function(a){ return a.pagina===par[0]; });
@@ -13851,7 +13852,7 @@ function adicionarFornecedor() {
   div.innerHTML = '<div class="fl"><label>Serviço</label><select class="fi" id="forn-serv-' + idx + '"><option value="limpeza">Limpeza</option><option value="jardim">Jardim</option><option value="elevador">Elevador</option><option value="seguranca">Segurança</option><option value="administracao">Administração</option><option value="outro">Outro</option></select></div>' +
     '<div class="fl"><label>Empresa</label><input class="fi" id="forn-nome-' + idx + '" placeholder="Nome da empresa"></div>' +
     '<div class="fl"><label>Ref. Bancária / Desc. extrato</label><input class="fi" id="forn-ref-' + idx + '" placeholder="Ex: MULTICLEAN LDA"></div>' +
-    '<div style="display:flex;align-items:flex-end;padding-bottom:14px;"><button class="tb-btn" style="color:var(--red);border-color:rgba(255,68,68,.3);background:var(--rdim);padding:8px;" onclick="this.parentElement.parentElement.remove()"><i class="ti ti-trash"></i></button></div>';
+    '<div style="display:flex;align-items:flex-end;padding-bottom:14px;"><button class="tb-btn" style="color:var(--red);border-color:rgba(255,68,68,.3);background:var(--rdim);padding:8px;" onclick="this.parentElement.parentElement.remove()">🗑️</button></div>';
   document.getElementById('def-fornecedores-lista').appendChild(div);
   _fornecedoresExtras.push(idx);
 }
