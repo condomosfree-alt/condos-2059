@@ -682,7 +682,7 @@ kbd { font-family: var(--mono, monospace); }
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.20-1906</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.20-2012</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -1673,7 +1673,7 @@ kbd { font-family: var(--mono, monospace); }
 
       <!-- PARCEIROS -->
       <div class="page" id="page-mensagens">
-        <div class="sec-hdr"><span class="sec-t">Mensagens dos Condóminos</span></div>
+        <div class="sec-hdr"><span class="sec-t">Mensagens dos Condóminos</span><button class="btn-primary" onclick="abrirComunicadoMassa()">📢 Comunicado a vários</button></div>
         <div style="display:flex;gap:14px;">
           <div class="panel" style="flex:0 0 300px;max-height:70vh;overflow-y:auto;">
             <div id="msg-lista-fracoes"><div class="loading"><div class="spin"></div></div></div>
@@ -18179,6 +18179,148 @@ function textoParaPDF(s) {
   // Normalizar espaços e travessões tipográficos
   t = t.replace(/[\u2013\u2014]/g, '-').replace(/[\u2018\u2019]/g, "'").replace(/[\u201C\u201D]/g, '"');
   return t.replace(/\s{2,}/g, ' ').trim();
+}
+
+
+// ═══════════════════════════════════════════════════════════
+// 📢 COMUNICADO EM MASSA — uma mensagem, muitos destinatários
+// ═══════════════════════════════════════════════════════════
+var _massaSel = {};
+
+function abrirComunicadoMassa() {
+  if (!fracoes || !fracoes.length) { toast('Ainda não há frações registadas','err'); return; }
+  _massaSel = {};
+  fracoes.forEach(function(f){ _massaSel[f.id] = true; });   // por defeito, todos
+
+  var blocos = {};
+  fracoes.forEach(function(f){ if (f.bloco) blocos[f.bloco] = (blocos[f.bloco]||0) + 1; });
+  var temBlocos = Object.keys(blocos).length > 0;
+
+  var h = '<div style="max-height:70vh;overflow-y:auto;padding:2px;">';
+
+  // Modelos rápidos
+  h += '<label style="font-size:11px;color:var(--t2);font-weight:600;">Modelo</label>';
+  h += '<select class="fi" id="massa-modelo" style="width:100%;font-size:12px;margin-bottom:12px;" onchange="massaAplicarModelo(this.value)">';
+  h += '<option value="">— escrever de raiz —</option>';
+  h += '<option value="agua">💧 Corte de água / manutenção</option>';
+  h += '<option value="elevador">🛗 Elevador fora de serviço</option>';
+  h += '<option value="obra">🔧 Início de obra no edifício</option>';
+  h += '<option value="limpeza">🧹 Limpeza / desinfestação</option>';
+  h += '<option value="assembleia">📅 Lembrete de assembleia</option>';
+  h += '<option value="geral">📢 Aviso geral</option>';
+  h += '</select>';
+
+  h += '<label style="font-size:11px;color:var(--t2);font-weight:600;">Mensagem</label>';
+  h += '<textarea id="massa-texto" class="fi" style="width:100%;min-height:110px;font-size:12.5px;margin-bottom:4px;" placeholder="Escreve o comunicado…" oninput="massaContar()"></textarea>';
+  h += '<div id="massa-chars" style="font-size:10px;color:var(--t3);margin-bottom:12px;"></div>';
+
+  // Destinatários
+  h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">';
+  h += '<span style="font-size:11px;color:var(--t2);font-weight:600;">Destinatários</span>';
+  h += '<span id="massa-conta" style="font-size:11px;font-weight:800;color:var(--cyan);"></span></div>';
+
+  h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">';
+  h += '<button class="tb-btn" style="font-size:10.5px;padding:5px 11px;" onclick="massaTodos(true)">Todos</button>';
+  h += '<button class="tb-btn" style="font-size:10.5px;padding:5px 11px;" onclick="massaTodos(false)">Nenhum</button>';
+  if (temBlocos) {
+    Object.keys(blocos).sort().forEach(function(b){
+      h += '<button class="tb-btn" style="font-size:10.5px;padding:5px 11px;" onclick="massaBloco(\'' + b + '\')">Bloco ' + b + ' (' + blocos[b] + ')</button>';
+    });
+  }
+  h += '<button class="tb-btn" style="font-size:10.5px;padding:5px 11px;color:var(--amber);border-color:rgba(255,179,0,.35);" onclick="massaDevedores()">Só quem deve</button>';
+  h += '</div>';
+
+  h += '<div style="max-height:200px;overflow-y:auto;border:1px solid var(--b1);border-radius:9px;padding:6px;">';
+  fracoes.forEach(function(f){
+    h += '<label style="display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:7px;cursor:pointer;">';
+    h += '<input type="checkbox" class="massa-cb" data-id="' + f.id + '" checked onchange="massaToggle(\'' + f.id + '\', this.checked)" style="accent-color:var(--cyan);">';
+    h += '<div style="flex:1;min-width:0;"><span style="font-size:12.5px;font-weight:600;">' + (f.codigo||'') + '</span>';
+    h += '<span style="font-size:11px;color:var(--t3);"> · ' + (f.proprietario_nome||'sem nome') + (f.bloco?' · Bloco '+f.bloco:'') + '</span></div>';
+    h += '</label>';
+  });
+  h += '</div>';
+
+  h += '<div id="massa-aviso" style="font-size:10.5px;color:var(--t3);margin-top:10px;line-height:1.5;">💡 Cada condómino recebe a mensagem no portal dele e, se tiver avisos ativos, uma notificação no telemóvel. Fica tudo registado como prova.</div>';
+  h += '<button class="btn-primary" style="width:100%;margin-top:12px;" onclick="enviarComunicadoMassa()">📢 Enviar comunicado</button>';
+  h += '</div>';
+
+  abrirModalGenerico('📢 Comunicado a vários', h);
+  setTimeout(massaContar, 60);
+}
+
+function massaToggle(id, on) { _massaSel[id] = on; massaContar(); }
+
+function massaTodos(on) {
+  fracoes.forEach(function(f){ _massaSel[f.id] = on; });
+  document.querySelectorAll('.massa-cb').forEach(function(cb){ cb.checked = on; });
+  massaContar();
+}
+
+function massaBloco(b) {
+  fracoes.forEach(function(f){ _massaSel[f.id] = (f.bloco === b); });
+  document.querySelectorAll('.massa-cb').forEach(function(cb){
+    var f = fracoes.find(function(x){ return x.id === cb.dataset.id; });
+    cb.checked = !!(f && f.bloco === b);
+  });
+  massaContar();
+}
+
+async function massaDevedores() {
+  var q = await sb.from('quotas').select('fracao_id,valor_emitido,valor_pago').eq('condominio_id', currentCondo.id);
+  var devem = {};
+  (q.data||[]).forEach(function(x){
+    if (parseFloat(x.valor_emitido||0) - parseFloat(x.valor_pago||0) > 0.005) devem[x.fracao_id] = true;
+  });
+  fracoes.forEach(function(f){ _massaSel[f.id] = !!devem[f.id]; });
+  document.querySelectorAll('.massa-cb').forEach(function(cb){ cb.checked = !!devem[cb.dataset.id]; });
+  massaContar();
+  toast(Object.keys(devem).length + ' fração(ões) com valores em dívida','ok');
+}
+
+function massaContar() {
+  var n = Object.keys(_massaSel).filter(function(k){ return _massaSel[k]; }).length;
+  var el = document.getElementById('massa-conta');
+  if (el) el.textContent = n + ' de ' + fracoes.length;
+  var t = document.getElementById('massa-texto');
+  var ch = document.getElementById('massa-chars');
+  if (t && ch) ch.textContent = t.value.length + ' caracteres' + (t.value.length > 400 ? ' — mensagens longas são cortadas na notificação do telemóvel' : '');
+}
+
+function massaAplicarModelo(m) {
+  var t = document.getElementById('massa-texto');
+  if (!t || !m) return;
+  var nome = currentCondo ? (currentCondo.nome||'condomínio') : 'condomínio';
+  var modelos = {
+    agua: '💧 AVISO — Corte de água\n\nInforma-se que a água será cortada no dia __/__/____, entre as __:__ e as __:__, para trabalhos de manutenção na rede do edifício.\n\nAgradece-se que encham água para consumo antes dessa hora.\n\nA administração.',
+    elevador: '🛗 AVISO — Elevador fora de serviço\n\nO elevador estará fora de serviço a partir de __/__/____ para __________ (reparação/manutenção).\n\nPrevisão de reposição: __/__/____.\n\nPedimos desculpa pelo incómodo.\n\nA administração.',
+    obra: '🔧 AVISO — Início de obra\n\nInforma-se que terão início no dia __/__/____ os trabalhos de __________, aprovados em assembleia.\n\nDuração prevista: __ dias. Zona afetada: __________.\n\nA administração.',
+    limpeza: '🧹 AVISO — Limpeza / desinfestação\n\nNo dia __/__/____ será realizada a __________ (limpeza / desinfestação) nas partes comuns.\n\nPede-se que mantenham portas fechadas e animais recolhidos durante a intervenção.\n\nA administração.',
+    assembleia: '📅 LEMBRETE — Assembleia de condóminos\n\nRecordamos que a assembleia se realiza no dia __/__/____, às __:__, em __________.\n\nA sua presença é importante. Caso não possa comparecer, pode fazer-se representar por procuração.\n\nA administração.',
+    geral: '📢 AVISO AOS CONDÓMINOS\n\n__________\n\nA administração do ' + nome + '.'
+  };
+  if (modelos[m]) { t.value = modelos[m]; massaContar(); }
+}
+
+async function enviarComunicadoMassa() {
+  var txt = (document.getElementById('massa-texto')||{}).value || '';
+  txt = txt.trim();
+  if (txt.length < 5) { toast('Escreve a mensagem primeiro','err'); return; }
+  var ids = Object.keys(_massaSel).filter(function(k){ return _massaSel[k]; });
+  if (!ids.length) { toast('Escolhe pelo menos um destinatário','err'); return; }
+
+  var nomes = ids.slice(0,3).map(function(id){ var f = fracoes.find(function(x){ return x.id===id; }); return f?f.codigo:''; }).join(', ');
+  var msgConf = 'Enviar este comunicado a ' + ids.length + ' fração(ões)?\n\n' + (ids.length<=3?nomes:nomes+' e mais '+(ids.length-3)) + '\n\nCada uma recebe no portal + notificação no telemóvel (se ativa). Fica registado como prova.';
+  if (!await confirmar(msgConf, {titulo:'Enviar comunicado', tipo:'info', icon:'📢', okTexto:'Enviar'})) return;
+
+  var linhas = ids.map(function(id){
+    return { condominio_id: currentCondo.id, fracao_id: id, autor:'admin', texto: txt, lida_admin:true, lida_condomino:false };
+  });
+  var ins = await sb.from('mensagens').insert(linhas);
+  if (ins.error) { toast('Erro ao enviar: ' + ins.error.message, 'err'); return; }
+  toast('📢 Comunicado enviado a ' + ids.length + ' fração(ões)!','ok');
+  fecharModalGenerico();
+  loadMensagens();
+  atualizarBadgeMensagens();
 }
 
 var _msgConversaAtual = [];
