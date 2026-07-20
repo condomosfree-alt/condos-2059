@@ -682,7 +682,7 @@ kbd { font-family: var(--mono, monospace); }
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.20-1854</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.20-1906</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -18161,17 +18161,120 @@ async function abrirConversa(fracaoId) {
   loadMensagens(); // refrescar a lista (badges)
 }
 
+
+// 🧹 Limpa texto para PDF — o jsPDF standard não desenha emojis (saem "Ø=Ü¶")
+function textoParaPDF(s) {
+  if (!s) return '';
+  var t = String(s);
+  // Traduzir os emojis que usamos em prefixo por etiquetas legíveis
+  var mapa = [
+    [/^🧾\s*/u, '[RECIBO] '], [/^⚠️\s*/u, '[AVISO] '], [/^📨\s*/u, '[CONVOCATORIA] '],
+    [/^📬\s*/u, '[CARTA REGISTADA] '], [/^📋\s*/u, '[ATA] '], [/^🗳️\s*/u, '[VOTACAO] '],
+    [/^💶\s*/u, '[QUOTA EXTRA] '], [/^🔑\s*/u, '[ACESSO PORTAL] '], [/^✅\s*/u, '[OK] '],
+    [/^🔧\s*/u, '[OBRA] '], [/^📅\s*/u, '[DATA] '], [/^🔔\s*/u, '[AVISO] ']
+  ];
+  mapa.forEach(function(m){ t = t.replace(m[0], m[1]); });
+  // Remover quaisquer outros emojis/símbolos que a fonte não desenha
+  t = t.replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}]/gu, '');
+  // Normalizar espaços e travessões tipográficos
+  t = t.replace(/[\u2013\u2014]/g, '-').replace(/[\u2018\u2019]/g, "'").replace(/[\u201C\u201D]/g, '"');
+  return t.replace(/\s{2,}/g, ' ').trim();
+}
+
 var _msgConversaAtual = [];
-async function exportarConversaPDF() {
+// 📤 Painel de opções antes de exportar — evita PDFs de 200 páginas inúteis
+function exportarConversaPDF() {
   if (!_msgFracaoAtiva || !_msgConversaAtual.length) { toast('Sem mensagens para exportar','err'); return; }
+  var f = fracoes.find(function(x){ return x.id === _msgFracaoAtiva; });
+
+  // Anos e tipos presentes nesta conversa
+  var anos = {}, tipos = {};
+  _msgConversaAtual.forEach(function(m){
+    anos[new Date(m.criado_em).getFullYear()] = true;
+    tipos[_tipoMensagem(m.texto)] = (tipos[_tipoMensagem(m.texto)]||0) + 1;
+  });
+  var listaAnos = Object.keys(anos).map(Number).sort(function(a,b){ return b-a; });
+
+  var h = '<div style="font-size:12px;color:var(--t2);line-height:1.55;margin-bottom:14px;">Registo de comunicações da fração <strong>' + (f?f.codigo:'') + '</strong> — ' + _msgConversaAtual.length + ' mensagem(ns) no total.<br>Filtra para obteres só o que precisas (ex: para o Julgado de Paz, normalmente basta o ano e o tipo em causa).</div>';
+
+  h += '<label style="font-size:11px;color:var(--t2);font-weight:600;">Período</label>';
+  h += '<select id="exp-ano" class="fi" style="width:100%;font-size:12px;margin-bottom:12px;"><option value="">Todos os anos (' + _msgConversaAtual.length + ' mensagens)</option>';
+  listaAnos.forEach(function(a){
+    var n = _msgConversaAtual.filter(function(m){ return new Date(m.criado_em).getFullYear() === a; }).length;
+    h += '<option value="' + a + '">' + a + ' (' + n + ' mensagens)</option>';
+  });
+  h += '</select>';
+
+  h += '<label style="font-size:11px;color:var(--t2);font-weight:600;">Tipo de comunicação</label>';
+  h += '<select id="exp-tipo" class="fi" style="width:100%;font-size:12px;margin-bottom:14px;"><option value="">Todos os tipos</option>';
+  var nomesTipo = { recibo:'🧾 Recibos', divida:'⚠️ Avisos de dívida', convocatoria:'📨 Convocatórias', ata:'📋 Atas', votacao:'🗳️ Votações', quota:'💶 Quotas extraordinárias', acesso:'🔑 Acessos ao portal', outro:'💬 Conversa / outros' };
+  Object.keys(tipos).forEach(function(t){
+    h += '<option value="' + t + '">' + (nomesTipo[t]||t) + ' (' + tipos[t] + ')</option>';
+  });
+  h += '</select>';
+
+  h += '<div id="exp-resumo" style="background:rgba(0,212,255,.06);border:1px solid rgba(0,212,255,.22);border-radius:8px;padding:10px 12px;font-size:11.5px;color:var(--cyan);margin-bottom:14px;"></div>';
+  h += '<button class="btn-primary" style="width:100%;" onclick="gerarConversaPDF()">📄 Gerar registo</button>';
+  abrirModalGenerico('📤 Exportar Registo de Comunicações', h);
+  setTimeout(function(){
+    var s1 = document.getElementById('exp-ano'), s2 = document.getElementById('exp-tipo');
+    if (s1) s1.onchange = _atualizarResumoExport;
+    if (s2) s2.onchange = _atualizarResumoExport;
+    _atualizarResumoExport();
+  }, 80);
+}
+
+// Classificar a mensagem pelo conteúdo (para o filtro)
+function _tipoMensagem(t) {
+  t = String(t||'');
+  if (/RECIBO/i.test(t)) return 'recibo';
+  if (/QUOTA EM ATRASO|em atraso|dívida|divida/i.test(t)) return 'divida';
+  if (/CONVOCAT/i.test(t)) return 'convocatoria';
+  if (/\bATA\b/i.test(t)) return 'ata';
+  if (/vota[çc]/i.test(t)) return 'votacao';
+  if (/quota extraordin/i.test(t)) return 'quota';
+  if (/Portal enviado|acesso ao Portal/i.test(t)) return 'acesso';
+  return 'outro';
+}
+
+function _filtrarParaExport() {
+  var ano = document.getElementById('exp-ano') ? document.getElementById('exp-ano').value : '';
+  var tipo = document.getElementById('exp-tipo') ? document.getElementById('exp-tipo').value : '';
+  return _msgConversaAtual.filter(function(m){
+    if (ano && new Date(m.criado_em).getFullYear() !== parseInt(ano)) return false;
+    if (tipo && _tipoMensagem(m.texto) !== tipo) return false;
+    return true;
+  });
+}
+
+function _atualizarResumoExport() {
+  var el = document.getElementById('exp-resumo');
+  if (!el) return;
+  var lista = _filtrarParaExport();
+  if (!lista.length) { el.innerHTML = '⚠️ Nenhuma mensagem com estes filtros.'; el.style.color = 'var(--amber)'; return; }
+  el.style.color = 'var(--cyan)';
+  var d1 = new Date(lista[0].criado_em), d2 = new Date(lista[lista.length-1].criado_em);
+  var pags = Math.max(1, Math.ceil(lista.length / 18));
+  el.innerHTML = '📄 <strong>' + lista.length + ' mensagem(ns)</strong> · de ' + d1.toLocaleDateString('pt-PT') + ' a ' + d2.toLocaleDateString('pt-PT') + ' · aprox. ' + pags + ' página(s)';
+}
+
+async function gerarConversaPDF() {
+  var _lista = _filtrarParaExport();
+  if (!_lista.length) { toast('Nenhuma mensagem com esses filtros','err'); return; }
+  // guardar os filtros antes de a modal desaparecer
+  window._expFiltros = {
+    ano: document.getElementById('exp-ano') ? document.getElementById('exp-ano').value : '',
+    tipo: document.getElementById('exp-tipo') ? document.getElementById('exp-tipo').value : ''
+  };
+  fecharModalGenerico();
   if (!window.jspdf || !window.jspdf.jsPDF) { toast('Biblioteca PDF não carregada','err'); return; }
   var f = fracoes.find(function(x){ return x.id === _msgFracaoAtiva; });
   var { jsPDF } = window.jspdf;
   var doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
   var W = 210, M = 20, y = 0;
-  var condoNome = displayNomeCondo(currentCondo.nome||'');
+  var condoNome = textoParaPDF(displayNomeCondo(currentCondo.nome||''));
   var hojeFmt = new Date().toLocaleDateString('pt-PT');
-  var fracInfo = f ? ((f.codigo||'') + ' - ' + (f.proprietario_nome||'')) : 'Fracao';
+  var fracInfo = textoParaPDF(f ? ((f.codigo||'') + ' - ' + (f.proprietario_nome||'')) : 'Fracao');
 
   // Cabeçalho oficial
   doc.setFillColor(13,24,37); doc.rect(0,0,W,42,'F');
@@ -18183,12 +18286,17 @@ async function exportarConversaPDF() {
   doc.setFontSize(10);
   doc.text('Fracao ' + fracInfo, W/2, 33, {align:'center'});
   doc.setTextColor(190,195,205); doc.setFont('helvetica','normal'); doc.setFontSize(8);
-  doc.text('Documento gerado em ' + hojeFmt + ' - ' + _msgConversaAtual.length + ' mensagem(ns)', W/2, 39.5, {align:'center'});
+  var fAno = (window._expFiltros||{}).ano || '';
+  var fTipo = (window._expFiltros||{}).tipo || '';
+  var filtroTxt = '';
+  if (fAno) filtroTxt += ' - ano ' + fAno;
+  if (fTipo) filtroTxt += ' - so ' + fTipo;
+  doc.text('Documento gerado em ' + hojeFmt + ' - ' + _lista.length + ' mensagem(ns)' + filtroTxt, W/2, 39.5, {align:'center'});
 
   y = 54;
   doc.setFontSize(9);
   var ultimoDia = '';
-  _msgConversaAtual.forEach(function(m){
+  _lista.forEach(function(m){
     var d = new Date(m.criado_em);
     var dia = d.toLocaleDateString('pt-PT');
     var hora = d.toLocaleTimeString('pt-PT',{hour:'2-digit',minute:'2-digit'});
@@ -18201,7 +18309,7 @@ async function exportarConversaPDF() {
       ultimoDia = dia;
     }
 
-    var linhas = doc.splitTextToSize(m.texto, W-2*M-4);
+    var linhas = doc.splitTextToSize(textoParaPDF(m.texto), W-2*M-4);
     var alturaBloco = 6 + linhas.length*4.5 + 4;
     if (y + alturaBloco > 278) { doc.addPage(); y = 20; }
 
