@@ -11,6 +11,7 @@
 <meta name="theme-color" content="#080d14">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.x/tabler-icons.min.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
@@ -681,7 +682,7 @@ kbd { font-family: var(--mono, monospace); }
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.19-2335</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.20-1301</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -1774,6 +1775,23 @@ kbd { font-family: var(--mono, monospace); }
       <!-- DEFINIÇÕES -->
       <div class="page" id="page-definicoes">
         <div class="sec-hdr"><span class="sec-t">Definições</span><button class="btn-primary" onclick="saveCondDef()"><i class="ti ti-check"></i>Guardar</button></div>
+        <div class="panel" style="border:1px solid rgba(0,212,255,.25);">
+          <div class="ph"><span class="pt">🧰 Manutenção &amp; Confiança</span><span class="pm">verificações do sistema e exportação dos teus dados</span></div>
+          <div style="padding:16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;">
+            <button class="tb-btn" style="padding:14px;text-align:left;line-height:1.4;" onclick="diagnosticarInstalacao()">
+              <div style="font-size:13px;font-weight:700;color:var(--cyan);">🩺 Verificar instalação</div>
+              <div style="font-size:10.5px;color:var(--t3);margin-top:3px;">Testa se todas as funções e colunas da base de dados existem. Diz que SQL falta correr.</div>
+            </button>
+            <button class="tb-btn" style="padding:14px;text-align:left;line-height:1.4;" onclick="verificarCoerencia()">
+              <div style="font-size:13px;font-weight:700;color:#b48cff;">🧮 Verificar coerência</div>
+              <div style="font-size:10.5px;color:var(--t3);margin-top:3px;">Cruza os números entre módulos e aponta divergências (quotas, permilagens, estados presos).</div>
+            </button>
+            <button class="tb-btn" style="padding:14px;text-align:left;line-height:1.4;" onclick="exportarTudo()">
+              <div style="font-size:13px;font-weight:700;color:var(--green);">📦 Exportar tudo</div>
+              <div style="font-size:10.5px;color:var(--t3);margin-top:3px;">Descarrega um ZIP com todos os dados do condomínio (CSV + JSON). Os dados são teus.</div>
+            </button>
+          </div>
+        </div>
         <div class="panel">
           <div class="ph"><span class="pt">Dados do Condomínio</span></div>
           <div style="padding:16px;">
@@ -18451,6 +18469,277 @@ function mostrarAtalhos() {
   });
   h += '</div>';
   abrirModalGenerico('⌨️ Atalhos de teclado', h);
+}
+
+
+// ═══════════════════════════════════════════════════════════
+// 🧰 MANUTENÇÃO & CONFIANÇA — diagnóstico, coerência, exportação
+// ═══════════════════════════════════════════════════════════
+
+// 🩺 1. DIAGNÓSTICO DE INSTALAÇÃO — testa RPCs, tabelas e colunas
+async function diagnosticarInstalacao() {
+  var DUMMY = '00000000-0000-0000-0000-000000000000';
+  var TESTES = [
+    // Portal do condómino
+    { t:'rpc', nome:'portal_situacao', args:{p_token:DUMMY}, sql:'sql_portal_v1.sql', grupo:'Portal do condómino' },
+    { t:'rpc', nome:'portal_quotas', args:{p_token:DUMMY}, sql:'sql_portal_v1.sql', grupo:'Portal do condómino' },
+    { t:'rpc', nome:'portal_mensagens', args:{p_token:DUMMY}, sql:'sql_mensagens.sql', grupo:'Portal do condómino' },
+    { t:'rpc', nome:'portal_atas', args:{p_token:DUMMY}, sql:'sql_portal_atas.sql', grupo:'Portal do condómino' },
+    { t:'rpc', nome:'portal_convocatorias', args:{p_token:DUMMY}, sql:'sql_portal_convocatorias.sql', grupo:'Portal do condómino' },
+    { t:'rpc', nome:'portal_concurso_resumo', args:{p_token:DUMMY, p_ocorrencia:DUMMY}, sql:'sql_fix_concurso.sql', grupo:'Portal do condómino' },
+    { t:'col', tabela:'assembleias', col:'hora_assembleia', sql:'sql_portal_convocatorias.sql', grupo:'Portal do condómino' },
+    // Parceiros & concursos
+    { t:'tab', tabela:'orcamentos_obra', sql:'sql_portal_parceiro.sql', grupo:'Parceiros & concursos' },
+    { t:'rpc', nome:'parceiro_situacao', args:{p_token:DUMMY}, sql:'sql_portal_parceiro.sql', grupo:'Parceiros & concursos' },
+    { t:'rpc', nome:'parceiro_pedidos', args:{p_token:DUMMY}, sql:'sql_fix_concurso.sql', grupo:'Parceiros & concursos' },
+    { t:'rpc', nome:'concurso_info', args:{p_token:DUMMY}, sql:'sql_orcamento_publico.sql', grupo:'Parceiros & concursos' },
+    { t:'col', tabela:'parceiros', col:'token_acesso', sql:'sql_portal_parceiro.sql', grupo:'Parceiros & concursos' },
+    { t:'col', tabela:'ocorrencias', col:'token_concurso', sql:'sql_orcamento_publico.sql', grupo:'Parceiros & concursos' },
+    { t:'col', tabela:'ocorrencias', col:'concurso_prazo', sql:'sql_concurso_prazo.sql', grupo:'Parceiros & concursos' },
+    { t:'col', tabela:'ocorrencias', col:'tipo_legal', sql:'sql_classificacao_legal.sql', grupo:'Parceiros & concursos' },
+    { t:'col', tabela:'condominios', col:'limite_admin', sql:'sql_classificacao_legal.sql', grupo:'Parceiros & concursos' },
+    // Notificações push
+    { t:'tab', tabela:'push_subscricoes', sql:'sql_push_notificacoes.sql', grupo:'Notificações push' },
+    { t:'rpc', nome:'push_estado', args:{p_token:DUMMY}, sql:'sql_push_notificacoes.sql', grupo:'Notificações push' },
+    { t:'edge', nome:'enviar-push', sql:'Edge Function (GUIA_web_push.md)', grupo:'Notificações push' },
+    // Energia & gestão
+    { t:'col', tabela:'condominios', col:'aquecimento_tipo', sql:'sql_energia_caderneta.sql', grupo:'Energia & gestão' },
+    { t:'col', tabela:'despesas', col:'dispensa_cobranca', sql:'sql_dispensa_cobranca.sql', grupo:'Energia & gestão' },
+    { t:'col', tabela:'fracoes', col:'dados_atualizados_em', sql:'sql_dados_atualizacao.sql', grupo:'Energia & gestão' }
+  ];
+
+  abrirModalGenerico('🩺 Diagnóstico de Instalação',
+    '<div id="diag-corpo"><div style="text-align:center;padding:20px;color:var(--t2);"><div class="spin"></div><div style="margin-top:10px;font-size:12px;">A testar ' + TESTES.length + ' componentes…</div></div></div>');
+
+  var resultados = [];
+  for (var i = 0; i < TESTES.length; i++) {
+    var t = TESTES[i], ok = false, detalhe = '';
+    try {
+      if (t.t === 'rpc') {
+        var r = await sb.rpc(t.nome, t.args);
+        ok = !r.error || !/could not find|does not exist|PGRST202/i.test(r.error.message || '');
+        if (!ok) detalhe = 'função não existe';
+      } else if (t.t === 'tab') {
+        var r2 = await sb.from(t.tabela).select('id', { count:'exact', head:true });
+        ok = !r2.error || !/does not exist|relation/i.test(r2.error.message || '');
+        if (!ok) detalhe = 'tabela não existe';
+      } else if (t.t === 'col') {
+        var r3 = await sb.from(t.tabela).select(t.col).limit(1);
+        ok = !r3.error || !/does not exist|column/i.test(r3.error.message || '');
+        if (!ok) detalhe = 'coluna ' + t.tabela + '.' + t.col + ' não existe';
+      } else if (t.t === 'edge') {
+        try {
+          var r4 = await sb.functions.invoke(t.nome, { body: {} });
+          ok = true;  // respondeu (mesmo com erro de validação = está publicada)
+          if (r4.error && /not found|404|Failed to send/i.test(String(r4.error.message||r4.error))) { ok = false; detalhe = 'função não publicada'; }
+        } catch(e) { ok = !/404|not found|Failed to send/i.test(String(e.message||e)); if (!ok) detalhe = 'função não publicada'; }
+      }
+    } catch(e) { ok = false; detalhe = e.message || 'erro'; }
+    resultados.push({ nome: (t.nome || (t.tabela + (t.col ? '.' + t.col : ''))), ok: ok, detalhe: detalhe, sql: t.sql, grupo: t.grupo });
+  }
+
+  var falhas = resultados.filter(function(x){ return !x.ok; });
+  var h = '';
+  if (!falhas.length) {
+    h += '<div style="background:rgba(34,229,132,.08);border:1px solid rgba(34,229,132,.3);border-radius:10px;padding:16px;text-align:center;">';
+    h += '<div style="font-size:28px;">✅</div><div style="font-size:14px;font-weight:700;color:var(--green);margin-top:6px;">Instalação completa</div>';
+    h += '<div style="font-size:11.5px;color:var(--t2);margin-top:4px;">Os ' + resultados.length + ' componentes testados estão todos presentes.</div></div>';
+  } else {
+    // agrupar as falhas por SQL a correr
+    var porSql = {};
+    falhas.forEach(function(f){ (porSql[f.sql] = porSql[f.sql] || []).push(f); });
+    h += '<div style="background:rgba(255,84,112,.08);border:1px solid rgba(255,84,112,.3);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:12px;color:var(--red);"><strong>' + falhas.length + ' componente(s) em falta.</strong> Corre os SQLs indicados no Supabase (SQL Editor) e volta a verificar.</div>';
+    Object.keys(porSql).forEach(function(sql){
+      h += '<div style="background:var(--s1);border:1px solid var(--b1);border-radius:10px;padding:12px 14px;margin-bottom:10px;">';
+      h += '<div style="font-size:12px;font-weight:800;color:var(--amber);">📄 ' + sql + '</div>';
+      porSql[sql].forEach(function(f){
+        h += '<div style="font-size:11px;color:var(--t2);margin-top:5px;">❌ ' + f.nome + (f.detalhe ? ' <span style="color:var(--t3);">(' + f.detalhe + ')</span>' : '') + '</div>';
+      });
+      h += '</div>';
+    });
+  }
+  // e os que estão bem, discretos
+  var oks = resultados.filter(function(x){ return x.ok; });
+  h += '<div style="font-size:10.5px;color:var(--t3);margin-top:10px;">✅ ' + oks.length + ' componentes OK: ' + oks.map(function(o){ return o.nome; }).join(' · ') + '</div>';
+  h += '<button class="btn-ghost" style="width:100%;margin-top:12px;font-size:11.5px;" onclick="diagnosticarInstalacao()">🔄 Verificar novamente</button>';
+  var corpo = document.getElementById('diag-corpo');
+  if (corpo) corpo.innerHTML = h;
+}
+
+
+// 🧮 2. VERIFICADOR DE COERÊNCIA — cruza números entre módulos
+async function verificarCoerencia() {
+  abrirModalGenerico('🧮 Verificação de Coerência',
+    '<div id="coer-corpo"><div style="text-align:center;padding:20px;color:var(--t2);"><div class="spin"></div><div style="margin-top:10px;font-size:12px;">A cruzar os números…</div></div></div>');
+
+  var achados = [];
+  var cid = currentCondo.id;
+  try {
+    var [qR, fR, dR, oR, obR, aR, mR] = await Promise.all([
+      sb.from('quotas').select('id,mes,ano,valor_emitido,valor_pago,data_pagamento,fracao_id').eq('condominio_id', cid),
+      sb.from('fracoes').select('id,codigo,permilagem,token_acesso,proprietario_nome').eq('condominio_id', cid),
+      sb.from('despesas').select('id,descricao,valor_total,estado,quota_gerada,dispensa_cobranca').eq('condominio_id', cid),
+      sb.from('ocorrencias').select('id,descricao,estado,precisa_votacao,concurso_aberto,concurso_prazo').eq('condominio_id', cid),
+      sb.from('orcamentos_obra').select('id,ocorrencia_id,estado,validade_dias,submetido_em').eq('condominio_id', cid),
+      sb.from('assembleias').select('id,data_assembleia,estado_sessao,ata_texto,numero_ata').eq('condominio_id', cid),
+      sb.from('movimentos').select('id,tipo,valor,categoria,descricao').eq('condominio_id', cid)
+    ]);
+    var quotas = qR.data||[], frs = fR.data||[], desps = dR.data||[], ocs = oR.data||[], orcs = obR.data||[], asss = aR.data||[], movs = mR.data||[];
+
+    // 1) Permilagens somam 1000‰?
+    var somaPerm = frs.reduce(function(s,f){ return s + parseFloat(f.permilagem||0); }, 0);
+    if (Math.abs(somaPerm - 1000) > 0.5) {
+      achados.push({ nivel:'alto', icone:'⚖️', titulo:'Permilagens somam ' + somaPerm.toFixed(1) + '‰ (deviam ser 1000‰)',
+        texto:'A soma das permilagens das frações não fecha em 1000. Todas as divisões por permilagem (quotas, obras, votações) ficam distorcidas. Corrige nas Frações.' });
+    }
+    // 2) Quotas pagas a mais do que o emitido
+    quotas.filter(function(q){ return parseFloat(q.valor_pago||0) > parseFloat(q.valor_emitido||0) + 0.005; }).forEach(function(q){
+      var f = frs.find(function(x){ return x.id === q.fracao_id; });
+      achados.push({ nivel:'medio', icone:'💶', titulo:'Fração ' + (f?f.codigo:'?') + ' pagou a mais em ' + q.mes + '/' + q.ano,
+        texto:'Pago ' + parseFloat(q.valor_pago).toFixed(2) + '€ com emissão de ' + parseFloat(q.valor_emitido).toFixed(2) + '€. Confirma se é acerto de conta ou erro de registo.' });
+    });
+    // 3) Quotas pagas sem data de pagamento
+    var semData = quotas.filter(function(q){ return parseFloat(q.valor_pago||0) > 0 && !q.data_pagamento; });
+    if (semData.length) achados.push({ nivel:'medio', icone:'📅', titulo: semData.length + ' quota(s) paga(s) sem data de pagamento',
+      texto:'Sem data, os recibos e a prestação de contas ficam incompletos. Abre cada quota e regista a data.' });
+    // 4) Ocorrências em votação sem votação ativa (o bug que já nos mordeu!)
+    ocs.filter(function(o){ return o.estado === 'aguarda_votacao' && !o.precisa_votacao; }).forEach(function(o){
+      achados.push({ nivel:'alto', icone:'🗳️', titulo:'Ocorrência presa: "' + (o.descricao||'').substring(0,40) + '…"',
+        texto:'Está "aguarda votação" mas a votação não foi aberta aos condóminos — ninguém consegue votar. Abre a ocorrência e recoloca em votação.' });
+    });
+    // 5) Mais de um orçamento escolhido na mesma ocorrência
+    var porOc = {};
+    orcs.filter(function(o){ return o.estado === 'escolhido'; }).forEach(function(o){ (porOc[o.ocorrencia_id] = porOc[o.ocorrencia_id]||[]).push(o); });
+    Object.keys(porOc).forEach(function(k){
+      if (porOc[k].length > 1) achados.push({ nivel:'alto', icone:'📋', titulo:'Concurso com ' + porOc[k].length + ' propostas escolhidas',
+        texto:'Só pode haver uma proposta escolhida por obra. Abre a comparação e corrige.' });
+    });
+    // 6) Orçamentos submetidos com validade expirada
+    var hoje = new Date();
+    var expirados = orcs.filter(function(o){
+      if (o.estado !== 'submetido' || !o.submetido_em || !o.validade_dias) return false;
+      var lim = new Date(o.submetido_em); lim.setDate(lim.getDate() + parseInt(o.validade_dias));
+      return lim < hoje;
+    });
+    if (expirados.length) achados.push({ nivel:'medio', icone:'⏰', titulo: expirados.length + ' orçamento(s) com validade expirada',
+      texto:'Propostas submetidas cuja validade já passou. Se ainda não decidiste, pede confirmação/renovação ao fornecedor antes de adjudicar.' });
+    // 7) Assembleias encerradas sem ata
+    asss.filter(function(a){ return a.estado_sessao === 'encerrada' && (!a.ata_texto || !a.ata_texto.trim()); }).forEach(function(a){
+      achados.push({ nivel:'alto', icone:'📜', titulo:'Assembleia de ' + new Date(a.data_assembleia).toLocaleDateString('pt-PT') + ' sem ata',
+        texto:'Sessão encerrada mas a ata não foi gerada/guardada. Sem ata não há título executivo nem prova. Vai à Sala e gera a ata.' });
+    });
+    // 8) Frações sem token de portal
+    var semTok = frs.filter(function(f){ return !f.token_acesso; });
+    if (semTok.length) achados.push({ nivel:'medio', icone:'🔑', titulo: semTok.length + ' fração(ões) sem acesso ao portal',
+      texto:'Sem token, o condómino não consegue entrar no portal. Corre o SQL dos tokens (Fase 2 RLS).' });
+    // 9) Movimentos sem categoria
+    var semCat = movs.filter(function(m){ return !m.categoria; });
+    if (semCat.length) achados.push({ nivel:'baixo', icone:'🏷️', titulo: semCat.length + ' movimento(s) sem categoria',
+      texto:'Movimentos sem categoria distorcem o agrupamento das contas (e o que o condómino vê no portal). Classifica-os nos Movimentos.' });
+    // 10) Despesas por cobrar (informativo — já existe alerta, aqui é o resumo)
+    var porCobrar = desps.filter(function(d){ return !d.quota_gerada && !d.dispensa_cobranca && d.estado !== 'cancelada' && parseFloat(d.valor_total||0) > 0; });
+    if (porCobrar.length) achados.push({ nivel:'baixo', icone:'🏦', titulo: porCobrar.length + ' despesa(s) sem decisão de cobrança',
+      texto:'Decide para cada uma: gerar quotas aos condóminos, ou marcar "paga pela conta".' });
+  } catch(e) {
+    achados.push({ nivel:'alto', icone:'❌', titulo:'Erro ao verificar', texto: e.message || String(e) });
+  }
+
+  var h = '';
+  if (!achados.length) {
+    h += '<div style="background:rgba(34,229,132,.08);border:1px solid rgba(34,229,132,.3);border-radius:10px;padding:16px;text-align:center;">';
+    h += '<div style="font-size:28px;">✅</div><div style="font-size:14px;font-weight:700;color:var(--green);margin-top:6px;">Os números batem certo</div>';
+    h += '<div style="font-size:11.5px;color:var(--t2);margin-top:4px;">10 verificações cruzadas sem divergências. É este rigor que se mostra a um síndico.</div></div>';
+  } else {
+    var cores = { alto:'255,84,112', medio:'255,179,0', baixo:'100,120,150' };
+    var ordem = { alto:0, medio:1, baixo:2 };
+    achados.sort(function(a,b){ return ordem[a.nivel] - ordem[b.nivel]; });
+    h += '<div style="font-size:11.5px;color:var(--t2);margin-bottom:12px;">' + achados.length + ' achado(s), do mais grave para o mais leve:</div>';
+    achados.forEach(function(a){
+      var cor = cores[a.nivel];
+      h += '<div style="background:rgba(' + cor + ',.06);border:1px solid rgba(' + cor + ',.3);border-radius:10px;padding:12px 14px;margin-bottom:9px;">';
+      h += '<div style="font-size:12.5px;font-weight:700;color:rgb(' + cor + ');">' + a.icone + ' ' + a.titulo + '</div>';
+      h += '<div style="font-size:11px;color:var(--t2);margin-top:5px;line-height:1.5;">' + a.texto + '</div></div>';
+    });
+  }
+  h += '<button class="btn-ghost" style="width:100%;margin-top:10px;font-size:11.5px;" onclick="verificarCoerencia()">🔄 Verificar novamente</button>';
+  var corpo = document.getElementById('coer-corpo');
+  if (corpo) corpo.innerHTML = h;
+}
+
+
+// 📦 3. EXPORTAR TUDO — os dados são teus (RGPD: portabilidade)
+function _csvDe(linhas, colunas) {
+  if (!linhas || !linhas.length) return '';
+  var cols = colunas || Object.keys(linhas[0]);
+  function cel(v) {
+    if (v === null || v === undefined) return '';
+    var s = String(v);
+    if (/[";\n]/.test(s)) s = '"' + s.replace(/"/g, '""') + '"';
+    return s;
+  }
+  var out = cols.join(';') + '\n';
+  linhas.forEach(function(l){ out += cols.map(function(c){ return cel(l[c]); }).join(';') + '\n'; });
+  return out;
+}
+
+async function exportarTudo() {
+  if (typeof JSZip === 'undefined') { toast('Biblioteca ZIP não carregada — recarrega a página','err'); return; }
+  if (!await confirmar('Exportar todos os dados de "' + (currentCondo.nome||'') + '"?\n\nGera um ZIP com CSVs (abrem no Excel) + JSON completo + atas em texto. Pode demorar uns segundos.', {titulo:'Exportar tudo', tipo:'info', icon:'📦', okTexto:'Exportar'})) return;
+  toast('📦 A recolher os dados…','');
+
+  var cid = currentCondo.id;
+  try {
+    var tabelas = ['fracoes','quotas','movimentos','despesas','ocorrencias','ocorrencia_eventos','ocorrencia_votos','parceiros','orcamentos_obra','assembleias','assembleia_presencas','assembleia_votos','mensagens','documentos','orcamento_rubricas','auditorias'];
+    var dados = { _exportado_em: new Date().toISOString(), _condominio: currentCondo };
+    var zip = new JSZip();
+    var pasta = zip.folder('CondOS_' + (currentCondo.nome||'condominio').replace(/[^\w\-]/g,'_'));
+
+    for (var i = 0; i < tabelas.length; i++) {
+      var t = tabelas[i];
+      try {
+        var r = await sb.from(t).select('*').eq('condominio_id', cid);
+        if (r.error) { dados[t] = { erro: r.error.message }; continue; }
+        dados[t] = r.data || [];
+        if (dados[t].length) pasta.file('csv/' + t + '.csv', '\ufeff' + _csvDe(dados[t]));
+      } catch(e) { dados[t] = { erro: String(e) }; }
+    }
+
+    // Atas em ficheiros de texto legíveis
+    (dados.assembleias || []).forEach(function(a){
+      if (a.ata_texto && a.ata_texto.trim()) {
+        var nome = 'atas/Ata_' + (a.numero_ata || (a.data_assembleia||'').substring(0,10)) + '.txt';
+        pasta.file(nome, a.ata_texto);
+      }
+    });
+
+    // JSON completo (backup técnico / reimportação futura)
+    pasta.file('dados_completos.json', JSON.stringify(dados, null, 2));
+
+    // LEIA-ME
+    var leia = 'COND.OS 2059 Pro — Exportação completa\n';
+    leia += 'Condomínio: ' + (currentCondo.nome||'') + '\n';
+    leia += 'Data: ' + new Date().toLocaleString('pt-PT') + '\n\n';
+    leia += 'Conteúdo:\n';
+    leia += '- csv/           → uma folha por módulo (abre no Excel; separador ponto-e-vírgula)\n';
+    leia += '- atas/          → as atas das assembleias em texto\n';
+    leia += '- dados_completos.json → todos os dados em bruto (backup técnico)\n\n';
+    leia += 'Os dados são teus. Este ficheiro serve de cópia de segurança e de\n';
+    leia += 'portabilidade (RGPD, Art. 20.º — direito de portabilidade dos dados).\n';
+    pasta.file('LEIA-ME.txt', leia);
+
+    var blob = await zip.generateAsync({ type:'blob', compression:'DEFLATE' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'CondOS_export_' + (currentCondo.nome||'condominio').replace(/[^\w\-]/g,'_') + '_' + new Date().toISOString().substring(0,10) + '.zip';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); }, 4000);
+
+    var nTab = tabelas.filter(function(t){ return Array.isArray(dados[t]) && dados[t].length; }).length;
+    toast('📦 Exportado: ' + nTab + ' módulos com dados. O ZIP está nas transferências.','ok');
+  } catch(e) {
+    console.error('exportar:', e);
+    toast('Erro ao exportar: ' + (e.message||e), 'err');
+  }
 }
 
 function toast(msg,type){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+(type||'');t.classList.add('show');setTimeout(()=>t.classList.remove('show'),3200);}
