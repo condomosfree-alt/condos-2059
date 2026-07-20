@@ -525,6 +525,17 @@ function irPara(pg) {
   if (pg==='reportar') ocVista('lista'); // sempre abre na lista
   if (pg==='mensagens') carregarMensagens(); // recarrega sempre ao entrar
   if (pg==='docs' && _loaded['docs']) { _docPasta = null; renderDocs(); } // volta sempre às pastas
+
+  // 🔔 Ao ENTRAR numa secção, o badge dela limpa-se logo (o conteúdo foi visto)
+  // Nota: quotas e ocorrências NÃO limpam só por entrar — são pendências reais
+  // (dívida por pagar, votação por votar). Só somem quando resolvidas de facto.
+  var mapaBadge = { mensagens:'badge-msg', docs:'badge-docs' };
+  if (mapaBadge[pg]) {
+    var bEl = document.getElementById(mapaBadge[pg]);
+    if (bEl) bEl.style.display = 'none';
+  }
+  // E ao VOLTAR ao início, recalcula tudo com a verdade do servidor
+  if (pg === 'inicio') { try { iniciar(); } catch(e){} }   // recalcula quotas, feed e todos os badges
 }
 
 function saudacao() { const h=new Date().getHours(); return h<12?'Bom dia':(h<20?'Boa tarde':'Boa noite'); }
@@ -555,9 +566,13 @@ async function iniciar() {
     hsub.textContent = d.n_quotas_divida + ' quota(s) em atraso — contacte a administração para regularizar';
   }
   // Badge de quotas em dívida no quadrado
-  if (divida > 0.005) {
-    const bq = document.getElementById('badge-quotas');
-    bq.textContent = d.n_quotas_divida; bq.className = 'mtile-badge amber'; bq.style.display = 'block';
+  const bq = document.getElementById('badge-quotas');
+  if (bq) {
+    if (divida > 0.005) {
+      bq.textContent = d.n_quotas_divida; bq.className = 'mtile-badge amber'; bq.style.display = 'block';
+    } else {
+      bq.style.display = 'none';   // sem dívida → badge desaparece
+    }
   }
 
   carregarFeed();
@@ -637,10 +652,12 @@ async function carregarFeed() {
 
   // Mensagens não lidas → badge no quadrado
   const rm = await sb.rpc('portal_mensagens_nao_lidas', { p_token: token });
+  const bm = document.getElementById('badge-msg');
   if (!rm.error && rm.data > 0) {
-    const bm = document.getElementById('badge-msg');
-    bm.textContent = rm.data; bm.style.display = 'block';
+    if (bm) { bm.textContent = rm.data; bm.style.display = 'block'; }
     itens.unshift({ ic:'💬', cor:'rgba(0,212,255,.14)', t:rm.data+' nova(s) mensagem(ns) da administração', s:'Toca para ler e responder', quando:'', onclick:"irPara('mensagens')" });
+  } else if (bm) {
+    bm.style.display = 'none';   // tudo lido → badge desaparece
   }
 
   if (!itens.length) { box.innerHTML = '<div class="empty">Sem notificações. Está tudo em ordem! ✨</div>'; return; }
