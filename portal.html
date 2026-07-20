@@ -596,6 +596,8 @@ async function carregarFeed() {
     } else if (abertas.length) {
       bo.textContent = abertas.length; bo.style.display = 'block';
       bo.className = 'mtile-badge amber'; // âmbar — a decorrer, sem ação urgente
+    } else {
+      bo.style.display = 'none';   // nada pendente → badge desaparece
     }
     // notificação de votação no topo do feed
     votacoesPendentes.slice(0,2).forEach(function(o){
@@ -609,17 +611,25 @@ async function carregarFeed() {
   }
 
   // Últimos documentos → notificação + badge (só os NOVOS desde a última visita)
-  const rd = await sb.rpc('portal_documentos', { p_token: token });
-  if (!rd.error && rd.data && rd.data.length) {
-    const totalDocs = rd.data.length;
+  const [rd, rdA, rdC] = await Promise.all([
+    sb.rpc('portal_documentos', { p_token: token }),
+    sb.rpc('portal_atas', { p_token: token }),
+    sb.rpc('portal_convocatorias', { p_token: token })
+  ]);
+  const nDocs = (!rd.error && rd.data) ? rd.data.length : 0;
+  const nAtas = (!rdA.error && rdA.data) ? rdA.data.length : 0;
+  const nConv = (!rdC.error && rdC.data) ? rdC.data.length : 0;
+  const totalDisponivel = nDocs + nAtas + nConv;
+  {
+    const totalDocs = totalDisponivel;
     let vistos = 0;
     try { vistos = parseInt(localStorage.getItem('docs_vistos_' + token) || '0'); } catch(e){}
     const novos = Math.max(0, totalDocs - vistos);
     const bd = document.getElementById('badge-docs');
     if (novos > 0) {
       bd.textContent = novos > 9 ? '9+' : novos; bd.className = 'mtile-badge amber'; bd.style.display = 'block';
-      const dd = rd.data[0];
-      itens.push({ ic:'📄', cor:'rgba(0,212,255,.1)', t: novos + ' novo(s) documento(s) disponível(eis)', s:dd.nome||dd.categoria, quando: dd.data_documento?tempoRelativo(dd.data_documento):'', onclick:"irPara('docs')" });
+      const dd = (rd.data && rd.data[0]) || (rdA.data && rdA.data[0]) || (rdC.data && rdC.data[0]) || {};
+      itens.push({ ic:'📄', cor:'rgba(0,212,255,.1)', t: novos + ' novo(s) documento(s) disponível(eis)', s:dd.nome||dd.categoria||'atas e convocatórias', quando: dd.data_documento?tempoRelativo(dd.data_documento):'', onclick:"irPara('docs')" });
     } else {
       bd.style.display = 'none';
     }
@@ -1016,7 +1026,8 @@ async function carregarDocumentos() {
     return (em - pg) <= 0.005 && pg > 0;
   });
 
-  try { localStorage.setItem('docs_vistos_' + token, String(_docsOutros.length)); } catch(e){}
+  // Marcar como vistos o MESMO total que o badge conta (docs + atas + convocatórias)
+  try { localStorage.setItem('docs_vistos_' + token, String(_docsOutros.length + _atasCache.length + _convsCache.length)); } catch(e){}
   const bd = document.getElementById('badge-docs'); if (bd) bd.style.display = 'none';
 
   if (!_docsOutros.length && !_atasCache.length && !_convsCache.length && !_recibosCache.length) {
@@ -1650,17 +1661,35 @@ async function abrirOcorrencia(id) {
     if (o.orcamento_nota) html += '<div style="font-size:12px;color:var(--t2);margin-bottom:8px;">🔧 <strong>Trabalho proposto:</strong> '+escapar(o.orcamento_nota)+'</div>';
     // 🔍 Transparência: quantas propostas foram recolhidas e qual a recomendada
     html += '<div id="concurso-'+o.id+'"></div>';
-    sb.rpc('portal_concurso_resumo', { p_token: token, p_ocorrencia: o.id }).then(function(cr){
+    // 🗳️ Propostas do concurso — o condómino escolhe qual vence
+    sb.rpc('portal_concurso_propostas', { p_token: token, p_ocorrencia: o.id }).then(function(pr){
       const el = document.getElementById('concurso-'+o.id);
-      if (!el || cr.error || !cr.data || !cr.data.length) return;
-      const d = cr.data[0];
-      if (!d.num_propostas || d.num_propostas < 1) return;
-      let t = '<div style="background:rgba(0,212,255,.06);border:1px solid rgba(0,212,255,.2);border-radius:8px;padding:9px 12px;margin-bottom:10px;font-size:11.5px;color:var(--t2);line-height:1.5;">🔍 <strong style="color:var(--cyan);">'+d.num_propostas+' proposta(s) de orçamento</strong> foram recolhidas e comparadas';
-      if (d.valor_recomendado) t += '. Recomendada pela administração: <strong>'+(d.nome_recomendado||'—')+'</strong> por <strong>'+parseFloat(d.valor_recomendado).toFixed(2).replace('.',',')+'€</strong>';
-      t += '. A decisão final é da assembleia/votação.</div>';
+      if (!el || pr.error || !pr.data || !pr.data.length) return;
+      _propostasCache[o.id] = pr.data;
+      const perm = parseFloat(o.minha_permilagem || 0);
+      let t = '<div style="background:rgba(0,212,255,.05);border:1px solid rgba(0,212,255,.22);border-radius:9px;padding:11px 13px;margin-bottom:11px;font-size:11.5px;color:var(--t2);line-height:1.5;">🔒 O concurso fechou com <strong style="color:var(--cyan);">'+pr.data.length+' propostas</strong> em envelope fechado. <strong>És tu que escolhes</strong> qual empresa faz o trabalho.</div>';
+      pr.data.forEach(function(p, i){
+        const meu = (_ocCache[o.id] && _ocCache[o.id].meu_orcamento === p.orcamento_id);
+        const quota = perm ? (parseFloat(p.valor||0) * perm / 1000) : null;
+        t += '<div style="background:'+(meu?'rgba(34,229,132,.08)':'var(--card2)')+';border:1px solid '+(meu?'rgba(34,229,132,.45)':'var(--b)')+';border-radius:11px;padding:12px 13px;margin-bottom:9px;">';
+        t += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">';
+        t += '<div style="flex:1;min-width:0;"><div style="font-size:13.5px;font-weight:700;">'+escapar(p.fornecedor||'Fornecedor')+(i===0?' <span style="font-size:9px;color:var(--green);font-weight:800;">MAIS BARATA</span>':'')+'</div>';
+        if (p.prazo_dias) t += '<div style="font-size:10.5px;color:var(--t3);margin-top:2px;">'+p.prazo_dias+' dias de execução</div>';
+        t += '</div><div style="text-align:right;"><div style="font-size:16px;font-weight:800;color:var(--cyan);">'+eur(p.valor)+'</div>';
+        if (quota !== null) t += '<div style="font-size:10.5px;color:var(--amber);margin-top:2px;">a tua parte: '+eur(quota)+'</div>';
+        t += '</div></div>';
+        if (p.notas) t += '<div style="font-size:11px;color:var(--t2);margin-top:8px;padding-top:8px;border-top:1px solid var(--b);">'+escapar(p.notas)+'</div>';
+        t += '<button onclick="votarProposta(\''+o.id+'\',\''+p.orcamento_id+'\')" style="width:100%;margin-top:10px;background:'+(meu?'var(--green)':'rgba(0,212,255,.12)')+';border:1px solid '+(meu?'var(--green)':'rgba(0,212,255,.4)')+';color:'+(meu?'#02121d':'var(--cyan)')+';border-radius:9px;padding:10px;font-size:12px;font-weight:800;cursor:pointer;">'+(meu?'✅ O teu voto':'Votar nesta')+'</button>';
+        t += '</div>';
+      });
+      t += '<button onclick="votarProposta(\''+o.id+'\',null)" style="width:100%;margin-top:4px;background:transparent;border:1px solid rgba(255,84,112,.35);color:var(--red);border-radius:9px;padding:10px;font-size:11.5px;font-weight:700;cursor:pointer;">✕ Voto contra a obra</button>';
       el.innerHTML = t;
+      // Há propostas para escolher → a pergunta sim/não deixa de fazer sentido
+      var sn = document.getElementById('votosn-' + o.id);
+      if (sn) sn.style.display = 'none';
     });
     if (podeVotar) {
+      html += '<div id="votosn-'+o.id+'">';
       html += '<div style="font-size:13px;color:var(--amber);font-weight:700;margin-bottom:4px;">🗳️ Aprovas esta reparação?</div>';
       if (o.orcamento_valor) {
         const total = parseFloat(o.orcamento_valor);
@@ -1680,6 +1709,7 @@ async function abrirOcorrencia(id) {
       html += '<button onclick="votarOcorrencia(\''+o.id+'\',\'sim\')" style="flex:1;background:rgba(34,229,132,.12);border:1px solid rgba(34,229,132,.4);color:var(--green);border-radius:8px;padding:11px;font-size:13px;font-weight:700;cursor:pointer;">✅ A favor</button>';
       html += '<button onclick="votarOcorrencia(\''+o.id+'\',\'nao\')" style="flex:1;background:rgba(255,84,112,.12);border:1px solid rgba(255,84,112,.4);color:var(--red);border-radius:8px;padding:11px;font-size:13px;font-weight:700;cursor:pointer;">❌ Contra</button>';
       html += '</div>';
+      html += '</div>';   // fecha votosn-
     } else {
       // Não pertence ao bloco desta reparação
       const bl = (o.divisao_metodo||'').indexOf('bloco:')===0 ? o.divisao_metodo.split(':')[1] : '';
@@ -1726,12 +1756,24 @@ async function abrirOcorrencia(id) {
   }
 }
 
+var _propostasCache = {};
+
+async function votarProposta(ocId, orcId) {
+  const res = await sb.rpc('portal_votar_proposta', { p_token: token, p_ocorrencia: ocId, p_orcamento: orcId });
+  if (res.error || res.data === false) { toastP('Não foi possível registar o voto.','err'); return; }
+  if (_ocCache[ocId]) { _ocCache[ocId].meu_voto = orcId ? 'sim' : 'nao'; _ocCache[ocId].meu_orcamento = orcId; }
+  toastP(orcId ? '✅ Voto registado nesta proposta' : '✕ Voto contra registado', 'ok');
+  abrirOcorrencia(ocId);
+  try { iniciar(); } catch(e){}   // badge recalcula
+}
+
 async function votarOcorrencia(id, voto) {
   const res = await sb.rpc('portal_votar_ocorrencia', { p_token: token, p_ocorrencia: id, p_voto: voto });
   if (res.error || res.data === false) { toastP('Não foi possível registar o voto.','err'); return; }
   // Atualizar o cache e reabrir o detalhe
   if (_ocCache[id]) _ocCache[id].meu_voto = voto;
   abrirOcorrencia(id);
+  try { iniciar(); } catch(e){}   // badge recalcula
 }
 
 async function reportar() {
