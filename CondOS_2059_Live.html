@@ -332,6 +332,11 @@ tbody tr:hover{background:rgba(0,212,255,.03)}
 @keyframes skelBrilho { 0% { background-position: -320px 0; } 100% { background-position: 320px 0; } }
 .skel-linha { background: linear-gradient(90deg, var(--s1) 25%, rgba(255,255,255,.045) 50%, var(--s1) 75%); background-size: 640px 100%; animation: skelBrilho 1.3s linear infinite; border-radius: 9px; margin-bottom: 9px; border: 1px solid var(--b1); }
 kbd { font-family: var(--mono, monospace); }
+
+/* 👆 Linhas de tabela clicáveis */
+.linha-click { cursor: pointer; transition: background .15s; }
+.linha-click:hover { background: rgba(0,212,255,.06); }
+.linha-click:hover td:first-child { box-shadow: inset 2px 0 0 var(--cyan); }
 </style>
 
 <script>
@@ -682,7 +687,7 @@ kbd { font-family: var(--mono, monospace); }
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.20-2017</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.20-2116</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -8567,14 +8572,14 @@ async function loadOcorrencias() {
   const catIco = {Elétrico:'ti-bolt elec',Canalização:'ti-droplet manut',Elevador:'ti-elevator manut',Limpeza:'ti-brush limpeza',Segurança:'ti-shield-lock sec',Obra:'ti-hammer obra',Outro:'ti-dots obra'};
   const el = document.getElementById('ocorrencias-list');
   el.innerHTML = ocs.length ? `<table class="tbl"><thead><tr><th>#</th><th>Categoria</th><th>Descrição</th><th>Local</th><th>Prioridade</th><th>Estado</th><th>Data</th><th>Ação</th></tr></thead><tbody>`+
-    ocs.map((o,i)=>`<tr>
+    ocs.map((o,i)=>`<tr class="linha-click" onclick="gerirOcorrencia('${o.id}')" title="Abrir ocorrência">
       <td class="mn" style="color:var(--t2)">OC-${String(i+1).padStart(3,'0')}</td>
       <td>${o.categoria}</td><td>${o.descricao}</td>
       <td style="color:var(--t2);font-size:11px">${o.local_ocorrencia||'—'}</td>
       <td><span class="pill ${priorCls[o.prioridade]||'info'}">${o.prioridade}</span></td>
       <td><span class="pill ${estadoCls[o.estado]||''}">${o.estado}</span></td>
       <td class="mn">${(o.criado_em||'').slice(0,10)}</td>
-      <td><button class="tb-btn" style="font-size:10px;padding:3px 9px;" onclick="gerirOcorrencia('${o.id}')">Gerir</button></td>
+      <td><button class="tb-btn" style="font-size:10px;padding:3px 9px;" onclick="event.stopPropagation();gerirOcorrencia('${o.id}')">Gerir</button></td>
     </tr>`).join('')+`</tbody></table>` :
     emptyState('ti-alert-circle','Sem ocorrências','Regista problemas do edifício.');
   const dashEl = document.getElementById('dash-ocs');
