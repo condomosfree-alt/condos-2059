@@ -767,7 +767,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.21-1322</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.21-1327</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -4120,7 +4120,7 @@ async function verificarAvisosGerais() {
       }
 
       // 5e-B) 💸 Saída grande sem classificação (levantamentos por justificar)
-      var mGrandesR = await sb.from('movimentos').select('valor,descricao,data_movimento').eq('condominio_id', currentCondo.id).eq('tipo','despesa').is('categoria', null).gte('valor', 2000);
+      var mGrandesR = await sb.from('movimentos').select('valor,descricao,data_movimento').eq('condominio_id', currentCondo.id).eq('tipo','despesa').or('categoria.is.null,categoria.eq.').gte('valor', 2000);
       var grandes = (mGrandesR.data||[]);
       if (grandes.length) {
         var somaG = grandes.reduce(function(s,m){ return s + parseFloat(m.valor||0); }, 0);
