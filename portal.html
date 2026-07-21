@@ -274,6 +274,15 @@
   </div>
 
   <div class="page" id="pg-quotas">
+    <div class="card" style="border-color:rgba(180,140,255,.3);">
+      <div style="font-size:13px;font-weight:700;color:#b48cff;">🧮 Quanto pagaria eu?</div>
+      <div style="font-size:11px;color:var(--t2);margin:5px 0 10px;line-height:1.5;">Simula uma obra ou despesa: escreve o valor total e vê a tua quota-parte (pela tua permilagem).</div>
+      <div style="display:flex;gap:9px;align-items:center;">
+        <input class="fi" id="sim-valor" type="number" step="10" placeholder="Valor total (ex: 5000)" style="flex:1;" oninput="simularQuota()">
+        <div id="sim-resultado" style="min-width:110px;text-align:right;font-size:17px;font-weight:800;color:#b48cff;">—</div>
+      </div>
+      <div id="sim-detalhe" style="font-size:10px;color:var(--t3);margin-top:6px;"></div>
+    </div>
     <div class="ptitle">As minhas quotas</div>
     <div class="psub">Histórico dos últimos 24 meses da sua fração.</div>
     <div id="q-lista"><div class="skel">A carregar…</div></div>
@@ -534,6 +543,16 @@ function irPara(pg) {
     var bEl = document.getElementById(mapaBadge[pg]);
     if (bEl) bEl.style.display = 'none';
   }
+  // Ocorrências: entrar marca as atuais como vistas (mas votações por votar continuam a marcar)
+  if (pg === 'reportar') {
+    try {
+      var vst = JSON.parse(localStorage.getItem('ocs_vistas_' + token) || '{}');
+      (window._ocsAbertasIds || []).forEach(function(id){ vst[id] = 1; });
+      localStorage.setItem('ocs_vistas_' + token, JSON.stringify(vst));
+    } catch(e){}
+    var boEl = document.getElementById('badge-oc');
+    if (boEl && boEl.className.indexOf('amber') > -1) boEl.style.display = 'none';
+  }
   // E ao VOLTAR ao início, recalcula tudo com a verdade do servidor
   if (pg === 'inicio') { try { iniciar(); } catch(e){} }   // recalcula quotas, feed e todos os badges
 }
@@ -608,12 +627,19 @@ async function carregarFeed() {
     if (votacoesPendentes.length) {
       bo.textContent = votacoesPendentes.length; bo.style.display = 'block';
       bo.className = 'mtile-badge'; // vermelho — precisa de ação
-    } else if (abertas.length) {
-      bo.textContent = abertas.length; bo.style.display = 'block';
-      bo.className = 'mtile-badge amber'; // âmbar — a decorrer, sem ação urgente
     } else {
-      bo.style.display = 'none';   // nada pendente → badge desaparece
+      // Sem votações pendentes: só marca ocorrências NOVAS que ele ainda não viu
+      var vistas = {};
+      try { vistas = JSON.parse(localStorage.getItem('ocs_vistas_' + token) || '{}'); } catch(e){}
+      var naoVistas = abertas.filter(function(o){ return !vistas[o.id]; });
+      if (naoVistas.length) {
+        bo.textContent = naoVistas.length; bo.style.display = 'block';
+        bo.className = 'mtile-badge amber';   // âmbar — novidade, sem ação urgente
+      } else {
+        bo.style.display = 'none';            // já viu tudo → limpo
+      }
     }
+    window._ocsAbertasIds = abertas.map(function(o){ return o.id; });
     // notificação de votação no topo do feed
     votacoesPendentes.slice(0,2).forEach(function(o){
       itens.unshift({ ic:'🗳️', cor:'rgba(255,179,0,.15)', t:'Votação pendente: '+categoriaLabel(o.categoria), s:'Toca para veres a tua parte e votares', quando:'', onclick:"irPara('reportar')" });
@@ -2027,8 +2053,33 @@ async function toggleNotificacoes(e) {
   }
 }
 
+
+// 🧮 Simulador "quanto pago eu?"
+var _simPerm = null, _simTotal = 1000;
+async function carregarPermilagem() {
+  try {
+    const r = await sb.rpc('portal_minha_permilagem', { p_token: token });
+    if (!r.error && r.data && r.data.length) {
+      _simPerm = parseFloat(r.data[0].permilagem || 0);
+      _simTotal = parseFloat(r.data[0].total_predio || 1000) || 1000;
+    }
+  } catch(e){}
+}
+function simularQuota() {
+  const v = parseFloat((document.getElementById('sim-valor')||{}).value || 0);
+  const res = document.getElementById('sim-resultado');
+  const det = document.getElementById('sim-detalhe');
+  if (!res) return;
+  if (!v || v <= 0) { res.textContent = '—'; if (det) det.textContent = ''; return; }
+  if (_simPerm === null) { res.textContent = '…'; carregarPermilagem().then(simularQuota); return; }
+  const parte = v * _simPerm / _simTotal;
+  res.textContent = parte.toFixed(2).replace('.',',') + '€';
+  if (det) det.textContent = 'A tua fração: ' + _simPerm + '‰ de ' + Math.round(_simTotal) + '‰ · valor indicativo, por permilagem geral';
+}
+
 iniciar();
 cIniciarPolling();
+carregarPermilagem();
 initNotificacoes();
 </script>
 </body>

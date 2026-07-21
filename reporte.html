@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reportar Problema no Edifício</title>
+<meta name="theme-color" content="#0a1220">
+<style>
+  :root { --bg:#0a1220; --card:#111d31; --card2:#16233a; --b:#233350; --b2:#2d4062;
+    --text:#e8eaf0; --t2:#9aa5b8; --t3:#647087; --cyan:#00d4ff; --green:#22e584; --red:#ff5470; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:system-ui,-apple-system,'Segoe UI',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+  .wrap { max-width:480px; margin:0 auto; padding:0 0 40px; }
+  .hdr { background:linear-gradient(180deg,#0d1a30,#0a1524); border-bottom:1px solid var(--b); padding:24px 20px; text-align:center; }
+  .h1 { font-size:20px; font-weight:800; }
+  .sub { font-size:12.5px; color:var(--t2); margin-top:6px; }
+  .page { padding:18px 16px; }
+  .lbl { font-size:11.5px; color:var(--t2); font-weight:600; margin-top:14px; display:block; }
+  .fi { width:100%; background:var(--card2); border:1px solid var(--b2); border-radius:10px; padding:13px; color:var(--text); font-size:14px; margin-top:6px; font-family:inherit; }
+  .fi:focus { outline:none; border-color:var(--cyan); }
+  .btn { width:100%; background:var(--cyan); border:none; color:#02121d; border-radius:12px; padding:16px; font-size:15px; font-weight:800; cursor:pointer; margin-top:22px; }
+  .btn:disabled { opacity:.5; }
+  .nota { font-size:11px; color:var(--t3); text-align:center; margin-top:14px; line-height:1.5; }
+  #loading, #erro, #sucesso { text-align:center; padding:60px 24px; }
+  .spin { width:32px; height:32px; border:3px solid var(--b); border-top-color:var(--cyan); border-radius:50%; margin:0 auto 14px; animation:sp .8s linear infinite; }
+  @keyframes sp { to { transform:rotate(360deg); } }
+  .toast-box { position:fixed; left:50%; bottom:26px; transform:translateX(-50%); background:var(--card2); border:1px solid var(--b2); border-radius:12px; padding:13px 18px; font-size:13px; font-weight:600; z-index:9999; opacity:0; transition:opacity .25s; max-width:88%; text-align:center; color:var(--red); border-color:rgba(255,84,112,.5); }
+  .toast-box.show { opacity:1; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="loading"><div class="spin"></div><div style="color:var(--t2);font-size:13px;">A carregar…</div></div>
+
+  <div id="erro" style="display:none;">
+    <div style="font-size:40px;margin-bottom:12px;">🔒</div>
+    <div style="font-size:16px;font-weight:700;">Código inválido</div>
+    <div style="font-size:13px;color:var(--t2);margin-top:8px;">Este código QR não é válido. Contacte a administração.</div>
+  </div>
+
+  <div id="form-area" style="display:none;">
+    <div class="hdr">
+      <div style="font-size:34px;margin-bottom:8px;">🔧</div>
+      <div class="h1">Viu um problema no edifício?</div>
+      <div class="sub" id="c-nome">—</div>
+    </div>
+    <div class="page">
+      <label class="lbl">O que se passa? *</label>
+      <textarea class="fi" id="f-desc" rows="4" placeholder="Ex: A luz da entrada do bloco B está fundida"></textarea>
+      <label class="lbl">Onde? (piso, zona)</label>
+      <input class="fi" id="f-local" placeholder="Ex: Entrada do Bloco B, r/c">
+      <label class="lbl">O seu nome (opcional)</label>
+      <input class="fi" id="f-nome" placeholder="Pode ficar anónimo">
+      <label class="lbl">Contacto (opcional)</label>
+      <input class="fi" id="f-contacto" placeholder="Telefone ou email, se quiser resposta">
+      <button class="btn" id="btn-enviar" onclick="enviar()">📤 Enviar à administração</button>
+      <div class="nota">O reporte entra diretamente no sistema de gestão do condomínio, com data e hora. Não precisa de conta.</div>
+    </div>
+  </div>
+
+  <div id="sucesso" style="display:none;">
+    <div style="font-size:52px;margin-bottom:14px;">✅</div>
+    <div style="font-size:19px;font-weight:800;">Reporte enviado!</div>
+    <div style="font-size:13.5px;color:var(--t2);margin-top:10px;line-height:1.6;max-width:320px;margin-left:auto;margin-right:auto;">A administração foi notificada e vai analisar a situação. Obrigado por ajudar a cuidar do edifício.</div>
+    <button class="btn" style="max-width:280px;margin:26px auto 0;display:block;" onclick="location.reload()">Reportar outro problema</button>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const SB_URL = 'https://iopkxoabszhzjimjltir.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlvcGt4b2Fic3poemppbWpsdGlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEyNzc5MjQsImV4cCI6MjA5Njg1MzkyNH0.PwopXnx0v7kSXUeua1Y3fI3xPDIS8S62SzGBfwPwLSA';
+const sb = supabase.createClient(SB_URL, SB_KEY);
+const token = new URLSearchParams(location.search).get('t');
+
+function toastP(m) {
+  let t = document.getElementById('toast-box');
+  if (!t) { t = document.createElement('div'); t.id='toast-box'; t.className='toast-box'; document.body.appendChild(t); }
+  t.textContent = m; t.classList.add('show');
+  clearTimeout(window._tt); window._tt = setTimeout(()=>t.classList.remove('show'), 3000);
+}
+
+async function init() {
+  if (!token) { falhar(); return; }
+  const r = await sb.rpc('reporte_info', { p_token: token });
+  if (r.error || !r.data || !r.data.length) { falhar(); return; }
+  document.getElementById('c-nome').textContent = r.data[0].condominio_nome || 'Condomínio';
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('form-area').style.display = 'block';
+}
+function falhar() {
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('erro').style.display = 'block';
+}
+async function enviar() {
+  const desc = document.getElementById('f-desc').value.trim();
+  if (desc.length < 5) { toastP('Descreva o problema, por favor.'); return; }
+  const btn = document.getElementById('btn-enviar');
+  btn.disabled = true; btn.textContent = 'A enviar…';
+  const r = await sb.rpc('reporte_submeter', {
+    p_token: token, p_descricao: desc,
+    p_local: document.getElementById('f-local').value.trim(),
+    p_nome: document.getElementById('f-nome').value.trim(),
+    p_contacto: document.getElementById('f-contacto').value.trim()
+  });
+  if (r.error || r.data === false) {
+    btn.disabled = false; btn.textContent = '📤 Enviar à administração';
+    toastP('Não foi possível enviar. Tente novamente.');
+    return;
+  }
+  document.getElementById('form-area').style.display = 'none';
+  document.getElementById('sucesso').style.display = 'block';
+  window.scrollTo(0,0);
+}
+init();
+</script>
+</body>
+</html>

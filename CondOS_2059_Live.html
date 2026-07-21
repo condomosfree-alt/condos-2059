@@ -337,6 +337,57 @@ kbd { font-family: var(--mono, monospace); }
 .linha-click { cursor: pointer; transition: background .15s; }
 .linha-click:hover { background: rgba(0,212,255,.06); }
 .linha-click:hover td:first-child { box-shadow: inset 2px 0 0 var(--cyan); }
+
+/* 🔎 Paleta de pesquisa global (Ctrl+K) */
+#paleta-ov { display:none; position:fixed; inset:0; background:rgba(4,10,20,.72); backdrop-filter:blur(3px); z-index:12000; align-items:flex-start; justify-content:center; padding-top:12vh; }
+#paleta-box { width:min(560px,92vw); background:var(--s1,#111d31); border:1px solid var(--b2,#2d4062); border-radius:14px; overflow:hidden; box-shadow:0 24px 70px rgba(0,0,0,.55); }
+#paleta-in { width:100%; background:transparent; border:none; border-bottom:1px solid var(--b1,#233350); padding:15px 16px; color:var(--text,#e8eaf0); font-size:14px; outline:none; font-family:inherit; }
+#paleta-res { max-height:44vh; overflow-y:auto; }
+.paleta-item { padding:10px 14px; font-size:12.5px; cursor:pointer; display:flex; align-items:center; gap:8px; }
+.paleta-item:hover, .paleta-item.sel { background:rgba(0,212,255,.09); }
+
+/* 📊 Cabeçalhos ordenáveis */
+table.tbl thead th { cursor:pointer; user-select:none; }
+table.tbl thead th:hover { color:var(--cyan); }
+table.tbl thead th.ord-asc::after { content:' ▲'; font-size:8px; color:var(--cyan); }
+table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--cyan); }
+
+/* 🖨️ Impressão limpa */
+@media print {
+  body { background:#fff !important; color:#000 !important; }
+  .sb, .topbar, #sino-painel, #barra-novidades, .btn-primary, .btn-ghost, .tb-btn, #paleta-ov, #toast, .toast { display:none !important; }
+  .main { margin:0 !important; padding:0 !important; }
+  .page { display:none !important; }
+  .page.active { display:block !important; }
+  .panel { border:1px solid #ccc !important; background:#fff !important; box-shadow:none !important; break-inside:avoid; }
+  table.tbl { border-collapse:collapse; }
+  table.tbl th, table.tbl td { border:1px solid #ddd !important; color:#000 !important; }
+  .pill { border:1px solid #999 !important; color:#000 !important; background:#fff !important; }
+}
+
+/* 📽️ Modo Projeção */
+#proj-ov { display:none; position:fixed; inset:0; background:#060d1a; z-index:13000; overflow-y:auto; }
+.proj-wrap { max-width:1100px; margin:0 auto; padding:34px 40px 60px; font-family:inherit; }
+.proj-top { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:30px; }
+.proj-condo { font-size:15px; letter-spacing:3px; text-transform:uppercase; color:#00d4ff; font-weight:700; }
+.proj-tit { font-size:26px; font-weight:800; color:#e8eaf0; margin-top:6px; }
+.proj-relogio-box { font-size:34px; font-weight:800; color:#8b95a8; font-variant-numeric:tabular-nums; }
+.proj-quorum { border:2px solid; border-radius:20px; padding:26px 30px; text-align:center; margin-bottom:30px; background:rgba(255,255,255,.015); }
+.proj-q-num { font-size:88px; font-weight:900; line-height:1; font-variant-numeric:tabular-nums; }
+.proj-q-bar { position:relative; height:14px; background:rgba(255,255,255,.07); border-radius:8px; margin:20px 0 14px; overflow:visible; }
+.proj-q-bar > div { height:100%; border-radius:8px; transition:width .6s ease; }
+.proj-q-m1, .proj-q-m2 { position:absolute; top:-4px; bottom:-4px; width:2px; background:rgba(255,255,255,.35); }
+.proj-q-txt { font-size:19px; font-weight:800; letter-spacing:.5px; }
+.proj-q-sub { font-size:13px; color:#8b95a8; margin-top:8px; }
+.proj-ot-t { font-size:12px; letter-spacing:2.5px; color:#647087; font-weight:800; margin-bottom:14px; }
+.proj-ponto { display:flex; align-items:center; gap:16px; padding:15px 18px; border-radius:12px; margin-bottom:8px; font-size:19px; color:#9aa5b8; }
+.proj-ponto.atual { background:rgba(0,212,255,.09); border:1px solid rgba(0,212,255,.35); color:#fff; font-weight:700; }
+.proj-ponto-n { min-width:34px; height:34px; border-radius:50%; background:rgba(255,255,255,.06); display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:800; }
+.proj-ponto.atual .proj-ponto-n { background:#00d4ff; color:#02121d; }
+.proj-ponto-txt { flex:1; }
+.proj-votos { font-size:15px; font-weight:800; white-space:nowrap; }
+.proj-rodape { text-align:center; color:#3d4a61; font-size:11px; margin-top:36px; letter-spacing:1px; }
+.proj-fechar { position:fixed; top:16px; right:18px; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.15); color:#8b95a8; border-radius:10px; width:38px; height:38px; font-size:16px; cursor:pointer; }
 </style>
 
 <script>
@@ -687,7 +738,7 @@ kbd { font-family: var(--mono, monospace); }
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.20-2116</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.21-1240</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -1670,7 +1721,7 @@ kbd { font-family: var(--mono, monospace); }
       </div>
 
       <div class="page" id="page-ocorrencias">
-        <div class="sec-hdr"><span class="sec-t">Ocorrências</span><button class="btn-primary" onclick="openModal('mo-oc')"><i class="ti ti-plus"></i>Nova</button></div>
+        <div class="sec-hdr"><span class="sec-t">Ocorrências</span><button class="tb-btn" style="font-size:11px;margin-left:auto;margin-right:10px;color:var(--green);border-color:rgba(34,229,132,.35);" onclick="qrAtrio()" title="QR para colocar no átrio — qualquer morador reporta sem conta">📱 QR do Átrio</button><button class="btn-primary" onclick="openModal('mo-oc')"><i class="ti ti-plus"></i>Nova</button></div>
         <div class="panel">
           <div id="ocorrencias-list"><div class="loading"><div class="spin"></div></div></div>
         </div>
@@ -2112,7 +2163,7 @@ kbd { font-family: var(--mono, monospace); }
 <div class="mo" id="mo-sala-assembleia">
   <div class="mo-box" style="width:920px;max-width:97vw;max-height:92vh;overflow-y:auto;">
     <div class="mo-title">
-      <span>📋 Sala da Assembleia <span id="sala-estado-badge" style="font-size:10px;background:rgba(248,113,113,.15);color:#f87171;padding:2px 8px;border-radius:6px;margin-left:8px;">AO VIVO</span></span>
+      <span>📋 Sala da Assembleia <span id="sala-estado-badge" style="font-size:10px;background:rgba(248,113,113,.15);color:#f87171;padding:2px 8px;border-radius:6px;margin-left:8px;">AO VIVO</span> <button class="tb-btn" style="font-size:10.5px;padding:4px 12px;margin-left:10px;color:var(--cyan);border-color:rgba(0,212,255,.35);" onclick="abrirProjecao()" title="Ecrã limpo para projetar na assembleia">📽️ Projetar</button></span>
       <span class="mo-close" onclick="fecharSalaAssembleia()" style="cursor:pointer;font-size:18px;">✕</span>
     </div>
     <div id="sala-conteudo" style="padding:4px 2px;">
@@ -4161,6 +4212,14 @@ async function loadCondData() {
   verificarAvisosGerais();
   atualizarBadgeMensagens();
   loadOrcamento();
+  // 🔖 F5 volta à página onde estavas (hash no URL)
+  try {
+    var _hp = (location.hash||'').replace('#','');
+    if (_hp && _hp !== 'dashboard' && pageMap[_hp] && !window._hashRestaurado) {
+      window._hashRestaurado = true;
+      setTimeout(function(){ nav(_hp); }, 120);
+    }
+  } catch(e){}
   // 🔄 arranca (ou reinicia) a deteção de novidades
   try { iniciarPolling(); } catch(e) { console.error('polling:', e); }
   try { instalarInterceptorPush(); } catch(e) { console.error('push:', e); }
@@ -9108,6 +9167,32 @@ async function ocPedirOrcamentos() {
 }
 
 // QR do concurso em grande (para mostrar/imprimir)
+
+// 📱 QR do átrio — qualquer morador reporta avarias sem conta
+function qrAtrio() {
+  if (!currentCondo.token_reporte) {
+    toast('Corre o SQL sql_simulador_reporte.sql para ativar o QR do átrio','err');
+    return;
+  }
+  var base = location.href.substring(0, location.href.lastIndexOf('/') + 1);
+  var url = base + 'reporte.html?t=' + currentCondo.token_reporte;
+  var h = '<div style="text-align:center;padding:6px;">';
+  h += '<div style="font-size:12px;color:var(--t2);line-height:1.55;margin-bottom:14px;">Imprime e cola no átrio, no elevador ou na caixa do correio.<br><strong>Qualquer morador</strong> (mesmo inquilinos sem portal) aponta a câmara e reporta um problema na hora — entra direto nas tuas ocorrências.</div>';
+  h += '<div id="qr-atrio" style="display:inline-block;background:#fff;padding:16px;border-radius:14px;"></div>';
+  h += '<div style="font-size:15px;font-weight:800;margin-top:14px;">🔧 Viu um problema no edifício?</div>';
+  h += '<div style="font-size:11.5px;color:var(--t2);margin-top:4px;">Aponte a câmara do telemóvel e reporte em 30 segundos.</div>';
+  h += '<div style="font-size:9.5px;color:var(--t3);margin-top:12px;word-break:break-all;">' + url + '</div>';
+  h += '<div style="display:flex;gap:8px;margin-top:16px;">';
+  h += '<button class="tb-btn" style="flex:1;font-size:11.5px;" onclick="copiarLinkParceiro(\'' + url + '\')">📋 Copiar link</button>';
+  h += '<button class="tb-btn" style="flex:1;font-size:11.5px;" onclick="window.print()">🖨️ Imprimir</button>';
+  h += '</div></div>';
+  abrirModalGenerico('📱 QR do Átrio', h);
+  setTimeout(function(){
+    var el = document.getElementById('qr-atrio');
+    if (el && typeof QRCode !== 'undefined') new QRCode(el, { text: url, width: 240, height: 240, correctLevel: QRCode.CorrectLevel.M });
+  }, 100);
+}
+
 function ocQRConcurso(url) {
   if (typeof QRCode === 'undefined') { toast('Biblioteca QR não carregada','err'); return; }
   var h = '<div style="text-align:center;padding:10px;">';
@@ -10168,7 +10253,102 @@ function atualizarBadgeSala(modo) {
   }
 }
 
+
+// ═══════════════════════════════════════════════════════════
+// 📽️ MODO PROJEÇÃO — ecrã limpo para projetar na assembleia
+// Lê o estado da Sala e atualiza-se sozinho quando a Sala muda.
+// ═══════════════════════════════════════════════════════════
+var _projAberto = false;
+var _projRelogio = null;
+
+function abrirProjecao() {
+  if (!_salaAssembleia) { toast('Abre primeiro a Sala da Assembleia','err'); return; }
+  var ov = document.getElementById('proj-ov');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.id = 'proj-ov';
+    document.body.appendChild(ov);
+  }
+  ov.style.display = 'block';
+  _projAberto = true;
+  renderProjecao();
+  clearInterval(_projRelogio);
+  _projRelogio = setInterval(function(){
+    var r = document.getElementById('proj-relogio');
+    if (r) r.textContent = new Date().toLocaleTimeString('pt-PT',{hour:'2-digit',minute:'2-digit'});
+  }, 15000);
+  try { document.documentElement.requestFullscreen && document.documentElement.requestFullscreen(); } catch(e){}
+}
+
+function fecharProjecao() {
+  _projAberto = false;
+  clearInterval(_projRelogio);
+  var ov = document.getElementById('proj-ov');
+  if (ov) ov.style.display = 'none';
+  try { document.fullscreenElement && document.exitFullscreen(); } catch(e){}
+}
+
+function renderProjecao() {
+  if (!_projAberto || !_salaAssembleia) return;
+  var ov = document.getElementById('proj-ov');
+  if (!ov) return;
+  var q = calcularQuorum();
+  var nP = 0, nR = 0;
+  Object.values(_salaPresencas||{}).forEach(function(e){ if(e==='presente')nP++; else if(e==='representado')nR++; });
+
+  // Quórum legal: 1.ª convocatória >50% do valor; 2.ª (30 min depois) 1/4 do valor (Art. 1432.º CC)
+  var meta1 = q.total/2, meta2 = q.total/4;
+  var tem1 = q.presente > meta1, tem2 = q.presente >= meta2;
+  var estadoQ = tem1 ? {t:'QUÓRUM DA 1.ª CONVOCATÓRIA ✔', c:'#22e584'}
+              : tem2 ? {t:'Quórum só em 2.ª convocatória (30 min depois, ≥¼ do valor)', c:'#ffb300'}
+              : {t:'SEM QUÓRUM — aguardar mais condóminos', c:'#ff5470'};
+
+  var dt = _salaAssembleia.data_assembleia ? new Date(_salaAssembleia.data_assembleia).toLocaleDateString('pt-PT',{day:'numeric',month:'long',year:'numeric'}) : '';
+  var pct = q.total > 0 ? Math.min(100, q.presente/q.total*100) : 0;
+
+  var h = '<div class="proj-wrap">';
+  h += '<div class="proj-top"><div><div class="proj-condo">' + (currentCondo.nome||'').replace(/</g,'&lt;') + '</div>';
+  h += '<div class="proj-tit">' + (_salaAssembleia.tipo||'Assembleia de Condóminos') + ' · ' + dt + '</div></div>';
+  h += '<div class="proj-relogio-box"><span id="proj-relogio">' + new Date().toLocaleTimeString('pt-PT',{hour:'2-digit',minute:'2-digit'}) + '</span></div></div>';
+
+  // Quórum grande
+  h += '<div class="proj-quorum" style="border-color:' + estadoQ.c + '55;">';
+  h += '<div class="proj-q-num" style="color:' + estadoQ.c + ';">' + Math.round(q.presente) + '<span style="font-size:.45em;">‰</span></div>';
+  h += '<div class="proj-q-bar"><div style="width:' + pct.toFixed(1) + '%;background:' + estadoQ.c + ';"></div><span class="proj-q-m1" style="left:50%;"></span><span class="proj-q-m2" style="left:25%;"></span></div>';
+  h += '<div class="proj-q-txt" style="color:' + estadoQ.c + ';">' + estadoQ.t + '</div>';
+  h += '<div class="proj-q-sub">' + nP + ' presentes · ' + nR + ' representados · ' + Math.round(q.total) + '‰ total do prédio</div>';
+  h += '</div>';
+
+  // Ordem de trabalhos com o ponto atual destacado
+  h += '<div class="proj-ot"><div class="proj-ot-t">ORDEM DE TRABALHOS</div>';
+  (_salaPontos||[]).forEach(function(p, i){
+    var atual = (i === _salaPontoAtual);
+    var votos = (_salaVotos||{})[i] || {};
+    var vF=0, vC=0, vA=0, pF=0, pC=0;
+    Object.keys(votos).forEach(function(fid){
+      var f = fracoes.find(function(x){ return x.id===fid; });
+      var perm = f ? parseFloat(f.permilagem||0) : 0;
+      if (votos[fid]==='favor'){ vF++; pF+=perm; }
+      else if (votos[fid]==='contra'){ vC++; pC+=perm; }
+      else vA++;
+    });
+    h += '<div class="proj-ponto' + (atual?' atual':'') + '">';
+    h += '<span class="proj-ponto-n">' + (i+1) + '</span><span class="proj-ponto-txt">' + String(p||'').replace(/</g,'&lt;') + '</span>';
+    if (vF || vC || vA) {
+      h += '<span class="proj-votos"><span style="color:#22e584;">✔ ' + Math.round(pF) + '‰</span> <span style="color:#ff5470;">✘ ' + Math.round(pC) + '‰</span>' + (vA?' <span style="color:#8b95a8;">− ' + vA + '</span>':'') + '</span>';
+    }
+    h += '</div>';
+  });
+  h += '</div>';
+
+  h += '<div class="proj-rodape">COND.OS · registo em tempo real · <span style="opacity:.7;">Esc para sair</span></div>';
+  h += '<button class="proj-fechar" onclick="fecharProjecao()">✕</button>';
+  h += '</div>';
+  ov.innerHTML = h;
+}
+
 function renderSala() {
+  setTimeout(function(){ try { renderProjecao(); } catch(e){} }, 30);
   var cont = document.getElementById('sala-conteudo');
   var q = calcularQuorum();
   var nPresentes = Object.values(_salaPresencas).filter(function(e){ return e==='presente'; }).length;
@@ -18553,6 +18733,7 @@ function injetarBarraDinheiro(pAtual) {
 }
 
 function nav(p) {
+  try { if (location.hash !== '#'+p) history.replaceState(null, '', '#'+p); } catch(e){}
   document.querySelectorAll('.page').forEach(el=>el.classList.remove('active'));
   document.querySelectorAll('.ni').forEach(el=>el.classList.remove('active'));
   const pg=document.getElementById('page-'+p); if(pg) pg.classList.add('active');
@@ -18764,6 +18945,133 @@ function skeleton(n, altura) {
 // ⌨️ ATALHOS DE TECLADO
 var buscaCondominosDebounced = debounce(function(v){ filtrarCondominos(v); }, 280);
 
+
+// ═══════════════════════════════════════════════════════════
+// 🔎 PESQUISA GLOBAL (Ctrl+K) — salta para qualquer coisa
+// ═══════════════════════════════════════════════════════════
+var _paletaIndex = null;
+
+async function paletaAbrir() {
+  var ov = document.getElementById('paleta-ov');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.id = 'paleta-ov';
+    ov.innerHTML = '<div id="paleta-box">' +
+      '<input id="paleta-in" placeholder="Procurar frações, condóminos, ocorrências, parceiros, páginas…" autocomplete="off">' +
+      '<div id="paleta-res"></div>' +
+      '<div style="padding:7px 14px;font-size:9.5px;color:var(--t3);border-top:1px solid var(--b1);">↑↓ navegar · Enter abrir · Esc fechar</div></div>';
+    document.body.appendChild(ov);
+    ov.addEventListener('click', function(e){ if (e.target === ov) paletaFechar(); });
+    var inp = document.getElementById('paleta-in');
+    inp.addEventListener('input', debounce(paletaFiltrar, 160));
+    inp.addEventListener('keydown', paletaTeclas);
+  }
+  ov.style.display = 'flex';
+  var inp2 = document.getElementById('paleta-in');
+  inp2.value = ''; inp2.focus();
+
+  // Construir o índice (páginas + dados em memória + ocorrências/parceiros da BD)
+  _paletaIndex = [];
+  Object.keys(pageMap).forEach(function(p){
+    _paletaIndex.push({ tipo:'📄 Página', nome: pageMap[p], extra:'', acao: function(){ nav(p); } });
+  });
+  (fracoes||[]).forEach(function(f){
+    _paletaIndex.push({ tipo:'🏠 Fração', nome: (f.codigo||'') , extra: f.proprietario_nome||'', acao: function(){ nav('fracoes'); } });
+    if (f.proprietario_nome) _paletaIndex.push({ tipo:'👤 Condómino', nome: f.proprietario_nome, extra: 'Fração ' + (f.codigo||''), acao: function(){ nav('condominos'); var b=document.getElementById('cond-search'); if(b){ b.value=f.proprietario_nome; filtrarCondominos(f.proprietario_nome);} } });
+  });
+  try {
+    var [ocR, pR] = await Promise.all([
+      sb.from('ocorrencias').select('id,descricao,categoria,estado').eq('condominio_id', currentCondo.id).order('criado_em',{ascending:false}).limit(120),
+      sb.from('parceiros').select('id,nome,categoria').eq('condominio_id', currentCondo.id).limit(120)
+    ]);
+    (ocR.data||[]).forEach(function(o){
+      _paletaIndex.push({ tipo:'🔧 Ocorrência', nome: (o.descricao||'').substring(0,60), extra: (o.categoria||'')+' · '+(o.estado||''), acao: function(){ nav('ocorrencias'); setTimeout(function(){ gerirOcorrencia(o.id); }, 250); } });
+    });
+    (pR.data||[]).forEach(function(p){
+      _paletaIndex.push({ tipo:'🤝 Parceiro', nome: p.nome||'', extra: p.categoria||'', acao: function(){ nav('parceiros'); } });
+    });
+  } catch(e){}
+  paletaFiltrar();
+}
+
+function paletaFechar() {
+  var ov = document.getElementById('paleta-ov');
+  if (ov) ov.style.display = 'none';
+}
+
+function _norm(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); }
+
+function paletaFiltrar() {
+  var q = _norm((document.getElementById('paleta-in')||{}).value||'').trim();
+  var res = document.getElementById('paleta-res');
+  if (!res) return;
+  var lista = !q ? _paletaIndex.slice(0, 9) : _paletaIndex.filter(function(it){
+    return _norm(it.nome).indexOf(q) > -1 || _norm(it.extra).indexOf(q) > -1 || _norm(it.tipo).indexOf(q) > -1;
+  }).slice(0, 9);
+  window._paletaLista = lista;
+  window._paletaSel = 0;
+  res.innerHTML = lista.length ? lista.map(function(it, i){
+    return '<div class="paleta-item' + (i===0?' sel':'') + '" data-i="' + i + '" onclick="paletaEscolher(' + i + ')">' +
+      '<span style="font-size:10px;color:var(--t3);min-width:92px;display:inline-block;">' + it.tipo + '</span>' +
+      '<span style="font-weight:600;">' + (it.nome||'').replace(/</g,'&lt;') + '</span>' +
+      (it.extra ? '<span style="color:var(--t3);font-size:11px;"> · ' + String(it.extra).replace(/</g,'&lt;') + '</span>' : '') +
+      '</div>';
+  }).join('') : '<div style="padding:16px;text-align:center;color:var(--t3);font-size:12px;">Nada encontrado.</div>';
+}
+
+function paletaTeclas(e) {
+  var lista = window._paletaLista || [];
+  if (e.key === 'Escape') { paletaFechar(); return; }
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    var n = lista.length; if (!n) return;
+    window._paletaSel = ((window._paletaSel + (e.key==='ArrowDown'?1:-1)) + n) % n;
+    document.querySelectorAll('.paleta-item').forEach(function(el, i){ el.classList.toggle('sel', i === window._paletaSel); });
+    return;
+  }
+  if (e.key === 'Enter') { e.preventDefault(); paletaEscolher(window._paletaSel||0); }
+}
+
+function paletaEscolher(i) {
+  var it = (window._paletaLista||[])[i];
+  if (!it) return;
+  paletaFechar();
+  try { it.acao(); } catch(e){ console.error('paleta:', e); }
+}
+
+
+// 📊 Ordenação universal: clicar num cabeçalho ordena a tabela (DOM-based)
+document.addEventListener('click', function(e) {
+  var th = e.target.closest('table.tbl thead th');
+  if (!th) return;
+  var tabela = th.closest('table');
+  var tbody = tabela.querySelector('tbody');
+  if (!tbody) return;
+  var idx = Array.prototype.indexOf.call(th.parentNode.children, th);
+  var asc = th.dataset.ord !== 'asc';
+  tabela.querySelectorAll('thead th').forEach(function(x){ x.dataset.ord=''; x.classList.remove('ord-asc','ord-desc'); });
+  th.dataset.ord = asc ? 'asc' : 'desc';
+  th.classList.add(asc ? 'ord-asc' : 'ord-desc');
+
+  function valor(tr) {
+    var td = tr.children[idx];
+    if (!td) return '';
+    var t = td.textContent.trim();
+    // números com € e datas
+    var num = parseFloat(t.replace(/\./g,'').replace(',','.').replace(/[^\d.\-]/g,''));
+    if (t.match(/^\d{4}-\d{2}-\d{2}/)) return t;                 // data ISO ordena como texto
+    if (!isNaN(num) && /\d/.test(t)) return num;
+    return t.toLowerCase();
+  }
+  var linhas = Array.prototype.slice.call(tbody.querySelectorAll('tr'));
+  linhas.sort(function(a,b){
+    var va = valor(a), vb = valor(b);
+    if (typeof va === 'number' && typeof vb === 'number') return asc ? va-vb : vb-va;
+    return asc ? String(va).localeCompare(String(vb),'pt') : String(vb).localeCompare(String(va),'pt');
+  });
+  linhas.forEach(function(tr){ tbody.appendChild(tr); });
+});
+
 function instalarAtalhos() {
   if (window._atalhosOn) return;
   window._atalhosOn = true;
@@ -18771,8 +19079,14 @@ function instalarAtalhos() {
     var alvo = e.target.tagName;
     var aEscrever = (alvo === 'INPUT' || alvo === 'TEXTAREA' || e.target.isContentEditable);
 
+    // Ctrl+K / Cmd+K → pesquisa global (funciona sempre)
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
+      e.preventDefault(); paletaAbrir(); return;
+    }
+
     // Esc fecha modais e o sino — funciona sempre
     if (e.key === 'Escape') {
+      if (_projAberto) { fecharProjecao(); return; }
       var m = document.getElementById('modal-generico');
       if (m && m.style.display !== 'none') { fecharModalGenerico(); return; }
       toggleSino(true);
