@@ -767,7 +767,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.21-1256</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.21-1322</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -1408,6 +1408,18 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
         <div class="sec-hdr">
           <span class="sec-t">Financeiro</span>
           <button class="btn-primary" onclick="openModal('mo-mov')"><i class="ti ti-plus"></i>Novo Movimento</button>
+        </div>
+        <div class="panel" id="fundo-cartao" style="border:1px solid rgba(180,140,255,.3);margin-bottom:16px;display:none;">
+          <div class="ph"><span class="pt">🛡️ Fundo de Reserva — Prova Real</span><span class="pm">DL 268/94, Art. 4.º — mín. 10% das quotas, para conservação</span></div>
+          <div style="padding:14px 16px;">
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px;">
+              <div style="text-align:center;"><div style="font-size:9.5px;color:var(--t3);text-transform:uppercase;">Teórico (devia existir)</div><div id="fundo-teorico" style="font-size:19px;font-weight:800;font-family:var(--mono);color:var(--t2);">—</div></div>
+              <div style="text-align:center;"><div style="font-size:9.5px;color:var(--t3);text-transform:uppercase;">Comprovado (movimentos)</div><div id="fundo-comprovado" style="font-size:19px;font-weight:800;font-family:var(--mono);color:#b48cff;">—</div></div>
+              <div style="text-align:center;"><div style="font-size:9.5px;color:var(--t3);text-transform:uppercase;">Cobertura</div><div id="fundo-cobertura" style="font-size:19px;font-weight:800;font-family:var(--mono);">—</div></div>
+            </div>
+            <div style="height:9px;background:rgba(255,255,255,.06);border-radius:6px;overflow:hidden;margin-bottom:10px;"><div id="fundo-barra" style="height:100%;width:0%;background:#b48cff;border-radius:6px;transition:width .5s;"></div></div>
+            <div id="fundo-nota" style="font-size:10.5px;color:var(--t3);line-height:1.5;"></div>
+          </div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px;">
           <div class="kpi" style="border-top:2px solid var(--green);">
@@ -2114,7 +2126,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="mo-box">
     <div class="mo-title">Novo Movimento <span class="mo-close" onclick="closeModal('mo-mov')"><i class="ti ti-x"></i></span></div>
     <div class="fl"><label>Tipo</label><select class="fi" id="mv-tipo"><option value="receita">Receita</option><option value="despesa">Despesa</option></select></div>
-    <div class="fl"><label>Categoria</label><select class="fi" id="mv-cat"><option value="quotas">Quotas</option><option value="limpeza">Limpeza</option><option value="eletricidade">Eletricidade</option><option value="agua">Água</option><option value="elevador">Elevador</option><option value="seguro">Seguro</option><option value="obras">Obras</option><option value="manutencao">Manutenção</option><option value="administracao">Administração</option><option value="outros">Outros</option></select></div>
+    <div class="fl"><label>Categoria</label><select class="fi" id="mv-cat"><option value="quotas">Quotas</option><option value="limpeza">Limpeza</option><option value="eletricidade">Eletricidade</option><option value="agua">Água</option><option value="elevador">Elevador</option><option value="seguro">Seguro</option><option value="obras">Obras</option><option value="manutencao">Manutenção</option><option value="administracao">Administração</option><option value="fundo_reserva">🛡️ Fundo de Reserva (despesa=reforço · receita=utilização)</option><option value="outros">Outros</option></select></div>
     <div class="fl"><label>Descrição</label><input class="fi" id="mv-desc" placeholder="Ex: Quota Janeiro 2026"></div>
     <div class="form-row">
       <div class="fl"><label>Valor (€)</label><input class="fi" id="mv-valor" type="number" step="0.01"></div>
@@ -4089,6 +4101,52 @@ async function verificarAvisosGerais() {
           detalhe: 'Sem email registado: ' + nomesC + (nCarta>5?'…':'') + '. Gera o PDF de cada um (botão 📄 nas Quotas) e envia por correio.' });
       }
     } catch(e) { console.error('aviso recibos carta:', e); }
+
+    // 5e-A) 🛡️ FUNDO SEM PROVA — teórico vs comprovado por movimentos
+    try {
+      var pctFv = parseFloat(currentCondo.fundo_percentagem); if (isNaN(pctFv)) pctFv = 10;
+      var [qPagasR, mFundoR] = await Promise.all([
+        sb.from('quotas').select('valor_pago').eq('condominio_id', currentCondo.id),
+        sb.from('movimentos').select('tipo,valor').eq('condominio_id', currentCondo.id).eq('categoria','fundo_reserva')
+      ]);
+      var pagasFv = (qPagasR.data||[]).reduce(function(s,q){ return s + parseFloat(q.valor_pago||0); }, 0);
+      var teoricoFv = pagasFv * pctFv / 100;
+      var comprovadoFv = (mFundoR.data||[]).reduce(function(s,m){ return s + (m.tipo==='despesa'?1:-1)*parseFloat(m.valor||0); }, 0);
+      window._fundoComprovado = comprovadoFv; window._fundoTeorico = teoricoFv;
+      if (teoricoFv >= 50 && comprovadoFv < teoricoFv * 0.85) {
+        avisos.push({ pagina:'financeiro', badge:'🛡️', cor:'#b48cff',
+          texto: 'Fundo de reserva sem prova: faltam ' + (teoricoFv-comprovadoFv).toFixed(2) + '€ comprovados',
+          detalhe: 'Pelo DL 268/94 (Art. 4.º), ' + pctFv + '% das quotas pagas (' + teoricoFv.toFixed(2) + '€) devia estar no fundo — mas só há ' + comprovadoFv.toFixed(2) + '€ comprovados por transferências registadas. Regista os reforços nos Movimentos (categoria 🛡️ Fundo). Os condóminos veem esta diferença no portal.' });
+      }
+
+      // 5e-B) 💸 Saída grande sem classificação (levantamentos por justificar)
+      var mGrandesR = await sb.from('movimentos').select('valor,descricao,data_movimento').eq('condominio_id', currentCondo.id).eq('tipo','despesa').is('categoria', null).gte('valor', 2000);
+      var grandes = (mGrandesR.data||[]);
+      if (grandes.length) {
+        var somaG = grandes.reduce(function(s,m){ return s + parseFloat(m.valor||0); }, 0);
+        avisos.push({ pagina:'financeiro', badge:String(grandes.length), cor:'#ff5470',
+          texto: grandes.length + ' saída(s) grande(s) sem classificação (' + somaG.toFixed(2) + '€)',
+          detalhe: 'Movimentos de 2.000€+ sem categoria: ' + grandes.slice(0,3).map(function(m){ return parseFloat(m.valor).toFixed(2)+'€ ('+(m.data_movimento||'').substring(0,10)+')'; }).join(', ') + '. Dinheiro grande a sair sem justificação registada é exatamente o que o Raio-X apanha nas contas dos outros — classifica-os.' });
+      }
+
+      // 5e-C) 📉 DESVIO ORÇAMENTAL — despesas do ano vs orçamento aprovado, com projeção
+      var anoAtualDv = new Date().getFullYear();
+      var mesAtualDv = new Date().getMonth() + 1;
+      var rubR = await sb.from('orcamento_rubricas').select('valor_total').eq('condominio_id', currentCondo.id).eq('ano', anoAtualDv);
+      var orcTotalDv = (rubR.data||[]).reduce(function(s,r){ return s + parseFloat(r.valor_total||0); }, 0);
+      if (orcTotalDv > 0 && mesAtualDv >= 3) {
+        var mAnoR = await sb.from('movimentos').select('valor,categoria').eq('condominio_id', currentCondo.id).eq('tipo','despesa').gte('data_movimento', anoAtualDv + '-01-01');
+        var gastoAnoDv = (mAnoR.data||[]).filter(function(m){ return m.categoria !== 'fundo_reserva'; }).reduce(function(s,m){ return s + parseFloat(m.valor||0); }, 0);
+        var esperadoDv = orcTotalDv * mesAtualDv / 12;
+        var projecaoDv = gastoAnoDv / mesAtualDv * 12;
+        if (gastoAnoDv > esperadoDv * 1.15 && projecaoDv > orcTotalDv) {
+          var faltaDv = projecaoDv - orcTotalDv;
+          avisos.push({ pagina:'financeiro', badge:'📉', cor:'#ffb300',
+            texto: 'Despesas ' + Math.round((gastoAnoDv/esperadoDv-1)*100) + '% acima do orçamento anual',
+            detalhe: 'Até ' + mesAtualDv + '/' + anoAtualDv + ' já saíram ' + gastoAnoDv.toFixed(2) + '€ (esperado: ' + esperadoDv.toFixed(2) + '€). A este ritmo o ano fecha em ' + projecaoDv.toFixed(2) + '€ contra ' + orcTotalDv.toFixed(2) + '€ orçamentados — faltarão ' + faltaDv.toFixed(2) + '€. Ou se travam custos, ou terá de haver quotas extraordinárias (Art. 1424.º): leva o tema à assembleia ANTES do buraco, não depois.' });
+        }
+      }
+    } catch(e) { console.error('avisos fundo/orçamento:', e); }
 
     // 5e) Fundo de reserva em falta (quotas por pagar prendem a parte do fundo)
     try {
@@ -8824,6 +8882,10 @@ function atualizarClassificacao() {
   if (!tipoEl || !box) return;
   var cl = classificarIntervencao(tipoEl.value, valEl ? valEl.value : 0);
   box.innerHTML = htmlClassificacao(cl);
+  // 🛡️ Obra de conservação + fundo com prova → lembrar que o fundo serve para isto
+  if (tipoEl.value === 'conservacao' && (window._fundoComprovado||0) > 0) {
+    box.innerHTML += '<div style="background:rgba(180,140,255,.07);border:1px solid rgba(180,140,255,.3);border-radius:8px;padding:9px 12px;margin-top:8px;font-size:10.5px;color:#b48cff;line-height:1.5;">🛡️ Obra de <strong>conservação</strong> — é exatamente para isto que o fundo de reserva existe (DL 268/94). Comprovado: <strong>' + (window._fundoComprovado||0).toFixed(2) + '€</strong>. Se pagares pelo fundo, regista a utilização nos Movimentos (categoria Fundo, tipo receita) em vez de gerar quotas extra.</div>';
+  }
   // ⚖️ O concurso só aparece quando a lei o exige (conservação/inovação)
   var bc = document.getElementById('oc-bloco-concurso');
   var ns = document.getElementById('oc-nota-semconcurso');
@@ -9200,7 +9262,8 @@ async function ocPedirOrcamentos() {
     var ja = jaPedidos.indexOf(p.id) > -1;
     h += '<label style="display:flex;align-items:center;gap:10px;padding:9px 11px;background:var(--s1);border:1px solid var(--b1);border-radius:8px;margin-bottom:7px;cursor:' + (ja?'default':'pointer') + ';opacity:' + (ja?'.55':'1') + ';">';
     h += '<input type="checkbox" class="po-parc" value="' + p.id + '"' + (ja?' disabled':'') + ' style="accent-color:var(--cyan);">';
-    h += '<div style="flex:1;"><div style="font-size:12.5px;font-weight:600;color:var(--text);">' + (p.nome||'') + '</div>';
+    var _star = parseFloat(p.rating||0);
+    h += '<div style="flex:1;"><div style="font-size:12.5px;font-weight:600;color:var(--text);">' + (p.nome||'') + (_star ? ' <span style="font-size:10px;color:var(--amber);">' + _star.toFixed(1) + '★' + (p.num_avaliacoes?' ('+p.num_avaliacoes+')':'') + '</span>' : '') + '</div>';
     h += '<div style="font-size:10px;color:var(--t3);">' + (p.categoria||'') + (p.autorizado_ata?' · ⚖️ '+p.autorizado_ata:'') + (ja?' · já pedido':'') + '</div></div>';
     if (!p.token_acesso) h += '<span style="font-size:9px;color:var(--amber);">sem portal</span>';
     h += '</label>';
@@ -14551,6 +14614,103 @@ async function saveCondDef() {
 // saveGeminiKey removida — chave gerida pelo servidor Supabase
 
 // ===== IA (via Supabase Edge Function — chave segura no servidor) =====
+
+// 🧠 Contexto real do condomínio para o Assistente IA (o "programa-DEUS" a alimentar a IA)
+
+// 🛡️ FUNDO DE VERDADE — teórico (devia existir) vs comprovado (com prova)
+async function atualizarFundoCartao() {
+  var cartao = document.getElementById('fundo-cartao');
+  if (!cartao || !currentCondo) return;
+  try {
+    var pct = parseFloat(currentCondo.fundo_percentagem); if (isNaN(pct)) pct = 10;
+    var [qR, mR] = await Promise.all([
+      sb.from('quotas').select('valor_pago').eq('condominio_id', currentCondo.id),
+      sb.from('movimentos').select('tipo,valor,data_movimento').eq('condominio_id', currentCondo.id).eq('categoria','fundo_reserva')
+    ]);
+    var pagas = (qR.data||[]).reduce(function(s,q){ return s + parseFloat(q.valor_pago||0); }, 0);
+    var teorico = Math.round(pagas * pct) / 100;
+    var comprovado = (mR.data||[]).reduce(function(s,m){ return s + (m.tipo==='despesa'?1:-1)*parseFloat(m.valor||0); }, 0);
+    var ultimo = (mR.data||[]).filter(function(m){ return m.tipo==='despesa'; }).map(function(m){ return m.data_movimento; }).sort().pop();
+    window._fundoComprovado = comprovado;
+    window._fundoTeorico = teorico;
+
+    cartao.style.display = 'block';
+    document.getElementById('fundo-teorico').textContent = teorico.toFixed(2) + '€';
+    document.getElementById('fundo-comprovado').textContent = comprovado.toFixed(2) + '€';
+    var cob = teorico > 0 ? Math.min(999, comprovado/teorico*100) : (comprovado > 0 ? 100 : 0);
+    var cobEl = document.getElementById('fundo-cobertura');
+    var cor = cob >= 95 ? 'var(--green)' : (cob >= 60 ? 'var(--amber)' : 'var(--red)');
+    cobEl.textContent = Math.round(cob) + '%';
+    cobEl.style.color = cor;
+    var barra = document.getElementById('fundo-barra');
+    barra.style.width = Math.min(100, cob) + '%';
+    barra.style.background = cor;
+    var nota = document.getElementById('fundo-nota');
+    if (teorico < 1 && comprovado < 1) {
+      nota.innerHTML = 'Ainda sem quotas pagas registadas. O teórico cresce automaticamente: ' + pct + '% de cada quota paga pertence ao fundo.';
+    } else if (cob >= 95) {
+      nota.innerHTML = '✅ <strong style="color:var(--green);">Fundo comprovado.</strong> As transferências registadas cobrem o valor legal' + (ultimo ? ' · último reforço: ' + new Date(ultimo).toLocaleDateString('pt-PT') : '') + '. Os condóminos veem esta prova no portal.';
+    } else {
+      nota.innerHTML = '⚠️ <strong style="color:' + cor + ';">Diferença por comprovar: ' + Math.max(0, teorico-comprovado).toFixed(2) + '€.</strong> Regista as transferências para a conta do fundo nos Movimentos (categoria 🛡️ Fundo de Reserva, tipo despesa = reforço). <strong>Os condóminos veem esta diferença no portal deles</strong> — é a prova pública de que o fundo existe de facto.';
+    }
+  } catch(e) { console.error('fundo cartão:', e); }
+}
+
+async function construirContextoIA() {
+  if (!currentCondo) return '';
+  try {
+    var cid = currentCondo.id;
+    var [qR, oR, dR, aR, pR, mR] = await Promise.all([
+      sb.from('quotas').select('valor_emitido,valor_pago,fracao_id,mes,ano').eq('condominio_id', cid),
+      sb.from('ocorrencias').select('descricao,categoria,estado,tipo_legal,orcamento_valor').eq('condominio_id', cid).neq('estado','resolvida').order('criado_em',{ascending:false}).limit(8),
+      sb.from('despesas').select('descricao,valor_total,estado,quota_gerada,dispensa_cobranca').eq('condominio_id', cid).order('criado_em',{ascending:false}).limit(8),
+      sb.from('assembleias').select('tipo,data_assembleia,numero_ata,estado_sessao,ata_texto,ordem_trabalhos').eq('condominio_id', cid).order('data_assembleia',{ascending:false}).limit(2),
+      sb.from('parceiros').select('nome,categoria,rating,num_avaliacoes').eq('condominio_id', cid).limit(10),
+      sb.from('movimentos').select('tipo,valor').eq('condominio_id', cid)
+    ]);
+    var linhas = [];
+    linhas.push('Condomínio: ' + (currentCondo.nome||'') + ' · ' + (fracoes||[]).length + ' frações · permilagem total ' + (fracoes||[]).reduce(function(s,f){return s+parseFloat(f.permilagem||0);},0).toFixed(0) + '‰');
+
+    // Dívidas por fração
+    var divPorFr = {};
+    (qR.data||[]).forEach(function(q){
+      var d = parseFloat(q.valor_emitido||0) - parseFloat(q.valor_pago||0);
+      if (d > 0.005) divPorFr[q.fracao_id] = (divPorFr[q.fracao_id]||0) + d;
+    });
+    var totalDiv = Object.values(divPorFr).reduce(function(s,v){return s+v;},0);
+    if (totalDiv > 0) {
+      var tops = Object.keys(divPorFr).sort(function(a,b){return divPorFr[b]-divPorFr[a];}).slice(0,3).map(function(fid){
+        var f = (fracoes||[]).find(function(x){return x.id===fid;});
+        return (f?f.codigo:'?') + ' (' + divPorFr[fid].toFixed(2) + '€)';
+      });
+      linhas.push('Dívida total de quotas: ' + totalDiv.toFixed(2) + '€ em ' + Object.keys(divPorFr).length + ' frações. Maiores: ' + tops.join(', '));
+    } else linhas.push('Quotas: sem dívidas.');
+
+    // Saldo
+    var saldo = (mR.data||[]).reduce(function(s,m){ return s + (m.tipo==='receita'?1:-1)*parseFloat(m.valor||0); }, 0);
+    linhas.push('Saldo (movimentos): ' + saldo.toFixed(2) + '€');
+
+    // Ocorrências
+    if ((oR.data||[]).length) linhas.push('Ocorrências abertas: ' + oR.data.map(function(o){ return (o.categoria||'') + ' "' + (o.descricao||'').substring(0,40) + '" [' + o.estado + (o.tipo_legal?'/'+o.tipo_legal:'') + ']'; }).join('; '));
+
+    // Despesas
+    var porCobrar = (dR.data||[]).filter(function(d){ return !d.quota_gerada && !d.dispensa_cobranca; });
+    if (porCobrar.length) linhas.push('Despesas sem decisão de cobrança: ' + porCobrar.map(function(d){ return d.descricao + ' (' + parseFloat(d.valor_total||0).toFixed(2) + '€)'; }).join(', '));
+
+    // Assembleias + ata
+    (aR.data||[]).forEach(function(a){
+      linhas.push('Assembleia ' + (a.tipo||'') + ' de ' + (a.data_assembleia||'').substring(0,10) + (a.numero_ata?' (ata n.º '+a.numero_ata+')':'') + ' [' + (a.estado_sessao||'agendada') + ']' + (a.ordem_trabalhos ? ' — pontos: ' + String(a.ordem_trabalhos).substring(0,150) : ''));
+    });
+    var ultimaAta = (aR.data||[]).find(function(a){ return a.ata_texto && a.ata_texto.trim(); });
+    if (ultimaAta) linhas.push('EXCERTO DA ÚLTIMA ATA: ' + ultimaAta.ata_texto.replace(/\s+/g,' ').substring(0, 900) + '…');
+
+    // Parceiros
+    if ((pR.data||[]).length) linhas.push('Parceiros: ' + pR.data.map(function(p){ return p.nome + ' (' + (p.categoria||'') + (p.rating?', '+parseFloat(p.rating).toFixed(1)+'★':'') + ')'; }).join(', '));
+
+    return 'DADOS REAIS DO CONDOMÍNIO (usa-os para responder com precisão; se a pergunta for genérica de legislação, ignora-os):\n' + linhas.join('\n') + '\n\n---\nPERGUNTA DO ADMINISTRADOR: ';
+  } catch(e) { console.error('contextoIA:', e); return ''; }
+}
+
 async function callIA(prompt, tipo) {
   const res = await fetch(PROXY_URL, {
     method: 'POST',
@@ -14573,7 +14733,8 @@ async function sendIA() {
   td.innerHTML='<div class="ia-typing"><div class="iad"></div><div class="iad"></div><div class="iad"></div></div>';
   msgs.appendChild(td); msgs.scrollTop=msgs.scrollHeight;
   try {
-    const text = await callIA(msg, 'legislacao');
+    const ctx = await construirContextoIA();
+    const text = await callIA(ctx + msg, 'legislacao');
     const el = document.getElementById(tId); if(el) el.remove();
     addIAMsg(text,'bot');
     if (currentCondo) await sb.from('ia_logs').insert({condominio_id:currentCondo.id,tipo:'legislacao',pergunta:msg,resposta:text});
@@ -18814,6 +18975,7 @@ function nav(p) {
   try { updateBadges(); atualizarBadgeMensagens(); } catch(e){}
   if (p==='ocorrencias' || p==='mensagens' || p==='quotas') { try { verificarAvisosGerais(); } catch(e){} }
   if(p==='orcamento'){ initOrcamentoAno(); loadOrcamento(); }
+  if(p==='financeiro'){ try { atualizarFundoCartao(); } catch(e){} }
   if(p==='condominos') loadCondominos();
   if(p==='mensagens') loadMensagens();
   if(p==='quotas'){

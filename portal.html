@@ -283,6 +283,19 @@
       </div>
       <div id="sim-detalhe" style="font-size:10px;color:var(--t3);margin-top:6px;"></div>
     </div>
+    <div class="card" id="fundo-card" style="display:none;border-color:rgba(180,140,255,.3);">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div style="font-size:13px;font-weight:700;color:#b48cff;">🛡️ Fundo de Reserva do Edifício</div>
+        <div id="fundo-selo" style="font-size:10px;font-weight:800;padding:3px 9px;border-radius:6px;"></div>
+      </div>
+      <div style="font-size:10.5px;color:var(--t2);margin:6px 0 12px;line-height:1.5;">Por lei (DL 268/94, Art. 4.º), o condomínio deve guardar pelo menos 10% das quotas num fundo próprio para obras de conservação. Este painel mostra o que está <strong>comprovado por movimentos registados</strong> — não apenas prometido.</div>
+      <div style="display:flex;gap:10px;margin-bottom:10px;">
+        <div style="flex:1;text-align:center;background:var(--card2);border-radius:9px;padding:9px;"><div style="font-size:9px;color:var(--t3);text-transform:uppercase;">Devia existir</div><div id="fundo-p-teorico" style="font-size:15px;font-weight:800;">—</div></div>
+        <div style="flex:1;text-align:center;background:var(--card2);border-radius:9px;padding:9px;"><div style="font-size:9px;color:var(--t3);text-transform:uppercase;">Comprovado</div><div id="fundo-p-comprovado" style="font-size:15px;font-weight:800;color:#b48cff;">—</div></div>
+      </div>
+      <div style="height:8px;background:rgba(255,255,255,.06);border-radius:5px;overflow:hidden;"><div id="fundo-p-barra" style="height:100%;width:0%;border-radius:5px;transition:width .5s;"></div></div>
+      <div id="fundo-p-nota" style="font-size:10px;color:var(--t3);margin-top:8px;line-height:1.5;"></div>
+    </div>
     <div class="ptitle">As minhas quotas</div>
     <div class="psub">Histórico dos últimos 24 meses da sua fração.</div>
     <div id="q-lista"><div class="skel">A carregar…</div></div>
@@ -2054,6 +2067,35 @@ async function toggleNotificacoes(e) {
 }
 
 
+
+// 🛡️ Fundo de reserva — a prova pública
+async function carregarFundo() {
+  try {
+    const r = await sb.rpc('portal_fundo', { p_token: token });
+    if (r.error || !r.data || !r.data.length) return;
+    const d = r.data[0];
+    const teo = parseFloat(d.teorico||0), comp = parseFloat(d.comprovado||0);
+    if (teo < 1 && comp < 1) return;   // sem histórico ainda — não mostrar vazio
+    const card = document.getElementById('fundo-card');
+    card.style.display = 'block';
+    document.getElementById('fundo-p-teorico').textContent = teo.toFixed(2).replace('.',',') + '€';
+    document.getElementById('fundo-p-comprovado').textContent = comp.toFixed(2).replace('.',',') + '€';
+    const cob = teo > 0 ? comp/teo*100 : 100;
+    const cor = cob >= 95 ? 'var(--green)' : (cob >= 60 ? '#ffb300' : 'var(--red)');
+    const barra = document.getElementById('fundo-p-barra');
+    barra.style.width = Math.min(100, cob) + '%'; barra.style.background = cor;
+    const selo = document.getElementById('fundo-selo');
+    const nota = document.getElementById('fundo-p-nota');
+    if (cob >= 95) {
+      selo.textContent = '✔ COMPROVADO'; selo.style.background = 'rgba(34,229,132,.14)'; selo.style.color = 'var(--green)';
+      nota.textContent = 'As transferências registadas cobrem o valor legal' + (d.ultimo_reforco ? ' · último reforço: ' + new Date(d.ultimo_reforco).toLocaleDateString('pt-PT') : '') + '.';
+    } else {
+      selo.textContent = '⚠ POR COMPROVAR'; selo.style.background = 'rgba(255,179,0,.14)'; selo.style.color = '#ffb300';
+      nota.textContent = 'Há uma diferença de ' + Math.max(0, teo-comp).toFixed(2).replace('.',',') + '€ entre o que devia existir e o que está comprovado por movimentos. Tens o direito de pedir esclarecimento à administração — por exemplo, o comprovativo bancário da conta do fundo.';
+    }
+  } catch(e){}
+}
+
 // 🧮 Simulador "quanto pago eu?"
 var _simPerm = null, _simTotal = 1000;
 async function carregarPermilagem() {
@@ -2080,6 +2122,7 @@ function simularQuota() {
 iniciar();
 cIniciarPolling();
 carregarPermilagem();
+carregarFundo();
 initNotificacoes();
 </script>
 </body>
