@@ -117,6 +117,34 @@ const token = params.get('t');
 function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function eur(v){ return parseFloat(v||0).toFixed(2).replace('.',',') + '€'; }
 
+
+async function concluirTrabalho(orcId) {
+  if (!confirm('Confirmar que o trabalho está concluído?\n\nA administração será avisada para validar e fechar a ocorrência.')) return;
+  const r = await sb.rpc('parceiro_concluir', { p_token: token, p_orcamento: orcId });
+  if (r.error || r.data === false) { toastP('Não foi possível marcar. Tente novamente.','err'); return; }
+  toastP('✅ Marcado como concluído — a administração vai validar.','ok');
+  carregarPedidos();
+}
+
+async function carregarContactoAdmin() {
+  try {
+    const r = await sb.rpc('parceiro_admin_contacto', { p_token: token });
+    if (r.error || !r.data || !r.data.length) return;
+    const d = r.data[0];
+    let el = document.getElementById('admin-contacto');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'admin-contacto';
+      el.style.cssText = 'margin:18px 16px 30px;background:var(--card);border:1px solid var(--b);border-radius:12px;padding:14px 16px;';
+      document.querySelector('.wrap, body').appendChild(el);
+    }
+    el.innerHTML = '<div style="font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Contacto da administração</div>' +
+      '<div style="font-size:13px;font-weight:700;">' + (d.condominio_nome||'') + '</div>' +
+      (d.morada ? '<div style="font-size:11.5px;color:var(--t2);margin-top:3px;">📍 ' + d.morada + '</div>' : '') +
+      (d.admin_email ? '<div style="font-size:11.5px;margin-top:3px;"><a href="mailto:' + d.admin_email + '" style="color:var(--cyan);text-decoration:none;">✉️ ' + d.admin_email + '</a></div>' : '');
+  } catch(e){}
+}
+
 async function init() {
   if (!token) { document.getElementById('loading').style.display='none'; document.getElementById('invalido').style.display='block'; return; }
   const r = await sb.rpc('parceiro_situacao', { p_token: token });
@@ -139,6 +167,7 @@ async function init() {
   document.getElementById('app').style.display='block';
   carregarPedidos();
   pIniciarPolling();
+  carregarContactoAdmin();
 }
 
 async function carregarPedidos() {
@@ -187,10 +216,15 @@ async function carregarPedidos() {
   } else {
     tc.innerHTML = escolhidos.map(p => {
       const aguardaAss = (p.ocorrencia_estado === 'aguarda_votacao');
-      let h = '<div class="li"><div class="est" style="background:' + (aguardaAss ? 'rgba(255,179,0,.14)' : 'rgba(34,229,132,.14)') + ';">' + (aguardaAss ? '⚖️' : '🔧') + '</div>';
+      const jaConcl = p.trabalho_concluido === true;
+      let h = '<div class="li" style="flex-wrap:wrap;"><div class="est" style="background:' + (aguardaAss ? 'rgba(255,179,0,.14)' : 'rgba(34,229,132,.14)') + ';">' + (aguardaAss ? '⚖️' : (jaConcl ? '✅' : '🔧')) + '</div>';
       h += '<div class="m"><div class="t">' + esc(p.descricao_obra || 'Trabalho') + '</div>';
-      h += '<div class="s">' + eur(p.valor) + (aguardaAss ? ' · a sua proposta foi selecionada — falta a deliberação da assembleia' : ' · adjudicado') + '</div></div>';
-      h += '<span class="pill ' + (aguardaAss ? 'pedido' : 'escolhido') + '">' + (aguardaAss ? 'Aguarda assembleia' : 'Adjudicado') + '</span></div>';
+      h += '<div class="s">' + eur(p.valor) + (aguardaAss ? ' · a sua proposta foi selecionada — falta a deliberação da assembleia' : (jaConcl ? ' · concluído — aguarda validação da administração' : ' · adjudicado')) + '</div></div>';
+      h += '<span class="pill ' + (aguardaAss ? 'pedido' : 'escolhido') + '">' + (aguardaAss ? 'Aguarda assembleia' : (jaConcl ? 'Concluído ✔' : 'Adjudicado')) + '</span>';
+      if (!aguardaAss && !jaConcl) {
+        h += '<button onclick="concluirTrabalho(\'' + p.orcamento_id + '\')" style="width:100%;margin-top:9px;background:rgba(34,229,132,.1);border:1px solid rgba(34,229,132,.4);color:var(--green);border-radius:9px;padding:10px;font-size:12px;font-weight:800;cursor:pointer;">✅ Marcar trabalho como concluído</button>';
+      }
+      h += '</div>';
       return h;
     }).join('');
   }

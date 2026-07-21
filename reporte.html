@@ -53,6 +53,12 @@
       <input class="fi" id="f-nome" placeholder="Pode ficar anónimo">
       <label class="lbl">Contacto (opcional)</label>
       <input class="fi" id="f-contacto" placeholder="Telefone ou email, se quiser resposta">
+      <label class="lbl">Fotografia (opcional)</label>
+      <label style="display:block;margin-top:6px;cursor:pointer;">
+        <input type="file" id="f-foto" accept="image/*" capture="environment" style="display:none" onchange="fotoEscolhida(this)">
+        <div id="foto-btn" style="background:var(--card2);border:1px dashed var(--b2);border-radius:10px;padding:14px;text-align:center;font-size:13px;color:var(--t2);">📷 Tirar ou escolher foto</div>
+      </label>
+      <img id="foto-prev" style="display:none;width:100%;border-radius:10px;margin-top:8px;max-height:220px;object-fit:cover;">
       <button class="btn" id="btn-enviar" onclick="enviar()">📤 Enviar à administração</button>
       <div class="nota">O reporte entra diretamente no sistema de gestão do condomínio, com data e hora. Não precisa de conta.</div>
     </div>
@@ -92,16 +98,56 @@ function falhar() {
   document.getElementById('loading').style.display = 'none';
   document.getElementById('erro').style.display = 'block';
 }
+
+// 📷 Compressão da foto no telemóvel (para ~1280px / JPEG 0.72 ≈ 150-250KB)
+let _fotoBlob = null;
+function fotoEscolhida(inp) {
+  const f = inp.files && inp.files[0];
+  if (!f) return;
+  const img = new Image();
+  img.onload = function() {
+    const max = 1280;
+    let w = img.width, h = img.height;
+    if (w > max || h > max) { const r = Math.min(max/w, max/h); w = Math.round(w*r); h = Math.round(h*r); }
+    const cv = document.createElement('canvas');
+    cv.width = w; cv.height = h;
+    cv.getContext('2d').drawImage(img, 0, 0, w, h);
+    cv.toBlob(function(blob) {
+      _fotoBlob = blob;
+      const p = document.getElementById('foto-prev');
+      p.src = cv.toDataURL('image/jpeg', 0.6);
+      p.style.display = 'block';
+      document.getElementById('foto-btn').textContent = '📷 Foto anexada (' + Math.round(blob.size/1024) + ' KB) — tocar para trocar';
+    }, 'image/jpeg', 0.72);
+  };
+  img.src = URL.createObjectURL(f);
+}
+
+async function subirFoto() {
+  if (!_fotoBlob) return null;
+  try {
+    const nome = 'ocorrencias/' + token.substring(0,8) + '_' + Date.now() + '.jpg';
+    const up = await sb.storage.from('fotos').upload(nome, _fotoBlob, { contentType:'image/jpeg' });
+    if (up.error) { console.error('upload:', up.error); return null; }
+    const pu = sb.storage.from('fotos').getPublicUrl(nome);
+    return (pu.data && pu.data.publicUrl) || null;
+  } catch(e) { console.error('foto:', e); return null; }
+}
+
 async function enviar() {
   const desc = document.getElementById('f-desc').value.trim();
   if (desc.length < 5) { toastP('Descreva o problema, por favor.'); return; }
   const btn = document.getElementById('btn-enviar');
   btn.disabled = true; btn.textContent = 'A enviar…';
+  let fotoUrl = null;
+  if (_fotoBlob) { btn.textContent = 'A enviar foto…'; fotoUrl = await subirFoto(); }
+  btn.textContent = 'A enviar…';
   const r = await sb.rpc('reporte_submeter', {
     p_token: token, p_descricao: desc,
     p_local: document.getElementById('f-local').value.trim(),
     p_nome: document.getElementById('f-nome').value.trim(),
-    p_contacto: document.getElementById('f-contacto').value.trim()
+    p_contacto: document.getElementById('f-contacto').value.trim(),
+    p_foto: fotoUrl
   });
   if (r.error || r.data === false) {
     btn.disabled = false; btn.textContent = '📤 Enviar à administração';

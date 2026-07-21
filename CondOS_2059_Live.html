@@ -388,6 +388,35 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
 .proj-votos { font-size:15px; font-weight:800; white-space:nowrap; }
 .proj-rodape { text-align:center; color:#3d4a61; font-size:11px; margin-top:36px; letter-spacing:1px; }
 .proj-fechar { position:fixed; top:16px; right:18px; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.15); color:#8b95a8; border-radius:10px; width:38px; height:38px; font-size:16px; cursor:pointer; }
+
+/* ═══ 📱 MODO TELEMÓVEL ═══ */
+@media (max-width: 860px) {
+  #btn-menu-mv { display:inline-flex !important; align-items:center; justify-content:center; }
+  .sb { position:fixed; left:0; top:0; bottom:0; z-index:11500; transform:translateX(-105%); transition:transform .28s ease; box-shadow:14px 0 40px rgba(0,0,0,.5); width:min(270px, 82vw); overflow-y:auto; }
+  body.menu-aberto .sb { transform:translateX(0); }
+  body.menu-aberto::after { content:''; position:fixed; inset:0; background:rgba(3,8,16,.62); z-index:11400; }
+  .main { width:100%; }
+  .topbar { padding:0 12px; }
+  .tb-page { font-size:11px; }
+  .sec-hdr { flex-wrap:wrap; gap:8px; }
+  .sec-hdr .btn-primary, .sec-hdr .tb-btn { font-size:11px; padding:7px 12px; }
+  /* Tabelas deslizam na horizontal */
+  .panel { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+  table.tbl { min-width:640px; }
+  /* Formulários em coluna */
+  .form-row { flex-direction:column !important; }
+  .form-row > * { width:100% !important; }
+  /* Modais ocupam o ecrã */
+  #modal-generico > div, .modal-caixa { width:96vw !important; max-width:96vw !important; max-height:92dvh !important; }
+  /* Grelhas de KPIs a 2 colunas */
+  [style*="grid-template-columns:repeat(4"] { grid-template-columns:repeat(2,1fr) !important; }
+  .proj-wrap { padding:20px 14px 40px; }
+  .proj-q-num { font-size:56px; }
+}
+@media (max-width: 480px) {
+  .kpi, .kpi-box { font-size:90%; }
+  table.tbl { min-width:560px; font-size:11px; }
+}
 </style>
 
 <script>
@@ -738,7 +767,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.21-1240</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.21-1248</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -792,6 +821,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <!-- MAIN -->
   <div class="main">
     <div class="topbar">
+      <button id="btn-menu-mv" onclick="toggleMenuMovel()" style="display:none;background:transparent;border:1px solid var(--b1);color:var(--cyan);border-radius:8px;width:34px;height:32px;font-size:16px;cursor:pointer;margin-right:10px;flex-shrink:0;">☰</button>
       <span class="tb-page" id="tb-page">dashboard /</span>
       <span class="tb-spacer"></span>
       <button class="tb-btn" onclick="nav('ocorrencias');openModal('mo-oc')"><i class="ti ti-plus"></i>Nova Ocorrência</button>
@@ -3973,6 +4003,23 @@ async function verificarAvisosGerais() {
         texto: porPagarForn.length + ' despesa(s) por pagar ao fornecedor',
         detalhe: 'Há ' + totalPorPagar.toFixed(2) + '€ aprovados mas ainda não pagos. Quando pagares, clica em "💸 Pagar" para o movimento entrar no extrato.' });
     }
+
+    // 5k) Trabalhos dados como concluídos pelo parceiro — validar e fechar
+    try {
+      var conclRes = await sb.from('orcamentos_obra').select('id,ocorrencia_id,concluido_em,parceiros(nome)').eq('condominio_id', currentCondo.id).eq('trabalho_concluido', true).eq('estado','escolhido');
+      var concl = (conclRes.data||[]);
+      if (concl.length) {
+        // só os cujas ocorrências ainda não estão resolvidas
+        var ocIds = concl.map(function(x){ return x.ocorrencia_id; });
+        var ocAb = await sb.from('ocorrencias').select('id,estado').in('id', ocIds).neq('estado','resolvida').neq('estado','fechada');
+        var pendVal = (ocAb.data||[]).length;
+        if (pendVal) {
+          avisos.push({ pagina:'ocorrencias', badge:String(pendVal), cor:'#22e584',
+            texto: pendVal + ' trabalho(s) dado(s) como concluído(s)',
+            detalhe: 'O parceiro marcou o trabalho como terminado. Confirma no local (ou com o condómino) e fecha a ocorrência como resolvida.' });
+        }
+      }
+    } catch(e) { console.error('aviso concluidos:', e); }
 
     // 5j) Concursos com prazo terminado (ainda abertos)
     try {
@@ -8813,6 +8860,13 @@ async function gerirOcorrencia(id) {
     h += '<div style="flex:1;min-width:60px;text-align:center;font-size:8.5px;padding:5px 2px;border-radius:5px;background:' + (ativo?'rgba(0,212,255,.15)':'var(--s2)') + ';color:' + (ativo?'var(--cyan)':'var(--t3)') + ';border:1px solid ' + (ativo?'rgba(0,212,255,.3)':'var(--b1)') + ';">' + (estadoLabels[e]||e) + '</div>';
   });
   h += '</div>';
+
+  // 📷 Foto da avaria (se veio do QR do átrio ou do portal)
+  if (_ocAtual.foto_url) {
+    h += '<a href="' + _ocAtual.foto_url + '" target="_blank" style="display:block;margin-bottom:12px;">';
+    h += '<img src="' + _ocAtual.foto_url + '" style="width:100%;max-height:230px;object-fit:cover;border-radius:10px;border:1px solid var(--b1);" alt="Foto da avaria">';
+    h += '<div style="font-size:9.5px;color:var(--t3);margin-top:4px;text-align:center;">📷 Foto anexada ao reporte — tocar para ampliar</div></a>';
+  }
 
   // 0. CLASSIFICAÇÃO LEGAL — define o caminho (3 orçamentos? votação? qual maioria?)
   h += '<div style="background:var(--s1);border:1px solid var(--b1);border-radius:10px;padding:14px;margin-bottom:12px;">';
@@ -18732,7 +18786,17 @@ function injetarBarraDinheiro(pAtual) {
   barra.innerHTML = h;
 }
 
+
+// 📱 Menu móvel (telemóvel): a sidebar vira gaveta
+function toggleMenuMovel() {
+  document.body.classList.toggle('menu-aberto');
+}
+function fecharMenuMovel() {
+  document.body.classList.remove('menu-aberto');
+}
+
 function nav(p) {
+  fecharMenuMovel();
   try { if (location.hash !== '#'+p) history.replaceState(null, '', '#'+p); } catch(e){}
   document.querySelectorAll('.page').forEach(el=>el.classList.remove('active'));
   document.querySelectorAll('.ni').forEach(el=>el.classList.remove('active'));
