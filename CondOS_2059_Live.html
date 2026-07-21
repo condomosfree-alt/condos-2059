@@ -767,7 +767,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.21-1248</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.21-1256</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -2114,6 +2114,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="mo-box">
     <div class="mo-title">Novo Movimento <span class="mo-close" onclick="closeModal('mo-mov')"><i class="ti ti-x"></i></span></div>
     <div class="fl"><label>Tipo</label><select class="fi" id="mv-tipo"><option value="receita">Receita</option><option value="despesa">Despesa</option></select></div>
+    <div class="fl"><label>Categoria</label><select class="fi" id="mv-cat"><option value="quotas">Quotas</option><option value="limpeza">Limpeza</option><option value="eletricidade">Eletricidade</option><option value="agua">Água</option><option value="elevador">Elevador</option><option value="seguro">Seguro</option><option value="obras">Obras</option><option value="manutencao">Manutenção</option><option value="administracao">Administração</option><option value="outros">Outros</option></select></div>
     <div class="fl"><label>Descrição</label><input class="fi" id="mv-desc" placeholder="Ex: Quota Janeiro 2026"></div>
     <div class="form-row">
       <div class="fl"><label>Valor (€)</label><input class="fi" id="mv-valor" type="number" step="0.01"></div>
@@ -2135,6 +2136,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
     <div class="form-row">
       <div class="fl"><label>Prioridade</label><select class="fi" id="oc-prio"><option>Baixa</option><option>Média</option><option>Alta</option><option>Urgente</option></select></div>
       <div class="fl"><label>Local</label><input class="fi" id="oc-local" placeholder="Ex: Bloco A, entrada"></div>
+      <div class="fl"><label>Reportado por <span style="font-size:9px;color:var(--t3);">(opcional)</span></label><input class="fi" id="oc-rep" placeholder="Ex: condómino da fração D"></div>
     </div>
     <div class="btn-row">
       <button class="btn-ghost" onclick="closeModal('mo-oc')">Cancelar</button>
@@ -2152,6 +2154,8 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
       <div class="fl"><label>Telefone</label><input class="fi" id="pc-tel"></div>
     </div>
     <div class="fl"><label>Email</label><input class="fi" id="pc-email" type="email"></div>
+    <div class="fl"><label>NIF <span style="font-size:9px;color:var(--t3);">(importante: deteta conflitos de interesse e proveniências)</span></label><input class="fi" id="pc-nif" placeholder="Ex: 501234567"></div>
+    <div class="fl"><label>Notas</label><input class="fi" id="pc-notas" placeholder="Ex: autorizado na ata n.º 12"></div>
     <div class="btn-row">
       <button class="btn-ghost" onclick="closeModal('mo-parceiro')">Cancelar</button>
       <button class="btn-primary" onclick="saveParceiro()"><i class="ti ti-check"></i>Guardar</button>
@@ -3651,8 +3655,8 @@ async function wizCriarCondominio() {
 // ===== AUTH =====
 function authTab(t) {
   document.querySelectorAll('.auth-tab').forEach((b,i) => b.classList.toggle('active', (i===0&&t==='login')||(i===1&&t==='register')));
-  document.getElementById('auth-login').style.display = t==='login' ? 'block' : 'none';
-  document.getElementById('auth-register').style.display = t==='register' ? 'block' : 'none';
+  var _al=document.getElementById('auth-login'); if(_al) _al.style.display = t==='login' ? 'block' : 'none';
+  var _ar=document.getElementById('auth-register'); if(_ar) _ar.style.display = t==='register' ? 'block' : 'none';
 }
 
 async function doLogin() {
@@ -8669,9 +8673,9 @@ async function loadOcorrencias() {
   const abertas = ocs.filter(o=>o.estado==='aberta').length;
   const urgentes = ocs.filter(o=>o.prioridade==='urgente'||o.prioridade==='critico').length;
   const resolvidas = ocs.filter(o=>o.estado==='resolvida').length;
-  document.getElementById('oc-abertas').textContent = abertas;
-  document.getElementById('oc-urgentes').textContent = urgentes;
-  document.getElementById('oc-resolvidas').textContent = resolvidas;
+  var _kocabertas = document.getElementById('oc-abertas'); if (_kocabertas) _kocabertas.textContent = abertas;
+  var _kocurgentes = document.getElementById('oc-urgentes'); if (_kocurgentes) _kocurgentes.textContent = urgentes;
+  var _kocresolvidas = document.getElementById('oc-resolvidas'); if (_kocresolvidas) _kocresolvidas.textContent = resolvidas;
   document.getElementById('oc-total').textContent = ocs.length;
   const estadoCls = {aberta:'alert',em_curso:'warn',resolvida:'ok'};
   const priorCls = {normal:'',urgente:'warn',critico:'alert'};
@@ -8696,7 +8700,7 @@ async function loadOcorrencias() {
 async function saveOc() {
   const desc = document.getElementById('oc-desc').value.trim();
   if (!desc) { toast('Descreve o problema','err'); return; }
-  const { error } = await sb.from('ocorrencias').insert({condominio_id:currentCondo.id,categoria:document.getElementById('oc-cat').value,descricao:desc,local_ocorrencia:document.getElementById('oc-local').value,prioridade:document.getElementById('oc-prio').value,reportado_por:document.getElementById('oc-rep').value,estado:'aberta'});
+  const { error } = await sb.from('ocorrencias').insert({condominio_id:currentCondo.id,categoria:document.getElementById('oc-cat').value,descricao:desc,local_ocorrencia:document.getElementById('oc-local').value,prioridade:document.getElementById('oc-prio').value,reportado_por:(document.getElementById('oc-rep')?document.getElementById('oc-rep').value:''),estado:'aberta'});
   if (error) { toast('Erro: '+error.message,'err'); return; }
   closeModal('mo-oc'); toast('Ocorrência registada!','ok');
   document.getElementById('oc-desc').value='';
@@ -10045,7 +10049,8 @@ async function loadParceiros() {
   const { data } = await sb.from('parceiros').select('*').eq('condominio_id',currentCondo.id).order('nome');
   const ps = data || [];
   const cats = ['Todos',...new Set(ps.map(p=>p.categoria))];
-  document.getElementById('cat-filters').innerHTML = cats.map(c=>`<button onclick="setCatFil('${c}')" style="background:${c===catFil?'var(--cyan)':'none'};color:${c===catFil?'var(--bg)':'var(--t2)'};border:1px solid ${c===catFil?'var(--cyan)':'var(--b1)'};padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;">${c}</button>`).join('');
+  var _catF = document.getElementById('cat-filters');
+  if (_catF) _catF.innerHTML = cats.map(c=>`<button onclick="setCatFil('${c}')" style="background:${c===catFil?'var(--cyan)':'none'};color:${c===catFil?'var(--bg)':'var(--t2)'};border:1px solid ${c===catFil?'var(--cyan)':'var(--b1)'};padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;">${c}</button>`).join('');
   const fil = catFil==='Todos'?ps:ps.filter(p=>p.categoria===catFil);
   const stars = n=>'★'.repeat(Math.round(n))+'☆'.repeat(5-Math.round(n));
   document.getElementById('parceiros-list').innerHTML = fil.length ?
@@ -10171,7 +10176,7 @@ var _parceiroAtual = null;
 async function saveParceiro() {
   const nome = document.getElementById('pc-nome').value.trim();
   if (!nome) { toast('Nome obrigatório','err'); return; }
-  const { error } = await sb.from('parceiros').insert({condominio_id:currentCondo.id,nome,categoria:document.getElementById('pc-esp').value,telefone:document.getElementById('pc-tel').value,email:document.getElementById('pc-email').value,nif:document.getElementById('p-nif').value,notas:document.getElementById('p-notas').value});
+  const { error } = await sb.from('parceiros').insert({condominio_id:currentCondo.id,nome,categoria:document.getElementById('pc-esp').value,telefone:document.getElementById('pc-tel').value,email:document.getElementById('pc-email').value,nif:(document.getElementById('pc-nif')?document.getElementById('pc-nif').value.trim():'')||null,notas:(document.getElementById('pc-notas')?document.getElementById('pc-notas').value.trim():'')||null});
   if (error) { toast('Erro: '+error.message,'err'); return; }
   closeModal('mo-parceiro'); toast('Parceiro adicionado!','ok');
   document.getElementById('pc-nome').value='';
@@ -16448,7 +16453,7 @@ async function importarFracoesIA() {
   }
   closeModal('mo-import-foto');
   fotoBase64 = null; fracoesDetectadas = [];
-  document.getElementById('foto-input').value = '';
+  var _fi=document.getElementById('foto-input'); if(_fi) _fi.value='';
   document.getElementById('foto-preview').style.display = 'none';
   document.getElementById('foto-resultado').style.display = 'none';
   document.getElementById('btn-analisar').style.display = 'none';
@@ -19217,7 +19222,21 @@ async function diagnosticarInstalacao() {
     // Energia & gestão
     { t:'col', tabela:'condominios', col:'aquecimento_tipo', sql:'sql_energia_caderneta.sql', grupo:'Energia & gestão' },
     { t:'col', tabela:'despesas', col:'dispensa_cobranca', sql:'sql_dispensa_cobranca.sql', grupo:'Energia & gestão' },
-    { t:'col', tabela:'fracoes', col:'dados_atualizados_em', sql:'sql_dados_atualizacao.sql', grupo:'Energia & gestão' }
+    { t:'col', tabela:'fracoes', col:'dados_atualizados_em', sql:'sql_dados_atualizacao.sql', grupo:'Energia & gestão' },
+    // Votação de orçamentos pelos condóminos
+    { t:'rpc', nome:'portal_concurso_propostas', args:{p_token:DUMMY, p_ocorrencia:DUMMY}, sql:'sql_votacao_orcamentos.sql', grupo:'Votação de orçamentos' },
+    { t:'rpc', nome:'portal_votar_proposta', args:{p_token:DUMMY, p_ocorrencia:DUMMY, p_orcamento:null}, sql:'sql_votacao_orcamentos.sql', grupo:'Votação de orçamentos' },
+    { t:'col', tabela:'ocorrencia_votos', col:'orcamento_id', sql:'sql_votacao_orcamentos.sql', grupo:'Votação de orçamentos' },
+    // Simulador + QR do átrio
+    { t:'rpc', nome:'portal_minha_permilagem', args:{p_token:DUMMY}, sql:'sql_simulador_reporte.sql', grupo:'Simulador & QR do átrio' },
+    { t:'rpc', nome:'reporte_info', args:{p_token:DUMMY}, sql:'sql_simulador_reporte.sql', grupo:'Simulador & QR do átrio' },
+    { t:'col', tabela:'condominios', col:'token_reporte', sql:'sql_simulador_reporte.sql', grupo:'Simulador & QR do átrio' },
+    // Parceiro conclui trabalho
+    { t:'rpc', nome:'parceiro_concluir', args:{p_token:DUMMY, p_orcamento:DUMMY}, sql:'sql_parceiro_concluir.sql', grupo:'Parceiro conclui' },
+    { t:'col', tabela:'orcamentos_obra', col:'trabalho_concluido', sql:'sql_parceiro_concluir.sql', grupo:'Parceiro conclui' },
+    // Fotos
+    { t:'col', tabela:'ocorrencias', col:'foto_url', sql:'sql_fotos_ocorrencias.sql', grupo:'Fotos nas ocorrências' },
+    { t:'bucket', nome:'fotos', sql:'sql_fotos_ocorrencias.sql', grupo:'Fotos nas ocorrências' }
   ];
 
   abrirModalGenerico('🩺 Diagnóstico de Instalação',
@@ -19239,6 +19258,10 @@ async function diagnosticarInstalacao() {
         var r3 = await sb.from(t.tabela).select(t.col).limit(1);
         ok = !r3.error || !/does not exist|column/i.test(r3.error.message || '');
         if (!ok) detalhe = 'coluna ' + t.tabela + '.' + t.col + ' não existe';
+      } else if (t.t === 'bucket') {
+        var rb = await sb.storage.from(t.nome).list('', { limit: 1 });
+        ok = !rb.error || !/not found|bucket/i.test(rb.error.message || '');
+        if (!ok) detalhe = 'bucket "' + t.nome + '" não existe no Storage';
       } else if (t.t === 'edge') {
         try {
           var r4 = await sb.functions.invoke(t.nome, { body: {} });
