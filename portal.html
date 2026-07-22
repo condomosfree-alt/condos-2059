@@ -262,6 +262,19 @@
       <div class="chip" id="chip-msg" onclick="irPara('mensagens')"><div class="chip-ic">💬</div><div class="chip-t">Mensagens</div><div class="chip-v" id="chip-msg-v">…</div></div>
       <div class="chip" id="chip-fundo" onclick="irPara('quotas')"><div class="chip-ic">🛡️</div><div class="chip-t">Fundo</div><div class="chip-v" id="chip-fundo-v">…</div></div>
     </div>
+    <div class="card" id="card-pergunta" style="border-color:rgba(0,212,255,.35);background:linear-gradient(135deg,var(--card),rgba(0,212,255,.04));">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div style="font-size:13.5px;font-weight:800;">🔮 Pergunta ao Prédio</div>
+        <div id="pp-conta" style="font-size:9px;color:var(--t3);"></div>
+      </div>
+      <div style="font-size:10.5px;color:var(--t2);margin:5px 0 10px;line-height:1.45;">Pergunta em linguagem normal: <em>"quanto devo?", "o fundo existe mesmo?", "porque paguei quota extra?", "quando é a assembleia?"</em></div>
+      <div style="display:flex;gap:8px;">
+        <input class="fi" id="pp-input" placeholder="Escreve a tua pergunta…" style="flex:1;font-size:13px;" onkeydown="if(event.key==='Enter')perguntarPredio()">
+        <button onclick="perguntarPredio()" id="pp-btn" style="background:var(--cyan);border:none;color:#02121d;border-radius:10px;padding:0 16px;font-size:15px;font-weight:800;cursor:pointer;">➤</button>
+      </div>
+      <div id="pp-resposta" style="display:none;margin-top:11px;background:var(--card2);border:1px solid var(--b);border-radius:11px;padding:12px 14px;font-size:12.5px;line-height:1.6;color:var(--text);"></div>
+    </div>
+
     <div class="card card-glow">
       <div style="font-size:11px;color:var(--t3);letter-spacing:.5px;">SITUAÇÃO DE QUOTAS</div>
       <div id="h-sit" style="font-family:'Courier New',monospace;font-weight:800;font-size:28px;margin:5px 0;">…</div>
@@ -332,6 +345,19 @@
       <div style="height:8px;background:rgba(255,255,255,.06);border-radius:5px;overflow:hidden;"><div id="fundo-p-barra" style="height:100%;width:0%;border-radius:5px;transition:width .5s;"></div></div>
       <div id="fundo-p-nota" style="font-size:10px;color:var(--t3);margin-top:8px;line-height:1.5;"></div>
       <div id="exig-zona" style="margin-top:12px;"></div>
+      <div id="dinheiro-card" style="display:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--b);">
+        <div style="font-size:12.5px;font-weight:800;">🍩 Para onde vai o teu dinheiro (este ano)</div>
+        <div style="font-size:10px;color:var(--t3);margin:4px 0 12px;">A tua parte real das despesas do prédio, pela tua permilagem.</div>
+        <div style="display:flex;align-items:center;gap:16px;">
+          <div id="dinheiro-donut" style="width:110px;height:110px;border-radius:50%;flex-shrink:0;position:relative;">
+            <div style="position:absolute;inset:22px;background:var(--card);border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+              <div id="dinheiro-total" style="font-size:13px;font-weight:800;color:var(--cyan);">—</div>
+              <div style="font-size:7.5px;color:var(--t3);">a tua parte</div>
+            </div>
+          </div>
+          <div id="dinheiro-legenda" style="flex:1;font-size:10.5px;line-height:1.9;"></div>
+        </div>
+      </div>
       <button id="btn-exigir" onclick="exigirProva()" style="width:100%;margin-top:10px;background:transparent;border:1px solid rgba(180,140,255,.4);color:#b48cff;border-radius:9px;padding:11px;font-size:12px;font-weight:700;cursor:pointer;">⚖️ Exigir prova bancária do fundo</button>
       <div style="font-size:9.5px;color:var(--t3);margin-top:6px;text-align:center;">A exigência fica registada no log de comunicações e vai à próxima assembleia.</div>
     </div>
@@ -614,6 +640,7 @@ function saudacao() { const h=new Date().getHours(); return h<12?'Bom dia':(h<20
 async function iniciar() {
   if (!token) { document.getElementById('invalido').style.display='block'; return; }
   const res = await sb.rpc('portal_situacao', { p_token: token });
+  if (!res.error && res.data && res.data.length) window._sitCache = res.data[0];
   if (res.error || !res.data || !res.data.length) { document.getElementById('invalido').style.display='block'; return; }
   const d = res.data[0];
   document.getElementById('app').style.display = 'block';
@@ -2174,6 +2201,103 @@ async function votarExigencia(id, voto) {
 }
 
 
+
+// 🔮 PERGUNTA AO PRÉDIO — assistente pessoal do condómino
+const PP_PROXY = SB_URL + '/functions/v1/hyper-task';
+function _ppLimite() {
+  const hoje = new Date().toISOString().substring(0,10);
+  let d = {};
+  try { d = JSON.parse(localStorage.getItem('pp_' + token) || '{}'); } catch(e){}
+  if (d.dia !== hoje) d = { dia: hoje, n: 0 };
+  return d;
+}
+function _ppAtualizaConta() {
+  const el = document.getElementById('pp-conta');
+  if (el) el.textContent = (10 - _ppLimite().n) + ' perguntas hoje';
+}
+async function perguntarPredio() {
+  const inp = document.getElementById('pp-input');
+  const box = document.getElementById('pp-resposta');
+  const btn = document.getElementById('pp-btn');
+  const q = (inp.value||'').trim();
+  if (q.length < 3) return;
+  let lim = _ppLimite();
+  if (lim.n >= 10) { box.style.display='block'; box.textContent = 'Atingiste as 10 perguntas de hoje — volta amanhã, ou fala com a administração pelas Mensagens. 😊'; return; }
+
+  btn.disabled = true; box.style.display = 'block';
+  box.innerHTML = '<span style="color:var(--t3);">🔮 A consultar os dados do prédio…</span>';
+
+  // Contexto REAL — só os dados desta fração e do prédio, já carregados/consultáveis
+  const s = window._sitCache || {};
+  const ch = window._chips || {};
+  let ctx = 'DADOS REAIS (usa APENAS isto; se a resposta não estiver aqui, diz para contactar a administração pela secção Mensagens do portal — NUNCA inventes valores):\n';
+  ctx += '- Fração: ' + (s.fracao_codigo||'?') + (s.bloco?' (Bloco '+s.bloco+')':'') + ' · Condomínio: ' + (s.condominio_nome||'') + '\n';
+  ctx += '- Dívida atual de quotas desta fração: ' + (ch.divida!=null ? ch.divida.toFixed(2)+'€' : 'desconhecida') + (s.n_quotas_divida ? ' ('+s.n_quotas_divida+' quotas)' : '') + '\n';
+  if (s.ultima_paga) ctx += '- Última quota paga em: ' + s.ultima_paga + '\n';
+  if (window._simPerm != null) ctx += '- Permilagem da fração: ' + window._simPerm + ' de ' + Math.round(window._simTotal||1000) + '\n';
+  if (window._fundoP) ctx += '- Fundo de reserva: devia existir ' + window._fundoP.teo.toFixed(2) + '€, comprovado ' + window._fundoP.comp.toFixed(2) + '€' + (window._fundoP.ult ? ', último reforço ' + window._fundoP.ult : '') + '\n';
+  if (window._dinheiroCats && window._dinheiroCats.length) ctx += '- Despesas do prédio este ano por categoria: ' + window._dinheiroCats.map(x => x.categoria + ' ' + x.total.toFixed(0) + '€').join(', ') + '\n';
+  try {
+    const ocs = Object.values(_ocCache||{});
+    if (ocs.length) ctx += '- Ocorrências/avarias ativas: ' + ocs.slice(0,5).map(o => (o.categoria||'') + ' "' + (o.descricao||'').substring(0,35) + '" [' + (o.estado||'') + ']').join('; ') + '\n';
+  } catch(e){}
+  ctx += '\nREGRAS: responde em português de Portugal, tom simpático e claro, máximo 4 frases. Se envolver a lei do condomínio, podes explicar em termos simples. Se a pergunta for sobre outra fração ou dados de terceiros, recusa educadamente (privacidade).\n\nPERGUNTA DO CONDÓMINO: ';
+
+  try {
+    const r = await fetch(PP_PROXY, {
+      method:'POST',
+      headers: { 'Content-Type':'application/json', 'Authorization': 'Bearer ' + SB_KEY },
+      body: JSON.stringify({ prompt: ctx + q, tipo: 'legislacao' })
+    });
+    const data = await r.json();
+    const txt = data.resposta || data.text || 'Não consegui responder agora — tenta pelas Mensagens.';
+    box.innerHTML = '<div style="font-size:9px;color:var(--t3);margin-bottom:5px;">🔮 O prédio responde:</div>' + txt.replace(/</g,'&lt;').replace(/\n/g,'<br>');
+    lim.n++; localStorage.setItem('pp_' + token, JSON.stringify(lim));
+    _ppAtualizaConta();
+    inp.value = '';
+  } catch(e) {
+    box.textContent = 'Sem ligação ao assistente — tenta mais tarde ou usa as Mensagens.';
+  }
+  btn.disabled = false;
+}
+
+// 🍩 PARA ONDE VAI O MEU DINHEIRO — donut pessoal por permilagem
+window._dinheiroCats = null;
+async function carregarDinheiro() {
+  try {
+    const r = await sb.rpc('portal_despesas_categorias', { p_token: token });
+    if (r.error || !r.data || !r.data.length) return;
+    window._dinheiroCats = r.data.map(x => ({ categoria: x.categoria, total: parseFloat(x.total||0) }));
+    if (window._simPerm == null) await carregarPermilagem();
+    const perm = window._simPerm || 0, permT = window._simTotal || 1000;
+    if (!perm) return;
+    const card = document.getElementById('dinheiro-card');
+    if (!card) return;
+    const nomes = { quotas:'Quotas', limpeza:'Limpeza', eletricidade:'Eletricidade', agua:'Água', elevador:'Elevador', seguro:'Seguro', obras:'Obras', manutencao:'Manutenção', administracao:'Administração', fundo_reserva:'Fundo de reserva', outros:'Outros' };
+    const cores = ['#00d4ff','#b48cff','#22e584','#ffb300','#ff5470','#4dabf7','#f783ac','#94d82d','#ffa94d','#748ffc'];
+    const totalPredio = window._dinheiroCats.reduce((s,x) => s + x.total, 0);
+    if (totalPredio < 1) return;
+    const minha = totalPredio * perm / permT;
+    // donut por conic-gradient
+    let ang = 0; const fatias = [];
+    window._dinheiroCats.slice(0, 8).forEach((x, i) => {
+      const pct = x.total / totalPredio * 100;
+      fatias.push(cores[i % cores.length] + ' ' + ang.toFixed(1) + '% ' + (ang+pct).toFixed(1) + '%');
+      ang += pct;
+    });
+    if (ang < 99.9) fatias.push('#3d4a61 ' + ang.toFixed(1) + '% 100%');
+    document.getElementById('dinheiro-donut').style.background = 'conic-gradient(' + fatias.join(',') + ')';
+    document.getElementById('dinheiro-total').textContent = minha.toFixed(0) + '€';
+    let leg = '';
+    window._dinheiroCats.slice(0, 5).forEach((x, i) => {
+      const minhaParte = x.total * perm / permT;
+      leg += '<div style="display:flex;justify-content:space-between;gap:8px;"><span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:' + cores[i % cores.length] + ';margin-right:6px;"></span>' + (nomes[x.categoria]||x.categoria) + '</span><strong>' + minhaParte.toFixed(2).replace('.',',') + '€</strong></div>';
+    });
+    document.getElementById('dinheiro-legenda').innerHTML = leg;
+    card.style.display = 'block';
+  } catch(e){}
+}
+
 // 🎯 Relance: o essencial em 3 chips no topo
 window._chips = { divida: null, msgs: null, fundoCob: null };
 function renderChips() {
@@ -2217,6 +2341,7 @@ async function carregarFundo() {
     document.getElementById('fundo-p-comprovado').textContent = comp.toFixed(2).replace('.',',') + '€';
     const cob = teo > 0 ? comp/teo*100 : 100;
     window._chips.fundoCob = cob; renderChips();
+    window._fundoP = { teo: teo, comp: comp, ult: d.ultimo_reforco ? new Date(d.ultimo_reforco).toLocaleDateString('pt-PT') : null };
     const cor = cob >= 95 ? 'var(--green)' : (cob >= 60 ? '#ffb300' : 'var(--red)');
     const barra = document.getElementById('fundo-p-barra');
     barra.style.width = Math.min(100, cob) + '%'; barra.style.background = cor;
@@ -2260,6 +2385,8 @@ cIniciarPolling();
 carregarPermilagem();
 carregarFundo();
 carregarExigencias();
+carregarDinheiro();
+_ppAtualizaConta();
 initNotificacoes();
 </script>
 </body>
