@@ -767,7 +767,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.22-0845</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.22-0906</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -821,6 +821,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <!-- MAIN -->
   <div class="main">
     <div class="topbar">
+      <button class="tb-btn" onclick="abrirComunicadoMassa()" title="Comunicado a todos os condóminos" style="font-size:13px;padding:5px 11px;margin-right:8px;color:var(--cyan);border-color:rgba(0,212,255,.3);">📢</button>
       <button id="btn-menu-mv" onclick="toggleMenuMovel()" style="display:none;background:transparent;border:1px solid var(--b1);color:var(--cyan);border-radius:8px;width:34px;height:32px;font-size:16px;cursor:pointer;margin-right:10px;flex-shrink:0;">☰</button>
       <span class="tb-page" id="tb-page">dashboard /</span>
       <span class="tb-spacer"></span>
@@ -11838,6 +11839,70 @@ async function sugerirOrdemTrabalhos() {
 
     // 5. Ata anterior (para aprovação)
     var aRes = await sb.from('assembleias').select('data_assembleia,tipo').eq('condominio_id', c.id).order('data_assembleia', {ascending:false}).limit(1);
+    // 🛡️ FUNDO: teórico vs comprovado — prestação de contas
+    try {
+      var pctF = parseFloat(c.fundo_percentagem); if (isNaN(pctF)) pctF = 10;
+      var [qFR, mFR] = await Promise.all([
+        sb.from('quotas').select('valor_pago').eq('condominio_id', c.id),
+        sb.from('movimentos').select('tipo,valor').eq('condominio_id', c.id).eq('categoria','fundo_reserva')
+      ]);
+      var teorF = (qFR.data||[]).reduce(function(s,q){ return s + parseFloat(q.valor_pago||0); }, 0) * pctF / 100;
+      var compF = (mFR.data||[]).reduce(function(s,x){ return s + (x.tipo==='despesa'?1:-1)*parseFloat(x.valor||0); }, 0);
+      if (teorF >= 50 && compF < teorF * 0.85) {
+        contexto.situacoes.push('FUNDO DE RESERVA SEM PROVA COMPLETA: por lei (DL 268/94) deviam existir ' + teorF.toFixed(2) + '€ (' + pctF + '% das quotas pagas) mas só ' + compF.toFixed(2) + '€ estão comprovados por movimentos. Sugerir ponto de prestação de contas do fundo com apresentação do extrato bancário.');
+      } else if (teorF >= 50) {
+        contexto.situacoes.push('Fundo de reserva comprovado: ' + compF.toFixed(2) + '€ de ' + teorF.toFixed(2) + '€ teóricos — pode ser comunicado como ponto de situação positivo.');
+      }
+    } catch(e){}
+
+    // 📉 DESVIO ORÇAMENTAL do ano corrente com projeção
+    try {
+      var anoC = new Date().getFullYear(), mesC = new Date().getMonth()+1;
+      var rubC = await sb.from('orcamento_rubricas').select('valor_total').eq('condominio_id', c.id).eq('ano', anoC);
+      var orcC = (rubC.data||[]).reduce(function(s,r){ return s + parseFloat(r.valor_total||0); }, 0);
+      if (orcC > 0 && mesC >= 3) {
+        var mAnoC = await sb.from('movimentos').select('valor,categoria').eq('condominio_id', c.id).eq('tipo','despesa').gte('data_movimento', anoC + '-01-01');
+        var gastoC = (mAnoC.data||[]).filter(function(m){ return m.categoria !== 'fundo_reserva'; }).reduce(function(s,m){ return s + parseFloat(m.valor||0); }, 0);
+        var projC = gastoC / mesC * 12;
+        if (projC > orcC * 1.1) {
+          contexto.situacoes.push('DESVIO ORÇAMENTAL: até ao mês ' + mesC + ' já saíram ' + gastoC.toFixed(2) + '€; a este ritmo o ano fecha em ' + projC.toFixed(2) + '€ contra ' + orcC.toFixed(2) + '€ orçamentados. Sugerir ponto: revisão de despesas ou quota extraordinária (Art. 1424.º) para cobrir a diferença.');
+        }
+      }
+    } catch(e){}
+
+    // 🔁 OCORRÊNCIAS CHUMBADAS em votação — reapreciar presencialmente
+    try {
+      var chR = await sb.from('ocorrencias').select('descricao,categoria,criado_em,orcamento_valor').eq('condominio_id', c.id).eq('estado','fechada').eq('precisa_votacao', true).order('criado_em',{ascending:false}).limit(4);
+      (chR.data||[]).forEach(function(o){
+        contexto.situacoes.push('Reparação CHUMBADA em votação online: "' + (o.descricao||'').substring(0,50) + '" (' + (o.categoria||'') + (o.orcamento_valor?', '+parseFloat(o.orcamento_valor).toFixed(2)+'€':'') + '). Se o problema persiste, pode justificar reapreciação presencial na assembleia com debate.');
+      });
+    } catch(e){}
+
+    // ⏰ Dívidas antigas com risco de prescrição (ordinárias: 5 anos, Art. 310.º)
+    try {
+      var anoLim = new Date().getFullYear() - 4;
+      var vhR = await sb.from('quotas').select('ano,valor_emitido,valor_pago').eq('condominio_id', c.id).lte('ano', anoLim);
+      var velhas = (vhR.data||[]).filter(function(q){ return parseFloat(q.valor_emitido||0) - parseFloat(q.valor_pago||0) > 0.005; });
+      if (velhas.length) {
+        var somaV = velhas.reduce(function(s,q){ return s + parseFloat(q.valor_emitido||0) - parseFloat(q.valor_pago||0); }, 0);
+        contexto.situacoes.push('RISCO DE PRESCRIÇÃO: ' + velhas.length + ' quota(s) de ' + anoLim + ' ou anteriores por cobrar (' + somaV.toFixed(2) + '€). Quotas ordinárias prescrevem em 5 anos (Art. 310.º al. g) — sugerir deliberação de cobrança judicial antes de prescreverem (a ata serve de título executivo).');
+      }
+    } catch(e){}
+
+    // ⚡ ENERGIA & VALORIZAÇÃO DO EDIFÍCIO — o programa olha para o prédio
+    try {
+      var idadeE = c.ano_construcao ? (new Date().getFullYear() - parseInt(c.ano_construcao)) : null;
+      if (idadeE !== null && idadeE >= 30) {
+        contexto.situacoes.push('Edifício com ' + idadeE + ' anos: idade em que fachadas, cobertura, canalizações e isolamento costumam exigir intervenção de conservação. Há apoios públicos para reabilitação (ex.: Bairros Mais Sustentáveis). Pode justificar ponto sobre plano plurianual de conservação.');
+      }
+      if (c.paineis_solares === 'nao' || !c.paineis_solares) {
+        contexto.situacoes.push('O edifício NÃO tem painéis solares: as despesas de eletricidade das partes comuns (iluminação, elevador) podiam ser reduzidas com autoconsumo coletivo; o licenciamento foi simplificado (DL 130/2026). Sugerir ponto: mandatar a administração para pedir 3 orçamentos de estudo solar.');
+      }
+      if (c.ev_carregadores === 'nao') {
+        contexto.situacoes.push('O edifício NÃO tem carregadores para veículos elétricos: qualquer condómino tem direito a instalar no seu lugar (mediante comunicação), e existem apoios de 80% até 800€/posto. Ponto informativo evita conflitos futuros e valoriza as frações.');
+      }
+    } catch(e){}
+
     // ⚖️ Exigências formais dos condóminos = pontos obrigatórios da ordem de trabalhos
     try {
       var exOT = await sb.from('exigencias').select('tipo,estado,criado_em,fracoes(codigo)').eq('condominio_id', c.id).in('estado', ['pendente','doc_carregado','em_votacao','validada']);
@@ -18845,6 +18910,8 @@ function abrirComunicadoMassa() {
   h += '<option value="limpeza">🧹 Limpeza / desinfestação</option>';
   h += '<option value="assembleia">📅 Lembrete de assembleia</option>';
   h += '<option value="geral">📢 Aviso geral</option>';
+  h += '<option value="auto_mes">📊 Fecho do mês — automático com os números reais</option>';
+  h += '<option value="auto_fundo">🛡️ Estado do fundo — automático com a prova</option>';
   h += '</select>';
 
   h += '<label style="font-size:11px;color:var(--t2);font-weight:600;">Mensagem</label>';
@@ -18926,6 +18993,7 @@ function massaContar() {
 function massaAplicarModelo(m) {
   var t = document.getElementById('massa-texto');
   if (!t || !m) return;
+  if (m === 'auto_mes' || m === 'auto_fundo') { massaModeloAuto(m, t); return; }
   var nome = currentCondo ? (currentCondo.nome||'condomínio') : 'condomínio';
   var modelos = {
     agua: '💧 AVISO — Corte de água\n\nInforma-se que a água será cortada no dia __/__/____, entre as __:__ e as __:__, para trabalhos de manutenção na rede do edifício.\n\nAgradece-se que encham água para consumo antes dessa hora.\n\nA administração.',
@@ -18936,6 +19004,52 @@ function massaAplicarModelo(m) {
     geral: '📢 AVISO AOS CONDÓMINOS\n\n__________\n\nA administração do ' + nome + '.'
   };
   if (modelos[m]) { t.value = modelos[m]; massaContar(); }
+}
+
+
+// 📊 Modelos automáticos: o comunicado escreve-se sozinho com os dados reais
+async function massaModeloAuto(m, t) {
+  t.value = 'A calcular com os dados reais…';
+  try {
+    if (m === 'auto_mes') {
+      var agora = new Date();
+      var mes = agora.getMonth() + 1, ano = agora.getFullYear();
+      var nomeMes = agora.toLocaleDateString('pt-PT', { month:'long' });
+      var ini = ano + '-' + String(mes).padStart(2,'0') + '-01';
+      var [qR, mR] = await Promise.all([
+        sb.from('quotas').select('valor_emitido,valor_pago').eq('condominio_id', currentCondo.id).eq('mes', mes).eq('ano', ano),
+        sb.from('movimentos').select('tipo,valor').eq('condominio_id', currentCondo.id).gte('data_movimento', ini)
+      ]);
+      var qs = qR.data||[];
+      var pagas = qs.filter(function(q){ return parseFloat(q.valor_pago||0) >= parseFloat(q.valor_emitido||0) - 0.005; }).length;
+      var ent = 0, sai = 0;
+      (mR.data||[]).forEach(function(x){ if (x.tipo==='receita') ent += parseFloat(x.valor||0); else sai += parseFloat(x.valor||0); });
+      var todosR = await sb.from('movimentos').select('tipo,valor').eq('condominio_id', currentCondo.id);
+      var saldo = (todosR.data||[]).reduce(function(s,x){ return s + (x.tipo==='receita'?1:-1)*parseFloat(x.valor||0); }, 0);
+      var pct = qs.length ? Math.round(pagas/qs.length*100) : 0;
+      var txt = '📊 FECHO DO MÊS — ' + nomeMes.toUpperCase() + ' ' + ano + '\n\n';
+      txt += 'Quotas do mês: ' + pagas + ' de ' + qs.length + ' frações em dia (' + pct + '%)' + (qs.length-pagas > 0 ? ' — as frações em falta já foram avisadas individualmente.' : ' — sem falhas. 👏') + '\n';
+      txt += 'Movimentos do mês: entraram ' + ent.toFixed(2) + '€ · saíram ' + sai.toFixed(2) + '€\n';
+      txt += 'Saldo do condomínio: ' + saldo.toFixed(2) + '€\n\n';
+      txt += 'Detalhe completo (contas, movimentos e documentos) disponível no portal.\n\nA administração.';
+      t.value = txt;
+    } else if (m === 'auto_fundo') {
+      var pct2 = parseFloat(currentCondo.fundo_percentagem); if (isNaN(pct2)) pct2 = 10;
+      var [q2R, f2R] = await Promise.all([
+        sb.from('quotas').select('valor_pago').eq('condominio_id', currentCondo.id),
+        sb.from('movimentos').select('tipo,valor').eq('condominio_id', currentCondo.id).eq('categoria','fundo_reserva')
+      ]);
+      var teor = (q2R.data||[]).reduce(function(s,q){ return s + parseFloat(q.valor_pago||0); }, 0) * pct2 / 100;
+      var comp = (f2R.data||[]).reduce(function(s,x){ return s + (x.tipo==='despesa'?1:-1)*parseFloat(x.valor||0); }, 0);
+      var cob = teor > 0 ? Math.round(comp/teor*100) : 100;
+      var txt2 = '🛡️ FUNDO DE RESERVA — PONTO DE SITUAÇÃO\n\n';
+      txt2 += 'Valor que deve existir por lei (' + pct2 + '% das quotas pagas, DL 268/94): ' + teor.toFixed(2) + '€\n';
+      txt2 += 'Valor comprovado por movimentos registados: ' + comp.toFixed(2) + '€ (' + cob + '%)\n\n';
+      txt2 += (cob >= 95 ? 'O fundo está integralmente comprovado. Podes consultar a prova no portal, na secção Quotas.' : 'A diferença de ' + Math.max(0,teor-comp).toFixed(2) + '€ está em regularização. Qualquer condómino pode exigir a prova bancária no portal.') + '\n\nA administração.';
+      t.value = txt2;
+    }
+    massaContar();
+  } catch(e) { t.value = 'Erro a calcular: ' + (e.message||e); }
 }
 
 async function enviarComunicadoMassa() {
