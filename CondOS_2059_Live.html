@@ -767,7 +767,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.21-1327</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.22-0845</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -1419,6 +1419,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
             </div>
             <div style="height:9px;background:rgba(255,255,255,.06);border-radius:6px;overflow:hidden;margin-bottom:10px;"><div id="fundo-barra" style="height:100%;width:0%;background:#b48cff;border-radius:6px;transition:width .5s;"></div></div>
             <div id="fundo-nota" style="font-size:10.5px;color:var(--t3);line-height:1.5;"></div>
+            <div id="exig-admin-zona"></div>
           </div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px;">
@@ -4101,6 +4102,54 @@ async function verificarAvisosGerais() {
           detalhe: 'Sem email registado: ' + nomesC + (nCarta>5?'…':'') + '. Gera o PDF de cada um (botão 📄 nas Quotas) e envia por correio.' });
       }
     } catch(e) { console.error('aviso recibos carta:', e); }
+
+    // 5e-0) ⚖️ EXIGÊNCIAS DOS CONDÓMINOS — pendentes de resposta
+    try {
+      var exR = await sb.from('exigencias').select('id,tipo,estado,criado_em,validada_em,apresentada_em').eq('condominio_id', currentCondo.id);
+      var exTodas = exR.data || [];
+      var exPend = exTodas.filter(function(e){ return e.estado === 'pendente'; });
+      if (exPend.length) {
+        avisos.push({ pagina:'financeiro', badge:'⚖️', cor:'#b48cff',
+          texto: exPend.length + ' exigência(s) formal(is) de condóminos por responder',
+          detalhe: 'Um condómino exigiu prova/esclarecimento. Isto está no log de comunicações com data — a não-resposta também fica registada. Responde no Financeiro (prova do fundo) ou nas Mensagens.' });
+      }
+      var exVal = exTodas.filter(function(e){ return e.estado === 'validada' && !e.apresentada_em; });
+      if (exVal.length) {
+        avisos.push({ pagina:'assembleias', badge:'📎', cor:'#22e584',
+          texto: 'Prova validada — apresentar na próxima assembleia',
+          detalhe: 'A prova do fundo foi validada pelos condóminos. Apresenta o extrato físico na próxima assembleia; ao gerar a ata, o sistema anexa a referência do documento (com impressão digital SHA-256) automaticamente.' });
+      }
+
+      // 5e-0b) 📅 PROVA ANUAL DO FUNDO — e registo de negligência se ignorado
+      var exValidadas = exTodas.filter(function(e){ return e.tipo === 'fundo' && (e.estado === 'validada' || e.estado === 'apresentada_assembleia'); });
+      var ultimaVal = exValidadas.map(function(e){ return e.validada_em; }).sort().pop();
+      var precisaRenovar = !ultimaVal || (new Date() - new Date(ultimaVal)) > 365*24*3600*1000;
+      var temAtiva = exTodas.some(function(e){ return ['pendente','doc_carregado','em_votacao'].indexOf(e.estado) > -1; });
+      if (precisaRenovar && !temAtiva && (window._fundoTeorico||0) >= 50) {
+        avisos.push({ pagina:'financeiro', badge:'📅', cor:'#ffb300',
+          texto: 'Prova anual do fundo por renovar',
+          detalhe: 'A prova bancária do fundo deve ser renovada e apresentada aos condóminos pelo menos uma vez por ano (boa prática de prestação de contas, Art. 1436.º). Carrega o extrato no Financeiro sem esperares que ta exijam.' });
+        // negligência documentada: avisado há 30+ dias sem ação → fica no log de TODOS, uma única vez
+        var avisadoEm = currentCondo.fundo_prova_avisado_em;
+        if (!avisadoEm) {
+          await sb.from('condominios').update({ fundo_prova_avisado_em: new Date().toISOString().substring(0,10), fundo_aviso_registado: false }).eq('id', currentCondo.id);
+          currentCondo.fundo_prova_avisado_em = new Date().toISOString().substring(0,10);
+        } else if (!currentCondo.fundo_aviso_registado && (new Date() - new Date(avisadoEm)) > 30*24*3600*1000) {
+          var msgsNeg = fracoes.map(function(fr){
+            return { condominio_id: currentCondo.id, fracao_id: fr.id, autor:'admin', lida_admin:true, lida_condomino:false,
+              texto: 'ℹ️ REGISTO AUTOMÁTICO DO SISTEMA\n\nO sistema avisou a administração em ' + new Date(avisadoEm).toLocaleDateString('pt-PT') + ' de que a prova anual do fundo de reserva estava por renovar. Até hoje (' + new Date().toLocaleDateString('pt-PT') + ') não foi carregado o extrato bancário.\n\n[Este registo é gerado automaticamente e fica no log de comunicações de todas as frações.]' };
+          });
+          await sb.from('mensagens').insert(msgsNeg);
+          await sb.from('condominios').update({ fundo_aviso_registado: true }).eq('id', currentCondo.id);
+          currentCondo.fundo_aviso_registado = true;
+        }
+      }
+      if (!precisaRenovar && currentCondo.fundo_prova_avisado_em) {
+        // prova renovada → limpar o relógio da negligência
+        await sb.from('condominios').update({ fundo_prova_avisado_em: null, fundo_aviso_registado: false }).eq('id', currentCondo.id);
+        currentCondo.fundo_prova_avisado_em = null; currentCondo.fundo_aviso_registado = false;
+      }
+    } catch(e) { console.error('avisos exigencias:', e); }
 
     // 5e-A) 🛡️ FUNDO SEM PROVA — teórico vs comprovado por movimentos
     try {
@@ -11316,6 +11365,22 @@ async function gerarAtaDoLivro() {
     var ata = await callIA(prompt, 'ata');
     if (!ata || !ata.trim()) throw new Error('A IA não devolveu texto.');
     // Guardar a ata + o número
+    // ⚖️ APÊNDICE DE PROVAS: exigências validadas ficam anexadas à ata com hash
+    try {
+      var exAta = await sb.from('exigencias').select('id,tipo,doc_url,doc_hash,validada_em,criado_em,fracoes(codigo)').eq('condominio_id', currentCondo.id).eq('estado','validada');
+      if (exAta.data && exAta.data.length) {
+        ata += '\n\n────────────────────────────────\nANEXOS — DOCUMENTOS DE PROVA (registo automático do sistema)\n';
+        exAta.data.forEach(function(e, i){
+          ata += '\nAnexo ' + (i+1) + ': Prova bancária do fundo de reserva, exigida pela fração ' + ((e.fracoes&&e.fracoes.codigo)||'?') + ' em ' + new Date(e.criado_em).toLocaleDateString('pt-PT') + ', validada pela maioria dos condóminos em ' + (e.validada_em?new Date(e.validada_em).toLocaleDateString('pt-PT'):'') + '.';
+          ata += '\n  Impressão digital do documento (SHA-256): ' + (e.doc_hash||'—');
+          ata += '\n  Localização do documento: ' + (e.doc_url||'—');
+          ata += '\n  Nota: a impressão digital permite verificar em qualquer momento que o documento arquivado não foi alterado desde a validação.';
+        });
+        // marcar como apresentadas nesta assembleia
+        var idsApres = exAta.data.map(function(e){ return e.id; });
+        await sb.from('exigencias').update({ estado:'apresentada_assembleia', apresentada_em: new Date().toISOString() }).in('id', idsApres);
+      }
+    } catch(e) { console.error('anexos ata:', e); }
     await sb.from('assembleias').update({ ata_texto: ata, ata_gerada_ia: true, numero_ata: numeroAta }).eq('id', _salaAssembleia.id);
     _salaAssembleia.ata_texto = ata;
     _salaAssembleia.ata_gerada_ia = true;
@@ -11773,6 +11838,14 @@ async function sugerirOrdemTrabalhos() {
 
     // 5. Ata anterior (para aprovação)
     var aRes = await sb.from('assembleias').select('data_assembleia,tipo').eq('condominio_id', c.id).order('data_assembleia', {ascending:false}).limit(1);
+    // ⚖️ Exigências formais dos condóminos = pontos obrigatórios da ordem de trabalhos
+    try {
+      var exOT = await sb.from('exigencias').select('tipo,estado,criado_em,fracoes(codigo)').eq('condominio_id', c.id).in('estado', ['pendente','doc_carregado','em_votacao','validada']);
+      (exOT.data||[]).forEach(function(e){
+        var nomes = { fundo:'apresentação física da prova bancária do fundo de reserva', extratos:'apresentação dos extratos bancários do condomínio', quotas:'esclarecimento sobre quotas', outro:'esclarecimento exigido' };
+        contexto.situacoes.push('EXIGÊNCIA FORMAL registada pela fração ' + ((e.fracoes&&e.fracoes.codigo)||'?') + ' em ' + new Date(e.criado_em).toLocaleDateString('pt-PT') + ': ' + (nomes[e.tipo]||e.tipo) + (e.estado==='validada' ? ' (prova já validada online — falta a apresentação física e anexação à ata)' : '') + '. Este ponto DEVE constar da ordem de trabalhos.');
+      });
+    } catch(e){}
     if (aRes.data && aRes.data.length) {
       contexto.situacoes.push('Há uma assembleia anterior (' + (aRes.data[0].data_assembleia||'') + ') cuja ata pode precisar de aprovação.');
     }
@@ -14616,6 +14689,164 @@ async function saveCondDef() {
 // ===== IA (via Supabase Edge Function — chave segura no servidor) =====
 
 // 🧠 Contexto real do condomínio para o Assistente IA (o "programa-DEUS" a alimentar a IA)
+
+
+// ═══════════════════════════════════════════════════════════
+// ⚖️ CADEIA DE PROVA DO FUNDO — lado do administrador
+// ═══════════════════════════════════════════════════════════
+var _exigAtual = null;
+
+async function carregarExigenciasAdmin() {
+  var zona = document.getElementById('exig-admin-zona');
+  if (!zona || !currentCondo) return;
+  try {
+    var r = await sb.from('exigencias').select('*, fracoes(codigo)').eq('condominio_id', currentCondo.id).order('criado_em', {ascending:false}).limit(6);
+    var exigs = r.data || [];
+    var h = '';
+    var ativa = exigs.find(function(e){ return ['pendente','doc_carregado','em_votacao'].indexOf(e.estado) > -1; });
+    if (ativa) {
+      _exigAtual = ativa;
+      h += '<div style="background:rgba(180,140,255,.06);border:1px solid rgba(180,140,255,.35);border-radius:10px;padding:12px 14px;margin-top:12px;">';
+      h += '<div style="font-size:12px;font-weight:800;color:#b48cff;">⚖️ Exigência formal de prova — fração ' + ((ativa.fracoes&&ativa.fracoes.codigo)||'?') + ' · ' + new Date(ativa.criado_em).toLocaleDateString('pt-PT') + '</div>';
+      if (ativa.estado === 'pendente') {
+        h += '<div style="font-size:11px;color:var(--t2);margin:6px 0 10px;line-height:1.5;">Um condómino exige a prova bancária do fundo. Carrega o <strong>extrato oficial do banco</strong> (PDF descarregado do homebanking). O sistema verifica o documento, os condóminos votam a validação, e o documento fica anexado à próxima ata — com impressão digital SHA-256.</div>';
+        h += '<label style="display:block;cursor:pointer;"><input type="file" id="exig-doc" accept="application/pdf,image/*" style="display:none" onchange="exigDocEscolhido(this)">';
+        h += '<div style="background:var(--s1);border:1px dashed var(--b2);border-radius:9px;padding:13px;text-align:center;font-size:12px;color:var(--t2);">📤 Carregar extrato bancário oficial (PDF)</div></label>';
+        h += '<div id="exig-doc-estado" style="font-size:10.5px;color:var(--t3);margin-top:6px;"></div>';
+      } else if (ativa.estado === 'doc_carregado') {
+        h += '<div style="font-size:11px;color:var(--amber);margin-top:6px;">Documento em verificação…</div>';
+      } else if (ativa.estado === 'em_votacao') {
+        h += '<div id="exig-votos" style="font-size:11px;color:var(--t2);margin-top:6px;">🗳️ Em votação pelos condóminos…</div>';
+      }
+      h += '</div>';
+    } else {
+      var rej = exigs.find(function(e){ return e.estado === 'rejeitada_ai'; });
+      if (rej) h += '<div style="background:rgba(255,84,112,.06);border:1px solid rgba(255,84,112,.3);border-radius:10px;padding:10px 13px;margin-top:12px;font-size:11px;color:var(--t2);">⚠️ A última prova foi <strong style="color:var(--red);">rejeitada na verificação</strong> (' + (rej.ai_resultado||'documento inválido') + ') e todos os condóminos foram informados. Aguarda nova exigência ou carrega diretamente um documento válido quando ela chegar.</div>';
+      var val = exigs.find(function(e){ return e.estado === 'validada'; });
+      if (val) h += '<div style="background:rgba(34,229,132,.06);border:1px solid rgba(34,229,132,.3);border-radius:10px;padding:10px 13px;margin-top:12px;font-size:11px;color:var(--t2);">✅ Prova <strong style="color:var(--green);">validada pela maioria</strong> em ' + (val.validada_em?new Date(val.validada_em).toLocaleDateString('pt-PT'):'') + '. Apresenta o extrato físico na próxima assembleia — o sistema vai anexá-lo à ata com a impressão digital.</div>';
+    }
+    zona.innerHTML = h;
+    if (ativa && ativa.estado === 'em_votacao') apurarExigencia(ativa);
+  } catch(e) { console.error('exig admin:', e); }
+}
+
+// SHA-256 do ficheiro — a impressão digital que vai à ata
+async function _hashFicheiro(file) {
+  var buf = await file.arrayBuffer();
+  var h = await crypto.subtle.digest('SHA-256', buf);
+  return Array.from(new Uint8Array(h)).map(function(b){ return b.toString(16).padStart(2,'0'); }).join('');
+}
+
+async function exigDocEscolhido(inp) {
+  var f = inp.files && inp.files[0];
+  if (!f || !_exigAtual) return;
+  var est = document.getElementById('exig-doc-estado');
+  function diz(t, cor) { if (est) { est.textContent = t; est.style.color = cor || 'var(--t3)'; } }
+
+  // Rejeição imediata dos "totós": Excel/Word não são extratos oficiais
+  var nome = (f.name||'').toLowerCase();
+  if (/\.(xls|xlsx|csv|doc|docx|txt)$/.test(nome)) {
+    diz('❌ Rejeitado: um extrato bancário oficial é um PDF do banco, não um ficheiro ' + nome.split('.').pop().toUpperCase() + '.', 'var(--red)');
+    return;
+  }
+  if (f.size < 8000) { diz('❌ Ficheiro demasiado pequeno para ser um extrato real.', 'var(--red)'); return; }
+
+  diz('🔐 A calcular impressão digital…');
+  var hash = await _hashFicheiro(f);
+  diz('📤 A carregar documento…');
+  var caminho = 'provas/' + currentCondo.id.substring(0,8) + '_' + Date.now() + '_' + nome.replace(/[^\w.\-]/g,'_');
+  var up = await sb.storage.from('fotos').upload(caminho, f, { contentType: f.type || 'application/pdf' });
+  if (up.error) { diz('❌ Falha no upload: ' + up.error.message, 'var(--red)'); return; }
+  var pu = sb.storage.from('fotos').getPublicUrl(caminho);
+  var docUrl = (pu.data && pu.data.publicUrl) || null;
+
+  await sb.from('exigencias').update({ estado:'doc_carregado', doc_url: docUrl, doc_hash: hash, doc_carregado_em: new Date().toISOString() }).eq('id', _exigAtual.id);
+
+  diz('🤖 Verificação automática do documento…');
+  var veredicto = await validarExtratoAI(f);
+
+  if (!veredicto.valido) {
+    // REJEIÇÃO PÚBLICA — todos os condóminos ficam a saber
+    await sb.from('exigencias').update({ estado:'rejeitada_ai', ai_resultado: veredicto.motivo }).eq('id', _exigAtual.id);
+    var msgsRej = fracoes.map(function(fr){
+      return { condominio_id: currentCondo.id, fracao_id: fr.id, autor:'admin', lida_admin:true, lida_condomino:false,
+        texto: '⚠️ VERIFICAÇÃO DA PROVA DO FUNDO\n\nA prova bancária do fundo de reserva, exigida pela fração ' + ((_exigAtual.fracoes&&_exigAtual.fracoes.codigo)||'') + ', foi REJEITADA na verificação automática.\nMotivo: ' + veredicto.motivo + '\n\n[Registo automático do sistema — impressão digital do documento rejeitado: ' + hash.substring(0,16) + '…]' };
+    });
+    await sb.from('mensagens').insert(msgsRej);
+    diz('❌ Documento rejeitado: ' + veredicto.motivo + ' — todos os condóminos foram informados.', 'var(--red)');
+    toast('Documento rejeitado na verificação. Rejeição comunicada a todos.','err');
+    carregarExigenciasAdmin();
+    return;
+  }
+
+  // PASSOU → votação dos condóminos
+  await sb.from('exigencias').update({ estado:'em_votacao', ai_resultado: veredicto.motivo }).eq('id', _exigAtual.id);
+  var msgsOk = fracoes.map(function(fr){
+    return { condominio_id: currentCondo.id, fracao_id: fr.id, autor:'admin', lida_admin:true, lida_condomino:false,
+      texto: '🗳️ VALIDAÇÃO DA PROVA DO FUNDO\n\nA administração carregou o extrato bancário do fundo de reserva (exigido pela fração ' + ((_exigAtual.fracoes&&_exigAtual.fracoes.codigo)||'') + '). O documento passou a verificação automática' + (veredicto.motivo ? ' (' + veredicto.motivo + ')' : '') + '.\n\nAgora és tu que validas: vai à secção Quotas do portal, consulta o documento e vota. Impressão digital: ' + hash.substring(0,16) + '…' };
+  });
+  await sb.from('mensagens').insert(msgsOk);
+  diz('✅ Documento verificado — votação aberta aos condóminos (todos avisados).', 'var(--green)');
+  toast('🗳️ Votação da prova aberta a todos os condóminos','ok');
+  carregarExigenciasAdmin();
+}
+
+// 🤖 Validação do extrato pelo AI: referências bancárias + coerência com o fundo
+async function validarExtratoAI(file) {
+  try {
+    var base64 = await new Promise(function(res, rej){
+      var r = new FileReader();
+      r.onload = function(){ res(r.result.split(',')[1]); };
+      r.onerror = rej;
+      r.readAsDataURL(file);
+    });
+    var teorico = (window._fundoTeorico||0).toFixed(2);
+    var comprovado = (window._fundoComprovado||0).toFixed(2);
+    var prompt = 'Analisa este documento que foi apresentado como EXTRATO BANCÁRIO OFICIAL da conta do fundo de reserva de um condomínio português.\n' +
+      'Contexto: o fundo teórico (10% das quotas pagas) é ' + teorico + '€ e o comprovado por movimentos registados é ' + comprovado + '€.\n' +
+      'Verifica: (1) tem elementos de um extrato real — nome de banco português, IBAN PT50, datas, saldos, layout bancário? (2) parece gerado em Excel/Word/editor (colunas perfeitas sem logotipo, fontes de escritório, sem rodapés bancários)? (3) o saldo visível é da ordem de grandeza do fundo esperado?\n' +
+      'Responde APENAS JSON: {"valido": true|false, "motivo": "explicação curta em português (máx 140 caracteres)", "saldo_detetado": número|null, "banco": "nome"|null}';
+    var resp = await fetch(PROXY_URL, {
+      method: 'POST', headers: { 'Content-Type':'application/json' },
+      body: JSON.stringify({ prompt: prompt, foto: base64, tipo: 'documento_import' })
+    });
+    var data = await resp.json();
+    var texto = (data.resposta || data.text || '').replace(/```json|```/g,'').trim();
+    var j = JSON.parse(texto.substring(texto.indexOf('{'), texto.lastIndexOf('}')+1));
+    return { valido: j.valido === true, motivo: j.motivo || (j.valido ? 'elementos bancários confirmados' : 'documento sem elementos de extrato oficial'), saldo: j.saldo_detetado };
+  } catch(e) {
+    console.error('validarExtratoAI:', e);
+    // Falha técnica não pode bloquear a cadeia: segue para votação com nota honesta
+    return { valido: true, motivo: 'verificação automática indisponível — validação fica inteiramente nos condóminos' };
+  }
+}
+
+// Apuramento: maioria absoluta da permilagem valida a prova
+async function apurarExigencia(exig) {
+  try {
+    var vR = await sb.from('exigencia_votos').select('fracao_id, voto').eq('exigencia_id', exig.id);
+    var votos = vR.data || [];
+    var pSim = 0, pNao = 0;
+    votos.forEach(function(v){
+      var f = fracoes.find(function(x){ return x.id === v.fracao_id; });
+      var perm = f ? parseFloat(f.permilagem||0) : 0;
+      if (v.voto === 'sim') pSim += perm; else pNao += perm;
+    });
+    var totalPerm = fracoes.reduce(function(s,f){ return s + parseFloat(f.permilagem||0); }, 0) || 1000;
+    var el = document.getElementById('exig-votos');
+    if (el) el.innerHTML = '🗳️ Votação: <strong style="color:var(--green);">' + Math.round(pSim) + '‰ aceitam</strong> · <strong style="color:var(--red);">' + Math.round(pNao) + '‰ rejeitam</strong> · maioria necessária: ' + Math.round(totalPerm/2) + '‰';
+    if (pSim > totalPerm/2) {
+      await sb.from('exigencias').update({ estado:'validada', validada_em: new Date().toISOString() }).eq('id', exig.id);
+      var msgsV = fracoes.map(function(fr){
+        return { condominio_id: currentCondo.id, fracao_id: fr.id, autor:'admin', lida_admin:true, lida_condomino:false,
+          texto: '✅ PROVA DO FUNDO VALIDADA\n\nA prova bancária do fundo de reserva foi validada pela maioria dos condóminos (' + Math.round(pSim) + '‰ a favor). O documento fica registado com impressão digital ' + (exig.doc_hash||'').substring(0,16) + '… e será apresentado fisicamente na próxima assembleia, ficando anexado à ata.' };
+      });
+      await sb.from('mensagens').insert(msgsV);
+      toast('✅ Prova validada pela maioria (' + Math.round(pSim) + '‰)','ok');
+      carregarExigenciasAdmin();
+    }
+  } catch(e) { console.error('apurar exig:', e); }
+}
 
 // 🛡️ FUNDO DE VERDADE — teórico (devia existir) vs comprovado (com prova)
 async function atualizarFundoCartao() {
@@ -18975,7 +19206,7 @@ function nav(p) {
   try { updateBadges(); atualizarBadgeMensagens(); } catch(e){}
   if (p==='ocorrencias' || p==='mensagens' || p==='quotas') { try { verificarAvisosGerais(); } catch(e){} }
   if(p==='orcamento'){ initOrcamentoAno(); loadOrcamento(); }
-  if(p==='financeiro'){ try { atualizarFundoCartao(); } catch(e){} }
+  if(p==='financeiro'){ try { atualizarFundoCartao(); carregarExigenciasAdmin(); } catch(e){} }
   if(p==='condominos') loadCondominos();
   if(p==='mensagens') loadMensagens();
   if(p==='quotas'){

@@ -295,6 +295,9 @@
       </div>
       <div style="height:8px;background:rgba(255,255,255,.06);border-radius:5px;overflow:hidden;"><div id="fundo-p-barra" style="height:100%;width:0%;border-radius:5px;transition:width .5s;"></div></div>
       <div id="fundo-p-nota" style="font-size:10px;color:var(--t3);margin-top:8px;line-height:1.5;"></div>
+      <div id="exig-zona" style="margin-top:12px;"></div>
+      <button id="btn-exigir" onclick="exigirProva()" style="width:100%;margin-top:10px;background:transparent;border:1px solid rgba(180,140,255,.4);color:#b48cff;border-radius:9px;padding:11px;font-size:12px;font-weight:700;cursor:pointer;">⚖️ Exigir prova bancária do fundo</button>
+      <div style="font-size:9.5px;color:var(--t3);margin-top:6px;text-align:center;">A exigência fica registada no log de comunicações e vai à próxima assembleia.</div>
     </div>
     <div class="ptitle">As minhas quotas</div>
     <div class="psub">Histórico dos últimos 24 meses da sua fração.</div>
@@ -2068,6 +2071,70 @@ async function toggleNotificacoes(e) {
 
 
 
+
+// ⚖️ CADEIA DE PROVA — exigir, acompanhar e validar
+var _exigencias = [];
+
+async function exigirProva() {
+  if (!confirm('Exigir formalmente a prova bancária do fundo de reserva?\n\nO pedido fica registado no log de comunicações (com data e hora), a administração é notificada, e o tema vai à próxima assembleia.\n\nQuando o extrato for carregado e verificado, vais poder votar na sua validação.')) return;
+  const r = await sb.rpc('portal_exigir', { p_token: token, p_tipo: 'fundo', p_texto: '' });
+  if (r.error || r.data === false) { toastP('Já existe uma exigência ativa deste tipo, ou não foi possível registar.','err'); return; }
+  toastP('⚖️ Exigência registada — a administração foi notificada.','ok');
+  carregarExigencias();
+}
+
+async function carregarExigencias() {
+  try {
+    const r = await sb.rpc('portal_exigencias', { p_token: token });
+    if (r.error || !r.data) return;
+    _exigencias = r.data;
+    const zona = document.getElementById('exig-zona');
+    const btn = document.getElementById('btn-exigir');
+    if (!zona) return;
+    const ativa = _exigencias.find(e => e.tipo === 'fundo' && ['pendente','doc_carregado','em_votacao'].includes(e.estado));
+    const validada = _exigencias.find(e => e.tipo === 'fundo' && ['validada','apresentada_assembleia'].includes(e.estado));
+    if (btn) btn.style.display = ativa ? 'none' : 'block';
+    let h = '';
+    if (ativa) {
+      h += '<div style="background:var(--card2);border:1px solid var(--b);border-radius:10px;padding:11px 13px;">';
+      h += '<div style="font-size:11px;font-weight:700;color:#b48cff;">⚖️ Exigência de prova em curso <span style="color:var(--t3);font-weight:400;">· pedida pela fração ' + (ativa.fracao_codigo||'') + '</span></div>';
+      if (ativa.estado === 'pendente') {
+        h += '<div style="font-size:10.5px;color:var(--t2);margin-top:5px;">A aguardar que a administração carregue o extrato bancário oficial.</div>';
+      } else if (ativa.estado === 'doc_carregado') {
+        h += '<div style="font-size:10.5px;color:var(--t2);margin-top:5px;">Documento carregado — em verificação automática.</div>';
+      } else if (ativa.estado === 'em_votacao') {
+        h += '<div style="font-size:10.5px;color:var(--t2);margin-top:5px;">O documento passou a verificação automática. <strong>Vota tu:</strong> o extrato apresentado comprova o fundo?</div>';
+        if (ativa.doc_url) h += '<a href="' + ativa.doc_url + '" target="_blank" style="display:block;font-size:11px;color:var(--cyan);margin-top:6px;">📄 Ver o documento apresentado</a>';
+        if (ativa.doc_hash) h += '<div style="font-size:8.5px;color:var(--t3);margin-top:3px;word-break:break-all;">Impressão digital (SHA-256): ' + ativa.doc_hash + '</div>';
+        if (ativa.meu_voto) {
+          h += '<div style="font-size:11px;color:var(--green);font-weight:700;margin-top:8px;">✔ O teu voto: ' + (ativa.meu_voto==='sim'?'Aceito a prova':'Rejeito a prova') + '</div>';
+        } else {
+          h += '<div style="display:flex;gap:8px;margin-top:9px;">';
+          h += '<button onclick="votarExigencia(\'' + ativa.exigencia_id + '\',\'sim\')" style="flex:1;background:rgba(34,229,132,.12);border:1px solid rgba(34,229,132,.4);color:var(--green);border-radius:8px;padding:10px;font-size:12px;font-weight:700;cursor:pointer;">✔ Aceito</button>';
+          h += '<button onclick="votarExigencia(\'' + ativa.exigencia_id + '\',\'nao\')" style="flex:1;background:rgba(255,84,112,.12);border:1px solid rgba(255,84,112,.4);color:var(--red);border-radius:8px;padding:10px;font-size:12px;font-weight:700;cursor:pointer;">✘ Rejeito</button>';
+          h += '</div>';
+        }
+      }
+      h += '</div>';
+    } else if (validada) {
+      h += '<div style="background:rgba(34,229,132,.06);border:1px solid rgba(34,229,132,.3);border-radius:10px;padding:10px 13px;font-size:10.5px;color:var(--t2);">✅ <strong style="color:var(--green);">Prova validada pela maioria</strong> em ' + (validada.validada_em ? new Date(validada.validada_em).toLocaleDateString('pt-PT') : '') + '.' + (validada.doc_url ? ' <a href="' + validada.doc_url + '" target="_blank" style="color:var(--cyan);">Ver documento</a>' : '') + ' Será apresentada fisicamente na próxima assembleia e anexada à ata.</div>';
+    }
+    // Rejeitadas recentes (transparência)
+    const rej = _exigencias.find(e => e.tipo === 'fundo' && e.estado === 'rejeitada_ai');
+    if (rej && !ativa) {
+      h += '<div style="background:rgba(255,84,112,.06);border:1px solid rgba(255,84,112,.35);border-radius:10px;padding:10px 13px;margin-top:8px;font-size:10.5px;color:var(--t2);">⚠️ <strong style="color:var(--red);">A última prova foi rejeitada na verificação automática.</strong> ' + (rej.ai_resultado||'') + ' Podes exigir novamente.</div>';
+    }
+    zona.innerHTML = h;
+  } catch(e){}
+}
+
+async function votarExigencia(id, voto) {
+  const r = await sb.rpc('portal_votar_exigencia', { p_token: token, p_exigencia: id, p_voto: voto });
+  if (r.error || r.data === false) { toastP('Não foi possível registar o voto.','err'); return; }
+  toastP(voto==='sim' ? '✔ Voto registado: aceitas a prova' : '✘ Voto registado: rejeitas a prova','ok');
+  carregarExigencias();
+}
+
 // 🛡️ Fundo de reserva — a prova pública
 async function carregarFundo() {
   try {
@@ -2123,6 +2190,7 @@ iniciar();
 cIniciarPolling();
 carregarPermilagem();
 carregarFundo();
+carregarExigencias();
 initNotificacoes();
 </script>
 </body>
