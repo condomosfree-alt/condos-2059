@@ -767,7 +767,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.22-0906</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.22-0922</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -841,6 +841,21 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
       <!-- DASHBOARD -->
       <div class="page active" id="page-dashboard">
         <div id="avisos-gerais-dash"></div>
+        <div class="panel" id="score-admin" style="display:none;border:1px solid rgba(255,179,0,.3);margin-bottom:16px;">
+          <div class="ph"><span class="pt">🏆 Saúde do Prédio — o que os condóminos veem</span><span class="pm">calculado automaticamente; não é editável</span></div>
+          <div style="padding:14px 16px;display:flex;align-items:center;gap:20px;flex-wrap:wrap;">
+            <div id="sa-circulo" style="width:84px;height:84px;border-radius:50%;flex-shrink:0;position:relative;">
+              <div style="position:absolute;inset:8px;background:var(--s1);border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+                <div id="sa-num" style="font-size:23px;font-weight:900;line-height:1;">—</div>
+                <div style="font-size:7px;color:var(--t3);">de 100</div>
+              </div>
+            </div>
+            <div style="flex:1;min-width:240px;">
+              <div id="sa-classe" style="font-size:13px;font-weight:800;margin-bottom:6px;">—</div>
+              <div id="sa-dicas" style="font-size:10.5px;color:var(--t2);line-height:1.7;"></div>
+            </div>
+          </div>
+        </div>
         <div class="kpi-grid">
           <div class="kpi kpi-click" style="border-top:2px solid var(--cyan);cursor:pointer;" onclick="nav('quotas')" title="Ir para Quotas · Receber">
             <div class="kpi-label">Taxa Cobrança</div>
@@ -4371,6 +4386,7 @@ async function loadCondData() {
   verificarAvisosGerais();
   atualizarBadgeMensagens();
   loadOrcamento();
+  try { carregarScoreAdmin(); } catch(e){}
   // 🔖 F5 volta à página onde estavas (hash no URL)
   try {
     var _hp = (location.hash||'').replace('#','');
@@ -14913,6 +14929,90 @@ async function apurarExigencia(exig) {
   } catch(e) { console.error('apurar exig:', e); }
 }
 
+
+// 🏆 SCORE DE SAÚDE — lado do administrador, com o caminho para subir
+
+function calcularScore(d) {
+  var det = [];
+  var pctDia = d.n_fracoes > 0 ? (d.n_fracoes - d.n_fracoes_divida) / d.n_fracoes : 1;
+  det.push({ nome:'Quotas em dia', pts: Math.round(30 * pctDia), max: 30 });
+  var cobF = d.fundo_teorico > 0 ? Math.min(1, d.fundo_comprovado / d.fundo_teorico) : (d.fundo_comprovado > 0 ? 1 : 0.5);
+  det.push({ nome:'Fundo comprovado', pts: Math.round(25 * cobF), max: 25 });
+  var pctOc = d.oc_total_12m > 0 ? d.oc_resolvidas_12m / d.oc_total_12m : 1;
+  det.push({ nome:'Avarias resolvidas', pts: Math.round(20 * pctOc), max: 20 });
+  det.push({ nome:'Assembleias e atas', pts: (d.teve_assembleia_12m ? 10 : 0) + (d.teve_ata_12m ? 5 : 0), max: 15 });
+  det.push({ nome:'Transparência', pts: (d.n_docs > 0 ? 5 : 0) + (d.prova_validada_12m ? 5 : 0), max: 10 });
+  var total = det.reduce(function(s,x){ return s + x.pts; }, 0);
+  return { total: total, det: det };
+}
+
+function _scoreClasse(t) {
+  if (t >= 85) return { txt:'Excelente gestão 🏆', cor:'#22e584' };
+  if (t >= 70) return { txt:'Boa gestão 💪', cor:'#00d4ff' };
+  if (t >= 50) return { txt:'Gestão razoável ⚠️', cor:'#ffb300' };
+  return { txt:'Precisa de atenção 🚨', cor:'#ff5470' };
+}
+
+async function carregarScoreAdmin() {
+  var painel = document.getElementById('score-admin');
+  if (!painel || !currentCondo) return;
+  try {
+    var cid = currentCondo.id;
+    var desde = new Date(Date.now() - 365*24*3600*1000).toISOString();
+    var [qR, mR, oR, aR, dR, eR] = await Promise.all([
+      sb.from('quotas').select('fracao_id,valor_emitido,valor_pago').eq('condominio_id', cid),
+      sb.from('movimentos').select('tipo,valor').eq('condominio_id', cid).eq('categoria','fundo_reserva'),
+      sb.from('ocorrencias').select('estado,criado_em').eq('condominio_id', cid).gte('criado_em', desde),
+      sb.from('assembleias').select('data_assembleia,ata_texto').eq('condominio_id', cid).gte('data_assembleia', desde),
+      sb.from('documentos').select('id', {count:'exact', head:true}).eq('condominio_id', cid),
+      sb.from('exigencias').select('id').eq('condominio_id', cid).eq('tipo','fundo').in('estado',['validada','apresentada_assembleia']).gte('validada_em', desde)
+    ]);
+    var pctFundo = parseFloat(currentCondo.fundo_percentagem); if (isNaN(pctFundo)) pctFundo = 10;
+    var divPorFr = {};
+    (qR.data||[]).forEach(function(q){
+      if (parseFloat(q.valor_emitido||0) - parseFloat(q.valor_pago||0) > 0.005) divPorFr[q.fracao_id] = true;
+    });
+    var pagas = (qR.data||[]).reduce(function(s,q){ return s + parseFloat(q.valor_pago||0); }, 0);
+    var teorico = pagas * pctFundo / 100;
+    var comprovado = (mR.data||[]).reduce(function(s,m){ return s + (m.tipo==='despesa'?1:-1)*parseFloat(m.valor||0); }, 0);
+    var ocs = oR.data||[];
+    var d = {
+      n_fracoes: (fracoes||[]).length,
+      n_fracoes_divida: Object.keys(divPorFr).length,
+      fundo_teorico: teorico, fundo_comprovado: comprovado,
+      oc_total_12m: ocs.length,
+      oc_resolvidas_12m: ocs.filter(function(o){ return o.estado==='resolvida' || o.estado==='fechada'; }).length,
+      teve_assembleia_12m: (aR.data||[]).length > 0,
+      teve_ata_12m: (aR.data||[]).some(function(a){ return a.ata_texto && a.ata_texto.trim().length > 50; }),
+      n_docs: dR.count || 0,
+      prova_validada_12m: (eR.data||[]).length > 0
+    };
+    var s = calcularScore(d);
+    var cl = _scoreClasse(s.total);
+    painel.style.display = 'block';
+    var num = document.getElementById('sa-num');
+    num.textContent = s.total; num.style.color = cl.cor;
+    document.getElementById('sa-circulo').style.background = 'conic-gradient(' + cl.cor + ' 0% ' + s.total + '%, rgba(255,255,255,.08) ' + s.total + '% 100%)';
+    var clEl = document.getElementById('sa-classe');
+    clEl.textContent = cl.txt + ' · ' + s.total + '/100'; clEl.style.color = cl.cor;
+
+    // 💡 O caminho para subir — a dica de cada componente em falta
+    var dicas = [];
+    s.det.forEach(function(x){
+      var falta = x.max - x.pts;
+      if (falta <= 0) return;
+      if (x.nome === 'Quotas em dia') dicas.push('+' + falta + ' pts: ' + d.n_fracoes_divida + ' fração(ões) com dívida — usa o comunicado "só quem deve" e o plano de cobrança.');
+      if (x.nome === 'Fundo comprovado') dicas.push('+' + falta + ' pts: regista as transferências do fundo nos Movimentos (categoria 🛡️) — faltam ' + Math.max(0, teorico-comprovado).toFixed(2) + '€ por comprovar.');
+      if (x.nome === 'Avarias resolvidas') dicas.push('+' + falta + ' pts: há ' + (d.oc_total_12m - d.oc_resolvidas_12m) + ' ocorrência(s) por fechar nos últimos 12 meses.');
+      if (x.nome === 'Assembleias e atas') dicas.push('+' + falta + ' pts: ' + (d.teve_assembleia_12m ? 'a assembleia existe mas falta gerar a ata na Sala.' : 'não há assembleia nos últimos 12 meses — agenda uma (a lei manda uma por ano, Art. 1431.º).'));
+      if (x.nome === 'Transparência') dicas.push('+' + falta + ' pts: ' + (d.n_docs > 0 ? 'valida uma prova do fundo com os condóminos este ano.' : 'publica documentos no portal e valida a prova do fundo.'));
+    });
+    document.getElementById('sa-dicas').innerHTML = dicas.length
+      ? '<strong style="color:var(--t2);">Para subir:</strong><br>' + dicas.map(function(x){ return '· ' + x; }).join('<br>')
+      : '✅ Pontuação máxima em todos os componentes — este é o cartão de visita que os condóminos partilham.';
+  } catch(e) { console.error('score admin:', e); }
+}
+
 // 🛡️ FUNDO DE VERDADE — teórico (devia existir) vs comprovado (com prova)
 async function atualizarFundoCartao() {
   var cartao = document.getElementById('fundo-cartao');
@@ -19321,6 +19421,7 @@ function nav(p) {
   if (p==='ocorrencias' || p==='mensagens' || p==='quotas') { try { verificarAvisosGerais(); } catch(e){} }
   if(p==='orcamento'){ initOrcamentoAno(); loadOrcamento(); }
   if(p==='financeiro'){ try { atualizarFundoCartao(); carregarExigenciasAdmin(); } catch(e){} }
+  if(p==='dashboard'){ try { carregarScoreAdmin(); } catch(e){} }
   if(p==='condominos') loadCondominos();
   if(p==='mensagens') loadMensagens();
   if(p==='quotas'){

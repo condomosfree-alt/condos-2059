@@ -281,6 +281,26 @@
       <div id="h-sit-sub" style="font-size:12px;color:var(--t2);"></div>
     </div>
 
+    <div class="card" id="score-card" style="display:none;border-color:rgba(255,179,0,.3);">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <div style="font-size:13.5px;font-weight:800;">🏆 Saúde do Prédio</div>
+        <button onclick="partilharScore()" style="background:transparent;border:1px solid var(--b2);color:var(--t2);border-radius:8px;padding:5px 12px;font-size:10.5px;cursor:pointer;">📤 Partilhar</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:18px;">
+        <div id="score-circulo" style="width:96px;height:96px;border-radius:50%;flex-shrink:0;position:relative;">
+          <div style="position:absolute;inset:9px;background:var(--card);border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+            <div id="score-num" style="font-size:26px;font-weight:900;line-height:1;">—</div>
+            <div style="font-size:7.5px;color:var(--t3);">de 100</div>
+          </div>
+        </div>
+        <div style="flex:1;">
+          <div id="score-classe" style="font-size:13px;font-weight:800;margin-bottom:7px;">—</div>
+          <div id="score-barras" style="font-size:9.5px;line-height:2.1;"></div>
+        </div>
+      </div>
+      <div style="font-size:9px;color:var(--t3);margin-top:10px;">Calculado automaticamente pelo sistema com os dados reais — o administrador não o pode editar.</div>
+    </div>
+
     <div class="menu-grid">
       <div class="mtile" onclick="irPara('quotas')">
         <span class="mtile-badge" id="badge-quotas" style="display:none;"></span>
@@ -2202,6 +2222,107 @@ async function votarExigencia(id, voto) {
 
 
 
+
+// 🏆 SCORE DE SAÚDE DO PRÉDIO — a fórmula pública
+function calcularScore(d) {
+  var det = [];
+  // 1) Quotas em dia — 30 pts
+  var pctDia = d.n_fracoes > 0 ? (d.n_fracoes - d.n_fracoes_divida) / d.n_fracoes : 1;
+  det.push({ nome:'Quotas em dia', pts: Math.round(30 * pctDia), max: 30 });
+  // 2) Fundo comprovado — 25 pts
+  var cobF = d.fundo_teorico > 0 ? Math.min(1, d.fundo_comprovado / d.fundo_teorico) : (d.fundo_comprovado > 0 ? 1 : 0.5);
+  det.push({ nome:'Fundo comprovado', pts: Math.round(25 * cobF), max: 25 });
+  // 3) Reação a avarias — 20 pts
+  var pctOc = d.oc_total_12m > 0 ? d.oc_resolvidas_12m / d.oc_total_12m : 1;
+  det.push({ nome:'Avarias resolvidas', pts: Math.round(20 * pctOc), max: 20 });
+  // 4) Vida democrática — 15 pts
+  det.push({ nome:'Assembleias e atas', pts: (d.teve_assembleia_12m ? 10 : 0) + (d.teve_ata_12m ? 5 : 0), max: 15 });
+  // 5) Transparência ativa — 10 pts
+  det.push({ nome:'Transparência', pts: (d.n_docs > 0 ? 5 : 0) + (d.prova_validada_12m ? 5 : 0), max: 10 });
+  var total = det.reduce(function(s,x){ return s + x.pts; }, 0);
+  return { total: total, det: det };
+}
+function classeScore(t) {
+  if (t >= 85) return { txt:'Excelente gestão 🏆', cor:'#22e584' };
+  if (t >= 70) return { txt:'Boa gestão 💪', cor:'#00d4ff' };
+  if (t >= 50) return { txt:'Gestão razoável ⚠️', cor:'#ffb300' };
+  return { txt:'Precisa de atenção 🚨', cor:'#ff5470' };
+}
+
+window._scoreDados = null;
+async function carregarScore() {
+  try {
+    const r = await sb.rpc('portal_score', { p_token: token });
+    if (r.error || !r.data || !r.data.length) return;
+    const d = r.data[0];
+    const s = calcularScore(d);
+    const cl = classeScore(s.total);
+    window._scoreDados = { s: s, cl: cl };
+    const card = document.getElementById('score-card');
+    if (!card) return;
+    card.style.display = 'block';
+    const num = document.getElementById('score-num');
+    num.textContent = s.total; num.style.color = cl.cor;
+    document.getElementById('score-circulo').style.background =
+      'conic-gradient(' + cl.cor + ' 0% ' + s.total + '%, rgba(255,255,255,.08) ' + s.total + '% 100%)';
+    const clEl = document.getElementById('score-classe');
+    clEl.textContent = cl.txt; clEl.style.color = cl.cor;
+    let barras = '';
+    s.det.forEach(function(x){
+      const pct = x.max > 0 ? x.pts / x.max * 100 : 0;
+      barras += '<div style="display:flex;align-items:center;gap:8px;"><span style="min-width:104px;color:var(--t2);">' + x.nome + '</span>';
+      barras += '<div style="flex:1;height:5px;background:rgba(255,255,255,.07);border-radius:3px;overflow:hidden;"><div style="width:' + pct + '%;height:100%;background:' + cl.cor + ';border-radius:3px;"></div></div>';
+      barras += '<strong style="min-width:34px;text-align:right;">' + x.pts + '/' + x.max + '</strong></div>';
+    });
+    document.getElementById('score-barras').innerHTML = barras;
+  } catch(e){}
+}
+
+// 📤 Partilhar: gera uma imagem bonita para o grupo do prédio
+async function partilharScore() {
+  if (!window._scoreDados) return;
+  const s = window._scoreDados.s, cl = window._scoreDados.cl;
+  const nome = (window._sitCache && window._sitCache.condominio_nome) || 'O meu prédio';
+  const cv = document.createElement('canvas');
+  cv.width = 800; cv.height = 800;
+  const g = cv.getContext('2d');
+  // fundo
+  const grad = g.createLinearGradient(0,0,800,800);
+  grad.addColorStop(0,'#0a1220'); grad.addColorStop(1,'#101b30');
+  g.fillStyle = grad; g.fillRect(0,0,800,800);
+  // título
+  g.fillStyle = '#9aa5b8'; g.font = '600 26px system-ui'; g.textAlign = 'center';
+  g.fillText('SAÚDE DO PRÉDIO', 400, 90);
+  g.fillStyle = '#e8eaf0'; g.font = '800 40px system-ui';
+  g.fillText(nome.length > 28 ? nome.substring(0,27) + '…' : nome, 400, 145);
+  // círculo do score
+  g.lineWidth = 26; g.strokeStyle = 'rgba(255,255,255,.08)';
+  g.beginPath(); g.arc(400, 400, 170, 0, Math.PI*2); g.stroke();
+  g.strokeStyle = cl.cor; g.lineCap = 'round';
+  g.beginPath(); g.arc(400, 400, 170, -Math.PI/2, -Math.PI/2 + Math.PI*2*(s.total/100)); g.stroke();
+  g.fillStyle = cl.cor; g.font = '900 130px system-ui';
+  g.fillText(s.total, 400, 435);
+  g.fillStyle = '#647087'; g.font = '600 24px system-ui';
+  g.fillText('de 100', 400, 480);
+  // classificação
+  g.fillStyle = cl.cor; g.font = '800 38px system-ui';
+  g.fillText(cl.txt, 400, 640);
+  // rodapé
+  g.fillStyle = '#3d4a61'; g.font = '600 20px system-ui';
+  g.fillText('Medido automaticamente · COND.OS — gestão com prova', 400, 745);
+
+  cv.toBlob(async function(blob){
+    const file = new File([blob], 'saude_predio.png', { type:'image/png' });
+    if (navigator.canShare && navigator.canShare({ files:[file] })) {
+      try { await navigator.share({ files:[file], title:'Saúde do Prédio' }); return; } catch(e){}
+    }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = 'saude_predio.png';
+    document.body.appendChild(a); a.click(); a.remove();
+    toastP('📤 Imagem guardada — partilha no grupo do prédio!','ok');
+  }, 'image/png');
+}
+
 // 🔮 PERGUNTA AO PRÉDIO — assistente pessoal do condómino
 const PP_PROXY = SB_URL + '/functions/v1/hyper-task';
 function _ppLimite() {
@@ -2387,6 +2508,7 @@ carregarFundo();
 carregarExigencias();
 carregarDinheiro();
 _ppAtualizaConta();
+carregarScore();
 initNotificacoes();
 </script>
 </body>
