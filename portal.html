@@ -202,6 +202,37 @@
   .toast-box.ok { border-color:rgba(34,229,132,.5); color:#22e584; }
   .toast-box.err { border-color:rgba(255,84,112,.5); color:#ff5470; }
   .toast-box.info { border-color:rgba(0,212,255,.5); color:#00d4ff; }
+
+  /* 💓 Badges vivos — pulsam até serem tratados */
+  @keyframes badge-pulsa {
+    0%, 100% { transform:scale(1); box-shadow:0 0 8px rgba(255,84,112,.45); }
+    50% { transform:scale(1.18); box-shadow:0 0 18px rgba(255,84,112,.85); }
+  }
+  @keyframes badge-pulsa-amber {
+    0%, 100% { transform:scale(1); box-shadow:0 0 8px rgba(255,179,0,.35); }
+    50% { transform:scale(1.14); box-shadow:0 0 16px rgba(255,179,0,.75); }
+  }
+  .mtile-badge { animation: badge-pulsa 1.6s ease-in-out infinite; }
+  .mtile-badge.amber { animation: badge-pulsa-amber 2.2s ease-in-out infinite; }
+  /* 💬 Tile com novidades ganha vida */
+  .mtile.tem-novidade { border-color: rgba(0,212,255,.5); }
+  .mtile.tem-novidade::after { content:''; position:absolute; inset:-1px; border-radius:16px; border:1px solid rgba(0,212,255,.35); animation: aura 2.4s ease-in-out infinite; pointer-events:none; }
+  @keyframes aura { 0%,100% { opacity:.25; } 50% { opacity:.9; } }
+  /* 🎯 Chips de relance no topo */
+  .chips { display:flex; gap:8px; margin-bottom:14px; }
+  .chip { flex:1; background:var(--card); border:1px solid var(--b); border-radius:12px; padding:10px 8px; text-align:center; cursor:pointer; transition:transform .15s, border-color .15s; }
+  .chip:active { transform:scale(.95); }
+  .chip-ic { font-size:16px; }
+  .chip-t { font-size:9px; color:var(--t3); text-transform:uppercase; letter-spacing:.5px; margin-top:3px; }
+  .chip-v { font-size:12px; font-weight:800; margin-top:1px; }
+  .chip.ok { border-color:rgba(34,229,132,.4); } .chip.ok .chip-v { color:var(--green); }
+  .chip.atencao { border-color:rgba(255,179,0,.45); animation: chip-vibra 3s ease-in-out infinite; } .chip.atencao .chip-v { color:var(--amber); }
+  .chip.urgente { border-color:rgba(255,84,112,.5); animation: chip-vibra 2s ease-in-out infinite; } .chip.urgente .chip-v { color:var(--red); }
+  @keyframes chip-vibra { 0%,92%,100% { transform:translateX(0); } 94% { transform:translateX(-2px); } 96% { transform:translateX(2px); } 98% { transform:translateX(-1px); } }
+  /* entrada suave dos cartões */
+  .page.active .card { animation: surge .35s ease-out; }
+  @keyframes surge { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+
 </style>
 </head>
 <body>
@@ -226,6 +257,11 @@
   </div>
 
   <div class="page active" id="pg-inicio">
+    <div class="chips" id="chips-relance" style="display:none;">
+      <div class="chip" id="chip-quotas" onclick="irPara('quotas')"><div class="chip-ic">💶</div><div class="chip-t">Quotas</div><div class="chip-v" id="chip-quotas-v">…</div></div>
+      <div class="chip" id="chip-msg" onclick="irPara('mensagens')"><div class="chip-ic">💬</div><div class="chip-t">Mensagens</div><div class="chip-v" id="chip-msg-v">…</div></div>
+      <div class="chip" id="chip-fundo" onclick="irPara('quotas')"><div class="chip-ic">🛡️</div><div class="chip-t">Fundo</div><div class="chip-v" id="chip-fundo-v">…</div></div>
+    </div>
     <div class="card card-glow">
       <div style="font-size:11px;color:var(--t3);letter-spacing:.5px;">SITUAÇÃO DE QUOTAS</div>
       <div id="h-sit" style="font-family:'Courier New',monospace;font-weight:800;font-size:28px;margin:5px 0;">…</div>
@@ -601,6 +637,7 @@ async function iniciar() {
     hsub.textContent = d.n_quotas_divida + ' quota(s) em atraso — contacte a administração para regularizar';
   }
   // Badge de quotas em dívida no quadrado
+  window._chips.divida = divida; renderChips();
   const bq = document.getElementById('badge-quotas');
   if (bq) {
     if (divida > 0.005) {
@@ -694,6 +731,7 @@ async function carregarFeed() {
 
   // Mensagens não lidas → badge no quadrado
   const rm = await sb.rpc('portal_mensagens_nao_lidas', { p_token: token });
+  window._chips.msgs = (!rm.error && rm.data > 0) ? rm.data : 0; renderChips();
   const bm = document.getElementById('badge-msg');
   if (!rm.error && rm.data > 0) {
     if (bm) { bm.textContent = rm.data; bm.style.display = 'block'; }
@@ -2135,6 +2173,36 @@ async function votarExigencia(id, voto) {
   carregarExigencias();
 }
 
+
+// 🎯 Relance: o essencial em 3 chips no topo
+window._chips = { divida: null, msgs: null, fundoCob: null };
+function renderChips() {
+  var box = document.getElementById('chips-relance');
+  if (!box) return;
+  var ch = window._chips;
+  if (ch.divida === null && ch.msgs === null && ch.fundoCob === null) return;
+  box.style.display = 'flex';
+  function pinta(id, valor, classe) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    var v = document.getElementById(id + '-v');
+    if (v) v.textContent = valor;
+    el.className = 'chip ' + classe;
+  }
+  if (ch.divida !== null) {
+    pinta('chip-quotas', ch.divida > 0.005 ? ch.divida.toFixed(0) + '€ em dívida' : 'Em dia ✔', ch.divida > 0.005 ? 'urgente' : 'ok');
+  }
+  if (ch.msgs !== null) {
+    pinta('chip-msg', ch.msgs > 0 ? ch.msgs + ' nova(s)' : 'Sem novas', ch.msgs > 0 ? 'atencao' : 'ok');
+    // tile das mensagens ganha aura quando há novidades
+    var tileMsg = document.querySelector('.mtile[onclick*="mensagens"]');
+    if (tileMsg) tileMsg.classList.toggle('tem-novidade', ch.msgs > 0);
+  }
+  if (ch.fundoCob !== null) {
+    pinta('chip-fundo', ch.fundoCob >= 95 ? 'Provado ✔' : Math.round(ch.fundoCob) + '% provado', ch.fundoCob >= 95 ? 'ok' : (ch.fundoCob >= 60 ? 'atencao' : 'urgente'));
+  }
+}
+
 // 🛡️ Fundo de reserva — a prova pública
 async function carregarFundo() {
   try {
@@ -2148,6 +2216,7 @@ async function carregarFundo() {
     document.getElementById('fundo-p-teorico').textContent = teo.toFixed(2).replace('.',',') + '€';
     document.getElementById('fundo-p-comprovado').textContent = comp.toFixed(2).replace('.',',') + '€';
     const cob = teo > 0 ? comp/teo*100 : 100;
+    window._chips.fundoCob = cob; renderChips();
     const cor = cob >= 95 ? 'var(--green)' : (cob >= 60 ? '#ffb300' : 'var(--red)');
     const barra = document.getElementById('fundo-p-barra');
     barra.style.width = Math.min(100, cob) + '%'; barra.style.background = cor;
