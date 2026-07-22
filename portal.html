@@ -275,6 +275,12 @@
       <div id="pp-resposta" style="display:none;margin-top:11px;background:var(--card2);border:1px solid var(--b);border-radius:11px;padding:12px 14px;font-size:12.5px;line-height:1.6;color:var(--text);"></div>
     </div>
 
+    <div class="card" id="ofertas-card" style="display:none;border-color:rgba(148,216,45,.35);">
+      <div style="font-size:13px;font-weight:800;">💼 Ofertas para o prédio <span style="font-size:8.5px;background:rgba(148,216,45,.15);color:#94d82d;padding:2px 7px;border-radius:5px;vertical-align:middle;">OFERTA COMERCIAL</span></div>
+      <div style="font-size:10px;color:var(--t3);margin:4px 0 10px;">Propostas de empresas selecionadas pela administração. Aderir é sempre voluntário.</div>
+      <div id="ofertas-lista"></div>
+    </div>
+
     <div class="card card-glow">
       <div style="font-size:11px;color:var(--t3);letter-spacing:.5px;">SITUAÇÃO DE QUOTAS</div>
       <div id="h-sit" style="font-family:'Courier New',monospace;font-weight:800;font-size:28px;margin:5px 0;">…</div>
@@ -365,6 +371,10 @@
       <div style="height:8px;background:rgba(255,255,255,.06);border-radius:5px;overflow:hidden;"><div id="fundo-p-barra" style="height:100%;width:0%;border-radius:5px;transition:width .5s;"></div></div>
       <div id="fundo-p-nota" style="font-size:10px;color:var(--t3);margin-top:8px;line-height:1.5;"></div>
       <div id="exig-zona" style="margin-top:12px;"></div>
+      <div id="historia-card" style="display:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--b);">
+        <div style="font-size:12.5px;font-weight:800;">🕰️ A tua história neste prédio</div>
+        <div id="historia-corpo" style="font-size:11.5px;color:var(--t2);line-height:1.7;margin-top:8px;"></div>
+      </div>
       <div id="dinheiro-card" style="display:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--b);">
         <div style="font-size:12.5px;font-weight:800;">🍩 Para onde vai o teu dinheiro (este ano)</div>
         <div style="font-size:10px;color:var(--t3);margin:4px 0 12px;">A tua parte real das despesas do prédio, pela tua permilagem.</div>
@@ -2223,6 +2233,90 @@ async function votarExigencia(id, voto) {
 
 
 
+
+// 🕰️ A TUA HISTÓRIA NO PRÉDIO
+async function carregarHistoria() {
+  try {
+    const r = await sb.rpc('portal_historia', { p_token: token });
+    if (r.error || !r.data || !r.data.length) return;
+    const h = r.data[0];
+    if (!h.primeiro_ano) return;   // sem histórico ainda
+    const card = document.getElementById('historia-card');
+    if (!card) return;
+    const anos = new Date().getFullYear() - h.primeiro_ano;
+    let linhas = [];
+    linhas.push('🏠 No prédio desde <strong>' + h.primeiro_ano + '</strong>' + (anos >= 1 ? ' — ' + anos + ' ano' + (anos>1?'s':'') : ''));
+    linhas.push('💶 Pagaste <strong>' + parseFloat(h.total_pago||0).toFixed(2).replace('.',',') + '€</strong> em quotas (' + (h.n_quotas_pagas||0) + ' quotas)');
+    linhas.push('🛡️ Contribuíste com <strong>' + parseFloat(h.contribuicao_fundo||0).toFixed(2).replace('.',',') + '€</strong> para o fundo de reserva');
+    const atr = parseInt(h.n_atrasos||0);
+    linhas.push(atr === 0 ? '🏅 <strong style="color:var(--green);">Zero atrasos</strong> — pagador exemplar' : '📅 ' + atr + ' quota(s) paga(s) fora do prazo');
+    const tA = parseInt(h.total_assembleias||0), pA = parseInt(h.presencas||0);
+    if (tA > 0) {
+      let frase = '🗳️ Estiveste em <strong>' + pA + ' de ' + tA + '</strong> assembleias';
+      if (pA === tA) frase += ' — pilar da democracia do prédio 🏛️';
+      else if (pA === 0 && tA >= 2) frase += ' — as reuniões não são contigo 😄 (a tua permilagem faz falta!)';
+      else if (pA / tA >= 0.6) frase += ' — presença de confiança';
+      linhas.push(frase);
+    }
+    document.getElementById('historia-corpo').innerHTML = linhas.join('<br>');
+    card.style.display = 'block';
+  } catch(e){}
+}
+
+// 💼 OFERTAS COLETIVAS — adesão voluntária, consentimento explícito
+var _ofertasCache = [];
+async function carregarOfertas() {
+  try {
+    const r = await sb.rpc('portal_ofertas', { p_token: token });
+    if (r.error || !r.data || !r.data.length) return;
+    _ofertasCache = r.data;
+    const card = document.getElementById('ofertas-card');
+    const lista = document.getElementById('ofertas-lista');
+    if (!card || !lista) return;
+    let h = '';
+    r.data.forEach(function(o){
+      const meta = parseInt(o.meta_aderentes||0), n = parseInt(o.n_interessados||0);
+      h += '<div style="background:var(--card2);border:1px solid var(--b);border-radius:11px;padding:12px 13px;margin-bottom:9px;">';
+      h += '<div style="font-size:13px;font-weight:700;">' + escapar(o.titulo||'') + '</div>';
+      h += '<div style="font-size:10.5px;color:var(--t3);margin-top:2px;">' + escapar(o.prestador_nome||'') + (o.fecha_em ? ' · até ' + new Date(o.fecha_em).toLocaleDateString('pt-PT') : '') + '</div>';
+      if (o.beneficio) h += '<div style="font-size:11.5px;color:#94d82d;font-weight:700;margin-top:5px;">🎁 ' + escapar(o.beneficio) + '</div>';
+      if (o.descricao) h += '<div style="font-size:11px;color:var(--t2);margin-top:6px;line-height:1.5;">' + escapar(o.descricao) + '</div>';
+      if (meta > 0) {
+        const pct = Math.min(100, n/meta*100);
+        h += '<div style="height:6px;background:rgba(255,255,255,.07);border-radius:4px;overflow:hidden;margin-top:9px;"><div style="width:' + pct + '%;height:100%;background:#94d82d;border-radius:4px;"></div></div>';
+        h += '<div style="font-size:9.5px;color:var(--t3);margin-top:3px;">' + n + ' de ' + meta + ' aderentes' + (n >= meta ? ' — meta atingida! 🎉' : '') + '</div>';
+      } else if (n > 0) {
+        h += '<div style="font-size:9.5px;color:var(--t3);margin-top:6px;">' + n + ' interessado(s)</div>';
+      }
+      if (o.meu_interesse) {
+        h += '<div style="font-size:11px;color:var(--green);font-weight:700;margin-top:9px;">✔ Registaste o teu interesse</div>';
+      } else {
+        h += '<button onclick="aderirOferta(\'' + o.oferta_id + '\')" style="width:100%;margin-top:9px;background:rgba(148,216,45,.12);border:1px solid rgba(148,216,45,.4);color:#94d82d;border-radius:9px;padding:10px;font-size:12px;font-weight:800;cursor:pointer;">' + (o.tipo === 'predio' ? '👍 Apoio levar à assembleia' : '✋ Tenho interesse') + '</button>';
+      }
+      h += '</div>';
+    });
+    lista.innerHTML = h;
+    card.style.display = 'block';
+  } catch(e){}
+}
+
+async function aderirOferta(id) {
+  const o = _ofertasCache.find(x => x.oferta_id === id);
+  if (!o) return;
+  let consent = false;
+  if (o.tipo === 'individual') {
+    // 🔒 RGPD: consentimento explícito para partilhar dados com o prestador
+    consent = confirm('CONSENTIMENTO DE PARTILHA DE DADOS\n\nAo confirmar, autorizas a partilha do teu nome, fração e contacto com "' + (o.prestador_nome||'o prestador') + '", exclusivamente para esta proposta:\n"' + (o.titulo||'') + '"\n\nEste consentimento fica registado com data e hora, e podes retirá-lo pedindo à administração.\n\nAutorizas?');
+    if (!consent) return;
+  } else {
+    if (!confirm('Registar o teu apoio a levar esta proposta à assembleia?\n\n"' + (o.titulo||'') + '"\n\n(Sem partilha de dados pessoais — é o condomínio que decide em conjunto.)')) return;
+  }
+  const r = await sb.rpc('portal_oferta_interesse', { p_token: token, p_oferta: id, p_consentimento: consent });
+  if (r.error || r.data === false) { toastP('Não foi possível registar.','err'); return; }
+  toastP(o.tipo === 'predio' ? '👍 Apoio registado' : '✋ Interesse registado com consentimento','ok');
+  carregarOfertas();
+}
+
 // 🏆 SCORE DE SAÚDE DO PRÉDIO — a fórmula pública
 function calcularScore(d) {
   var det = [];
@@ -2509,6 +2603,8 @@ carregarExigencias();
 carregarDinheiro();
 _ppAtualizaConta();
 carregarScore();
+carregarHistoria();
+carregarOfertas();
 initNotificacoes();
 </script>
 </body>

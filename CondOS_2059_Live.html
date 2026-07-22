@@ -767,7 +767,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.22-0922</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.22-0937</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -897,6 +897,10 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
       <!-- CONDÓMINOS -->
       <!-- EDIFÍCIO -->
       <div class="page" id="page-edificio">
+        <div class="panel" id="radar-manutencao" style="display:none;border:1px solid rgba(255,179,0,.3);margin-bottom:16px;">
+          <div class="ph"><span class="pt">🔧 Radar de Manutenção</span><span class="pm">o que está parado há demasiado tempo</span></div>
+          <div id="radar-corpo" style="padding:14px 16px;font-size:11.5px;line-height:1.8;"></div>
+        </div>
         <div class="sec-hdr">
           <span class="sec-t">🏢 Perfil do Edifício</span>
           <button class="btn-primary" onclick="saveEdificio()"><i class="ti ti-check"></i>Guardar</button>
@@ -1425,6 +1429,10 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
           <span class="sec-t">Financeiro</span>
           <button class="btn-primary" onclick="openModal('mo-mov')"><i class="ti ti-plus"></i>Novo Movimento</button>
         </div>
+        <div class="panel" id="balanco-hist" style="display:none;margin-bottom:16px;">
+          <div class="ph"><span class="pt">📈 Balanço Histórico</span><span class="pm">desde o primeiro registo — atualiza sozinho</span></div>
+          <div id="balanco-corpo" style="padding:14px 16px;"></div>
+        </div>
         <div class="panel" id="fundo-cartao" style="border:1px solid rgba(180,140,255,.3);margin-bottom:16px;display:none;">
           <div class="ph"><span class="pt">🛡️ Fundo de Reserva — Prova Real</span><span class="pm">DL 268/94, Art. 4.º — mín. 10% das quotas, para conservação</span></div>
           <div style="padding:14px 16px;">
@@ -1808,6 +1816,10 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
 
       <div class="page" id="page-parceiros">
         <div class="sec-hdr"><span class="sec-t">Parceiros</span><button class="btn-primary" onclick="openModal('mo-parceiro')"><i class="ti ti-plus"></i>Adicionar</button></div>
+        <div class="panel" id="ofertas-admin" style="border:1px solid rgba(148,216,45,.3);margin-bottom:16px;">
+          <div class="ph"><span class="pt">💼 Ofertas Coletivas</span><span class="pm">poder de compra do prédio — propostas de empresas aos condóminos</span><button class="tb-btn" style="font-size:11px;margin-left:auto;color:#94d82d;border-color:rgba(148,216,45,.4);" onclick="novaOferta()">➕ Nova oferta</button></div>
+          <div id="ofertas-admin-lista" style="padding:12px 16px;font-size:11.5px;color:var(--t3);">Sem ofertas ativas.</div>
+        </div>
         <div class="panel">
           <div id="parceiros-list"><div class="loading"><div class="spin"></div></div></div>
         </div>
@@ -11919,6 +11931,15 @@ async function sugerirOrdemTrabalhos() {
       }
     } catch(e){}
 
+    // 💼 Ofertas coletivas "do prédio" com apoio → ponto de deliberação
+    try {
+      var ofOT = await sb.from('ofertas').select('titulo,prestador_nome,beneficio,tipo,estado,oferta_interesses(fracao_id)').eq('condominio_id', c.id).eq('tipo','predio').in('estado',['ativa','fechada']);
+      (ofOT.data||[]).forEach(function(o){
+        var n = (o.oferta_interesses||[]).length;
+        if (n >= 3) contexto.situacoes.push('OFERTA COLETIVA com apoio de ' + n + ' condóminos: "' + (o.titulo||'') + '" de ' + (o.prestador_nome||'') + (o.beneficio?' ('+o.beneficio+')':'') + '. Sugerir como ponto de deliberação (contratação pelo condomínio).');
+      });
+    } catch(e){}
+
     // ⚖️ Exigências formais dos condóminos = pontos obrigatórios da ordem de trabalhos
     try {
       var exOT = await sb.from('exigencias').select('tipo,estado,criado_em,fracoes(codigo)').eq('condominio_id', c.id).in('estado', ['pendente','doc_carregado','em_votacao','validada']);
@@ -14929,6 +14950,205 @@ async function apurarExigencia(exig) {
   } catch(e) { console.error('apurar exig:', e); }
 }
 
+
+
+
+// 💼 OFERTAS COLETIVAS — lado do administrador
+function novaOferta() {
+  var h = '<div style="font-size:11px;color:var(--t2);line-height:1.5;margin-bottom:12px;">Publica uma proposta de uma empresa credenciada. Os condóminos aderem voluntariamente no portal — nas ofertas individuais, cada adesão exige <strong>consentimento explícito</strong> de partilha de dados (RGPD).</div>';
+  h += '<div class="fl"><label>Título</label><input class="fi" id="of-titulo" placeholder="Ex: Seguro multirriscos habitação"></div>';
+  h += '<div class="fl"><label>Empresa / prestador</label><input class="fi" id="of-prestador" placeholder="Ex: Seguros Silva, Lda"></div>';
+  h += '<div class="fl"><label>Email do prestador (recebe os interessados)</label><input class="fi" id="of-email" type="email"></div>';
+  h += '<div class="fl"><label>Tipo</label><select class="fi" id="of-tipo"><option value="individual">Individual — cada condómino adere e consente partilhar os dados</option><option value="predio">Do prédio — apoio para levar à assembleia (sem partilha de dados)</option></select></div>';
+  h += '<div class="fl"><label>Benefício coletivo</label><input class="fi" id="of-beneficio" placeholder="Ex: -20% se 10 ou mais aderirem"></div>';
+  h += '<div class="fl"><label>Meta de aderentes (opcional)</label><input class="fi" id="of-meta" type="number" placeholder="Ex: 10"></div>';
+  h += '<div class="fl"><label>Descrição</label><textarea class="fi" id="of-desc" rows="3" placeholder="O que inclui, condições…"></textarea></div>';
+  h += '<div class="fl"><label>Aberta até</label><input class="fi" id="of-fecha" type="date"></div>';
+  h += '<label style="display:flex;gap:8px;align-items:center;font-size:11px;color:var(--t2);margin:10px 0;"><input type="checkbox" id="of-avisar" checked style="accent-color:var(--cyan);"> Avisar todos os condóminos (mensagem + notificação)</label>';
+  h += '<button class="btn-primary" style="width:100%;" onclick="guardarOferta()">💼 Publicar oferta</button>';
+  abrirModalGenerico('💼 Nova Oferta Coletiva', h);
+}
+
+async function guardarOferta() {
+  var t = (document.getElementById('of-titulo')||{}).value||'';
+  var p = (document.getElementById('of-prestador')||{}).value||'';
+  if (t.trim().length < 3 || p.trim().length < 2) { toast('Preenche o título e o prestador','err'); return; }
+  var tipo = (document.getElementById('of-tipo')||{}).value||'individual';
+  var ins = await sb.from('ofertas').insert({
+    condominio_id: currentCondo.id, titulo: t.trim(), prestador_nome: p.trim(),
+    prestador_email: ((document.getElementById('of-email')||{}).value||'').trim() || null,
+    tipo: tipo,
+    beneficio: ((document.getElementById('of-beneficio')||{}).value||'').trim() || null,
+    meta_aderentes: parseInt((document.getElementById('of-meta')||{}).value||0) || 0,
+    descricao: ((document.getElementById('of-desc')||{}).value||'').trim() || null,
+    fecha_em: (document.getElementById('of-fecha')||{}).value || null
+  });
+  if (ins.error) { toast('Erro: ' + ins.error.message,'err'); return; }
+  if ((document.getElementById('of-avisar')||{}).checked) {
+    var txt = '💼 NOVA OFERTA PARA O PRÉDIO (oferta comercial)\n\n' + t.trim() + ' — ' + p.trim() + ((document.getElementById('of-beneficio')||{}).value ? '\n🎁 ' + (document.getElementById('of-beneficio')||{}).value : '') + '\n\nAderir é voluntário. Vê os detalhes no início do portal.';
+    var msgs = fracoes.map(function(f){ return { condominio_id: currentCondo.id, fracao_id: f.id, autor:'admin', texto: txt, lida_admin:true, lida_condomino:false }; });
+    await sb.from('mensagens').insert(msgs);
+  }
+  toast('💼 Oferta publicada','ok');
+  fecharModalGenerico();
+  carregarOfertasAdmin();
+}
+
+async function carregarOfertasAdmin() {
+  var el = document.getElementById('ofertas-admin-lista');
+  if (!el || !currentCondo) return;
+  try {
+    var r = await sb.from('ofertas').select('*, oferta_interesses(fracao_id, consentimento)').eq('condominio_id', currentCondo.id).order('criado_em', {ascending:false}).limit(8);
+    var ofs = r.data||[];
+    if (!ofs.length) { el.innerHTML = 'Sem ofertas. Cria a primeira — seguros, internet, energia… o prédio junto negoceia melhor.'; return; }
+    var h = '';
+    ofs.forEach(function(o){
+      var ints = o.oferta_interesses||[];
+      var ativa = o.estado === 'ativa';
+      h += '<div style="background:var(--s1);border:1px solid var(--b1);border-radius:10px;padding:11px 13px;margin-bottom:9px;">';
+      h += '<div style="display:flex;justify-content:space-between;gap:10px;align-items:center;">';
+      h += '<div><span style="font-size:12.5px;font-weight:700;">' + (o.titulo||'') + '</span> <span style="font-size:10px;color:var(--t3);">· ' + (o.prestador_nome||'') + ' · ' + (o.tipo==='predio'?'do prédio':'individual') + '</span></div>';
+      h += '<span class="pill ' + (ativa?'ok':'') + '">' + (ativa?'ativa':'fechada') + '</span></div>';
+      h += '<div style="font-size:11px;color:var(--t2);margin-top:5px;">' + ints.length + ' interessado(s)' + (o.meta_aderentes?' · meta: '+o.meta_aderentes:'') + '</div>';
+      if (ativa && ints.length) {
+        h += '<button class="tb-btn" style="font-size:10.5px;margin-top:8px;" onclick="fecharOferta(\'' + o.id + '\')">📤 Fechar e enviar interessados ao prestador</button>';
+      }
+      h += '</div>';
+    });
+    el.innerHTML = h;
+  } catch(e) { console.error('ofertas admin:', e); }
+}
+
+async function fecharOferta(id) {
+  try {
+    var oR = await sb.from('ofertas').select('*, oferta_interesses(fracao_id, consentimento)').eq('id', id).single();
+    var o = oR.data;
+    if (!o) return;
+    var consentidos = (o.oferta_interesses||[]).filter(function(i){ return o.tipo === 'predio' || i.consentimento === true; });
+    var linhas = consentidos.map(function(i){
+      var f = fracoes.find(function(x){ return x.id === i.fracao_id; });
+      if (!f) return null;
+      return (f.codigo||'') + ' · ' + (f.proprietario_nome||'') + (o.tipo==='individual' ? ' · ' + (f.telemovel||f.email||'sem contacto') : '');
+    }).filter(Boolean);
+    var msgTexto = o.tipo === 'predio'
+      ? 'Fechar esta oferta?\n\n' + linhas.length + ' condómino(s) apoiam levar à assembleia. O tema entra na sugestão de pontos da próxima ordem de trabalhos.'
+      : 'Fechar e preparar o envio ao prestador?\n\n' + linhas.length + ' condómino(s) deram CONSENTIMENTO de partilha. Vai abrir um email pré-preenchido para ' + (o.prestador_email||'o prestador') + ' com a lista.';
+    if (!await confirmar(msgTexto, {titulo:'Fechar oferta', tipo:'info', icon:'📤', okTexto:'Fechar'})) return;
+    await sb.from('ofertas').update({ estado:'fechada' }).eq('id', id);
+    if (o.tipo === 'individual' && linhas.length) {
+      var corpo = 'Exmos. Srs. ' + (o.prestador_nome||'') + ',%0D%0A%0D%0ANo seguimento da oferta "' + encodeURIComponent(o.titulo||'') + '" publicada no portal do condomínio ' + encodeURIComponent(currentCondo.nome||'') + ', seguem os condóminos que manifestaram interesse e CONSENTIRAM a partilha dos seus dados para esta proposta:%0D%0A%0D%0A' + encodeURIComponent(linhas.join('\n')) + '%0D%0A%0D%0AAgradecemos contacto direto com os interessados.%0D%0AA administração.';
+      window.open('mailto:' + (o.prestador_email||'') + '?subject=' + encodeURIComponent('Interessados — ' + (o.titulo||'')) + '&body=' + corpo);
+    }
+    toast('Oferta fechada' + (o.tipo==='individual' ? ' — email preparado com ' + linhas.length + ' consentido(s)' : ''),'ok');
+    carregarOfertasAdmin();
+  } catch(e) { toast('Erro: ' + (e.message||e),'err'); }
+}
+
+// 🔧 RADAR DE MANUTENÇÃO — o que ficou parado
+async function carregarRadar() {
+  var painel = document.getElementById('radar-manutencao');
+  if (!painel || !currentCondo) return;
+  try {
+    var [oR, mR] = await Promise.all([
+      sb.from('ocorrencias').select('categoria,criado_em,estado').eq('condominio_id', currentCondo.id),
+      sb.from('movimentos').select('categoria,data_movimento').eq('condominio_id', currentCondo.id).eq('tipo','despesa')
+    ]);
+    // última atividade por área (ocorrência resolvida OU despesa da categoria)
+    var ultima = {};
+    function marca(area, data) {
+      if (!data) return;
+      if (!ultima[area] || data > ultima[area]) ultima[area] = data;
+    }
+    (oR.data||[]).forEach(function(o){
+      var cat = (o.categoria||'').toLowerCase();
+      if (/elevador/.test(cat)) marca('elevador', o.criado_em);
+      if (/canaliza|água|agua|infiltra/.test(cat)) marca('canalizacao', o.criado_em);
+      if (/elétric|eletric|luz/.test(cat)) marca('eletrico', o.criado_em);
+      if (/fachada|pintura|telhado|cobertura/.test(cat)) marca('estrutura', o.criado_em);
+    });
+    (mR.data||[]).forEach(function(m){
+      var cat = (m.categoria||'').toLowerCase();
+      if (cat === 'elevador') marca('elevador', m.data_movimento);
+      if (cat === 'agua') marca('canalizacao', m.data_movimento);
+      if (cat === 'eletricidade') marca('eletrico', m.data_movimento);
+      if (cat === 'obras' || cat === 'manutencao') marca('estrutura', m.data_movimento);
+    });
+
+    var agora = new Date();
+    function anosDesde(d) { return d ? (agora - new Date(d)) / (365.25*24*3600*1000) : null; }
+    var idade = currentCondo.ano_construcao ? (agora.getFullYear() - parseInt(currentCondo.ano_construcao)) : null;
+
+    var areas = [
+      { nome:'🛗 Elevador', ult: ultima.elevador, ciclo: 1, nota:'manutenção periódica obrigatória por contrato EMIE' },
+      { nome:'🚿 Canalização / águas', ult: ultima.canalizacao, ciclo: 3, nota:'inspeção preventiva recomendada' },
+      { nome:'💡 Instalação elétrica comum', ult: ultima.eletrico, ciclo: 5, nota:'verificação periódica recomendada' },
+      { nome:'🏗️ Fachada / cobertura', ult: ultima.estrutura, ciclo: 8, nota:'ciclo típico de conservação 8-10 anos (Art. 89.º RJUE)' }
+    ];
+    if (currentCondo.cert_validade) {
+      var diasCert = (new Date(currentCondo.cert_validade) - agora) / (24*3600*1000);
+      areas.push({ nome:'⚡ Certificado energético', ult: null, especial: diasCert < 0 ? 'CADUCADO — renovar' : ('válido até ' + new Date(currentCondo.cert_validade).toLocaleDateString('pt-PT')), alerta: diasCert < 180 });
+    }
+
+    var h = '', pendentes = 0;
+    areas.forEach(function(a){
+      if (a.especial !== undefined) {
+        h += '<div style="display:flex;justify-content:space-between;gap:10px;"><span>' + a.nome + '</span><span style="color:' + (a.alerta ? 'var(--red)' : 'var(--green)') + ';font-weight:700;">' + a.especial + '</span></div>';
+        if (a.alerta) pendentes++;
+        return;
+      }
+      var anos = anosDesde(a.ult);
+      var atrasado = anos === null ? true : anos > a.ciclo;
+      if (atrasado) pendentes++;
+      var estado = anos === null
+        ? '<span style="color:var(--amber);font-weight:700;">sem registo — ' + a.nota + '</span>'
+        : (atrasado
+          ? '<span style="color:var(--red);font-weight:700;">há ' + anos.toFixed(1) + ' anos (ciclo: ' + a.ciclo + ') — ' + a.nota + '</span>'
+          : '<span style="color:var(--green);font-weight:700;">há ' + (anos < 1 ? Math.round(anos*12) + ' meses' : anos.toFixed(1) + ' anos') + ' ✓</span>');
+      h += '<div style="display:flex;justify-content:space-between;gap:10px;"><span>' + a.nome + '</span>' + estado + '</div>';
+    });
+    if (idade !== null) h += '<div style="font-size:10px;color:var(--t3);margin-top:8px;">Edifício com ' + idade + ' anos. O radar usa os registos de ocorrências e despesas — quanto mais registares, mais fino ele fica.</div>';
+    document.getElementById('radar-corpo').innerHTML = h;
+    painel.style.display = 'block';
+    painel.querySelector('.pm').textContent = pendentes ? pendentes + ' área(s) a precisar de atenção' : 'tudo em dia ✓';
+  } catch(e) { console.error('radar:', e); }
+}
+
+// 📈 BALANÇO HISTÓRICO — desde o primeiro registo
+async function carregarBalanco() {
+  var painel = document.getElementById('balanco-hist');
+  if (!painel || !currentCondo) return;
+  try {
+    var r = await sb.from('movimentos').select('tipo,valor,categoria,data_movimento').eq('condominio_id', currentCondo.id);
+    var movs = r.data||[];
+    if (!movs.length) return;
+    var porAno = {}, tot = { ent:0, sai:0, fIn:0, fOut:0 };
+    movs.forEach(function(m){
+      var ano = (m.data_movimento||'').substring(0,4) || '?';
+      porAno[ano] = porAno[ano] || { ent:0, sai:0 };
+      var v = parseFloat(m.valor||0);
+      if (m.categoria === 'fundo_reserva') { if (m.tipo==='despesa') tot.fIn += v; else tot.fOut += v; return; }
+      if (m.tipo === 'receita') { porAno[ano].ent += v; tot.ent += v; }
+      else { porAno[ano].sai += v; tot.sai += v; }
+    });
+    var anos = Object.keys(porAno).sort();
+    var h = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:14px;">';
+    h += '<div style="text-align:center;"><div style="font-size:9px;color:var(--t3);text-transform:uppercase;">Recebido (sempre)</div><div style="font-size:16px;font-weight:800;color:var(--green);font-family:var(--mono);">' + tot.ent.toFixed(2) + '€</div></div>';
+    h += '<div style="text-align:center;"><div style="font-size:9px;color:var(--t3);text-transform:uppercase;">Gasto (sempre)</div><div style="font-size:16px;font-weight:800;color:var(--red);font-family:var(--mono);">' + tot.sai.toFixed(2) + '€</div></div>';
+    h += '<div style="text-align:center;"><div style="font-size:9px;color:var(--t3);text-transform:uppercase;">Fundo: reforçado</div><div style="font-size:16px;font-weight:800;color:#b48cff;font-family:var(--mono);">' + tot.fIn.toFixed(2) + '€</div></div>';
+    h += '<div style="text-align:center;"><div style="font-size:9px;color:var(--t3);text-transform:uppercase;">Fundo: utilizado</div><div style="font-size:16px;font-weight:800;color:var(--amber);font-family:var(--mono);">' + tot.fOut.toFixed(2) + '€</div></div>';
+    h += '</div>';
+    if (anos.length > 1) {
+      h += '<table class="tbl" style="width:100%;"><thead><tr><th>Ano</th><th>Entradas</th><th>Saídas</th><th>Resultado</th></tr></thead><tbody>';
+      anos.forEach(function(a){
+        var d = porAno[a], res = d.ent - d.sai;
+        h += '<tr><td class="mn">' + a + '</td><td class="mn" style="color:var(--green);">' + d.ent.toFixed(2) + '€</td><td class="mn" style="color:var(--red);">' + d.sai.toFixed(2) + '€</td><td class="mn" style="color:' + (res>=0?'var(--green)':'var(--red)') + ';font-weight:700;">' + (res>=0?'+':'') + res.toFixed(2) + '€</td></tr>';
+      });
+      h += '</tbody></table>';
+    }
+    document.getElementById('balanco-corpo').innerHTML = h;
+    painel.style.display = 'block';
+  } catch(e) { console.error('balanço:', e); }
+}
 
 // 🏆 SCORE DE SAÚDE — lado do administrador, com o caminho para subir
 
@@ -19422,6 +19642,9 @@ function nav(p) {
   if(p==='orcamento'){ initOrcamentoAno(); loadOrcamento(); }
   if(p==='financeiro'){ try { atualizarFundoCartao(); carregarExigenciasAdmin(); } catch(e){} }
   if(p==='dashboard'){ try { carregarScoreAdmin(); } catch(e){} }
+  if(p==='edificio'){ try { carregarRadar(); } catch(e){} }
+  if(p==='parceiros'){ try { carregarOfertasAdmin(); } catch(e){} }
+  if(p==='financeiro'){ try { carregarBalanco(); } catch(e){} }
   if(p==='condominos') loadCondominos();
   if(p==='mensagens') loadMensagens();
   if(p==='quotas'){
