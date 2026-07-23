@@ -767,7 +767,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.23-2138</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.23-2203</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -9134,6 +9134,7 @@ async function gerirOcorrencia(id) {
   h += '</div>';
 
   // 3. AÇÃO conforme valor
+  var _votosRenderizados = false;
   if (_ocAtual.orcamento_valor) {
     var v = parseFloat(_ocAtual.orcamento_valor);
     if (v <= limite) {
@@ -9148,6 +9149,7 @@ async function gerirOcorrencia(id) {
       h += '<div style="font-size:11px;color:var(--t2);margin-bottom:8px;">Acima do limite — os condóminos devem aprovar. Ao abrir a votação, aparece no portal de cada um.</div>';
       if (_ocAtual.precisa_votacao) {
         h += await ocRenderVotos(id);
+        _votosRenderizados = true;
         // Se já há maioria, avisa e destaca o botão de seguimento rápido
         if (window._ocPodeAprovar === true) {
           h += '<div style="background:rgba(34,229,132,.1);border:1px solid rgba(34,229,132,.35);border-radius:8px;padding:10px 12px;margin-top:10px;">';
@@ -9173,6 +9175,75 @@ async function gerirOcorrencia(id) {
       h += '</div>';
     }
   }
+
+  // 🗳️ REDE DE SEGURANÇA: o apuramento aparece SEMPRE que há votação aberta ou votos
+  // (antes só aparecia se houvesse orçamento registado ACIMA do limite legal —
+  //  votações abertas sem valor, ou de valor baixo, ficavam invisíveis ao administrador)
+  if (!_votosRenderizados) {
+    var _temVotos = false;
+    try {
+      var _vChk = await sb.from('ocorrencia_votos').select('fracao_id', { count:'exact', head:true }).eq('ocorrencia_id', id);
+      _temVotos = (_vChk.count || 0) > 0;
+    } catch(e){}
+    if (_ocAtual.precisa_votacao || _temVotos) {
+      h += '<div style="background:rgba(255,179,0,.06);border:1px solid rgba(255,179,0,.25);border-radius:10px;padding:14px;margin-bottom:12px;">';
+      h += '<div style="font-size:12px;font-weight:700;color:var(--amber);margin-bottom:6px;">🗳️ VOTAÇÃO DOS CONDÓMINOS</div>';
+      if (!_ocAtual.orcamento_valor) {
+        h += '<div style="font-size:11px;color:var(--t2);margin-bottom:8px;">Esta votação está a decorrer sem orçamento registado. Regista o valor acima para poder aprovar e lançar o custo.</div>';
+      }
+      h += await ocRenderVotos(id);
+      _votosRenderizados = true;
+      if (window._ocPodeAprovar === true) {
+        h += '<div style="background:rgba(34,229,132,.1);border:1px solid rgba(34,229,132,.35);border-radius:8px;padding:10px 12px;margin-top:10px;font-size:12px;font-weight:700;color:var(--green);">🎉 Esta votação já tem maioria!</div>';
+      }
+      h += '<div style="display:flex;gap:8px;margin-top:10px;">';
+      h += '<button class="btn-ghost" style="flex:1;font-size:11px;color:var(--green);border-color:rgba(34,229,132,.3);" onclick="ocAprovar()">👍 Aprovar</button>';
+      h += '<button class="btn-ghost" style="flex:1;font-size:11px;color:var(--red);border-color:rgba(255,68,68,.3);" onclick="ocRecusar()">👎 Recusar</button>';
+      h += '</div>';
+      h += '</div>';
+    }
+  }
+
+  // 📊 CONCURSO: ranking AO VIVO das propostas votadas pelos condóminos
+  // (antes o vencedor só era apurado ao carregar em Aprovar — o admin não via nada durante a votação)
+  try {
+    var vpLive = await sb.from('ocorrencia_votos').select('orcamento_id,fracao_id').eq('ocorrencia_id', id).not('orcamento_id','is',null);
+    var votosProps = vpLive.data || [];
+    if (votosProps.length) {
+      var obLive = await sb.from('orcamentos_obra').select('id,valor,parceiro_id').eq('ocorrencia_id', id);
+      var propsLive = obLive.data || [];
+      var nomesP = {};
+      var idsP = propsLive.map(function(p){ return p.parceiro_id; }).filter(Boolean);
+      if (idsP.length) {
+        var pnR = await sb.from('parceiros').select('id,nome').in('id', idsP);
+        (pnR.data||[]).forEach(function(p){ nomesP[p.id] = p.nome; });
+      }
+      var permProp = {}, nVotos = {};
+      votosProps.forEach(function(v){
+        var f = (fracoes||[]).find(function(x){ return x.id === v.fracao_id; });
+        var perm = f ? parseFloat(f.permilagem||0) : 0;
+        permProp[v.orcamento_id] = (permProp[v.orcamento_id]||0) + perm;
+        nVotos[v.orcamento_id] = (nVotos[v.orcamento_id]||0) + 1;
+      });
+      var permTotalP = (fracoes||[]).reduce(function(s,f){ return s + parseFloat(f.permilagem||0); }, 0) || 1000;
+      var ordenadas = propsLive.slice().sort(function(a,b){ return (permProp[b.id]||0) - (permProp[a.id]||0); });
+      h += '<div style="background:rgba(0,212,255,.05);border:1px solid rgba(0,212,255,.25);border-radius:10px;padding:14px;margin-bottom:12px;">';
+      h += '<div style="font-size:12px;font-weight:700;color:var(--cyan);margin-bottom:8px;">📊 ESCOLHA DOS CONDÓMINOS — ao vivo</div>';
+      ordenadas.forEach(function(p, i){
+        var perm = permProp[p.id] || 0;
+        var pct = permTotalP > 0 ? perm/permTotalP*100 : 0;
+        var lider = i === 0 && perm > 0;
+        h += '<div style="margin-bottom:9px;">';
+        h += '<div style="display:flex;justify-content:space-between;font-size:11.5px;">';
+        h += '<span>' + (lider ? '🏆 ' : '') + (nomesP[p.parceiro_id] || 'Proposta') + ' <span style="color:var(--t3);">' + (p.valor ? parseFloat(p.valor).toFixed(2) + '€' : 'sem valor') + '</span></span>';
+        h += '<strong style="color:' + (lider ? 'var(--green)' : 'var(--t2)') + ';">' + Math.round(perm) + '‰ · ' + (nVotos[p.id]||0) + ' voto(s)</strong></div>';
+        h += '<div style="height:6px;background:rgba(255,255,255,.07);border-radius:4px;overflow:hidden;margin-top:4px;"><div style="width:' + Math.min(100,pct) + '%;height:100%;background:' + (lider ? 'var(--green)' : 'var(--cyan)') + ';border-radius:4px;"></div></div>';
+        h += '</div>';
+      });
+      h += '<div style="font-size:10px;color:var(--t3);margin-top:6px;">Maioria necessária: mais de ' + Math.round(permTotalP/2) + '‰. Ao aprovar, a proposta mais votada é adjudicada automaticamente.</div>';
+      h += '</div>';
+    }
+  } catch(e) { console.error('ranking propostas:', e); }
 
   // 4. REPARAÇÃO / RESOLUÇÃO + CUSTO
   if (_ocAtual.estado === 'aprovada' || _ocAtual.estado === 'em_reparacao') {
