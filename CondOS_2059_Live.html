@@ -767,7 +767,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.22-0937</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.23-0839</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -1901,6 +1901,10 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
 
       <!-- DEFINIÇÕES -->
       <div class="page" id="page-definicoes">
+        <div class="panel" id="inbox-negocio" style="border:1px solid rgba(148,216,45,.28);margin-bottom:16px;">
+          <div class="ph"><span class="pt">📥 Contactos recebidos</span><span class="pm">candidaturas de empresas e prédios interessados (das páginas públicas)</span></div>
+          <div id="inbox-lista" style="padding:13px 16px;">A carregar…</div>
+        </div>
         <div class="sec-hdr"><span class="sec-t">Definições</span><button class="btn-primary" onclick="saveCondDef()"><i class="ti ti-check"></i>Guardar</button></div>
         <div class="panel" style="border:1px solid rgba(0,212,255,.25);">
           <div class="ph"><span class="pt">🧰 Manutenção &amp; Confiança</span><span class="pm">verificações do sistema e exportação dos teus dados</span></div>
@@ -14953,6 +14957,70 @@ async function apurarExigencia(exig) {
 
 
 
+
+// 🔗 Link do prestador — ele submete a proposta sem ter conta
+function copiarLinkPrestador(tok) {
+  var base = location.href.replace(/[^/]*$/, '');
+  var url = base + 'parceiro-proposta.html?t=' + tok;
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(url).then(function(){ toast('🔗 Link copiado — envia ao prestador','ok'); },
+      function(){ prompt('Copia o link para o prestador:', url); });
+  } else { prompt('Copia o link para o prestador:', url); }
+}
+
+// ✔ Aprovar a proposta submetida — curadoria antes de chegar aos condóminos
+async function aprovarOferta(id) {
+  if (!await confirmar('Aprovar esta proposta e publicá-la aos condóminos?\n\nSó depois de aprovada é que aparece no portal.', {titulo:'Aprovar proposta', tipo:'info', icon:'✔', okTexto:'Aprovar'})) return;
+  var up = await sb.from('ofertas').update({ aprovada_admin: true }).eq('id', id);
+  if (up.error) { toast('Erro: ' + up.error.message,'err'); return; }
+  toast('✔ Proposta aprovada e publicada','ok');
+  carregarOfertasAdmin();
+}
+
+// 📥 INBOX DO NEGÓCIO — candidaturas de empresas e prédios interessados
+async function carregarInbox() {
+  var el = document.getElementById('inbox-lista');
+  if (!el) return;
+  try {
+    var [cR, lR] = await Promise.all([
+      sb.from('parceiros_candidaturas').select('*').order('criado_em', {ascending:false}).limit(10),
+      sb.from('leads_condominios').select('*').order('criado_em', {ascending:false}).limit(10)
+    ]);
+    var cands = cR.data||[], leads = lR.data||[];
+    var novas = cands.filter(function(x){ return x.estado === 'nova'; }).length;
+    var novos = leads.filter(function(x){ return x.estado === 'novo'; }).length;
+    var h = '';
+    h += '<div style="display:flex;gap:14px;margin-bottom:12px;flex-wrap:wrap;">';
+    h += '<div><span style="font-size:20px;font-weight:800;color:#94d82d;font-family:var(--mono);">' + cands.length + '</span> <span style="font-size:11px;color:var(--t3);">candidatura(s) de empresas' + (novas ? ' · ' + novas + ' por ver' : '') + '</span></div>';
+    h += '<div><span style="font-size:20px;font-weight:800;color:var(--cyan);font-family:var(--mono);">' + leads.length + '</span> <span style="font-size:11px;color:var(--t3);">prédio(s) interessado(s)' + (novos ? ' · ' + novos + ' por ver' : '') + '</span></div>';
+    h += '</div>';
+    if (!cands.length && !leads.length) {
+      h += '<div style="font-size:11.5px;color:var(--t3);">Ainda sem contactos. Partilha a landing (index.html) com prédios e a página de empresas (empresas.html) com prestadores.</div>';
+    }
+    if (leads.length) {
+      h += '<div style="font-size:11px;font-weight:700;color:var(--t2);margin:10px 0 6px;">🏢 Prédios interessados</div>';
+      leads.forEach(function(l){
+        h += '<div style="background:var(--s1);border:1px solid var(--b1);border-radius:9px;padding:9px 11px;margin-bottom:6px;font-size:11.5px;">';
+        h += '<strong>' + (l.nome_predio || l.contacto_nome || l.email) + '</strong> <span style="font-size:10px;color:var(--t3);">· ' + (l.papel||'') + (l.n_fracoes ? ' · ' + l.n_fracoes + ' frações' : '') + ' · ' + new Date(l.criado_em).toLocaleDateString('pt-PT') + '</span>';
+        h += '<div style="color:var(--t2);margin-top:3px;">' + (l.email||'') + (l.telefone ? ' · ' + l.telefone : '') + '</div>';
+        if (l.mensagem) h += '<div style="color:var(--t3);font-size:10.5px;margin-top:3px;font-style:italic;">"' + l.mensagem.substring(0,110) + '"</div>';
+        h += '</div>';
+      });
+    }
+    if (cands.length) {
+      h += '<div style="font-size:11px;font-weight:700;color:var(--t2);margin:12px 0 6px;">💼 Empresas candidatas</div>';
+      cands.forEach(function(x){
+        h += '<div style="background:var(--s1);border:1px solid var(--b1);border-radius:9px;padding:9px 11px;margin-bottom:6px;font-size:11.5px;">';
+        h += '<strong>' + (x.empresa||'') + '</strong> <span style="font-size:10px;color:var(--t3);">· ' + (x.categoria||'sem categoria') + ' · ' + new Date(x.criado_em).toLocaleDateString('pt-PT') + '</span>';
+        h += '<div style="color:var(--t2);margin-top:3px;">' + (x.contacto_nome ? x.contacto_nome + ' · ' : '') + (x.email||'') + (x.telefone ? ' · ' + x.telefone : '') + '</div>';
+        if (x.mensagem) h += '<div style="color:var(--t3);font-size:10.5px;margin-top:3px;font-style:italic;">"' + x.mensagem.substring(0,110) + '"</div>';
+        h += '</div>';
+      });
+    }
+    el.innerHTML = h;
+  } catch(e) { el.innerHTML = '<div style="font-size:11px;color:var(--t3);">Corre o sql_parceiros_externos.sql para ativar o inbox.</div>'; }
+}
+
 // 💼 OFERTAS COLETIVAS — lado do administrador
 function novaOferta() {
   var h = '<div style="font-size:11px;color:var(--t2);line-height:1.5;margin-bottom:12px;">Publica uma proposta de uma empresa credenciada. Os condóminos aderem voluntariamente no portal — nas ofertas individuais, cada adesão exige <strong>consentimento explícito</strong> de partilha de dados (RGPD).</div>';
@@ -15010,9 +15078,18 @@ async function carregarOfertasAdmin() {
       h += '<div><span style="font-size:12.5px;font-weight:700;">' + (o.titulo||'') + '</span> <span style="font-size:10px;color:var(--t3);">· ' + (o.prestador_nome||'') + ' · ' + (o.tipo==='predio'?'do prédio':'individual') + '</span></div>';
       h += '<span class="pill ' + (ativa?'ok':'') + '">' + (ativa?'ativa':'fechada') + '</span></div>';
       h += '<div style="font-size:11px;color:var(--t2);margin-top:5px;">' + ints.length + ' interessado(s)' + (o.meta_aderentes?' · meta: '+o.meta_aderentes:'') + '</div>';
-      if (ativa && ints.length) {
-        h += '<button class="tb-btn" style="font-size:10.5px;margin-top:8px;" onclick="fecharOferta(\'' + o.id + '\')">📤 Fechar e enviar interessados ao prestador</button>';
+      if (o.submetida_por_prestador && o.aprovada_admin === false) {
+        h += '<div style="background:rgba(255,179,0,.08);border:1px solid rgba(255,179,0,.3);border-radius:8px;padding:9px 11px;margin-top:8px;font-size:11px;color:var(--t2);">⏳ <strong style="color:var(--amber);">Proposta submetida pelo prestador — por aprovar.</strong> Os condóminos ainda NÃO a veem.' + (o.desconto_texto ? '<br>Desconto: ' + o.desconto_texto : '') + (parseFloat(o.contrib_fundo||0) > 0 ? '<br>🛡️ Contribuição para o fundo: ' + parseFloat(o.contrib_fundo).toFixed(2) + '€ por contrato' : '') + '</div>';
+        h += '<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">';
+        h += '<button class="tb-btn" style="font-size:10.5px;color:var(--green);border-color:rgba(34,229,132,.4);" onclick="aprovarOferta(\'' + o.id + '\')">✔ Aprovar e publicar</button>';
+        h += '</div>';
       }
+      h += '<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">';
+      if (o.token_prestador) h += '<button class="tb-btn" style="font-size:10.5px;" onclick="copiarLinkPrestador(\'' + o.token_prestador + '\')">🔗 Link para o prestador submeter</button>';
+      if (ativa && ints.length) {
+        h += '<button class="tb-btn" style="font-size:10.5px;" onclick="fecharOferta(\'' + o.id + '\')">📤 Fechar e enviar interessados</button>';
+      }
+      h += '</div>';
       h += '</div>';
     });
     el.innerHTML = h;
@@ -19644,6 +19721,7 @@ function nav(p) {
   if(p==='dashboard'){ try { carregarScoreAdmin(); } catch(e){} }
   if(p==='edificio'){ try { carregarRadar(); } catch(e){} }
   if(p==='parceiros'){ try { carregarOfertasAdmin(); } catch(e){} }
+  if(p==='definicoes'){ try { carregarInbox(); } catch(e){} }
   if(p==='financeiro'){ try { carregarBalanco(); } catch(e){} }
   if(p==='condominos') loadCondominos();
   if(p==='mensagens') loadMensagens();

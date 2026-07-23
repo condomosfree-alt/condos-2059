@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#060A14">
+<title>Cond.OS para Empresas — chegue a prédios inteiros</title>
+<meta name="description" content="Apresente serviços a condomínios inteiros com adesão em grupo. Sem comissões escondidas: o benefício reverte para o prédio e converte melhor.">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{--bg:#060A14;--panel:#0D1526;--panel2:#131D33;--ink:#E9F1FF;--dim:#8496B4;--faint:#44536F;--cyan:#00D4FF;--gold:#F5B942;--green:#22E584;--red:#FF5470;--lime:#94d82d;}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,'Segoe UI',sans-serif;line-height:1.6;overflow-x:hidden;}
+  .wrap{max-width:1000px;margin:0 auto;padding:0 22px;}
+  a{color:inherit;}
+  .btn{display:inline-block;border-radius:11px;padding:13px 24px;font-size:14.5px;font-weight:800;cursor:pointer;text-decoration:none;transition:.15s;border:none;}
+  .btn-cyan{background:var(--cyan);color:#02121d;}
+  .btn-lime{background:var(--lime);color:#0a1a05;}
+  .btn-ghost{background:transparent;border:1px solid #22314e;color:var(--ink);}
+  .btn-sm{padding:8px 15px;font-size:12.5px;}
+  .btn:hover{transform:translateY(-2px);}
+
+  nav{display:flex;justify-content:space-between;align-items:center;padding:20px 22px;max-width:1000px;margin:0 auto;}
+  .logo{font-size:21px;font-weight:900;letter-spacing:-.5px;}
+  .logo span{color:var(--cyan);}
+  .nav-r{display:flex;gap:8px;}
+
+  .hero{text-align:center;padding:56px 22px 46px;position:relative;}
+  .hero::before{content:'';position:absolute;top:-80px;left:50%;transform:translateX(-50%);width:600px;height:380px;background:radial-gradient(ellipse,rgba(148,216,45,.1),transparent 70%);pointer-events:none;}
+  .tag{display:inline-block;background:rgba(148,216,45,.1);border:1px solid rgba(148,216,45,.3);color:var(--lime);font-size:12px;font-weight:700;padding:6px 14px;border-radius:20px;margin-bottom:20px;}
+  h1{font-size:clamp(29px,5vw,46px);font-weight:900;letter-spacing:-1.4px;line-height:1.12;max-width:740px;margin:0 auto 18px;}
+  h1 .g{background:linear-gradient(120deg,var(--lime),var(--cyan));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;}
+  .lead{font-size:clamp(15px,2.2vw,18px);color:var(--dim);max-width:600px;margin:0 auto 30px;}
+
+  section{padding:48px 0;}
+  .st{font-size:clamp(23px,4vw,32px);font-weight:900;letter-spacing:-1px;text-align:center;margin-bottom:10px;}
+  .ss{font-size:15px;color:var(--dim);text-align:center;max-width:580px;margin:0 auto 38px;}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:18px;}
+  .c{background:var(--panel);border:1px solid var(--panel2);border-radius:16px;padding:24px;}
+  .c-ic{font-size:28px;margin-bottom:12px;}
+  .c-t{font-size:16px;font-weight:800;margin-bottom:7px;}
+  .c-d{font-size:13.5px;color:var(--dim);line-height:1.55;}
+
+  .modelo{background:linear-gradient(135deg,var(--panel),rgba(148,216,45,.05));border:1px solid rgba(148,216,45,.25);border-radius:20px;padding:40px 30px;text-align:center;}
+  .modelo h2{font-size:clamp(22px,3.5vw,30px);font-weight:900;letter-spacing:-.8px;margin-bottom:14px;}
+  .modelo h2 .g{color:var(--lime);}
+  .modelo p{font-size:15px;color:var(--dim);max-width:640px;margin:0 auto 8px;}
+  .passos{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px;max-width:720px;margin:30px auto 0;}
+  .passo{background:var(--panel2);border:1px solid #1c2a44;border-radius:12px;padding:18px;text-align:left;}
+  .passo-n{width:26px;height:26px;border-radius:50%;background:var(--lime);color:#0a1a05;font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;margin-bottom:10px;}
+  .passo-t{font-size:13.5px;color:var(--dim);line-height:1.5;}
+
+  .categorias{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:8px;}
+  .cat{background:var(--panel);border:1px solid var(--panel2);border-radius:20px;padding:9px 18px;font-size:13px;color:var(--dim);}
+
+  .form-card{background:var(--panel);border:1px solid var(--panel2);border-radius:20px;padding:34px;max-width:520px;margin:0 auto;}
+  .fl{margin-top:15px;}
+  .fl label{display:block;font-size:12px;color:var(--dim);margin-bottom:6px;font-weight:600;}
+  .fi{width:100%;background:var(--panel2);border:1px solid #1e2c48;border-radius:10px;padding:12px 14px;color:var(--ink);font-size:14.5px;font-family:inherit;}
+  .fi:focus{outline:none;border-color:var(--lime);}
+  textarea.fi{resize:vertical;min-height:75px;}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  .btn-enviar{width:100%;margin-top:22px;background:var(--lime);border:none;color:#0a1a05;border-radius:12px;padding:15px;font-size:15px;font-weight:800;cursor:pointer;}
+  .btn-enviar:disabled{opacity:.5;}
+  .ok-msg{display:none;text-align:center;padding:30px;}
+  .ok-msg .ic{font-size:46px;margin-bottom:12px;}
+  .erro{color:var(--red);font-size:13px;margin-top:10px;text-align:center;display:none;}
+
+  footer{border-top:1px solid var(--panel2);padding:34px 22px;text-align:center;color:var(--faint);font-size:12.5px;margin-top:30px;}
+  .footer-links a{color:var(--dim);text-decoration:none;margin:0 10px;font-size:12px;}
+  @media(max-width:520px){.row2{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="logo">COND<span>.OS</span></div>
+  <div class="nav-r">
+    <a class="btn btn-ghost btn-sm" href="index.html">Para condomínios</a>
+    <a class="btn btn-lime btn-sm" href="#candidatar">Ser parceiro</a>
+  </div>
+</nav>
+
+<div class="hero">
+  <div class="wrap">
+    <div class="tag">💼 Cond.OS para empresas</div>
+    <h1>Chegue a <span class="g">prédios inteiros</span>, não a um cliente de cada vez.</h1>
+    <p class="lead">O Cond.OS liga os seus serviços a condomínios que decidem em grupo. Uma proposta, dezenas de frações a aderir ao mesmo tempo — com um modelo de confiança que converte melhor do que a publicidade tradicional.</p>
+    <a href="#candidatar" class="btn btn-lime">Quero apresentar propostas</a>
+  </div>
+</div>
+
+<section>
+  <div class="wrap">
+    <div class="st">Porque é diferente de anunciar</div>
+    <div class="ss">Não vendemos banners. Ligamos a sua oferta ao momento certo, à pessoa certa, com a decisão já a acontecer.</div>
+    <div class="grid">
+      <div class="c"><div class="c-ic">🎯</div><div class="c-t">Adesão em grupo</div><div class="c-d">Uma proposta chega a todas as frações de um prédio. Se a meta de aderentes for atingida, fecha vários contratos de uma vez.</div></div>
+      <div class="c"><div class="c-ic">🧠</div><div class="c-t">Momento certo, dados reais</div><div class="c-d">O sistema deteta quando um prédio precisa: seguro a renovar, elevador sem contrato, energia acima da média. A sua oferta aparece quando faz sentido.</div></div>
+      <div class="c"><div class="c-ic">✔</div><div class="c-t">Credibilidade emprestada</div><div class="c-d">A administração aprova cada proposta antes de a publicar. Os condóminos veem uma oferta curada, não spam — e confiam mais.</div></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="modelo">
+      <h2>O modelo que <span class="g">converte melhor</span>: 0€ de comissão</h2>
+      <p>Ao contrário dos intermediários clássicos, o Cond.OS <strong>não fica com comissão de angariação</strong>. Pedimos que esse valor reverta para o condomínio — em desconto direto e/ou contribuição para o fundo de reserva do prédio.</p>
+      <p style="color:var(--lime);font-weight:600;margin-top:14px;">Resultado: os condóminos veem que ganham. E quando veem que ganham, aderem em grupo — a sua taxa de conversão sobe muito acima do banner que ninguém clica.</p>
+      <div class="passos">
+        <div class="passo"><div class="passo-n">1</div><div class="passo-t">Candidata-se e apresenta a empresa. Validamos a credibilidade.</div></div>
+        <div class="passo"><div class="passo-n">2</div><div class="passo-t">Recebe um link para submeter propostas a condomínios interessados.</div></div>
+        <div class="passo"><div class="passo-n">3</div><div class="passo-t">A administração aprova e publica aos condóminos, com a meta de aderentes.</div></div>
+        <div class="passo"><div class="passo-n">4</div><div class="passo-t">Recebe os interessados (com consentimento) e fecha vários contratos.</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="st">Serviços que encaixam</div>
+    <div class="ss">Se o seu serviço faz sentido para um prédio inteiro, tem lugar aqui.</div>
+    <div class="categorias">
+      <div class="cat">🛡️ Seguros do edifício e frações</div>
+      <div class="cat">⚡ Energia e eletricidade</div>
+      <div class="cat">🛗 Manutenção de elevadores</div>
+      <div class="cat">🧹 Limpeza</div>
+      <div class="cat">📡 Telecomunicações</div>
+      <div class="cat">☀️ Painéis solares</div>
+      <div class="cat">🔌 Carregadores elétricos</div>
+      <div class="cat">🔥 Inspeção de gás</div>
+      <div class="cat">🪟 Janelas e eficiência</div>
+      <div class="cat">🐛 Desinfestação</div>
+    </div>
+  </div>
+</section>
+
+<section id="candidatar">
+  <div class="wrap">
+    <div class="st">Candidate a sua empresa</div>
+    <div class="ss">Deixe os dados. Analisamos a credibilidade e, se fizer sentido, damos-lhe acesso para apresentar propostas a condomínios.</div>
+    <div class="form-card">
+      <div id="form-campos">
+        <div class="fl"><label>Nome da empresa *</label><input class="fi" id="e-empresa" placeholder="Ex: Seguros Silva, Lda"></div>
+        <div class="row2">
+          <div class="fl"><label>Pessoa de contacto</label><input class="fi" id="e-contacto" placeholder="Nome"></div>
+          <div class="fl"><label>Categoria</label>
+            <select class="fi" id="e-categoria">
+              <option value="">Selecionar…</option>
+              <option value="seguros">Seguros</option>
+              <option value="energia">Energia / eletricidade</option>
+              <option value="elevadores">Elevadores</option>
+              <option value="limpeza">Limpeza</option>
+              <option value="telecom">Telecomunicações</option>
+              <option value="solar">Painéis solares</option>
+              <option value="ev">Carregadores elétricos</option>
+              <option value="gas">Gás / caldeiras</option>
+              <option value="outro">Outro</option>
+            </select>
+          </div>
+        </div>
+        <div class="row2">
+          <div class="fl"><label>Email *</label><input class="fi" id="e-email" type="email" placeholder="email@empresa.pt"></div>
+          <div class="fl"><label>Telefone</label><input class="fi" id="e-tel" placeholder="2xx xxx xxx"></div>
+        </div>
+        <div class="fl"><label>NIF (opcional)</label><input class="fi" id="e-nif" placeholder="Contribuinte da empresa"></div>
+        <div class="fl"><label>Sobre a proposta (opcional)</label><textarea class="fi" id="e-msg" placeholder="Que serviços quer apresentar aos condomínios?"></textarea></div>
+        <button class="btn-enviar" id="e-btn" onclick="candidatar()">📤 Enviar candidatura</button>
+        <div id="e-erro" class="erro"></div>
+        <div style="font-size:11.5px;color:var(--faint);text-align:center;margin-top:14px;">Analisamos cada candidatura. Só publicamos empresas credenciadas e de confiança.</div>
+      </div>
+      <div id="e-sucesso" class="ok-msg">
+        <div class="ic">✅</div>
+        <div style="font-size:19px;font-weight:800;margin-bottom:8px;">Candidatura recebida!</div>
+        <div style="font-size:14px;color:var(--dim);">Vamos analisar e entrar em contacto. Obrigado pelo interesse em ser parceiro Cond.OS.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="logo" style="font-size:18px;">COND<span>.OS</span></div>
+  <div style="margin-top:8px;">Gestão de condomínios com prova · Portugal</div>
+  <div class="footer-links" style="margin-top:10px;">
+    <a href="index.html">Para condomínios</a>
+    <a href="#candidatar">Ser parceiro</a>
+  </div>
+</footer>
+
+<script>
+const SB_URL = 'https://iopkxoabszhzjimjltir.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlvcGt4b2Fic3poemppbWpsdGlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEyNzc5MjQsImV4cCI6MjA5Njg1MzkyNH0.PwopXnx0v7kSXUeua1Y3fI3xPDIS8S62SzGBfwPwLSA';
+const sb = supabase.createClient(SB_URL, SB_KEY);
+
+async function candidatar() {
+  const empresa = (document.getElementById('e-empresa').value||'').trim();
+  const email = (document.getElementById('e-email').value||'').trim();
+  if (empresa.length < 2) { erroE('Preenche o nome da empresa.'); return; }
+  if (!email.includes('@') || !email.includes('.')) { erroE('Preenche um email válido.'); return; }
+  const btn = document.getElementById('e-btn');
+  btn.disabled = true; btn.textContent = 'A enviar…';
+  try {
+    const r = await sb.rpc('candidatar_parceiro', {
+      p_empresa: empresa,
+      p_contacto: (document.getElementById('e-contacto').value||'').trim(),
+      p_email: email,
+      p_telefone: (document.getElementById('e-tel').value||'').trim(),
+      p_categoria: document.getElementById('e-categoria').value,
+      p_nif: (document.getElementById('e-nif').value||'').trim(),
+      p_mensagem: (document.getElementById('e-msg').value||'').trim()
+    });
+    if (r.error || r.data === false) { erroE('Não foi possível enviar. Tenta novamente.'); btn.disabled = false; btn.textContent = '📤 Enviar candidatura'; return; }
+    document.getElementById('form-campos').style.display = 'none';
+    document.getElementById('e-sucesso').style.display = 'block';
+  } catch(e) { erroE('Erro de ligação. Tenta novamente.'); btn.disabled = false; btn.textContent = '📤 Enviar candidatura'; }
+}
+function erroE(m){ const e = document.getElementById('e-erro'); e.textContent = m; e.style.display = 'block'; }
+</script>
+</body>
+</html>

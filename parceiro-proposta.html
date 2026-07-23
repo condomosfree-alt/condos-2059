@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Submeter proposta · Cond.OS</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{--bg:#0a1220;--card:#111d31;--card2:#16233a;--b:#233350;--b2:#2d4062;--text:#e8eaf0;--t2:#9aa5b8;--t3:#647087;--cyan:#00d4ff;--green:#22e584;--red:#ff5470;--amber:#ffb300;--lime:#94d82d;}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,'Segoe UI',sans-serif;line-height:1.5;min-height:100vh;padding:20px;}
+  .wrap{max-width:560px;margin:0 auto;}
+  .topo{text-align:center;padding:26px 0 20px;}
+  .logo{font-size:22px;font-weight:900;letter-spacing:-.5px;}
+  .logo span{color:var(--cyan);}
+  .sub{font-size:12px;color:var(--t3);margin-top:4px;}
+  .card{background:var(--card);border:1px solid var(--b);border-radius:16px;padding:22px;margin-bottom:16px;}
+  h1{font-size:18px;font-weight:800;margin-bottom:6px;}
+  .muted{font-size:12.5px;color:var(--t2);line-height:1.6;}
+  .fl{margin-top:14px;}
+  .fl label{display:block;font-size:11.5px;color:var(--t2);margin-bottom:5px;font-weight:600;}
+  .fi{width:100%;background:var(--card2);border:1px solid var(--b);border-radius:10px;padding:11px 13px;color:var(--text);font-size:14px;font-family:inherit;}
+  .fi:focus{outline:none;border-color:var(--cyan);}
+  textarea.fi{resize:vertical;min-height:70px;}
+  .btn{width:100%;margin-top:20px;background:var(--lime);border:none;color:#0a1a05;border-radius:11px;padding:14px;font-size:15px;font-weight:800;cursor:pointer;}
+  .btn:disabled{opacity:.5;}
+  .destaque{background:rgba(148,216,45,.08);border:1px solid rgba(148,216,45,.3);border-radius:11px;padding:13px 15px;margin-top:16px;font-size:12px;color:var(--t2);line-height:1.6;}
+  .destaque strong{color:var(--lime);}
+  .ok-box{text-align:center;padding:30px 20px;}
+  .ok-ic{font-size:48px;margin-bottom:12px;}
+  .erro{color:var(--red);font-size:13px;margin-top:10px;text-align:center;}
+  .pill{display:inline-block;background:var(--card2);border:1px solid var(--b);border-radius:6px;padding:3px 9px;font-size:11px;color:var(--t2);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topo">
+    <div class="logo">COND<span>.OS</span></div>
+    <div class="sub">Gestão de condomínios com prova</div>
+  </div>
+
+  <div id="loading" class="card"><div class="muted" style="text-align:center;padding:20px;">A carregar…</div></div>
+
+  <div id="conteudo" style="display:none;">
+    <div class="card">
+      <h1 id="titulo">Submeter proposta</h1>
+      <div class="muted" id="contexto"></div>
+
+      <div class="fl"><label>Nome da empresa / prestador *</label><input class="fi" id="p-nome" placeholder="Ex: Seguros Silva, Lda"></div>
+      <div class="fl"><label>Descrição da proposta *</label><textarea class="fi" id="p-desc" placeholder="O que inclui, condições, cobertura…"></textarea></div>
+      <div class="fl"><label>Benefício coletivo (o gancho)</label><input class="fi" id="p-beneficio" placeholder="Ex: -20% se 10 ou mais frações aderirem"></div>
+      <div class="fl"><label>Desconto negociado para os aderentes</label><input class="fi" id="p-desconto" placeholder="Ex: 15% sobre o preço de tabela"></div>
+      <div class="fl"><label>Contribuição para o fundo de reserva do prédio (€)</label><input class="fi" id="p-contrib" type="number" step="0.01" placeholder="Ex: 5,00 por contrato fechado"></div>
+
+      <div class="destaque">
+        💡 <strong>O modelo Cond.OS é diferente.</strong> Não cobramos comissão de intermediação. Em troca, pedimos que o benefício reverta para o condomínio — em desconto direto e/ou contribuição para o fundo de reserva. Assim converte mais: os condóminos veem que ganham, e aderem em grupo.
+      </div>
+
+      <button class="btn" id="btn-enviar" onclick="enviar()">📤 Submeter proposta para aprovação</button>
+      <div id="erro" class="erro" style="display:none;"></div>
+      <div class="muted" style="margin-top:14px;font-size:11px;text-align:center;">A proposta é revista pela administração do condomínio antes de ser publicada aos condóminos.</div>
+    </div>
+  </div>
+
+  <div id="sucesso" style="display:none;">
+    <div class="card ok-box">
+      <div class="ok-ic">✅</div>
+      <h1>Proposta submetida!</h1>
+      <div class="muted" style="margin-top:8px;">A administração do condomínio vai rever a tua proposta e, se aprovada, publicá-la aos condóminos no portal. Serás contactado se houver interessados.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const SB_URL = 'https://iopkxoabszhzjimjltir.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlvcGt4b2Fic3poemppbWpsdGlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEyNzc5MjQsImV4cCI6MjA5Njg1MzkyNH0.PwopXnx0v7kSXUeua1Y3fI3xPDIS8S62SzGBfwPwLSA';
+const sb = supabase.createClient(SB_URL, SB_KEY);
+const token = new URLSearchParams(location.search).get('t');
+
+async function iniciar() {
+  if (!token) { falhar('Link inválido — falta o código de acesso.'); return; }
+  try {
+    const r = await sb.rpc('prestador_oferta_info', { p_token: token });
+    if (r.error || !r.data || !r.data.length) { falhar('Não encontrámos esta proposta. O link pode ter expirado.'); return; }
+    const o = r.data[0];
+    document.getElementById('titulo').textContent = o.titulo || 'Submeter proposta';
+    document.getElementById('contexto').innerHTML = 'Condomínio: <span class="pill">' + escapar(o.condominio_nome || '') + '</span>' +
+      (o.n_interessados > 0 ? ' · <span class="pill">' + o.n_interessados + ' já interessado(s)</span>' : '');
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('conteudo').style.display = 'block';
+  } catch(e) { falhar('Erro de ligação. Tenta novamente.'); }
+}
+
+async function enviar() {
+  const nome = val('p-nome'), desc = val('p-desc');
+  if (nome.length < 2 || desc.length < 5) { erro('Preenche o nome da empresa e a descrição.'); return; }
+  const btn = document.getElementById('btn-enviar');
+  btn.disabled = true; btn.textContent = 'A enviar…';
+  try {
+    const r = await sb.rpc('prestador_submeter', {
+      p_token: token, p_prestador: nome, p_descricao: desc,
+      p_beneficio: val('p-beneficio'), p_desconto: val('p-desconto'),
+      p_contrib: parseFloat(val('p-contrib')) || 0
+    });
+    if (r.error || r.data === false) { erro('Não foi possível submeter. Verifica o link.'); btn.disabled = false; btn.textContent = '📤 Submeter proposta para aprovação'; return; }
+    document.getElementById('conteudo').style.display = 'none';
+    document.getElementById('sucesso').style.display = 'block';
+  } catch(e) { erro('Erro de ligação.'); btn.disabled = false; btn.textContent = '📤 Submeter proposta para aprovação'; }
+}
+
+function val(id){ return (document.getElementById(id).value || '').trim(); }
+function escapar(s){ return (s||'').replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c])); }
+function erro(m){ const e = document.getElementById('erro'); e.textContent = m; e.style.display = 'block'; }
+function falhar(m){
+  document.getElementById('loading').innerHTML = '<div class="erro" style="display:block;padding:20px;">' + m + '</div>';
+}
+iniciar();
+</script>
+</body>
+</html>

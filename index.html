@@ -164,6 +164,7 @@ footer{border-top:1px solid var(--line);padding:30px 0;font-family:var(--mono);f
 .rv{opacity:0;transform:translateY(22px);transition:opacity .7s ease,transform .7s ease}
 .rv.on{opacity:1;transform:none}
 </style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 
@@ -176,6 +177,7 @@ footer{border-top:1px solid var(--line);padding:30px 0;font-family:var(--mono);f
       <a href="#modulos">Módulos</a>
       <a href="#quem">Para quem</a>
     </nav>
+    <a class="btn btn-ghost btn-sm" href="empresas.html">Para empresas</a>
     <a class="btn btn-ghost btn-sm" href="CondOS_2059_Live.html">Entrar no sistema</a>
   </div>
 </header>
@@ -326,8 +328,89 @@ footer{border-top:1px solid var(--line);padding:30px 0;font-family:var(--mono);f
 <div class="final wrap">
   <h2 class="rv">O seu condomínio merece <em>um sistema</em>,<br>não uma pasta de papéis.</h2>
   <p class="rv">Abra o Cond.OS no navegador e veja o ciclo completo a funcionar — das quotas à prova documental.</p>
-  <div class="rv"><a class="btn btn-cyan" href="CondOS_2059_Live.html">Entrar no Cond.OS</a></div>
+  <div class="rv" style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;"><a class="btn btn-cyan" href="#comecar">Quero para o meu prédio</a><a class="btn btn-ghost" href="CondOS_2059_Live.html">Ver o sistema</a></div>
 </div>
+
+
+  <!-- 📋 Captação de leads -->
+  <style>
+    #comecar{padding:64px 0;}
+    .lead-form{background:var(--panel);border:1px solid var(--panel2);border-radius:20px;padding:34px;max-width:520px;margin:0 auto;}
+    .lead-form .fl{margin-top:15px;}
+    .lead-form label{display:block;font-size:12px;color:var(--dim);margin-bottom:6px;font-weight:600;}
+    .lead-form .fi{width:100%;background:var(--panel2);border:1px solid #1e2c48;border-radius:10px;padding:12px 14px;color:var(--ink);font-size:14.5px;font-family:inherit;}
+    .lead-form .fi:focus{outline:none;border-color:var(--cyan);}
+    .lead-form textarea.fi{resize:vertical;min-height:72px;}
+    .lead-row2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+    .lead-btn{width:100%;margin-top:22px;background:var(--cyan);border:none;color:#02121d;border-radius:12px;padding:15px;font-size:15px;font-weight:800;cursor:pointer;}
+    .lead-btn:disabled{opacity:.5;}
+    .lead-ok{display:none;text-align:center;padding:28px;}
+    .lead-ok .ic{font-size:44px;margin-bottom:12px;}
+    .lead-erro{color:var(--red);font-size:13px;margin-top:10px;text-align:center;display:none;}
+    @media(max-width:520px){.lead-row2{grid-template-columns:1fr;}}
+  </style>
+  <section id="comecar" class="wrap">
+    <h2 style="font-size:clamp(24px,4vw,32px);font-weight:900;text-align:center;letter-spacing:-1px;margin-bottom:10px;">Vamos começar</h2>
+    <p style="font-size:15px;color:var(--dim);text-align:center;max-width:540px;margin:0 auto 34px;">Deixa o teu contacto e ajudamos a pôr o teu prédio a funcionar — sejas o administrador, um condómino curioso, ou uma empresa de gestão.</p>
+    <div class="lead-form">
+      <div id="lead-campos">
+        <div class="fl"><label>És…</label>
+          <select class="fi" id="l-papel">
+            <option value="condomino">Um condómino que quer isto no prédio</option>
+            <option value="administrador">Administrador / síndico</option>
+            <option value="empresa_gestao">Empresa de gestão de condomínios</option>
+          </select>
+        </div>
+        <div class="lead-row2">
+          <div class="fl"><label>O teu nome</label><input class="fi" id="l-nome" placeholder="Nome"></div>
+          <div class="fl"><label>Nome do prédio (opcional)</label><input class="fi" id="l-predio" placeholder="Ex: Solar das Palmeiras"></div>
+        </div>
+        <div class="lead-row2">
+          <div class="fl"><label>Email *</label><input class="fi" id="l-email" type="email" placeholder="email@exemplo.pt"></div>
+          <div class="fl"><label>Telefone (opcional)</label><input class="fi" id="l-tel" placeholder="9xx xxx xxx"></div>
+        </div>
+        <div class="fl"><label>Nº de frações (se souberes)</label><input class="fi" id="l-fracoes" type="number" placeholder="Ex: 48"></div>
+        <div class="fl"><label>Mensagem (opcional)</label><textarea class="fi" id="l-msg" placeholder="Conta-nos o que procuras…"></textarea></div>
+        <button class="lead-btn" id="l-btn" onclick="enviarLead()">Enviar e ser contactado</button>
+        <div id="l-erro" class="lead-erro"></div>
+        <div style="font-size:11.5px;color:var(--faint);text-align:center;margin-top:14px;">Os teus dados servem apenas para te contactarmos sobre o Cond.OS. Nunca os partilhamos.</div>
+      </div>
+      <div id="lead-sucesso" class="lead-ok">
+        <div class="ic">✅</div>
+        <div style="font-size:19px;font-weight:800;margin-bottom:8px;">Recebido!</div>
+        <div style="font-size:14px;color:var(--dim);">Entramos em contacto em breve. Obrigado pelo interesse no Cond.OS.</div>
+      </div>
+    </div>
+  </section>
+
+  <script>
+  (function(){
+    const _SB_URL = 'https://iopkxoabszhzjimjltir.supabase.co';
+    const _SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlvcGt4b2Fic3poemppbWpsdGlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEyNzc5MjQsImV4cCI6MjA5Njg1MzkyNH0.PwopXnx0v7kSXUeua1Y3fI3xPDIS8S62SzGBfwPwLSA';
+    window._sbLead = supabase.createClient(_SB_URL, _SB_KEY);
+  })();
+  async function enviarLead() {
+    const email = (document.getElementById('l-email').value || '').trim();
+    if (!email.includes('@') || !email.includes('.')) { _erroLead('Preenche um email válido.'); return; }
+    const btn = document.getElementById('l-btn');
+    btn.disabled = true; btn.textContent = 'A enviar…';
+    try {
+      const r = await window._sbLead.rpc('registar_lead', {
+        p_predio: (document.getElementById('l-predio').value||'').trim(),
+        p_contacto: (document.getElementById('l-nome').value||'').trim(),
+        p_email: email,
+        p_telefone: (document.getElementById('l-tel').value||'').trim(),
+        p_fracoes: parseInt(document.getElementById('l-fracoes').value) || null,
+        p_papel: document.getElementById('l-papel').value,
+        p_mensagem: (document.getElementById('l-msg').value||'').trim()
+      });
+      if (r.error || r.data === false) { _erroLead('Não foi possível enviar. Tenta novamente.'); btn.disabled = false; btn.textContent = 'Enviar e ser contactado'; return; }
+      document.getElementById('lead-campos').style.display = 'none';
+      document.getElementById('lead-sucesso').style.display = 'block';
+    } catch(e) { _erroLead('Erro de ligação. Tenta novamente.'); btn.disabled = false; btn.textContent = 'Enviar e ser contactado'; }
+  }
+  function _erroLead(m){ const e = document.getElementById('l-erro'); e.textContent = m; e.style.display = 'block'; }
+  </script>
 
 <footer class="wrap">
   <span>COND.OS 2059 · gestão de condomínios</span>

@@ -2280,6 +2280,8 @@ async function carregarOfertas() {
       h += '<div style="font-size:13px;font-weight:700;">' + escapar(o.titulo||'') + '</div>';
       h += '<div style="font-size:10.5px;color:var(--t3);margin-top:2px;">' + escapar(o.prestador_nome||'') + (o.fecha_em ? ' · até ' + new Date(o.fecha_em).toLocaleDateString('pt-PT') : '') + '</div>';
       if (o.beneficio) h += '<div style="font-size:11.5px;color:#94d82d;font-weight:700;margin-top:5px;">🎁 ' + escapar(o.beneficio) + '</div>';
+      if (o.desconto_texto) h += '<div style="font-size:11px;color:var(--t2);margin-top:3px;">💶 Desconto negociado: ' + escapar(o.desconto_texto) + '</div>';
+      if (parseFloat(o.contrib_fundo||0) > 0) h += '<div style="font-size:10.5px;color:var(--green);margin-top:5px;line-height:1.5;">🛡️ <strong>' + parseFloat(o.contrib_fundo).toFixed(2).replace('.',',') + '€ por contrato vão para o fundo de reserva do prédio.</strong><br><span style="color:var(--t3);">O Cond.OS não fica com comissão: 100% do benefício é vosso.</span></div>';
       if (o.descricao) h += '<div style="font-size:11px;color:var(--t2);margin-top:6px;line-height:1.5;">' + escapar(o.descricao) + '</div>';
       if (meta > 0) {
         const pct = Math.min(100, n/meta*100);
