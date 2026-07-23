@@ -164,15 +164,30 @@ function voltarAoPortal(e) {
     <div class="fl">
       <label>Papel Legal <span class="req">*</span> <span class="cargo-badge">DL 268/94</span></label>
       <select class="fi" id="f-papel-legal">
-        <option value="">— Seleccione o seu papel legal —</option>
+        <option value="">— Qual é a sua relação com a fração? —</option>
         <option value="proprietario">Proprietário</option>
+        <option value="comproprietario">Comproprietário (fração partilhada)</option>
+        <option value="usufrutuario">Usufrutuário</option>
         <option value="arrendatario">Arrendatário (Inquilino)</option>
-        <option value="representante">Representante de Proprietário</option>
+        <option value="representante">Representante do proprietário (procuração)</option>
+        <option value="herdeiro">Herdeiro / cabeça-de-casal</option>
+      </select>
+      <div class="field-hint">Isto é o seu <strong>título sobre a fração</strong> — quem é o dono. Quem paga as quotas é o proprietário (o arrendatário só se estiver assim previsto no contrato).</div>
+    </div>
+
+    <div class="cargo-divider"></div>
+
+    <div class="fl">
+      <label>Cargo no Condomínio <span style="color:var(--t3);font-weight:400;">(se algum)</span> <span class="cargo-badge">Art. 1435.º CC</span></label>
+      <select class="fi" id="f-cargo-condominio">
+        <option value="">— Nenhum cargo —</option>
         <option value="administrador">Administrador do Condomínio</option>
         <option value="vice_administrador">Vice-Administrador</option>
         <option value="coadjuvante">Coadjuvante do Administrador</option>
+        <option value="secretario">Secretário da Assembleia</option>
+        <option value="conselho_fiscal">Membro do Conselho Fiscal</option>
       </select>
-      <div class="field-hint">O papel legal é o que consta ou foi deliberado em assembleia de condóminos.</div>
+      <div class="field-hint">Cargo <strong>eleito em assembleia</strong> — é independente de ser proprietário ou inquilino. Um proprietário pode (e costuma) acumular os dois.</div>
     </div>
 
     <div class="cargo-divider"></div>
@@ -188,6 +203,61 @@ function voltarAoPortal(e) {
       </select>
       <div class="field-hint">Se exerce uma função remunerada ou com créditos aprovados em assembleia, indique aqui. Permite ao programa gerir pagamentos e créditos associados ao seu cargo.</div>
     </div>
+  </div>
+
+  <!-- DADOS DA FRAÇÃO -->
+  <div class="card">
+    <div class="card-title">🏠 A Sua Fração</div>
+    <div class="field-hint" style="margin-bottom:12px;">Estes dados descrevem o <strong>imóvel</strong>, não a pessoa. O que indicar aqui é enviado à administração para confirmação — não altera nada automaticamente.</div>
+
+    <div class="fl">
+      <label>Permilagem (‰) <span class="cargo-badge">título constitutivo</span></label>
+      <input class="fi" id="f-permilagem-oficial" readonly disabled style="opacity:.75;cursor:not-allowed;">
+      <div class="field-hint">A permilagem define quanto paga de cada despesa (Art. 1424.º CC). É fixada no <strong>título constitutivo</strong> da propriedade horizontal — não pode ser alterada aqui, nem por si, nem pela administração.</div>
+      <button type="button" id="btn-divergencia" onclick="toggleDivergencia()" style="margin-top:8px;background:transparent;border:1px solid rgba(255,84,112,.4);color:#ff5470;border-radius:8px;padding:8px 12px;font-size:12px;cursor:pointer;">⚠️ Esta permilagem não corresponde à minha</button>
+      <div id="box-divergencia" style="display:none;margin-top:10px;background:rgba(255,84,112,.06);border:1px solid rgba(255,84,112,.3);border-radius:9px;padding:12px;">
+        <label>Permilagem que consta no seu título / caderneta</label>
+        <input class="fi" id="f-decl-permilagem" type="number" step="0.001" placeholder="Ex: 43.500">
+        <label style="margin-top:8px;">Onde confirmou este valor?</label>
+        <input class="fi" id="f-decl-nota" placeholder="Ex: caderneta predial de 2019 / escritura">
+        <div class="field-hint" style="margin-top:7px;">A administração compara com o título constitutivo. Enquanto não for confirmada, mantém-se a permilagem oficial — <strong>as quotas não mudam com esta declaração</strong>.</div>
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:14px;">
+      <div class="fl">
+        <label>Garagem / lugar próprio</label>
+        <select class="fi" id="f-decl-garagem">
+          <option value="">— Não indicar —</option>
+          <option value="true">Sim, tenho</option>
+          <option value="false">Não tenho</option>
+        </select>
+      </div>
+      <div class="fl">
+        <label>Nº de lugares</label>
+        <input class="fi" id="f-decl-lugares" type="number" min="0" max="9" placeholder="Ex: 1">
+      </div>
+    </div>
+    <div class="row">
+      <div class="fl">
+        <label>Tipo de garagem</label>
+        <select class="fi" id="f-decl-garagem-tipo">
+          <option value="">— Não indicar —</option>
+          <option value="box">Box fechada</option>
+          <option value="lugar">Lugar marcado</option>
+          <option value="comum">Espaço comum</option>
+        </select>
+      </div>
+      <div class="fl">
+        <label>Arrecadação</label>
+        <select class="fi" id="f-decl-arrecadacao">
+          <option value="">— Não indicar —</option>
+          <option value="true">Sim, tenho</option>
+          <option value="false">Não tenho</option>
+        </select>
+      </div>
+    </div>
+    <div id="decl-estado" style="display:none;margin-top:12px;font-size:12px;border-radius:9px;padding:10px 12px;"></div>
   </div>
 
   <!-- NIB / DADOS BANCÁRIOS -->
@@ -422,9 +492,57 @@ if (!token) {
     if (d.fracao_codigo) codigo = d.fracao_codigo;
     if (d.bloco) bloco = d.bloco;
     document.getElementById('h-fracao').textContent = 'Fração ' + codigo + (bloco ? ' — Bloco ' + bloco : '');
+    preencherFicha(d);
   });
 }
 document.getElementById('h-fracao').textContent = 'Fração ' + codigo + (bloco ? ' — Bloco ' + bloco : '');
+
+
+// 🧾 Preencher com o que já está registado (evita re-escrever tudo)
+function preencherFicha(d) {
+  function set(id, v) { var el = document.getElementById(id); if (el && v !== null && v !== undefined && v !== '') el.value = v; }
+  set('f-nome', d.proprietario_nome); set('f-nif', d.proprietario_nif);
+  set('f-tel', d.proprietario_tel); set('f-email', d.proprietario_email);
+  set('f-morada', d.proprietario_morada); set('f-nib', d.nib_proprio);
+  set('f-papel-legal', d.papel_legal); set('f-cargo-condominio', d.cargo_condominio);
+  set('f-funcao-operacional', d.funcao_operacional);
+  set('f-seguradora', d.seguro_seguradora); set('f-apolice', d.seguro_apolice);
+  set('f-validade', d.seguro_validade); set('f-capital', d.seguro_capital);
+
+  // 🏠 Permilagem oficial — só leitura
+  var pm = document.getElementById('f-permilagem-oficial');
+  if (pm) pm.value = (d.permilagem !== null && d.permilagem !== undefined) ? (d.permilagem + ' ‰') : 'não registada';
+  if (d.garagem === true) set('f-decl-garagem', 'true');
+  else if (d.garagem === false) set('f-decl-garagem', 'false');
+  set('f-decl-garagem-tipo', d.garagem_tipo);
+
+  // Estado de uma declaração anterior
+  var est = document.getElementById('decl-estado');
+  if (est && d.decl_estado) {
+    var cores = { pendente: ['rgba(255,179,0,.08)','rgba(255,179,0,.35)','#ffb300','⏳ Declaração enviada — a aguardar confirmação da administração.'],
+                  aceite: ['rgba(34,229,132,.08)','rgba(34,229,132,.35)','#22e584','✅ A sua declaração foi confirmada e o registo atualizado.'],
+                  rejeitada: ['rgba(255,84,112,.08)','rgba(255,84,112,.35)','#ff5470','❌ A administração não confirmou a declaração. Fale com ela para esclarecer.'] };
+    var cfg = cores[d.decl_estado];
+    if (cfg) {
+      est.style.display = 'block';
+      est.style.background = cfg[0]; est.style.border = '1px solid ' + cfg[1];
+      est.style.color = cfg[2]; est.textContent = cfg[3];
+    }
+  }
+}
+
+function toggleDivergencia() {
+  var box = document.getElementById('box-divergencia');
+  if (!box) return;
+  var aberto = box.style.display === 'block';
+  box.style.display = aberto ? 'none' : 'block';
+  var btn = document.getElementById('btn-divergencia');
+  if (btn) btn.textContent = aberto ? '⚠️ Esta permilagem não corresponde à minha' : '✕ Afinal está correta';
+  if (aberto) {
+    var p = document.getElementById('f-decl-permilagem'); if (p) p.value = '';
+    var n = document.getElementById('f-decl-nota'); if (n) n.value = '';
+  }
+}
 
 var seguroOpcao = ''; // 'sim' ou 'nao'
 function toggleSeguro(opcao) {
@@ -482,7 +600,15 @@ async function submeter() {
     proprietario_email: email,
     proprietario_morada: document.getElementById('f-morada').value.trim() || '',
     papel_legal: papelLegal,
+    cargo_condominio: (document.getElementById('f-cargo-condominio')||{}).value || '',
     funcao_operacional: document.getElementById('f-funcao-operacional').value || '',
+    // 🏠 Dados da fração — vão como DECLARAÇÃO, não gravam por cima do oficial
+    decl_garagem: (document.getElementById('f-decl-garagem')||{}).value || '',
+    decl_garagem_tipo: (document.getElementById('f-decl-garagem-tipo')||{}).value || '',
+    decl_arrecadacao: (document.getElementById('f-decl-arrecadacao')||{}).value || '',
+    decl_lugares: (document.getElementById('f-decl-lugares')||{}).value || '',
+    decl_permilagem: (document.getElementById('f-decl-permilagem')||{}).value || '',
+    decl_nota: (document.getElementById('f-decl-nota')||{}).value || '',
     nib_proprio: document.getElementById('f-nib').value.trim() || '',
     metodo_notificacao: Array.from(notifSel).join(','),
     notificacao_digital_aceite: document.getElementById('f-aceite').checked,
