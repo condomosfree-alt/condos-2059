@@ -767,7 +767,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.23-2240</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.23-2251</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -10542,7 +10542,7 @@ async function carregarDeclaracoes() {
   if (!painel || !lista || !currentCondo) return;
   try {
     var r = await sb.from('fracoes')
-      .select('id,codigo,permilagem,garagem,garagem_tipo,decl_garagem,decl_garagem_tipo,decl_arrecadacao,decl_lugares,decl_permilagem,decl_nota,decl_em,decl_estado')
+      .select('id,codigo,permilagem,garagem,garagem_tipo,decl_garagem,decl_garagem_tipo,decl_arrecadacao,decl_lugares,decl_permilagem,decl_nota,decl_fracao_nota,decl_em,decl_estado')
       .eq('condominio_id', currentCondo.id).eq('decl_estado', 'pendente');
     if (r.error) { painel.style.display = 'none'; return; }
     var decls = r.data || [];
@@ -10569,6 +10569,9 @@ async function carregarDeclaracoes() {
         h += '</div>';
       });
       if (f.decl_nota) h += '<div style="font-size:11px;color:var(--t3);margin-top:7px;font-style:italic;">"' + f.decl_nota + '"</div>';
+      if (f.decl_fracao_nota) {
+        h += '<div style="background:rgba(255,84,112,.1);border:1px solid rgba(255,84,112,.4);border-radius:8px;padding:10px 12px;margin-top:9px;font-size:11.5px;color:var(--t2);line-height:1.5;">🚨 <strong style="color:var(--red);">Quem preencheu diz que esta NÃO é a fração dele.</strong><br>"' + f.decl_fracao_nota + '"<br><span style="font-size:10.5px;color:var(--t3);">Confirma a quem entregaste este link antes de aceitar seja o que for — o token dá acesso às quotas e mensagens desta fração.</span></div>';
+      }
       if (f.decl_permilagem !== null && f.decl_permilagem !== undefined) {
         h += '<div style="background:rgba(255,84,112,.07);border:1px solid rgba(255,84,112,.3);border-radius:8px;padding:9px 11px;margin-top:9px;font-size:10.5px;color:var(--t2);line-height:1.5;">⚖️ A permilagem só muda por <strong>título constitutivo</strong> ou deliberação válida (unanimidade, Art. 1419.º). Confirma na caderneta predial antes de aceitar — alterar a permilagem muda o que TODAS as frações pagam.</div>';
       }

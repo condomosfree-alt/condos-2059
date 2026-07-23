@@ -211,6 +211,18 @@ function voltarAoPortal(e) {
     <div class="field-hint" style="margin-bottom:12px;">Estes dados descrevem o <strong>imóvel</strong>, não a pessoa. O que indicar aqui é enviado à administração para confirmação — não altera nada automaticamente.</div>
 
     <div class="fl">
+      <label>Fração a que estes dados dizem respeito</label>
+      <input class="fi" id="f-fracao-oficial" readonly disabled style="opacity:.85;cursor:not-allowed;font-weight:700;">
+      <div class="field-hint">Este link é pessoal e pertence a esta fração — é por ele que acede às suas quotas e mensagens.</div>
+      <button type="button" id="btn-fracao-errada" onclick="toggleFracaoErrada()" style="margin-top:8px;background:transparent;border:1px solid rgba(255,84,112,.4);color:#ff5470;border-radius:8px;padding:8px 12px;font-size:12px;cursor:pointer;">⚠️ Esta não é a minha fração</button>
+      <div id="box-fracao-errada" style="display:none;margin-top:10px;background:rgba(255,84,112,.06);border:1px solid rgba(255,84,112,.3);border-radius:9px;padding:12px;">
+        <label>Qual é a sua fração? (e como recebeu este link)</label>
+        <input class="fi" id="f-decl-fracao-nota" placeholder="Ex: sou o 2.º Dto, fração C — recebi este link por carta">
+        <div class="field-hint" style="margin-top:7px;">⚠️ <strong>Não preencha o resto da ficha.</strong> Se o link estiver trocado, os seus dados iriam parar à fração errada. A administração é avisada e trata da correção.</div>
+      </div>
+    </div>
+
+    <div class="fl" style="margin-top:14px;">
       <label>Permilagem (‰) <span class="cargo-badge">título constitutivo</span></label>
       <input class="fi" id="f-permilagem-oficial" readonly disabled style="opacity:.75;cursor:not-allowed;">
       <div class="field-hint">A permilagem define quanto paga de cada despesa (Art. 1424.º CC). É fixada no <strong>título constitutivo</strong> da propriedade horizontal — não pode ser alterada aqui, nem por si, nem pela administração.</div>
@@ -313,7 +325,7 @@ function voltarAoPortal(e) {
         <div class="lbl">Carta Registada + AR
           <span style="font-size:9px;background:var(--gdim);color:var(--green);padding:1px 6px;border-radius:4px;margin-left:4px;">Recomendado para atas</span>
         </div>
-        <div class="preco custo">~4,20€/carta — prova legal de entrega</div>
+        <div class="preco custo">~5,54€/carta — prova legal de entrega</div>
       </div>
     </div>
 
@@ -509,6 +521,10 @@ function preencherFicha(d) {
   set('f-seguradora', d.seguro_seguradora); set('f-apolice', d.seguro_apolice);
   set('f-validade', d.seguro_validade); set('f-capital', d.seguro_capital);
 
+  // 🏠 Qual é a fração (vem do token — não é o condómino que a escolhe)
+  var fr = document.getElementById('f-fracao-oficial');
+  if (fr) fr.value = 'Fração ' + (d.fracao_codigo || codigo || '?') + (d.bloco ? '  ·  Bloco ' + d.bloco : '');
+
   // 🏠 Permilagem oficial — só leitura
   var pm = document.getElementById('f-permilagem-oficial');
   if (pm) pm.value = (d.permilagem !== null && d.permilagem !== undefined) ? (d.permilagem + ' ‰') : 'não registada';
@@ -529,6 +545,16 @@ function preencherFicha(d) {
       est.style.color = cfg[2]; est.textContent = cfg[3];
     }
   }
+}
+
+function toggleFracaoErrada() {
+  var box = document.getElementById('box-fracao-errada');
+  if (!box) return;
+  var aberto = box.style.display === 'block';
+  box.style.display = aberto ? 'none' : 'block';
+  var btn = document.getElementById('btn-fracao-errada');
+  if (btn) btn.textContent = aberto ? '⚠️ Esta não é a minha fração' : '✕ Afinal é a minha fração';
+  if (aberto) { var n = document.getElementById('f-decl-fracao-nota'); if (n) n.value = ''; }
 }
 
 function toggleDivergencia() {
@@ -609,6 +635,7 @@ async function submeter() {
     decl_lugares: (document.getElementById('f-decl-lugares')||{}).value || '',
     decl_permilagem: (document.getElementById('f-decl-permilagem')||{}).value || '',
     decl_nota: (document.getElementById('f-decl-nota')||{}).value || '',
+    decl_fracao_nota: (document.getElementById('f-decl-fracao-nota')||{}).value || '',
     nib_proprio: document.getElementById('f-nib').value.trim() || '',
     metodo_notificacao: Array.from(notifSel).join(','),
     notificacao_digital_aceite: document.getElementById('f-aceite').checked,
