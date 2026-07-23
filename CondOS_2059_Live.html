@@ -767,7 +767,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.23-0839</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.23-0851</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -8237,16 +8237,37 @@ async function abrirFundoReserva() {
   abrirModalGenerico('🏦 Fundo Comum de Reserva', h);
 }
 
-async function configurarFundo() {
+function configurarFundo() {
   var pctAtual = parseFloat(currentCondo.fundo_percentagem); if (isNaN(pctAtual)) pctAtual = 10;
-  var p = prompt('Percentagem da quota que vai para o fundo de reserva.\n\n⚖️ O MÍNIMO LEGAL é 10% (DL 268/94, Art. 4.º).\nPodes subir se a assembleia aprovar.\n\nPercentagem (%):', pctAtual);
-  if (p === null) return;
-  var pct = parseFloat(String(p).replace(',','.'));
-  if (isNaN(pct) || pct < 0) { toast('Valor inválido','err'); return; }
-  if (pct < 10 && !confirm('⚠️ ATENÇÃO: ' + pct + '% está ABAIXO do mínimo legal de 10%.\n\nO DL 268/94 obriga a pelo menos 10%. Continuar mesmo assim?')) return;
-  var s = prompt('Saldo que o fundo JÁ TINHA antes de usares o programa (€):', parseFloat(currentCondo.fundo_saldo_inicial||0));
-  if (s === null) return;
-  var saldoIni = parseFloat(String(s).replace(',','.')) || 0;
+  var saldoAtual = parseFloat(currentCondo.fundo_saldo_inicial||0);
+  var h = '';
+  h += '<div style="background:rgba(0,212,255,.06);border:1px solid rgba(0,212,255,.25);border-radius:10px;padding:11px 13px;font-size:11.5px;color:var(--t2);line-height:1.55;">⚖️ O <strong>mínimo legal é 10%</strong> das quotas (DL 268/94, Art. 4.º). Podes subir se a assembleia aprovar — nunca descer sem risco.</div>';
+  h += '<div class="fl" style="margin-top:14px;"><label>Percentagem da quota que vai para o fundo</label>';
+  h += '<div style="display:flex;gap:8px;align-items:center;"><input class="fi" id="cf-pct" type="number" step="0.5" min="0" value="' + pctAtual + '" style="flex:1;"><span style="font-size:15px;color:var(--t2);font-weight:700;">%</span></div></div>';
+  h += '<div style="display:flex;gap:7px;margin-top:8px;">';
+  [10, 12, 15, 20].forEach(function(v){
+    h += '<button type="button" onclick="document.getElementById(\'cf-pct\').value=' + v + '" style="flex:1;background:var(--s1);border:1px solid var(--b1);color:var(--t2);border-radius:8px;padding:7px;font-size:11.5px;cursor:pointer;">' + v + '%</button>';
+  });
+  h += '</div>';
+  h += '<div class="fl" style="margin-top:16px;"><label>Saldo que o fundo já tinha antes do programa (€)</label><input class="fi" id="cf-saldo" type="number" step="0.01" value="' + saldoAtual + '"><div style="font-size:10.5px;color:var(--t3);margin-top:5px;">Se o prédio já tinha dinheiro no fundo antes de usares o Cond.OS, escreve-o aqui. Deixa 0 se começas do zero.</div></div>';
+  h += '<div id="cf-aviso" style="display:none;background:rgba(255,84,112,.08);border:1px solid rgba(255,84,112,.35);border-radius:9px;padding:10px 12px;font-size:11.5px;color:var(--t2);margin-top:12px;"></div>';
+  h += '<div style="display:flex;gap:9px;margin-top:18px;">';
+  h += '<button class="btn-ghost" style="flex:1;" onclick="abrirFundoReserva()">← Voltar</button>';
+  h += '<button class="btn-primary" style="flex:1;" onclick="configurarFundoGuardar()">Guardar</button>';
+  h += '</div>';
+  abrirModalGenerico('🏦 Configurar o fundo de reserva', h);
+}
+
+async function configurarFundoGuardar() {
+  var pct = parseFloat(String((document.getElementById('cf-pct')||{}).value||'').replace(',','.'));
+  if (isNaN(pct) || pct < 0) { toast('Percentagem inválida','err'); return; }
+  var av = document.getElementById('cf-aviso');
+  if (pct < 10 && av && av.style.display === 'none') {
+    av.innerHTML = '⚠️ <strong style="color:var(--red);">' + pct + '% está abaixo do mínimo legal de 10%.</strong><br>O DL 268/94 obriga a pelo menos 10%. Carrega em Guardar outra vez se queres mesmo continuar — a decisão fica por tua conta.';
+    av.style.display = 'block';
+    return;
+  }
+  var saldoIni = parseFloat(String((document.getElementById('cf-saldo')||{}).value||'').replace(',','.')) || 0;
   var res = await sb.from('condominios').update({ fundo_percentagem: pct, fundo_saldo_inicial: saldoIni }).eq('id', currentCondo.id);
   if (res.error) { toast('Erro (corre o sql_fundo_reserva_legal.sql): ' + res.error.message,'err'); return; }
   currentCondo.fundo_percentagem = pct;
@@ -8258,13 +8279,29 @@ async function configurarFundo() {
 
 async function usarFundo() {
   var saldo = await saldoFundoReserva();
-  var v = prompt('Usar dinheiro do fundo de reserva para uma obra.\n\n⚠️ O fundo só deve ser usado em obras e imprevistos — não em despesas correntes.\n⚖️ O valor usado deve ser REPOSTO no prazo de 12 meses (DL 268/94).\nA assembleia deve aprovar.\n\nSaldo disponível: ' + saldo.toFixed(2) + '€\n\nValor a usar (€):');
-  if (v === null) return;
-  var valor = parseFloat(String(v).replace(',','.'));
-  if (isNaN(valor) || valor <= 0) { toast('Valor inválido','err'); return; }
-  if (valor > saldo) { toast('O fundo só tem ' + saldo.toFixed(2) + '€','err'); return; }
-  var desc = prompt('Descrição da obra/despesa:');
-  if (!desc) return;
+  window._fundoSaldoDisp = saldo;
+  var h = '';
+  h += '<div style="background:rgba(255,179,0,.07);border:1px solid rgba(255,179,0,.3);border-radius:10px;padding:11px 13px;font-size:11.5px;color:var(--t2);line-height:1.55;">⚠️ O fundo só deve ser usado em <strong>obras e imprevistos</strong> — nunca em despesas correntes.<br>⚖️ O valor usado deve ser <strong>reposto em 12 meses</strong> (DL 268/94) e a assembleia deve aprovar.</div>';
+  h += '<div style="text-align:center;margin:16px 0 4px;"><div style="font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;">Saldo disponível no fundo</div><div style="font-size:26px;font-weight:900;color:var(--green);font-family:var(--mono);">' + saldo.toFixed(2) + '€</div></div>';
+  h += '<div class="fl" style="margin-top:14px;"><label>Valor a usar (€)</label><input class="fi" id="uf-valor" type="number" step="0.01" min="0" placeholder="0,00"></div>';
+  h += '<div class="fl" style="margin-top:12px;"><label>Obra ou despesa a que se destina</label><input class="fi" id="uf-desc" placeholder="Ex: substituição da bomba de água"></div>';
+  h += '<div id="uf-erro" style="display:none;color:var(--red);font-size:11.5px;margin-top:9px;"></div>';
+  h += '<div style="display:flex;gap:9px;margin-top:18px;">';
+  h += '<button class="btn-ghost" style="flex:1;" onclick="abrirFundoReserva()">← Voltar</button>';
+  h += '<button class="btn-primary" style="flex:1;background:var(--amber);border-color:var(--amber);color:#1a1200;" onclick="usarFundoConfirmar()">🏦 Registar utilização</button>';
+  h += '</div>';
+  abrirModalGenerico('🏦 Usar dinheiro do fundo', h);
+  setTimeout(function(){ try { document.getElementById('uf-valor').focus(); } catch(e){} }, 80);
+}
+
+async function usarFundoConfirmar() {
+  var saldo = parseFloat(window._fundoSaldoDisp||0);
+  var valor = parseFloat(String((document.getElementById('uf-valor')||{}).value||'').replace(',','.'));
+  var desc = ((document.getElementById('uf-desc')||{}).value||'').trim();
+  function erroUF(m){ var e = document.getElementById('uf-erro'); if (e) { e.textContent = m; e.style.display = 'block'; } }
+  if (isNaN(valor) || valor <= 0) { erroUF('Escreve o valor a usar.'); return; }
+  if (valor > saldo) { erroUF('O fundo só tem ' + saldo.toFixed(2) + '€ disponíveis.'); return; }
+  if (desc.length < 3) { erroUF('Descreve a obra ou despesa — fica registado como justificação.'); return; }
   var res = await sb.from('movimentos').insert({
     condominio_id: currentCondo.id, tipo: 'despesa', categoria: 'Fundo de Reserva',
     descricao: '🏦 Uso do fundo: ' + desc + ' (repor em 12 meses)', valor: valor,
@@ -9910,11 +9947,55 @@ async function ocRecusar() {
   verificarAvisosGerais();
 }
 
-async function ocEncerrar() {
-  var motivo = prompt('Encerrar esta ocorrência sem reparação. Motivo? (ex: falso alarme, resolvido sem custo, duplicada)');
-  if (motivo === null) return;
+function ocEncerrar() {
+  var desc = (_ocAtual && _ocAtual.descricao) ? _ocAtual.descricao : '';
+  var motivos = ['Falso alarme', 'Resolvido sem custo', 'Ocorrência duplicada', 'Responsabilidade do condómino', 'Responsabilidade de terceiros', 'Sem gravidade'];
+  var h = '';
+  h += '<div style="font-size:12px;color:var(--t2);line-height:1.6;">Esta ocorrência vai ser encerrada <strong>sem qualquer reparação</strong>. O motivo fica na cronologia e é visível ao condómino que a reportou — por isso vale a pena ser claro.</div>';
+  if (desc) h += '<div style="background:var(--s1);border:1px solid var(--b1);border-radius:9px;padding:10px 12px;font-size:11.5px;color:var(--t2);margin-top:12px;">📋 ' + desc.substring(0,140) + (desc.length > 140 ? '…' : '') + '</div>';
+  h += '<div style="font-size:11px;color:var(--t3);margin:14px 0 7px;">Motivo do encerramento</div>';
+  h += '<div style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:11px;">';
+  motivos.forEach(function(m){
+    h += '<button type="button" class="enc-chip" onclick="ocEncChip(this)" style="background:var(--s1);border:1px solid var(--b1);color:var(--t2);border-radius:20px;padding:7px 13px;font-size:11.5px;cursor:pointer;">' + m + '</button>';
+  });
+  h += '</div>';
+  h += '<textarea class="fi" id="enc-motivo" rows="3" placeholder="Escolhe acima ou escreve o motivo…" style="width:100%;"></textarea>';
+  h += '<div id="enc-erro" style="display:none;color:var(--red);font-size:11px;margin-top:7px;"></div>';
+  h += '<div style="display:flex;gap:9px;margin-top:16px;">';
+  h += '<button class="btn-ghost" style="flex:1;" onclick="gerirOcorrencia(\'' + _ocAtual.id + '\')">← Voltar</button>';
+  h += '<button class="btn-primary" style="flex:1;background:var(--red);border-color:var(--red);" onclick="ocEncerrarConfirmar()">✕ Encerrar ocorrência</button>';
+  h += '</div>';
+  abrirModalGenerico('✕ Encerrar sem reparação', h);
+  setTimeout(function(){ try { document.getElementById('enc-motivo').focus(); } catch(e){} }, 80);
+}
+
+function ocEncChip(btn) {
+  var t = document.getElementById('enc-motivo');
+  if (t) t.value = btn.textContent;
+  var todos = document.querySelectorAll('.enc-chip');
+  for (var i = 0; i < todos.length; i++) {
+    todos[i].style.background = 'var(--s1)';
+    todos[i].style.borderColor = 'var(--b1)';
+    todos[i].style.color = 'var(--t2)';
+  }
+  btn.style.background = 'rgba(0,212,255,.12)';
+  btn.style.borderColor = 'rgba(0,212,255,.45)';
+  btn.style.color = 'var(--cyan)';
+  var e = document.getElementById('enc-erro');
+  if (e) e.style.display = 'none';
+}
+
+async function ocEncerrarConfirmar() {
+  var t = document.getElementById('enc-motivo');
+  var motivo = t ? (t.value || '').trim() : '';
+  if (motivo.length < 3) {
+    var e = document.getElementById('enc-erro');
+    if (e) { e.textContent = 'Escolhe ou escreve um motivo — fica registado como justificação do encerramento.'; e.style.display = 'block'; }
+    if (t) t.focus();
+    return;
+  }
   await sb.from('ocorrencias').update({ estado:'fechada', precisa_votacao:false }).eq('id',_ocAtual.id);
-  await ocEvento('estado', 'Ocorrência encerrada pela administração' + (motivo?': '+motivo:'') + '.');
+  await ocEvento('estado', 'Ocorrência encerrada pela administração: ' + motivo + '.');
   toast('Ocorrência encerrada.','ok');
   fecharModalGenerico();
   loadOcorrencias();
