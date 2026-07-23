@@ -767,7 +767,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.23-2203</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.23-2223</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -1293,6 +1293,10 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
       </div><!-- /page-edificio -->
 
       <div class="page" id="page-condominos">
+        <div class="panel" id="decl-painel" style="display:none;border:1px solid rgba(255,179,0,.35);margin-bottom:16px;">
+          <div class="ph"><span class="pt">📝 Declarações dos condóminos por confirmar</span><span class="pm">o que declararam na ficha vs o que está registado</span></div>
+          <div id="decl-lista" style="padding:12px 16px;"></div>
+        </div>
         <!-- BANNER LEGAL -->
         <div style="background:linear-gradient(135deg,rgba(124,58,237,.1),rgba(0,212,255,.08));border:1px solid rgba(124,58,237,.3);border-radius:10px;padding:14px 18px;margin-bottom:20px;display:flex;gap:14px;align-items:flex-start;">
           <i class="ti ti-scale" style="color:var(--violet);font-size:22px;margin-top:2px;flex-shrink:0;"></i>
@@ -4147,6 +4151,18 @@ async function verificarAvisosGerais() {
           detalhe: 'Sem email registado: ' + nomesC + (nCarta>5?'…':'') + '. Gera o PDF de cada um (botão 📄 nas Quotas) e envia por correio.' });
       }
     } catch(e) { console.error('aviso recibos carta:', e); }
+
+    // 5e-00) 📝 DECLARAÇÕES DA FICHA por confirmar
+    try {
+      var dclR = await sb.from('fracoes').select('codigo,decl_permilagem').eq('condominio_id', currentCondo.id).eq('decl_estado','pendente');
+      var dcls = dclR.data || [];
+      if (dcls.length) {
+        var comPerm = dcls.filter(function(x){ return x.decl_permilagem !== null && x.decl_permilagem !== undefined; }).length;
+        avisos.push({ pagina:'condominos', badge:'📝', cor:'#ffb300',
+          texto: dcls.length + ' declaração(ões) de condóminos por confirmar' + (comPerm ? ' (' + comPerm + ' sobre permilagem)' : ''),
+          detalhe: 'Condóminos declararam dados da fração na ficha. Nada foi alterado: confirma na página Condóminos, comparando com o título constitutivo/caderneta antes de aceitar.' });
+      }
+    } catch(e){}
 
     // 5e-0) ⚖️ EXIGÊNCIAS DOS CONDÓMINOS — pendentes de resposta
     try {
@@ -10514,6 +10530,87 @@ async function gerarAcessoParceiro(id) {
     }
     toast('🔑 Acesso criado — copia o link e envia ao parceiro','ok');
     abrirParceiro(id);
+  } catch(e) { toast('Erro: ' + (e.message||e),'err'); }
+}
+
+
+// 📝 DECLARAÇÕES DA FICHA — o condómino declara, o administrador confirma.
+// Nada do que ele declara sobre a fração entra sozinho no registo oficial.
+async function carregarDeclaracoes() {
+  var painel = document.getElementById('decl-painel');
+  var lista = document.getElementById('decl-lista');
+  if (!painel || !lista || !currentCondo) return;
+  try {
+    var r = await sb.from('fracoes')
+      .select('id,codigo,permilagem,garagem,garagem_tipo,decl_garagem,decl_garagem_tipo,decl_arrecadacao,decl_lugares,decl_permilagem,decl_nota,decl_em,decl_estado')
+      .eq('condominio_id', currentCondo.id).eq('decl_estado', 'pendente');
+    if (r.error) { painel.style.display = 'none'; return; }
+    var decls = r.data || [];
+    if (!decls.length) { painel.style.display = 'none'; return; }
+    var h = '';
+    decls.forEach(function(f){
+      h += '<div style="background:var(--s1);border:1px solid var(--b1);border-radius:10px;padding:12px 14px;margin-bottom:10px;">';
+      h += '<div style="font-size:12.5px;font-weight:800;">Fração ' + (f.codigo||'') + ' <span style="font-size:10px;color:var(--t3);font-weight:400;">· declarado em ' + (f.decl_em ? new Date(f.decl_em).toLocaleDateString('pt-PT') : '') + '</span></div>';
+      var linhas = [];
+      if (f.decl_permilagem !== null && f.decl_permilagem !== undefined) {
+        linhas.push({ campo:'Permilagem', sistema: (f.permilagem !== null ? f.permilagem + '‰' : '—'), decl: f.decl_permilagem + '‰', critico: true });
+      }
+      if (f.decl_garagem !== null && f.decl_garagem !== undefined) {
+        linhas.push({ campo:'Garagem', sistema: (f.garagem === true ? 'Sim' : (f.garagem === false ? 'Não' : '—')), decl: (f.decl_garagem ? 'Sim' : 'Não') });
+      }
+      if (f.decl_garagem_tipo) linhas.push({ campo:'Tipo de garagem', sistema: f.garagem_tipo || '—', decl: f.decl_garagem_tipo });
+      if (f.decl_arrecadacao !== null && f.decl_arrecadacao !== undefined) linhas.push({ campo:'Arrecadação', sistema:'—', decl: (f.decl_arrecadacao ? 'Sim' : 'Não') });
+      if (f.decl_lugares !== null && f.decl_lugares !== undefined) linhas.push({ campo:'Lugares', sistema:'—', decl: String(f.decl_lugares) });
+      linhas.forEach(function(l){
+        var difere = String(l.sistema).replace('‰','').trim() !== String(l.decl).replace('‰','').trim();
+        h += '<div style="display:flex;justify-content:space-between;gap:10px;font-size:11.5px;margin-top:6px;">';
+        h += '<span style="color:var(--t2);">' + l.campo + (l.critico ? ' <span style="color:var(--red);">⚠</span>' : '') + '</span>';
+        h += '<span>no sistema: <strong>' + l.sistema + '</strong> · declarado: <strong style="color:' + (difere ? 'var(--amber)' : 'var(--t2)') + ';">' + l.decl + '</strong></span>';
+        h += '</div>';
+      });
+      if (f.decl_nota) h += '<div style="font-size:11px;color:var(--t3);margin-top:7px;font-style:italic;">"' + f.decl_nota + '"</div>';
+      if (f.decl_permilagem !== null && f.decl_permilagem !== undefined) {
+        h += '<div style="background:rgba(255,84,112,.07);border:1px solid rgba(255,84,112,.3);border-radius:8px;padding:9px 11px;margin-top:9px;font-size:10.5px;color:var(--t2);line-height:1.5;">⚖️ A permilagem só muda por <strong>título constitutivo</strong> ou deliberação válida (unanimidade, Art. 1419.º). Confirma na caderneta predial antes de aceitar — alterar a permilagem muda o que TODAS as frações pagam.</div>';
+      }
+      h += '<div style="display:flex;gap:8px;margin-top:10px;">';
+      h += '<button class="tb-btn" style="flex:1;font-size:11px;color:var(--green);border-color:rgba(34,229,132,.35);" onclick="decidirDeclaracao(\'' + f.id + '\',true)">✔ Confirmar e atualizar</button>';
+      h += '<button class="tb-btn" style="flex:1;font-size:11px;color:var(--red);border-color:rgba(255,84,112,.35);" onclick="decidirDeclaracao(\'' + f.id + '\',false)">✕ Não confirmar</button>';
+      h += '</div></div>';
+    });
+    lista.innerHTML = h;
+    painel.style.display = 'block';
+  } catch(e) { console.error('declaracoes:', e); }
+}
+
+async function decidirDeclaracao(fracaoId, aceitar) {
+  try {
+    var fR = await sb.from('fracoes').select('*').eq('id', fracaoId).single();
+    if (fR.error || !fR.data) { toast('Erro ao ler a fração','err'); return; }
+    var f = fR.data;
+    if (!aceitar) {
+      await sb.from('fracoes').update({ decl_estado:'rejeitada', decl_decidida_em:new Date().toISOString() }).eq('id', fracaoId);
+      toast('Declaração não confirmada','ok');
+      carregarDeclaracoes();
+      return;
+    }
+    var mudaPerm = (f.decl_permilagem !== null && f.decl_permilagem !== undefined && parseFloat(f.decl_permilagem) !== parseFloat(f.permilagem||0));
+    if (mudaPerm) {
+      if (!await confirmar('⚖️ Vais alterar a PERMILAGEM da fração ' + (f.codigo||'') + ' de ' + (f.permilagem||0) + '‰ para ' + f.decl_permilagem + '‰.\n\nIsto muda o que esta fração paga em TODAS as despesas — e, por arrastamento, o peso das outras.\n\nSó deves fazer isto se confirmaste o valor no título constitutivo ou na caderneta predial. Confirmaste?', {titulo:'Alterar permilagem', tipo:'aviso', icon:'⚖️', okTexto:'Confirmei no título'})) return;
+    }
+    var upd = { decl_estado:'aceite', decl_decidida_em:new Date().toISOString() };
+    if (f.decl_garagem !== null && f.decl_garagem !== undefined) upd.garagem = f.decl_garagem;
+    if (f.decl_garagem_tipo) upd.garagem_tipo = f.decl_garagem_tipo;
+    if (mudaPerm) upd.permilagem = f.decl_permilagem;
+    var r = await sb.from('fracoes').update(upd).eq('id', fracaoId);
+    if (r.error) { toast('Erro: ' + r.error.message,'err'); return; }
+    // fica registo no log de comunicações — a alteração é rastreável
+    try {
+      await sb.from('mensagens').insert({ condominio_id: currentCondo.id, fracao_id: fracaoId, autor:'admin', lida_admin:true, lida_condomino:false,
+        texto: '✅ DECLARAÇÃO CONFIRMADA\n\nA administração confirmou os dados que declaraste sobre a fração' + (mudaPerm ? ' e atualizou a permilagem para ' + f.decl_permilagem + '‰ (verificado no título constitutivo).' : '.') });
+    } catch(e){}
+    toast('✔ Declaração confirmada e registo atualizado','ok');
+    carregarDeclaracoes();
+    if (typeof loadCondominos === 'function') loadCondominos();
   } catch(e) { toast('Erro: ' + (e.message||e),'err'); }
 }
 
@@ -20133,6 +20230,7 @@ function nav(p) {
   if(p==='edificio'){ try { carregarRadar(); } catch(e){} }
   if(p==='parceiros'){ try { carregarOfertasAdmin(); } catch(e){} }
   if(p==='definicoes'){ try { carregarInbox(); } catch(e){} }
+  if(p==='condominos'){ try { carregarDeclaracoes(); } catch(e){} }
   if(p==='financeiro'){ try { carregarBalanco(); } catch(e){} }
   if(p==='condominos') loadCondominos();
   if(p==='mensagens') loadMensagens();
