@@ -767,7 +767,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.23-0851</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.23-2138</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -1434,7 +1434,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
           <div id="balanco-corpo" style="padding:14px 16px;"></div>
         </div>
         <div class="panel" id="fundo-cartao" style="border:1px solid rgba(180,140,255,.3);margin-bottom:16px;display:none;">
-          <div class="ph"><span class="pt">🛡️ Fundo de Reserva — Prova Real</span><span class="pm">DL 268/94, Art. 4.º — mín. 10% das quotas, para conservação</span></div>
+          <div class="ph"><span class="pt">🛡️ Fundo de Reserva — Prova Real</span><span class="pm" id="fundo-pm">DL 268/94, Art. 4.º — mín. 10% das quotas, para conservação</span></div>
           <div style="padding:14px 16px;">
             <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px;">
               <div style="text-align:center;"><div style="font-size:9.5px;color:var(--t3);text-transform:uppercase;">Teórico (devia existir)</div><div id="fundo-teorico" style="font-size:19px;font-weight:800;font-family:var(--mono);color:var(--t2);">—</div></div>
@@ -1443,6 +1443,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
             </div>
             <div style="height:9px;background:rgba(255,255,255,.06);border-radius:6px;overflow:hidden;margin-bottom:10px;"><div id="fundo-barra" style="height:100%;width:0%;background:#b48cff;border-radius:6px;transition:width .5s;"></div></div>
             <div id="fundo-nota" style="font-size:10.5px;color:var(--t3);line-height:1.5;"></div>
+            <div id="fundo-suficiencia"></div>
             <div id="exig-admin-zona"></div>
           </div>
         </div>
@@ -4073,8 +4074,9 @@ async function verificarAvisosGerais() {
     // 5j) Concursos com prazo terminado (ainda abertos)
     try {
       var hojeStr = new Date().toISOString().split('T')[0];
-      var prazRes = await sb.from('ocorrencias').select('id,descricao,concurso_prazo').eq('condominio_id', currentCondo.id).eq('concurso_aberto', true).not('concurso_prazo','is',null).lte('concurso_prazo', hojeStr);
-      var expirados = prazRes.data || [];
+      var prazRes = await sb.from('ocorrencias').select('id,descricao,concurso_prazo,estado').eq('condominio_id', currentCondo.id).eq('concurso_aberto', true).not('concurso_prazo','is',null).lte('concurso_prazo', hojeStr);
+      // ocorrência já resolvida/fechada não gera aviso, mesmo que o concurso tenha ficado aberto
+      var expirados = (prazRes.data || []).filter(function(o){ return o.estado !== 'resolvida' && o.estado !== 'fechada'; });
       if (expirados.length) {
         avisos.push({ pagina:'ocorrencias', badge:String(expirados.length), cor:'#ffb300',
           texto: expirados.length + ' concurso(s) com prazo terminado',
@@ -4085,7 +4087,18 @@ async function verificarAvisosGerais() {
     // 5i) Concursos de orçamentos — propostas recebidas / por validar
     try {
       var obRes = await sb.from('orcamentos_obra').select('id,estado,validado,ocorrencia_id').eq('condominio_id', currentCondo.id).eq('estado','submetido');
-      var props = obRes.data || [];
+      var propsTodas = obRes.data || [];
+      // filtrar propostas cuja ocorrência já foi resolvida/fechada (o aviso ficava pendurado para sempre)
+      var props = propsTodas;
+      try {
+        var idsOc = propsTodas.map(function(o){ return o.ocorrencia_id; }).filter(Boolean);
+        if (idsOc.length) {
+          var estRes = await sb.from('ocorrencias').select('id,estado').in('id', idsOc);
+          var vivas = {};
+          (estRes.data||[]).forEach(function(o){ if (o.estado !== 'resolvida' && o.estado !== 'fechada') vivas[o.id] = true; });
+          props = propsTodas.filter(function(o){ return vivas[o.ocorrencia_id]; });
+        }
+      } catch(e) {}
       var porValidarN = props.filter(function(o){ return o.validado === false; }).length;
       var recebidasN = props.length;
       if (recebidasN > 0) {
@@ -8859,14 +8872,16 @@ async function loadOcorrencias() {
   const catIco = {Elétrico:'ti-bolt elec',Canalização:'ti-droplet manut',Elevador:'ti-elevator manut',Limpeza:'ti-brush limpeza',Segurança:'ti-shield-lock sec',Obra:'ti-hammer obra',Outro:'ti-dots obra'};
   const el = document.getElementById('ocorrencias-list');
   el.innerHTML = ocs.length ? `<table class="tbl"><thead><tr><th>#</th><th>Categoria</th><th>Descrição</th><th>Local</th><th>Prioridade</th><th>Estado</th><th>Data</th><th>Ação</th></tr></thead><tbody>`+
-    ocs.map((o,i)=>`<tr class="linha-click" onclick="gerirOcorrencia('${o.id}')" title="Abrir ocorrência">
+    ocs.map((o,i)=>`<tr class="linha-click" onclick="${(o.estado==='resolvida'||o.estado==='fechada')?`verOcorrencia('${o.id}')`:`gerirOcorrencia('${o.id}')`}" title="${(o.estado==='resolvida'||o.estado==='fechada')?'Ver histórico (só leitura)':'Abrir ocorrência'}">
       <td class="mn" style="color:var(--t2)">OC-${String(i+1).padStart(3,'0')}</td>
       <td>${o.categoria}</td><td>${o.descricao}</td>
       <td style="color:var(--t2);font-size:11px">${o.local_ocorrencia||'—'}</td>
       <td><span class="pill ${priorCls[o.prioridade]||'info'}">${o.prioridade}</span></td>
       <td><span class="pill ${estadoCls[o.estado]||''}">${o.estado}</span></td>
       <td class="mn">${(o.criado_em||'').slice(0,10)}</td>
-      <td><button class="tb-btn" style="font-size:10px;padding:3px 9px;" onclick="event.stopPropagation();gerirOcorrencia('${o.id}')">Gerir</button></td>
+      <td>${(o.estado==='resolvida'||o.estado==='fechada')
+        ? `<div style="display:flex;gap:5px;"><button class="tb-btn" style="font-size:10px;padding:3px 8px;color:var(--red);border-color:rgba(255,84,112,.4);opacity:.75;cursor:not-allowed;" onclick="event.stopPropagation();toast('Ocorrência encerrada — já não pode ser gerida, só consultada.','')" title="Encerrada: sem gestão">🔒 Gerir</button><button class="tb-btn" style="font-size:10px;padding:3px 9px;color:var(--cyan);border-color:rgba(0,212,255,.35);" onclick="event.stopPropagation();verOcorrencia('${o.id}')">👁️ Ver</button></div>`
+        : `<button class="tb-btn" style="font-size:10px;padding:3px 9px;" onclick="event.stopPropagation();gerirOcorrencia('${o.id}')">Gerir</button>`}</td>
     </tr>`).join('')+`</tbody></table>` :
     emptyState('ti-alert-circle','Sem ocorrências','Regista problemas do edifício.');
   const dashEl = document.getElementById('dash-ocs');
@@ -9013,6 +9028,13 @@ function atualizarClassificacao() {
 }
 
 async function gerirOcorrencia(id) {
+  // 🔒 Ocorrência encerrada é história, não gestão — abre a vista de leitura
+  try {
+    var chk = await sb.from('ocorrencias').select('estado').eq('id', id).single();
+    if (chk.data && (chk.data.estado === 'resolvida' || chk.data.estado === 'fechada')) {
+      return verOcorrencia(id);
+    }
+  } catch(e){}
   var oRes = await sb.from('ocorrencias').select('*').eq('id', id).single();
   if (oRes.error) { toast('Erro ao abrir ocorrência', 'err'); return; }
   _ocAtual = oRes.data;
@@ -10018,6 +10040,95 @@ async function ocAprovarEConcluir() {
 
 // 🪄 BOTÃO MÁGICO: aprova + lança despesa + gera as quotas de todas as frações, num só clique
 // 🔗 QR + link público da ocorrência (prova verificável — resolve conflitos)
+
+// 👁️ VER OCORRÊNCIA (encerrada) — como se desenrolou + partilha. Sem botões de gestão.
+async function verOcorrencia(id) {
+  var r = await sb.from('ocorrencias').select('*').eq('id', id).single();
+  if (r.error || !r.data) { toast('Não foi possível abrir','err'); return; }
+  var o = r.data;
+  _ocAtual = o;
+  var evRes = await sb.from('ocorrencia_eventos').select('*').eq('ocorrencia_id', id).order('criado_em',{ascending:true});
+  var eventos = evRes.data || [];
+  var votos = [];
+  try {
+    var vR = await sb.from('ocorrencia_votos').select('voto,fracao_id').eq('ocorrencia_id', id);
+    votos = vR.data || [];
+  } catch(e){}
+
+  var encerrada = o.estado === 'fechada';
+  var corEstado = encerrada ? 'var(--t3)' : 'var(--green)';
+  var h = '<div style="max-height:75vh;overflow-y:auto;padding:2px;">';
+
+  // Cabeçalho
+  h += '<div style="font-size:16px;font-weight:700;">' + (o.categoria||'') + ' — ' + (o.descricao||'').substring(0,70) + '</div>';
+  h += '<div style="font-size:11px;color:var(--t3);margin:3px 0 12px;">📍 ' + (o.local_ocorrencia||'—') + ' · reportado por ' + (o.reportado_por||'—') + ' · aberta a ' + (o.criado_em||'').slice(0,10) + '</div>';
+
+  // Selo do desfecho
+  h += '<div style="background:var(--s1);border:1px solid var(--b1);border-left:3px solid ' + corEstado + ';border-radius:10px;padding:12px 14px;margin-bottom:14px;">';
+  h += '<div style="font-size:12.5px;font-weight:800;color:' + corEstado + ';">' + (encerrada ? '🔒 Encerrada sem reparação' : '✅ Resolvida') + '</div>';
+  if (o.data_resolucao) h += '<div style="font-size:11px;color:var(--t2);margin-top:3px;">Em ' + new Date(o.data_resolucao).toLocaleDateString('pt-PT') + '</div>';
+  if (parseFloat(o.orcamento_valor||0) > 0) h += '<div style="font-size:11px;color:var(--t2);margin-top:3px;">💶 Custo: <strong>' + parseFloat(o.orcamento_valor).toFixed(2) + '€</strong>' + (o.despesa_id ? ' · lançado nas despesas' : ' · sem despesa associada') + '</div>';
+  if (votos.length) {
+    var pSim = 0, pNao = 0;
+    votos.forEach(function(v){
+      var f = (fracoes||[]).find(function(x){ return x.id === v.fracao_id; });
+      var perm = f ? parseFloat(f.permilagem||0) : 0;
+      if (v.voto === 'sim') pSim += perm; else pNao += perm;
+    });
+    h += '<div style="font-size:11px;color:var(--t2);margin-top:3px;">🗳️ Votação: <strong style="color:var(--green);">' + Math.round(pSim) + '‰ a favor</strong> · <strong style="color:var(--red);">' + Math.round(pNao) + '‰ contra</strong> (' + votos.length + ' votos)</div>';
+  }
+  h += '</div>';
+
+  if (o.foto_url) {
+    h += '<a href="' + o.foto_url + '" target="_blank" style="display:block;margin-bottom:12px;"><img src="' + o.foto_url + '" style="width:100%;max-height:220px;object-fit:cover;border-radius:10px;border:1px solid var(--b1);"></a>';
+  }
+
+  // Cronologia — como se desenrolou
+  h += '<div style="font-size:11px;font-weight:700;color:var(--t2);margin-bottom:6px;">COMO SE DESENROLOU</div>';
+  if (eventos.length) {
+    eventos.forEach(function(ev){
+      h += '<div style="display:flex;gap:10px;padding:7px 0;border-bottom:1px solid var(--b1);">';
+      h += '<span style="min-width:8px;height:8px;border-radius:50%;background:var(--cyan);margin-top:5px;"></span>';
+      h += '<div style="flex:1;"><div style="font-size:11.5px;color:var(--text);">' + (ev.texto||'') + '</div><div style="font-size:10px;color:var(--t3);">' + (ev.criado_em||'').slice(0,16).replace('T',' ') + '</div></div>';
+      h += '</div>';
+    });
+  } else { h += '<div style="font-size:11px;color:var(--t3);">Sem eventos registados.</div>'; }
+
+  // 🔗 Partilha — link + QR, a prova que qualquer condómino pode consultar
+  if (o.token_publico) {
+    var base = location.href.substring(0, location.href.lastIndexOf('/') + 1);
+    var url = base + 'ocorrencia.html?t=' + o.token_publico;
+    h += '<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--b1);">';
+    h += '<div style="font-size:11px;font-weight:700;color:var(--t2);margin-bottom:8px;">🔗 PARTILHAR ESTE HISTÓRICO</div>';
+    h += '<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">';
+    h += '<div id="ver-qr-box" style="background:#fff;padding:9px;border-radius:10px;"></div>';
+    h += '<div style="flex:1;min-width:180px;">';
+    h += '<div style="display:flex;gap:6px;"><input id="oc-url" class="fi" style="flex:1;font-size:10.5px;font-family:monospace;" value="' + url + '" readonly onclick="this.select()">';
+    h += '<button class="btn-primary" style="font-size:11px;padding:8px 12px;" onclick="ocCopiarLink()">📋</button></div>';
+    h += '<div style="display:flex;gap:6px;margin-top:7px;">';
+    h += '<button class="btn-ghost" style="flex:1;font-size:10.5px;" onclick="window.open(\'' + url + '\',\'_blank\')">👁️ Abrir</button>';
+    h += '<button class="btn-ghost" style="flex:1;font-size:10.5px;" onclick="ocImprimirQR(\'' + url + '\')">🖨️ QR</button>';
+    h += '</div>';
+    h += '<div style="font-size:9.5px;color:var(--t3);margin-top:6px;line-height:1.45;">Só de leitura — quem abrir vê a votação e o histórico, e não pode alterar nada.</div>';
+    h += '</div></div></div>';
+  } else {
+    h += '<div style="font-size:10.5px;color:var(--t3);margin-top:14px;">Corre o sql_qr_ocorrencia.sql para ativar o link público de partilha.</div>';
+  }
+
+  h += '<button class="btn-primary" style="width:100%;margin-top:14px;" onclick="exportarOcorrenciaPDF()">📄 PDF de prova</button>';
+  h += '</div>';
+  abrirModalGenerico((encerrada ? '🔒' : '✅') + ' Ocorrência ' + (encerrada ? 'encerrada' : 'resolvida') + ' — só leitura', h);
+
+  setTimeout(function(){
+    var box = document.getElementById('ver-qr-box');
+    if (box && window.QRCode && o.token_publico) {
+      var base2 = location.href.substring(0, location.href.lastIndexOf('/') + 1);
+      box.innerHTML = '';
+      new QRCode(box, { text: base2 + 'ocorrencia.html?t=' + o.token_publico, width: 108, height: 108, colorDark:'#0a1220', colorLight:'#ffffff', correctLevel: QRCode.CorrectLevel.M });
+    }
+  }, 120);
+}
+
 async function ocPartilhar(ocId) {
   var oc = _ocAtual;
   if (!oc || oc.id !== ocId) {
@@ -10119,13 +10230,20 @@ async function ocProcessarTudo() {
     condominio_id:currentCondo.id,
     descricao:'Reparação: ' + (_ocAtual.categoria||'') + ' — ' + (_ocAtual.descricao||'').substring(0,50) + ' [' + divTxt + ']',
     valor_total:valor, tipo:'reparacao', data_despesa:new Date().toISOString().split('T')[0],
-    distribuicao: metodo.indexOf('bloco:')===0 ? 'permilagem' : 'permilagem',
-    estado:'aprovada', quota_gerada:true
+    distribuicao: 'permilagem',
+    estado:'aprovada', quota_gerada:true,
+    origem_tipo:'ocorrencia', ocorrencia_id:_ocAtual.id, parceiro_id:_ocAtual.parceiro_id || null
   }).select();
+  // ⚠️ Nunca dizer que lançou se não lançou
+  if (dRes.error) {
+    toast('❌ A despesa NÃO foi criada: ' + dRes.error.message,'err');
+    console.error('despesa da ocorrência:', dRes.error);
+    return;
+  }
   var despId = dRes.data && dRes.data[0] ? dRes.data[0].id : null;
 
   // 3) Marcar ocorrência resolvida
-  await sb.from('ocorrencias').update({ estado:'resolvida', data_resolucao:new Date().toISOString(), despesa_id:despId }).eq('id',_ocAtual.id);
+  await sb.from('ocorrencias').update({ estado:'resolvida', data_resolucao:new Date().toISOString(), despesa_id:despId, concurso_aberto:false, precisa_votacao:false }).eq('id',_ocAtual.id);
   await ocEvento('estado', 'Reparação concluída. Custo de ' + valor.toFixed(2) + '€ lançado e quotas geradas para ' + divLabel + '.');
 
   // 4) Gerar as quotas (dividir por permilagem do grupo)
@@ -10225,7 +10343,10 @@ async function ocAprovar() {
   } catch(e) { console.error('fecho do concurso pós-aprovação:', e); }
 
   await ocEvento('estado', 'Reparação APROVADA' + votoTxt + '. Trabalho autorizado ao parceiro.');
-  toast('Aprovada! Podes marcar como resolvida quando terminar.','ok');
+  var valAp = parseFloat(_ocAtual.orcamento_valor||0);
+  toast(valAp > 0
+    ? 'Aprovada! O custo de ' + valAp.toFixed(2) + '€ só entra nas Despesas quando marcares como concluída.'
+    : 'Aprovada! Regista o orçamento antes de concluir, senão não entra custo nas contas.','ok');
   gerirOcorrencia(_ocAtual.id);
 }
 
@@ -10234,13 +10355,27 @@ async function ocConcluir() {
   var metodo = _ocAtual.divisao_metodo || 'geral';
   var divTxt = metodo.indexOf('bloco:')===0 ? 'Bloco ' + metodo.split(':')[1] : 'permilagem geral';
   // Criar despesa
-  var dRes = await sb.from('despesas').insert({
-    condominio_id:currentCondo.id,
-    descricao:'Reparação: ' + (_ocAtual.categoria||'') + ' — ' + (_ocAtual.descricao||'').substring(0,50) + ' [' + divTxt + ']',
-    valor_total:valor, tipo:'reparacao', data_despesa:new Date().toISOString().split('T')[0]
-  }).select();
-  var despId = dRes.data && dRes.data[0] ? dRes.data[0].id : null;
-  await sb.from('ocorrencias').update({ estado:'resolvida', data_resolucao:new Date().toISOString(), despesa_id:despId }).eq('id',_ocAtual.id);
+  if (!(valor > 0)) {
+    if (!await confirmar('Esta ocorrência não tem valor de orçamento registado.\n\nSe concluíres agora, NÃO é criada qualquer despesa nas contas — fica só o registo de que foi resolvida.\n\nContinuar?', {titulo:'Sem custo associado', tipo:'aviso', icon:'⚠️', okTexto:'Concluir sem custo'})) return;
+  }
+  var despId = null;
+  if (valor > 0) {
+    var dRes = await sb.from('despesas').insert({
+      condominio_id:currentCondo.id,
+      descricao:'Reparação: ' + (_ocAtual.categoria||'') + ' — ' + (_ocAtual.descricao||'').substring(0,50) + ' [' + divTxt + ']',
+      valor_total:valor, tipo:'reparacao', data_despesa:new Date().toISOString().split('T')[0],
+      distribuicao:'permilagem', estado:'aprovada', quota_gerada:false,
+      origem_tipo:'ocorrencia', ocorrencia_id:_ocAtual.id, parceiro_id:_ocAtual.parceiro_id || null
+    }).select();
+    // ⚠️ Se falhar, a ocorrência NÃO é dada como resolvida (senão o custo desaparecia sem ninguém saber)
+    if (dRes.error) {
+      toast('❌ A despesa NÃO foi criada: ' + dRes.error.message,'err');
+      console.error('despesa da ocorrência:', dRes.error);
+      return;
+    }
+    despId = dRes.data && dRes.data[0] ? dRes.data[0].id : null;
+  }
+  await sb.from('ocorrencias').update({ estado:'resolvida', data_resolucao:new Date().toISOString(), despesa_id:despId, concurso_aberto:false, precisa_votacao:false }).eq('id',_ocAtual.id);
   await ocEvento('estado', 'Reparação concluída. Custo de ' + valor.toFixed(2) + '€ lançado nas despesas, dividido por ' + divTxt + '.');
 
   // Avisar quem reportou (se veio do portal) que está resolvido
@@ -10264,7 +10399,7 @@ async function ocConcluir() {
 }
 
 async function resolveOc(id) {
-  await sb.from('ocorrencias').update({estado:'resolvida',data_resolucao:new Date().toISOString()}).eq('id',id);
+  await sb.from('ocorrencias').update({estado:'resolvida',data_resolucao:new Date().toISOString(),concurso_aberto:false,precisa_votacao:false}).eq('id',id);
   toast('Ocorrência resolvida!','ok'); loadOcorrencias(); updateBadges();
 }
 
@@ -10291,6 +10426,26 @@ async function loadParceiros() {
 function setCatFil(c){catFil=c;loadParceiros();}
 
 // Ficha do parceiro: editar dados + ver avaliações
+
+// 🔑 Gerar acesso ao portal para parceiros antigos (sem token)
+async function gerarAcessoParceiro(id) {
+  try {
+    var novo = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : null;
+    if (!novo) { toast('O browser não suporta geração de códigos — atualiza o navegador','err'); return; }
+    var up = await sb.from('parceiros').update({ token_acesso: novo }).eq('id', id);
+    if (up.error) {
+      if ((up.error.code||'') === '42703' || /column/i.test(up.error.message||'')) {
+        toast('Falta correr o sql_portal_parceiro.sql (coluna token_acesso)','err');
+      } else {
+        toast('Erro: ' + up.error.message,'err');
+      }
+      return;
+    }
+    toast('🔑 Acesso criado — copia o link e envia ao parceiro','ok');
+    abrirParceiro(id);
+  } catch(e) { toast('Erro: ' + (e.message||e),'err'); }
+}
+
 async function abrirParceiro(id) {
   var pRes = await sb.from('parceiros').select('*').eq('id', id).single();
   if (pRes.error) { toast('Erro ao abrir parceiro','err'); return; }
@@ -10328,7 +10483,25 @@ async function abrirParceiro(id) {
   h += '<button class="btn-primary" style="flex:1;" onclick="guardarParceiro()">💾 Guardar</button>';
   h += '<button class="tb-btn" style="color:var(--red);border-color:rgba(255,68,68,.3);" onclick="apagarParceiro()">🗑️</button>';
   h += '</div>';
+  // 📨 Pedidos de orçamento deste parceiro — para o admin ver se chegaram mesmo
+  var pedR = await sb.from('orcamentos_obra').select('estado').eq('parceiro_id', id);
+  var peds = pedR.data || [];
+  var nPedido = peds.filter(function(x){ return x.estado === 'pedido'; }).length;
+  var nSubmet = peds.filter(function(x){ return x.estado === 'submetido'; }).length;
+  h += '<div style="margin-top:14px;background:var(--s1);border:1px solid var(--b1);border-radius:10px;padding:11px 13px;font-size:11.5px;color:var(--t2);">';
+  h += '📨 <strong>Pedidos de orçamento:</strong> ' + nPedido + ' por responder · ' + nSubmet + ' respondido(s)';
+  if (pedR.error) h += '<br><span style="color:var(--red);">Erro a consultar: ' + pedR.error.message + '</span>';
+  else if (!peds.length) h += '<br><span style="color:var(--t3);">Ainda não recebeu nenhum pedido através do programa.</span>';
+  h += '</div>';
+
   // Acesso ao Portal do Parceiro
+  if (!p.token_acesso) {
+    h += '<div style="margin-top:12px;background:rgba(255,84,112,.07);border:1px solid rgba(255,84,112,.35);border-radius:10px;padding:12px;">';
+    h += '<div style="font-size:12px;font-weight:700;color:var(--red);">⚠️ Este parceiro não tem acesso ao portal</div>';
+    h += '<div style="font-size:10.5px;color:var(--t2);margin:4px 0 9px;line-height:1.5;">Sem código de acesso não há link para lhe enviar — os pedidos ficam registados mas ele nunca os vê. Gera o acesso e envia-lhe o link.</div>';
+    h += '<button class="btn-primary" style="width:100%;font-size:11.5px;" onclick="gerarAcessoParceiro(\'' + p.id + '\')">🔑 Gerar acesso ao portal</button>';
+    h += '</div>';
+  }
   if (p.token_acesso) {
     var baseP = location.href.substring(0, location.href.lastIndexOf('/') + 1);
     var urlPortalP = baseP + 'parceiro.html?t=' + p.token_acesso;
@@ -11965,6 +12138,16 @@ async function sugerirOrdemTrabalhos() {
         contexto.situacoes.push('FUNDO DE RESERVA SEM PROVA COMPLETA: por lei (DL 268/94) deviam existir ' + teorF.toFixed(2) + '€ (' + pctF + '% das quotas pagas) mas só ' + compF.toFixed(2) + '€ estão comprovados por movimentos. Sugerir ponto de prestação de contas do fundo com apresentação do extrato bancário.');
       } else if (teorF >= 50) {
         contexto.situacoes.push('Fundo de reserva comprovado: ' + compF.toFixed(2) + '€ de ' + teorF.toFixed(2) + '€ teóricos — pode ser comunicado como ponto de situação positivo.');
+      }
+    } catch(e){}
+
+    // 📈 A TAXA DO FUNDO CHEGA? — proposta de reforço com base no gasto real
+    try {
+      var sfOT = await analisarSuficienciaFundo(c);
+      if (sfOT && sfOT.pctSugerida) {
+        contexto.situacoes.push('TAXA DO FUNDO INSUFICIENTE: a taxa em vigor é ' + sfOT.pct + '% (rende ' + sfOT.contribAnual.toFixed(2) + '€/ano com as quotas de ' + sfOT.anoBase + '), mas o condomínio gastou em média ' + sfOT.gastoMedio.toFixed(2) + '€/ano em obras e manutenção nos últimos ' + sfOT.anosAmostra + ' ano(s). Sugerir ponto de deliberação: aumentar a percentagem do fundo de reserva de ' + sfOT.pct + '% para cerca de ' + sfOT.pctSugerida + '% (o DL 268/94 fixa 10% como MÍNIMO; a assembleia pode aprovar mais para acompanhar o ritmo real de conservação, evitando quotas extraordinárias de emergência).');
+      } else if (sfOT && sfOT.gastoMedio > 0) {
+        contexto.situacoes.push('Taxa do fundo adequada: ' + sfOT.pct + '% rende ' + sfOT.contribAnual.toFixed(2) + '€/ano e a conservação custa em média ' + sfOT.gastoMedio.toFixed(2) + '€/ano — sem necessidade de aumento.');
       }
     } catch(e){}
 
@@ -14695,7 +14878,10 @@ async function marcarEstadoAtual() {
 
 async function verificarNovidades() {
   if (document.hidden) return;              // separador em segundo plano → não gasta
-  if (!currentCondo || _pollAvisado) return;
+  if (!currentCondo) return;
+  // os badges do menu acompanham SEMPRE (2 queries baratas), mesmo com a barra já visível
+  try { updateBadges(); } catch(e){}
+  if (_pollAvisado) return;
   var agora = await _pollFotografia();
   if (!agora || !_pollBase) { if (agora) _pollBase = agora; return; }
 
@@ -14705,7 +14891,14 @@ async function verificarNovidades() {
   if (agora.propostas > _pollBase.propostas) novidades.push((agora.propostas - _pollBase.propostas) + ' proposta(s) de orçamento');
   if (agora.quotasPagas > _pollBase.quotasPagas) novidades.push((agora.quotasPagas - _pollBase.quotasPagas) + ' quota(s) paga(s)');
 
-  if (novidades.length) mostrarBarraNovidades(novidades.join(' · '));
+  if (novidades.length) {
+    mostrarBarraNovidades(novidades.join(' · '));
+    // o sino e a lista aberta acompanham a novidade, sem esperar por um clique
+    try { verificarAvisosGerais(); } catch(e){}
+    try {
+      if (agora.ocorrencias > _pollBase.ocorrencias && (location.hash||'') === '#ocorrencias') loadOcorrencias();
+    } catch(e){}
+  }
 }
 
 function mostrarBarraNovidades(txt) {
@@ -14785,7 +14978,7 @@ async function updateBadges() {
   const pend = (qs||[]).filter(q=>q.estado==='pendente'||q.estado==='atraso').length;
   document.getElementById('nb-quotas').textContent = pend;
   document.getElementById('nb-quotas').style.display = pend>0?'':'none';
-  const { data: ocs } = await sb.from('ocorrencias').select('estado').eq('condominio_id',currentCondo.id).neq('estado','resolvida');
+  const { data: ocs } = await sb.from('ocorrencias').select('estado').eq('condominio_id',currentCondo.id).neq('estado','resolvida').neq('estado','fechada');
   const ocN = (ocs||[]).length;
   document.getElementById('nb-oc').textContent = ocN;
   document.getElementById('nb-oc').style.display = ocN>0?'':'none';
@@ -14990,7 +15183,7 @@ async function validarExtratoAI(file) {
     var teorico = (window._fundoTeorico||0).toFixed(2);
     var comprovado = (window._fundoComprovado||0).toFixed(2);
     var prompt = 'Analisa este documento que foi apresentado como EXTRATO BANCÁRIO OFICIAL da conta do fundo de reserva de um condomínio português.\n' +
-      'Contexto: o fundo teórico (10% das quotas pagas) é ' + teorico + '€ e o comprovado por movimentos registados é ' + comprovado + '€.\n' +
+      'Contexto: o fundo teórico (' + _pctFundoAtual() + '% das quotas pagas, taxa em vigor neste condomínio) é ' + teorico + '€ e o comprovado por movimentos registados é ' + comprovado + '€.\n' +
       'Verifica: (1) tem elementos de um extrato real — nome de banco português, IBAN PT50, datas, saldos, layout bancário? (2) parece gerado em Excel/Word/editor (colunas perfeitas sem logotipo, fontes de escritório, sem rodapés bancários)? (3) o saldo visível é da ordem de grandeza do fundo esperado?\n' +
       'Responde APENAS JSON: {"valido": true|false, "motivo": "explicação curta em português (máx 140 caracteres)", "saldo_detetado": número|null, "banco": "nome"|null}';
     var resp = await fetch(PROXY_URL, {
@@ -15200,6 +15393,53 @@ async function fecharOferta(id) {
     toast('Oferta fechada' + (o.tipo==='individual' ? ' — email preparado com ' + linhas.length + ' consentido(s)' : ''),'ok');
     carregarOfertasAdmin();
   } catch(e) { toast('Erro: ' + (e.message||e),'err'); }
+}
+
+
+function _pctFundoAtual() {
+  var p = parseFloat((currentCondo||{}).fundo_percentagem);
+  return isNaN(p) ? 10 : p;
+}
+
+// 📈 SUFICIÊNCIA DO FUNDO — a taxa em vigor chega para o que este prédio gasta em conservação?
+// Nunca inventa custos: usa o histórico real de obras/manutenção do próprio condomínio.
+async function analisarSuficienciaFundo(cond) {
+  var cd = cond || currentCondo;
+  if (!cd) return null;
+  var pct = parseFloat(cd.fundo_percentagem); if (isNaN(pct)) pct = 10;
+  var anoAtual = new Date().getFullYear();
+  try {
+    var [qR, mR] = await Promise.all([
+      sb.from('quotas').select('ano,valor_pago').eq('condominio_id', cd.id),
+      sb.from('movimentos').select('valor,categoria,data_movimento').eq('condominio_id', cd.id).eq('tipo','despesa').gte('data_movimento', (anoAtual-3) + '-01-01')
+    ]);
+    // base: quotas pagas do ano corrente (ou do ano anterior, se o ano ainda mal começou)
+    var porAnoQ = {};
+    (qR.data||[]).forEach(function(q){ if (!q.ano) return; porAnoQ[q.ano] = (porAnoQ[q.ano]||0) + parseFloat(q.valor_pago||0); });
+    var baseAno = (porAnoQ[anoAtual] > 0) ? porAnoQ[anoAtual] : (porAnoQ[anoAtual-1] || 0);
+    var anoBase = (porAnoQ[anoAtual] > 0) ? anoAtual : anoAtual-1;
+    if (baseAno <= 0) return null;
+    var contribAnual = baseAno * pct / 100;
+    // gasto real em conservação: só obras e manutenção (o resto é despesa corrente)
+    var porAnoG = {};
+    (mR.data||[]).forEach(function(m){
+      if (m.categoria !== 'obras' && m.categoria !== 'manutencao') return;
+      var a = (m.data_movimento||'').substring(0,4);
+      if (!a) return;
+      porAnoG[a] = (porAnoG[a]||0) + parseFloat(m.valor||0);
+    });
+    var anosG = Object.keys(porAnoG);
+    if (!anosG.length) return { pct: pct, anoBase: anoBase, baseAno: baseAno, contribAnual: contribAnual, gastoMedio: 0, anosAmostra: 0, pctSugerida: null };
+    var gastoMedio = anosG.reduce(function(s,k){ return s + porAnoG[k]; }, 0) / anosG.length;
+    var pctSugerida = null;
+    // só sugere se a diferença for material (>15%) e a sugestão for realmente maior
+    if (gastoMedio > contribAnual * 1.15) {
+      pctSugerida = Math.ceil(gastoMedio / baseAno * 100);
+      if (pctSugerida > 40) pctSugerida = 40;          // travão de sanidade
+      if (pctSugerida <= pct) pctSugerida = null;
+    }
+    return { pct: pct, anoBase: anoBase, baseAno: baseAno, contribAnual: contribAnual, gastoMedio: gastoMedio, anosAmostra: anosG.length, pctSugerida: pctSugerida };
+  } catch(e) { console.error('suficiencia fundo:', e); return null; }
 }
 
 // 🔧 RADAR DE MANUTENÇÃO — o que ficou parado
@@ -15419,6 +15659,25 @@ async function atualizarFundoCartao() {
     var barra = document.getElementById('fundo-barra');
     barra.style.width = Math.min(100, cob) + '%';
     barra.style.background = cor;
+    var pm = document.getElementById('fundo-pm');
+    if (pm) pm.textContent = 'DL 268/94, Art. 4.º — mínimo legal 10% · em vigor neste prédio: ' + pct + '%';
+    // projeção de suficiência (assíncrona, não trava o cartão)
+    analisarSuficienciaFundo().then(function(sf){
+      var zona = document.getElementById('fundo-suficiencia');
+      if (!zona || !sf) return;
+      if (sf.gastoMedio <= 0) { zona.innerHTML = ''; return; }
+      var h = '';
+      if (sf.pctSugerida) {
+        h += '<div style="background:rgba(255,179,0,.07);border:1px solid rgba(255,179,0,.3);border-radius:9px;padding:10px 12px;margin-top:10px;font-size:11px;color:var(--t2);line-height:1.6;">';
+        h += '📈 <strong style="color:var(--amber);">A taxa de ' + sf.pct + '% pode não chegar.</strong><br>';
+        h += 'O fundo recebe ' + sf.contribAnual.toFixed(2) + '€/ano, mas este prédio gastou em média <strong>' + sf.gastoMedio.toFixed(2) + '€/ano</strong> em obras e manutenção (média de ' + sf.anosAmostra + ' ano' + (sf.anosAmostra>1?'s':'') + ').<br>';
+        h += 'Para acompanhar o ritmo real de conservação seriam precisos <strong style="color:var(--amber);">' + sf.pctSugerida + '%</strong> — subir a taxa exige deliberação da assembleia.';
+        h += '</div>';
+      } else {
+        h += '<div style="font-size:10.5px;color:var(--t3);margin-top:9px;">📈 A taxa de ' + sf.pct + '% rende ' + sf.contribAnual.toFixed(2) + '€/ano; a conservação tem custado ' + sf.gastoMedio.toFixed(2) + '€/ano — o ritmo está equilibrado.</div>';
+      }
+      zona.innerHTML = h;
+    });
     var nota = document.getElementById('fundo-nota');
     if (teorico < 1 && comprovado < 1) {
       nota.innerHTML = 'Ainda sem quotas pagas registadas. O teórico cresce automaticamente: ' + pct + '% de cada quota paga pertence ao fundo.';
@@ -15436,7 +15695,7 @@ async function construirContextoIA() {
     var cid = currentCondo.id;
     var [qR, oR, dR, aR, pR, mR] = await Promise.all([
       sb.from('quotas').select('valor_emitido,valor_pago,fracao_id,mes,ano').eq('condominio_id', cid),
-      sb.from('ocorrencias').select('descricao,categoria,estado,tipo_legal,orcamento_valor').eq('condominio_id', cid).neq('estado','resolvida').order('criado_em',{ascending:false}).limit(8),
+      sb.from('ocorrencias').select('descricao,categoria,estado,tipo_legal,orcamento_valor').eq('condominio_id', cid).neq('estado','resolvida').neq('estado','fechada').order('criado_em',{ascending:false}).limit(8),
       sb.from('despesas').select('descricao,valor_total,estado,quota_gerada,dispensa_cobranca').eq('condominio_id', cid).order('criado_em',{ascending:false}).limit(8),
       sb.from('assembleias').select('tipo,data_assembleia,numero_ata,estado_sessao,ata_texto,ordem_trabalhos').eq('condominio_id', cid).order('data_assembleia',{ascending:false}).limit(2),
       sb.from('parceiros').select('nome,categoria,rating,num_avaliacoes').eq('condominio_id', cid).limit(10),
@@ -19738,7 +19997,7 @@ async function atualizarBadgeMensagens() {
   if (b) { if ((res.count||0) > 0) { b.textContent = res.count; b.style.display='inline-block'; } else b.style.display='none'; }
 }
 // Verificar mensagens novas a cada 30s (para o admin ver sem recarregar)
-if (!window._msgInterval) { window._msgInterval = setInterval(function(){ if (currentCondo) atualizarBadgeMensagens(); }, 30000); }
+if (!window._msgInterval) { window._msgInterval = setInterval(function(){ if (currentCondo && !document.hidden) { atualizarBadgeMensagens(); try { updateBadges(); } catch(e){} } }, 30000); }
 
 function escaparHtml(s){ var d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
 
@@ -20472,6 +20731,13 @@ function updateClock(){const d=new Date();const p=n=>String(n).padStart(2,'0');c
 
 // ===== INIT =====
 setInterval(updateClock,1000); updateClock();
+// ao voltar ao separador, atualizar imediatamente em vez de esperar pelo ciclo
+document.addEventListener('visibilitychange', function(){
+  if (!document.hidden && typeof currentCondo !== 'undefined' && currentCondo) {
+    try { updateBadges(); atualizarBadgeMensagens(); } catch(e){}
+    try { verificarNovidades(); } catch(e){}
+  }
+});
 checkSession();
 
 </script>

@@ -172,7 +172,13 @@ async function init() {
 
 async function carregarPedidos() {
   const r = await sb.rpc('parceiro_pedidos', { p_token: token });
-  const pedidos = (!r.error && r.data) ? r.data : [];
+  // ⚠️ Nunca dizer "sem pedidos" quando na verdade a consulta falhou
+  if (r.error) {
+    const c1 = document.getElementById('pedidos-lista');
+    if (c1) c1.innerHTML = '<div class="empty" style="color:#ff5470;">⚠️ Não foi possível carregar os pedidos.<br><span style="font-size:11px;opacity:.8;">' + esc(r.error.message || 'erro desconhecido') + '</span><br><span style="font-size:11px;opacity:.7;">Avisa a administração do condomínio.</span></div>';
+    return;
+  }
+  const pedidos = r.data || [];
   const porResponder = pedidos.filter(p => p.estado === 'pedido');
   const submetidos = pedidos.filter(p => p.estado === 'submetido');
   const escolhidos = pedidos.filter(p => p.estado === 'escolhido');
