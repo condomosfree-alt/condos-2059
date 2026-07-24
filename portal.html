@@ -363,7 +363,7 @@
         <div style="font-size:13px;font-weight:700;color:#b48cff;">🛡️ Fundo de Reserva do Edifício</div>
         <div id="fundo-selo" style="font-size:10px;font-weight:800;padding:3px 9px;border-radius:6px;"></div>
       </div>
-      <div style="font-size:10.5px;color:var(--t2);margin:6px 0 12px;line-height:1.5;">Por lei (DL 268/94, Art. 4.º), o condomínio deve guardar pelo menos 10% das quotas num fundo próprio para obras de conservação. Este painel mostra o que está <strong>comprovado por movimentos registados</strong> — não apenas prometido.</div>
+      <div style="font-size:10.5px;color:var(--t2);margin:6px 0 12px;line-height:1.5;">Por lei (DL 268/94, Art. 4.º), o condomínio deve guardar <strong>no mínimo 10%</strong> das quotas num fundo próprio para obras. <span id="fundo-taxa-vigor"></span></div>
       <div style="display:flex;gap:10px;margin-bottom:10px;">
         <div style="flex:1;text-align:center;background:var(--card2);border-radius:9px;padding:9px;"><div style="font-size:9px;color:var(--t3);text-transform:uppercase;">Devia existir</div><div id="fundo-p-teorico" style="font-size:15px;font-weight:800;">—</div></div>
         <div style="flex:1;text-align:center;background:var(--card2);border-radius:9px;padding:9px;"><div style="font-size:9px;color:var(--t3);text-transform:uppercase;">Comprovado</div><div id="fundo-p-comprovado" style="font-size:15px;font-weight:800;color:#b48cff;">—</div></div>
@@ -621,7 +621,32 @@ function mostrarInstalar(e) {
   ov.style.display = 'flex';
 }
 
-function irPara(pg) {
+
+// 🔔 Vindo de uma notificação: ir direto ao que foi avisado
+function aplicarDestinoNotificacao() {
+  var h = (location.hash || '').replace('#','').trim();
+  var validos = ['inicio','quotas','contas','docs','reportar','mensagens'];
+  if (!h || validos.indexOf(h) === -1) return;
+  irPara(h, true);
+  // uma pista visual: o que motivou a notificação fica em destaque por instantes
+  setTimeout(function(){
+    var alvos = { mensagens:'pg-mensagens', quotas:'fundo-card', reportar:'oc-vista-lista', docs:'pg-docs', inicio:'ofertas-card' };
+    var el = document.getElementById(alvos[h] || '');
+    if (!el) return;
+    try { el.scrollIntoView({ behavior:'smooth', block:'start' }); } catch(e){ }
+    el.style.transition = 'box-shadow .4s';
+    el.style.boxShadow = '0 0 0 2px rgba(0,212,255,.55)';
+    setTimeout(function(){ el.style.boxShadow = ''; }, 2600);
+    // nas mensagens, mostrar sempre a mais recente
+    if (h === 'mensagens') {
+      var box = document.getElementById('chat-scroll');
+      if (box) box.scrollTop = box.scrollHeight;
+    }
+  }, 700);
+}
+
+function irPara(pg, semHistorico) {
+  try { if (!semHistorico && location.hash !== '#' + pg) history.replaceState(null, '', location.pathname + location.search + '#' + pg); } catch(e){}
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav button').forEach(b => b.classList.remove('on'));
   const map = { inicio:'pg-inicio', quotas:'pg-quotas', contas:'pg-contas', docs:'pg-docs', reportar:'pg-reportar', mensagens:'pg-mensagens' };
@@ -1130,11 +1155,12 @@ async function carregarFundoPortal() {
   h += '</div>';
   h += '<div style="text-align:right;">';
   h += '<div style="font-size:22px;font-weight:700;color:#b48cff;font-family:monospace;">' + eur(saldo) + '</div>';
-  h += '<div style="font-size:9.5px;color:var(--t3);">' + pct + '% de cada quota</div>';
+  h += '<div style="font-size:9.5px;color:var(--t3);">movimentos registados</div>';
+  h += '<div style="font-size:9.5px;color:#b48cff;font-weight:700;">taxa em vigor: ' + pct + '%</div>';
   h += '</div></div>';
   h += '<button onclick="toggleFundoDetalhe()" style="width:100%;margin-top:10px;background:transparent;border:1px solid rgba(180,140,255,.3);color:var(--t2);border-radius:8px;padding:8px;font-size:11px;font-weight:600;cursor:pointer;">👁️ Ver movimentos do fundo</button>';
   h += '<div id="c-fundo-movs"></div>';
-  h += '<div style="font-size:9.5px;color:var(--t3);margin-top:8px;line-height:1.4;">⚖️ Obrigatório por lei (DL 268/94): mínimo 10% da quota de cada condómino, em conta separada.</div>';
+  h += '<div style="font-size:9.5px;color:var(--t3);margin-top:8px;line-height:1.4;">⚖️ O DL 268/94 fixa 10% como <strong>mínimo</strong> — este prédio aplica ' + pct + '%. O valor acima conta só os movimentos do fundo já registados; o quadro 🛡️ em cima compara-o com o que devia existir.</div>';
   h += '</div>';
   box.innerHTML = h;
 }
@@ -2559,6 +2585,12 @@ async function carregarFundo() {
     const cob = teo > 0 ? comp/teo*100 : 100;
     window._chips.fundoCob = cob; renderChips();
     window._fundoP = { teo: teo, comp: comp, ult: d.ultimo_reforco ? new Date(d.ultimo_reforco).toLocaleDateString('pt-PT') : null };
+    // taxa realmente em vigor neste prédio (pode ser superior ao mínimo legal)
+    const pctVig = parseFloat(d.percentagem||0);
+    const elTaxa = document.getElementById('fundo-taxa-vigor');
+    if (elTaxa && pctVig > 0) {
+      elTaxa.innerHTML = 'Neste prédio está em vigor <strong style="color:#b48cff;">' + pctVig + '%</strong> de cada quota' + (pctVig > 10 ? ' — acima do mínimo, aprovado em assembleia.' : '.');
+    }
     const cor = cob >= 95 ? 'var(--green)' : (cob >= 60 ? '#ffb300' : 'var(--red)');
     const barra = document.getElementById('fundo-p-barra');
     barra.style.width = Math.min(100, cob) + '%'; barra.style.background = cor;
@@ -2608,6 +2640,9 @@ carregarScore();
 carregarHistoria();
 carregarOfertas();
 initNotificacoes();
+aplicarDestinoNotificacao();
+// se a app já estava aberta e o utilizador carrega noutra notificação
+window.addEventListener('hashchange', aplicarDestinoNotificacao);
 </script>
 </body>
 </html>

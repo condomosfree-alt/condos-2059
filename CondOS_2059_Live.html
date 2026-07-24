@@ -767,7 +767,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.24-2148</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.24-2152</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -3897,12 +3897,14 @@ async function checkSession() {
 var _avisosGerais = [];
 
 // 🔔 Enviar notificação push ao condómino (silencioso — nunca bloqueia o fluxo)
-async function enviarPush(fracaoId, titulo, corpo) {
+async function enviarPush(fracaoId, titulo, corpo, destino) {
   if (!fracaoId) return;
   try {
     var baseP = location.href.substring(0, location.href.lastIndexOf('/') + 1);
     var fr = fracoes.find(function(f){ return f.id === fracaoId; });
-    var urlP = fr && fr.token_acesso ? (baseP + 'portal.html?t=' + fr.token_acesso) : baseP;
+    // 🎯 o URL leva a secção certa: quem carrega na notificação cai onde interessa
+    var secao = destino ? ('#' + destino) : '#mensagens';
+    var urlP = fr && fr.token_acesso ? (baseP + 'portal.html?t=' + fr.token_acesso + secao) : baseP;
     await sb.functions.invoke('enviar-push', {
       body: { fracao_id: fracaoId, titulo: titulo || 'COND.OS', corpo: corpo || '', url: urlP }
     });
@@ -3927,15 +3929,19 @@ function instalarInterceptorPush() {
             // só notifica mensagens DO ADMIN para o condómino
             if (m && m.autor === 'admin' && m.fracao_id && m.texto) {
               var titulo = 'Nova mensagem do condomínio';
+              var destino = 'mensagens';
               var t = String(m.texto);
-              if (/RECIBO/i.test(t)) titulo = '🧾 Recibo disponível';
-              else if (/QUOTA EM ATRASO|dívida/i.test(t)) titulo = '⚠️ Aviso de quota';
-              else if (/CONVOCAT/i.test(t)) titulo = '📨 Convocatória de assembleia';
-              else if (/ATA /i.test(t)) titulo = '📋 Ata da assembleia';
-              else if (/vota/i.test(t)) titulo = '🗳️ Votação à sua espera';
-              else if (/quota extraordinária/i.test(t)) titulo = '💶 Quota extraordinária';
+              if (/RECIBO/i.test(t)) { titulo = '🧾 Recibo disponível'; destino = 'quotas'; }
+              else if (/QUOTA EM ATRASO|dívida/i.test(t)) { titulo = '⚠️ Aviso de quota'; destino = 'quotas'; }
+              else if (/CONVOCAT/i.test(t)) { titulo = '📨 Convocatória de assembleia'; destino = 'mensagens'; }
+              else if (/ATA /i.test(t)) { titulo = '📋 Ata da assembleia'; destino = 'docs'; }
+              else if (/vota|VOTAÇÃO/i.test(t)) { titulo = '🗳️ Votação à sua espera'; destino = 'reportar'; }
+              else if (/quota extraordinária/i.test(t)) { titulo = '💶 Quota extraordinária'; destino = 'quotas'; }
+              else if (/FUNDO DE RESERVA|PROVA DO FUNDO/i.test(t)) { titulo = '🛡️ Fundo de reserva'; destino = 'quotas'; }
+              else if (/OFERTA/i.test(t)) { titulo = '💼 Oferta para o prédio'; destino = 'inicio'; }
+              else if (/avaria|ocorrência|reparação/i.test(t)) { titulo = '🔧 Avaria no prédio'; destino = 'reportar'; }
               var resumo = t.replace(/\n+/g, ' ').substring(0, 110);
-              enviarPush(m.fracao_id, titulo, resumo);
+              enviarPush(m.fracao_id, titulo, resumo, destino);
             }
           });
         } catch(e) { /* nunca bloquear o insert */ }
