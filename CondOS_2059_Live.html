@@ -767,7 +767,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.28-1021</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.28-1059</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -4157,6 +4157,22 @@ async function verificarAvisosGerais() {
           detalhe: 'Sem email registado: ' + nomesC + (nCarta>5?'…':'') + '. Gera o PDF de cada um (botão 📄 nas Quotas) e envia por correio.' });
       }
     } catch(e) { console.error('aviso recibos carta:', e); }
+
+    // 5e-000) ✋ AVARIAS À ESPERA DE CONFIRMAÇÃO — não podem ficar penduradas
+    try {
+      var pcR = await sb.from('ocorrencias').select('id,descricao,criado_em').eq('condominio_id', currentCondo.id).eq('precisa_confirmacao', true).is('confirmada_em', null).not('estado','in','("resolvida","fechada")');
+      var pcs = pcR.data || [];
+      var paradas = pcs.filter(function(o){ return (new Date() - new Date(o.criado_em)) > 3*24*3600*1000; });
+      if (paradas.length) {
+        avisos.push({ pagina:'ocorrencias', badge:'✋', cor:'#ffb300',
+          texto: paradas.length + ' avaria(s) sem confirmação há mais de 3 dias',
+          detalhe: 'Chegaram pelo QR do átrio e ninguém confirmou. Ou o problema não existe (encerra), ou existe e ninguém reparou (confirma tu e desbloqueia) — o processo está parado à espera.' });
+      } else if (pcs.length) {
+        avisos.push({ pagina:'ocorrencias', badge:'✋', cor:'#8b95a8',
+          texto: pcs.length + ' avaria(s) à espera de confirmação dos condóminos',
+          detalhe: 'Reportadas pelo QR do átrio. Bastam 2 confirmações para o processo avançar sozinho — ou podes confirmar tu.' });
+      }
+    } catch(e){}
 
     // 5e-00) 📝 DECLARAÇÕES DA FICHA por confirmar
     try {
@@ -9088,7 +9104,11 @@ async function gerirOcorrencia(id) {
   h += '<div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;">';
   h += '<div><div style="font-size:15px;font-weight:700;">' + (o.categoria||'') + '</div>';
   h += '<div style="font-size:11.5px;color:var(--t2);margin-top:2px;">' + (o.descricao||'').substring(0,90) + '</div>';
-  h += '<div style="font-size:10.5px;color:var(--t3);margin-top:3px;">📍 ' + (o.local_ocorrencia||'—') + ' · aberta há ' + (dias === 0 ? 'hoje' : dias + ' dia' + (dias>1?'s':'')) + (o.reportado_por ? ' · ' + o.reportado_por : '') + '</div></div>';
+  h += '<div style="font-size:10.5px;color:var(--t3);margin-top:3px;">📍 ' + (o.local_ocorrencia||'—') + ' · aberta há ' + (dias === 0 ? 'hoje' : dias + ' dia' + (dias>1?'s':'')) + (o.reportado_por ? ' · ' + o.reportado_por : '') + '</div>';
+  if (o.confirmada_em) {
+    h += '<div style="font-size:10.5px;color:var(--green);margin-top:3px;">✅ Confirmada pelos condóminos · afeta ' + (o.ambito === 'bloco' ? 'apenas o bloco ' + (o.ambito_bloco||'?') : 'o prédio todo') + '</div>';
+  }
+  h += '</div>';
   var selo = valor > 0 ? parseFloat(valor).toFixed(2) + '€' : 'sem orçamento';
   h += '<span style="background:var(--s1);border:1px solid var(--b1);color:var(--t2);font-size:10.5px;padding:4px 10px;border-radius:6px;white-space:nowrap;">' + selo + '</span>';
   h += '</div></div>';
@@ -9124,6 +9144,26 @@ async function gerirOcorrencia(id) {
   // ── O QUE FAZER AGORA ──
   h += '<div style="background:var(--s1);border:1px solid var(--b1);border-radius:11px;padding:15px;margin-bottom:12px;">';
   h += '<div style="font-size:10.5px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;">Agora</div>';
+
+  if (o.precisa_confirmacao && !o.confirmada_em) {
+    var cfR = await sb.from('ocorrencia_confirmacoes').select('resposta').eq('ocorrencia_id', id);
+    var cfs = cfR.data || [];
+    var simN = cfs.filter(function(x){ return x.resposta !== 'nao'; }).length;
+    var naoN = cfs.filter(function(x){ return x.resposta === 'nao'; }).length;
+    h += '<div style="font-size:15px;font-weight:700;margin:4px 0 4px;">À espera da confirmação dos condóminos</div>';
+    h += '<div style="font-size:11.5px;color:var(--t2);margin-bottom:10px;line-height:1.5;">Este reporte chegou pelo QR do átrio, por isso não dispara nada sozinho. Bastam <strong>2 confirmações</strong> — ou podes desbloquear tu, se souberes que é verdade.</div>';
+    h += '<div style="display:flex;gap:14px;font-size:12px;margin-bottom:10px;">';
+    h += '<span style="color:var(--green);font-weight:700;">' + simN + ' confirmam</span>';
+    h += '<span style="color:var(--t3);">' + naoN + ' não veem</span>';
+    h += '<span style="color:var(--t3);">faltam ' + Math.max(0, 2 - simN) + '</span>';
+    h += '</div>';
+    h += _btnGuia('ti-check', '✋ Confirmar eu e desbloquear', 'Assumes que o problema existe — fica registado que foste tu', 'ocConfirmarAdmin()', true);
+    h += _btnGuia('ti-x', '✕ Encerrar — não existe', 'Falso alarme ou troça', 'ocEncerrar()', false);
+    h += '</div>';
+    h += '<details style="border:1px solid var(--b1);border-radius:9px;"><summary style="padding:10px 13px;font-size:12px;color:var(--t2);cursor:pointer;">Detalhes do reporte</summary><div style="padding:0 13px 12px;font-size:11.5px;color:var(--t2);line-height:1.6;">' + (o.descricao||'') + '</div></details>';
+    abrirModalGenerico('Gerir ocorrência', h);
+    return;
+  }
 
   if (passo === 1 && o.concurso_aberto) {
     h += '<div style="font-size:15px;font-weight:700;margin:4px 0 4px;">À espera das propostas</div>';
@@ -9721,6 +9761,49 @@ async function confirmarImportarParceiros() {
 }
 
 
+
+// ═══════════════════════════════════════════════════════════
+
+// ✋ O administrador desbloqueia sem esperar pelas 2 confirmações — mas fica registado que foi ele
+async function ocConfirmarAdmin() {
+  if (!_ocAtual) return;
+  var h = '<div style="font-size:11.5px;color:var(--t2);line-height:1.55;margin-bottom:12px;">Vais assumir que este problema existe, sem esperar pelas confirmações dos condóminos. Fica registado no histórico e no log de comunicações que foste tu a validar.</div>';
+  h += '<div style="font-size:11px;color:var(--t3);margin-bottom:7px;">A quem afeta?</div>';
+  h += '<select class="fi" id="ca-ambito" style="width:100%;"><option value="predio">Todo o prédio</option>';
+  var blocos = {};
+  (fracoes||[]).forEach(function(f){ if (f.bloco) blocos[f.bloco] = true; });
+  Object.keys(blocos).sort().forEach(function(b){ h += '<option value="bloco:' + b + '">Apenas o bloco ' + b + '</option>'; });
+  h += '</select>';
+  h += '<div style="display:flex;gap:9px;margin-top:16px;">';
+  h += '<button class="btn-ghost" style="flex:1;" onclick="gerirOcorrencia(\'' + _ocAtual.id + '\')">← Voltar</button>';
+  h += '<button class="btn-primary" style="flex:1;" onclick="ocConfirmarAdminGuardar()">✋ Confirmar e desbloquear</button>';
+  h += '</div>';
+  abrirModalGenerico('✋ Confirmar avaria', h);
+}
+
+async function ocConfirmarAdminGuardar() {
+  var v = (document.getElementById('ca-ambito')||{}).value || 'predio';
+  var ambito = v.indexOf('bloco:') === 0 ? 'bloco' : 'predio';
+  var bloco = ambito === 'bloco' ? v.split(':')[1] : null;
+  try {
+    var up = await sb.from('ocorrencias').update({
+      precisa_confirmacao: false, confirmada_em: new Date().toISOString(),
+      ambito: ambito, ambito_bloco: bloco
+    }).eq('id', _ocAtual.id);
+    if (up.error) { toast('Erro: ' + up.error.message,'err'); return; }
+    await ocEvento('estado', 'Avaria confirmada pela administração (sem esperar pelas confirmações dos condóminos). Âmbito: ' + (ambito === 'bloco' ? 'bloco ' + bloco : 'todo o prédio') + '.');
+    // 📩 PROVA: quem é afetado fica a saber, com data
+    var alvo = (fracoes||[]).filter(function(f){ return ambito === 'predio' || f.bloco === bloco; });
+    if (alvo.length) {
+      await sb.from('mensagens').insert(alvo.map(function(f){
+        return { condominio_id: currentCondo.id, fracao_id: f.id, autor:'admin', lida_admin:true, lida_condomino:false,
+          texto: '✅ AVARIA CONFIRMADA PELA ADMINISTRAÇÃO\n\n' + (_ocAtual.descricao||'').split('[')[0].trim().substring(0,160) + '\n\nÂmbito: ' + (ambito === 'bloco' ? 'apenas o bloco ' + bloco : 'todo o prédio') + '.\nA administração vai pedir orçamentos. Serás avisado se houver votação.\n\n[Registo automático do sistema, com data e hora.]' };
+      }));
+    }
+    toast('✋ Confirmada — o processo pode avançar','ok');
+    gerirOcorrencia(_ocAtual.id);
+  } catch(e) { toast('Erro: ' + (e.message||e),'err'); }
+}
 
 // ═══════════════════════════════════════════════════════════
 // 🧠 MOTOR DE SELEÇÃO DE PARCEIROS

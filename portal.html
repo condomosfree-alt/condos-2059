@@ -262,6 +262,12 @@
       <div class="chip" id="chip-msg" onclick="irPara('mensagens')"><div class="chip-ic">💬</div><div class="chip-t">Mensagens</div><div class="chip-v" id="chip-msg-v">…</div></div>
       <div class="chip" id="chip-fundo" onclick="irPara('quotas')"><div class="chip-ic">🛡️</div><div class="chip-t">Fundo</div><div class="chip-v" id="chip-fundo-v">…</div></div>
     </div>
+    <div class="card" id="confirmar-card" style="display:none;border-color:rgba(255,179,0,.45);background:linear-gradient(135deg,var(--card),rgba(255,179,0,.04));">
+      <div style="font-size:13.5px;font-weight:800;">✋ Precisamos da tua confirmação</div>
+      <div style="font-size:10.5px;color:var(--t2);margin:5px 0 12px;line-height:1.5;">Alguém reportou isto pelo QR do átrio. Antes de a administração gastar dinheiro, confirmamos contigo que existe — e quem é que afeta.</div>
+      <div id="confirmar-lista"></div>
+    </div>
+
     <div class="card" id="card-pergunta" style="border-color:rgba(0,212,255,.35);background:linear-gradient(135deg,var(--card),rgba(0,212,255,.04));">
       <div style="display:flex;justify-content:space-between;align-items:center;">
         <div style="font-size:13.5px;font-weight:800;">🔮 Pergunta ao Prédio</div>
@@ -2237,6 +2243,8 @@ async function carregarExigencias() {
         }
       }
       h += '</div>';
+    } else if (validada && /DEMONSTRA/i.test(validada.ai_resultado||'')) {
+      h += '<div style="background:rgba(255,179,0,.08);border:1px solid rgba(255,179,0,.4);border-radius:10px;padding:10px 13px;font-size:10.5px;color:var(--t2);line-height:1.5;">🧪 <strong style="color:#ffb300;">Demonstração — não é prova.</strong> Este documento foi carregado em modo de demonstração e a sua autenticidade <strong>não foi verificada</strong>. Podes exigir a prova bancária real.</div>';
     } else if (validada) {
       h += '<div style="background:rgba(34,229,132,.06);border:1px solid rgba(34,229,132,.3);border-radius:10px;padding:10px 13px;font-size:10.5px;color:var(--t2);">✅ <strong style="color:var(--green);">Prova validada pela maioria</strong> em ' + (validada.validada_em ? new Date(validada.validada_em).toLocaleDateString('pt-PT') : '') + '.' + (validada.doc_url ? ' <a href="' + validada.doc_url + '" target="_blank" style="color:var(--cyan);">Ver documento</a>' : '') + ' Será apresentada fisicamente na próxima assembleia e anexada à ata.</div>';
     }
@@ -2259,6 +2267,59 @@ async function votarExigencia(id, voto) {
 
 
 
+
+
+// ✋ CONFIRMAÇÃO DE AVARIAS ANÓNIMAS — o gatilho dos automatismos
+// A resposta confirma a existência E resolve o âmbito (prédio ou bloco) de uma vez.
+var _reabrir = {};
+async function carregarPorConfirmar() {
+  try {
+    const r = await sb.rpc('portal_por_confirmar', { p_token: token });
+    if (r.error || !r.data || !r.data.length) {
+      const c0 = document.getElementById('confirmar-card');
+      if (c0) c0.style.display = 'none';
+      return;
+    }
+    const card = document.getElementById('confirmar-card');
+    const lista = document.getElementById('confirmar-lista');
+    if (!card || !lista) return;
+    let h = '';
+    r.data.forEach(function(o){
+      h += '<div style="background:var(--card2);border:1px solid var(--b);border-radius:11px;padding:12px 13px;margin-bottom:9px;">';
+      h += '<div style="font-size:12.5px;line-height:1.5;">' + escapar((o.descricao||'').split('[')[0].trim()).substring(0,180) + '</div>';
+      if (o.local_ocorrencia) h += '<div style="font-size:10.5px;color:var(--t3);margin-top:3px;">📍 ' + escapar(o.local_ocorrencia) + '</div>';
+      h += '<div style="font-size:10px;color:var(--t3);margin-top:3px;">' + new Date(o.criado_em).toLocaleDateString('pt-PT') + ' · ' + (o.n_confirmam||0) + ' confirmaram' + (o.n_negam ? ' · ' + o.n_negam + ' não vê' : '') + '</div>';
+      if (o.minha_resposta && !_reabrir[o.ocorrencia_id]) {
+        const txt = o.minha_resposta === 'predio' ? 'Confirmaste: afeta o prédio todo'
+                  : (o.minha_resposta === 'bloco' ? 'Confirmaste: só o teu bloco' : 'Respondeste que não vês o problema');
+        h += '<div style="font-size:11px;color:var(--green);font-weight:700;margin-top:9px;">✔ ' + txt + ' <a href="#" onclick="event.preventDefault();confirmarOc(\'' + o.ocorrencia_id + '\',null)" style="color:var(--t3);font-weight:400;text-decoration:underline;">alterar</a></div>';
+      } else {
+        h += '<div style="font-size:11px;color:var(--t2);margin-top:10px;font-weight:700;">Consegues confirmar?</div>';
+        h += '<div style="display:flex;flex-direction:column;gap:6px;margin-top:7px;">';
+        h += '<button onclick="confirmarOc(\'' + o.ocorrencia_id + '\',\'predio\')" style="background:rgba(34,229,132,.12);border:1px solid rgba(34,229,132,.4);color:var(--green);border-radius:8px;padding:10px;font-size:12px;font-weight:700;cursor:pointer;text-align:left;">✔ Sim — afeta o prédio todo</button>';
+        h += '<button onclick="confirmarOc(\'' + o.ocorrencia_id + '\',\'bloco\')" style="background:rgba(0,212,255,.1);border:1px solid rgba(0,212,255,.4);color:var(--cyan);border-radius:8px;padding:10px;font-size:12px;font-weight:700;cursor:pointer;text-align:left;">✔ Sim — mas é só do meu bloco</button>';
+        h += '<button onclick="confirmarOc(\'' + o.ocorrencia_id + '\',\'nao\')" style="background:transparent;border:1px solid var(--b2);color:var(--t2);border-radius:8px;padding:10px;font-size:12px;cursor:pointer;text-align:left;">✕ Não vejo nada disso</button>';
+        h += '</div>';
+      }
+      h += '</div>';
+    });
+    lista.innerHTML = h;
+    card.style.display = 'block';
+  } catch(e){}
+}
+
+async function confirmarOc(id, resposta) {
+  if (resposta === null) {   // "alterar": reabre os botões sem gravar nada
+    _reabrir[id] = true;
+    carregarPorConfirmar();
+    return;
+  }
+  delete _reabrir[id];
+  const r = await sb.rpc('portal_confirmar_ocorrencia', { p_token: token, p_ocorrencia: id, p_resposta: resposta });
+  if (r.error || r.data === false) { toastP('Não foi possível registar a resposta.','err'); return; }
+  toastP(resposta === 'nao' ? 'Resposta registada — obrigado.' : '✔ Confirmado, obrigado! A tua resposta fica registada.','ok');
+  carregarPorConfirmar();
+}
 
 // 🕰️ A TUA HISTÓRIA NO PRÉDIO
 async function carregarHistoria() {
@@ -2639,6 +2700,7 @@ _ppAtualizaConta();
 carregarScore();
 carregarHistoria();
 carregarOfertas();
+carregarPorConfirmar();
 initNotificacoes();
 aplicarDestinoNotificacao();
 // se a app já estava aberta e o utilizador carrega noutra notificação
