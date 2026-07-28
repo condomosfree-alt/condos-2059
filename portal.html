@@ -233,6 +233,7 @@
   .page.active .card { animation: surge .35s ease-out; }
   @keyframes surge { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
 
+  @keyframes sobe { from { transform: translateY(22px); opacity: 0; } to { transform: none; opacity: 1; } }
 </style>
 </head>
 <body>
@@ -490,6 +491,20 @@
   <div id="chat-barra" style="display:none;gap:8px;position:fixed;bottom:calc(var(--nav-h) + 8px);left:50%;transform:translateX(-50%);width:100%;max-width:480px;padding:0 16px;z-index:25;">
     <input id="chat-input" placeholder="Escreve uma mensagem…" style="flex:1;box-shadow:0 4px 16px rgba(0,0,0,.4);" onkeydown="if(event.key==='Enter')enviarMensagem()">
     <button onclick="enviarMensagem()" style="background:linear-gradient(135deg,var(--cyan),var(--cyan2));border:none;border-radius:10px;color:#04121f;font-weight:800;padding:0 18px;font-size:16px;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.4);">➤</button>
+  </div>
+
+  <div id="modal-conf" style="display:none;position:fixed;inset:0;z-index:60;background:rgba(4,8,16,.72);backdrop-filter:blur(4px);align-items:flex-end;justify-content:center;">
+    <div id="conf-folha" style="width:100%;max-width:480px;background:var(--card);border:1px solid var(--b2);border-top:3px solid var(--cyan);border-radius:20px 20px 0 0;padding:24px 20px calc(24px + env(safe-area-inset-bottom));animation:sobe .22s cubic-bezier(.2,.9,.3,1);">
+      <div style="width:38px;height:4px;background:var(--b2);border-radius:3px;margin:-8px auto 16px;"></div>
+      <div id="conf-icone" style="font-size:34px;text-align:center;margin-bottom:10px;">🗳️</div>
+      <div id="conf-titulo" style="font-size:17px;font-weight:800;text-align:center;margin-bottom:8px;"></div>
+      <div id="conf-texto" style="font-size:13px;color:var(--t2);line-height:1.6;text-align:center;margin-bottom:6px;"></div>
+      <div id="conf-nota" style="font-size:11.5px;color:var(--t3);line-height:1.55;text-align:center;background:var(--card2);border:1px solid var(--b);border-radius:10px;padding:10px 12px;margin:12px 0 0;display:none;"></div>
+      <div style="display:flex;gap:9px;margin-top:20px;">
+        <button id="conf-nao" style="flex:1;background:transparent;border:1px solid var(--b2);color:var(--t2);border-radius:11px;padding:14px;font-size:14px;font-weight:600;cursor:pointer;">Cancelar</button>
+        <button id="conf-sim" style="flex:1.3;background:var(--cyan);border:none;color:#04121f;border-radius:11px;padding:14px;font-size:14px;font-weight:800;cursor:pointer;">Confirmar</button>
+      </div>
+    </div>
   </div>
 
   <div id="modal-ass" style="display:none;position:fixed;inset:0;z-index:50;background:rgba(4,8,16,.7);backdrop-filter:blur(3px);align-items:flex-end;justify-content:center;">
@@ -1943,9 +1958,16 @@ var _propostasCache = {};
 
 async function votarProposta(ocId, orcId) {
   const _nome = (_propostasCache[ocId]||[]).find(function(p){ return p.orcamento_id === orcId; });
-  if (!confirm(orcId
-      ? 'Vais votar na proposta de ' + ((_nome && _nome.fornecedor) || 'este fornecedor') + '.\n\n🔒 O voto é definitivo e fica registado com a tua fração, data e hora. Não poderás alterá-lo.\n\nConfirmas?'
-      : 'Vais votar CONTRA a obra (nenhuma proposta).\n\n🔒 O voto é definitivo e não poderá ser alterado.\n\nConfirmas?')) return;
+  if (!await confirmarP({
+    tipo: orcId ? 'votar' : 'perigo',
+    icone: orcId ? '🗳️' : '❌',
+    titulo: orcId ? 'Escolher esta proposta?' : 'Votar contra a obra?',
+    texto: orcId
+      ? 'Vais votar na proposta de <strong>' + ((_nome && _nome.fornecedor) || 'este fornecedor') + '</strong>' + ((_nome && _nome.valor) ? ' — ' + eur(_nome.valor) : '') + '.'
+      : 'Vais votar <strong>contra a obra</strong>, sem escolher nenhuma proposta.',
+    nota: '🔒 O voto é <strong>definitivo</strong>. Fica registado com a tua fração, data e hora — e não poderás alterá-lo depois.',
+    okTexto: orcId ? 'Escolher esta' : 'Sim, contra'
+  })) return;
   const res = await sb.rpc('portal_votar_proposta', { p_token: token, p_ocorrencia: ocId, p_orcamento: orcId });
   if (res.error || res.data === false) { toastP('Não foi possível registar o voto.','err'); return; }
   if (_ocCache[ocId]) { _ocCache[ocId].meu_voto = orcId ? 'sim' : 'nao'; _ocCache[ocId].meu_orcamento = orcId; }
@@ -1955,7 +1977,14 @@ async function votarProposta(ocId, orcId) {
 }
 
 async function votarOcorrencia(id, voto) {
-  if (!confirm('Vais votar ' + (voto === 'sim' ? 'A FAVOR' : 'CONTRA') + ' desta reparação.\n\n🔒 O voto é definitivo e fica registado com a tua fração, data e hora. Não poderás alterá-lo.\n\nConfirmas?')) return;
+  if (!await confirmarP({
+    tipo: voto === 'sim' ? 'ok' : 'perigo',
+    icone: voto === 'sim' ? '✅' : '❌',
+    titulo: voto === 'sim' ? 'Votar a favor?' : 'Votar contra?',
+    texto: 'Vais votar <strong>' + (voto === 'sim' ? 'a favor' : 'contra') + '</strong> desta reparação.',
+    nota: '🔒 O voto é <strong>definitivo</strong>. Fica registado com a tua fração, data e hora — e não poderás alterá-lo depois.',
+    okTexto: voto === 'sim' ? 'Sim, a favor' : 'Sim, contra'
+  })) return;
   const res = await sb.rpc('portal_votar_ocorrencia', { p_token: token, p_ocorrencia: id, p_voto: voto });
   if (res.error || res.data === false) {
     // pode ser prazo terminado — vale a pena dizer porquê em vez de um erro seco
@@ -2217,7 +2246,13 @@ async function toggleNotificacoes(e) {
 var _exigencias = [];
 
 async function exigirProva() {
-  if (!confirm('Exigir formalmente a prova bancária do fundo de reserva?\n\nO pedido fica registado no log de comunicações (com data e hora), a administração é notificada, e o tema vai à próxima assembleia.\n\nQuando o extrato for carregado e verificado, vais poder votar na sua validação.')) return;
+  if (!await confirmarP({
+    tipo: 'dados', icone: '⚖️',
+    titulo: 'Exigir a prova do fundo?',
+    texto: 'Vais pedir formalmente à administração a <strong>prova bancária do fundo de reserva</strong>.',
+    nota: 'O pedido fica registado no log de comunicações com data e hora, a administração é notificada, e o tema vai à próxima assembleia. Quando o extrato for carregado, poderás votar na sua validação.',
+    okTexto: 'Exigir prova'
+  })) return;
   const r = await sb.rpc('portal_exigir', { p_token: token, p_tipo: 'fundo', p_texto: '' });
   if (r.error || r.data === false) { toastP('Já existe uma exigência ativa deste tipo, ou não foi possível registar.','err'); return; }
   toastP('⚖️ Exigência registada — a administração foi notificada.','ok');
@@ -2283,6 +2318,46 @@ async function votarExigencia(id, voto) {
 
 
 
+
+
+// 💬 Confirmação com a cara do portal — substitui o confirm() branco do browser
+function confirmarP(opcoes) {
+  return new Promise(function(resolve){
+    var o = opcoes || {};
+    var cores = {
+      votar:   { cor:'var(--cyan)',  txt:'#04121f', icone:'🗳️' },
+      aviso:   { cor:'#ffb300',      txt:'#1a1200', icone:'⚠️' },
+      perigo:  { cor:'var(--red)',   txt:'#fff',    icone:'⚠️' },
+      ok:      { cor:'var(--green)', txt:'#04160c', icone:'✅' },
+      dados:   { cor:'#94d82d',      txt:'#0a1a05', icone:'🔒' }
+    };
+    var c = cores[o.tipo || 'votar'] || cores.votar;
+    var m = document.getElementById('modal-conf');
+    var folha = document.getElementById('conf-folha');
+    document.getElementById('conf-icone').textContent = o.icone || c.icone;
+    document.getElementById('conf-titulo').textContent = o.titulo || 'Confirmas?';
+    document.getElementById('conf-texto').innerHTML = o.texto || '';
+    var nota = document.getElementById('conf-nota');
+    if (o.nota) { nota.innerHTML = o.nota; nota.style.display = 'block'; }
+    else nota.style.display = 'none';
+    var sim = document.getElementById('conf-sim');
+    var nao = document.getElementById('conf-nao');
+    sim.textContent = o.okTexto || 'Confirmar';
+    sim.style.background = c.cor; sim.style.color = c.txt;
+    nao.textContent = o.cancelarTexto || 'Cancelar';
+    if (folha) folha.style.borderTopColor = c.cor;
+    m.style.display = 'flex';
+
+    function fechar(r) {
+      m.style.display = 'none';
+      sim.onclick = null; nao.onclick = null; m.onclick = null;
+      resolve(r);
+    }
+    sim.onclick = function(){ fechar(true); };
+    nao.onclick = function(){ fechar(false); };
+    m.onclick = function(ev){ if (ev.target === m) fechar(false); };   // tocar fora cancela
+  });
+}
 
 // 🗳️ ESTADO DA VOTAÇÃO — uma votação precisa de fim, e de mostrar o resultado a formar-se
 async function carregarEstadoVotacao(ocId) {
@@ -2468,10 +2543,22 @@ async function aderirOferta(id) {
   let consent = false;
   if (o.tipo === 'individual') {
     // 🔒 RGPD: consentimento explícito para partilhar dados com o prestador
-    consent = confirm('CONSENTIMENTO DE PARTILHA DE DADOS\n\nAo confirmar, autorizas a partilha do teu nome, fração e contacto com "' + (o.prestador_nome||'o prestador') + '", exclusivamente para esta proposta:\n"' + (o.titulo||'') + '"\n\nEste consentimento fica registado com data e hora, e podes retirá-lo pedindo à administração.\n\nAutorizas?');
+    consent = await confirmarP({
+      tipo: 'dados', icone: '🔒',
+      titulo: 'Autorizas a partilha dos teus dados?',
+      texto: 'Para aderires a <strong>' + (o.titulo||'esta oferta') + '</strong>, o teu nome, fração e contacto são partilhados com <strong>' + (o.prestador_nome||'o prestador') + '</strong>.',
+      nota: 'Usados exclusivamente para esta proposta. O consentimento fica registado com data e hora, e podes retirá-lo pedindo à administração.',
+      okTexto: 'Autorizo', cancelarTexto: 'Não autorizo'
+    });
     if (!consent) return;
   } else {
-    if (!confirm('Registar o teu apoio a levar esta proposta à assembleia?\n\n"' + (o.titulo||'') + '"\n\n(Sem partilha de dados pessoais — é o condomínio que decide em conjunto.)')) return;
+    if (!await confirmarP({
+      tipo: 'ok', icone: '👍',
+      titulo: 'Apoiar esta proposta?',
+      texto: 'Vais registar que apoias levar <strong>' + (o.titulo||'esta proposta') + '</strong> à próxima assembleia.',
+      nota: 'Sem partilha de dados pessoais — quem decide é o condomínio em conjunto.',
+      okTexto: 'Apoio'
+    })) return;
   }
   const r = await sb.rpc('portal_oferta_interesse', { p_token: token, p_oferta: id, p_consentimento: consent });
   if (r.error || r.data === false) { toastP('Não foi possível registar.','err'); return; }
