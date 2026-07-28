@@ -767,7 +767,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.28-1059</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.28-1122</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -9180,7 +9180,9 @@ async function gerirOcorrencia(id) {
   }
   else if (passo === 2 && (o.precisa_votacao || o.estado === 'aguarda_votacao')) {
     h += '<div style="font-size:15px;font-weight:700;margin:4px 0 4px;">Votação a decorrer</div>';
-    h += '<div style="font-size:11.5px;color:var(--t2);margin-bottom:10px;">Os condóminos estão a decidir. Podes aprovar assim que houver maioria.</div>';
+    var _pz = o.votacao_prazo ? new Date(o.votacao_prazo) : null;
+    var _dias = _pz ? Math.ceil((_pz - new Date())/86400000) : null;
+    h += '<div style="font-size:11.5px;color:var(--t2);margin-bottom:10px;">Os condóminos estão a decidir. Podes aprovar assim que houver maioria.' + (_pz ? ' <strong style="color:var(--amber);">' + (_dias > 0 ? 'Fecha daqui a ' + _dias + ' dia' + (_dias>1?'s':'') : 'Prazo terminado') + ' (' + _pz.toLocaleDateString('pt-PT') + ').</strong>' : '') + '</div>';
     h += await ocRenderVotos(id);
     if (window._ocPodeAprovar === true) {
       h += '<div style="background:rgba(34,229,132,.12);border:1px solid rgba(34,229,132,.4);border-radius:8px;padding:10px 12px;margin:10px 0;font-size:12px;font-weight:700;color:var(--green);">🎉 Já há maioria — podes avançar.</div>';
@@ -9803,6 +9805,89 @@ async function ocConfirmarAdminGuardar() {
     toast('✋ Confirmada — o processo pode avançar','ok');
     gerirOcorrencia(_ocAtual.id);
   } catch(e) { toast('Erro: ' + (e.message||e),'err'); }
+}
+
+// ═══════════════════════════════════════════════════════════
+
+// 🤖 AUTOMAÇÃO: quando as propostas chegam todas (ou o prazo acaba), abre a votação sozinha.
+// Bónus jurídico: assim o administrador não vê os envelopes antes do fim — a integridade
+// do concurso deixa de depender da honestidade dele.
+async function verificarConcursosProntos() {
+  if (!currentCondo) return;
+  try {
+    var ocR = await sb.from('ocorrencias')
+      .select('id,descricao,concurso_prazo,divisao_metodo,orcamento_valor')
+      .eq('condominio_id', currentCondo.id).eq('concurso_aberto', true)
+      .eq('precisa_votacao', false).not('estado','in','("resolvida","fechada")');
+    var ocs = ocR.data || [];
+    if (!ocs.length) return;
+    var ids = ocs.map(function(o){ return o.id; });
+    var obR = await sb.from('orcamentos_obra').select('ocorrencia_id,valor,estado').in('ocorrencia_id', ids);
+    var props = obR.data || [];
+
+    for (var k = 0; k < ocs.length; k++) {
+      var o = ocs[k];
+      var meus = props.filter(function(p){ return p.ocorrencia_id === o.id; });
+      if (!meus.length) continue;
+      var respondidas = meus.filter(function(p){ return p.valor !== null && p.valor !== undefined; });
+      var todas = respondidas.length === meus.length;
+      var prazoFim = o.concurso_prazo && new Date(o.concurso_prazo) < new Date();
+      // precisa de pelo menos 2 propostas para haver escolha real
+      if (!(todas || prazoFim) || respondidas.length < 2) continue;
+
+      var prazoVot = new Date(Date.now() + 8*24*3600*1000);
+      await sb.from('ocorrencias').update({
+        concurso_aberto: false, precisa_votacao: true, estado: 'aguarda_votacao',
+        votacao_aberta_em: new Date().toISOString(), votacao_prazo: prazoVot.toISOString()
+      }).eq('id', o.id);
+
+      try {
+        await sb.from('ocorrencia_eventos').insert({ ocorrencia_id: o.id, tipo: 'votacao',
+          texto: 'Envelopes abertos automaticamente (' + respondidas.length + ' proposta(s) ' + (todas ? 'recebidas' : 'até ao fim do prazo') + '). Votação aberta aos condóminos até ' + prazoVot.toLocaleDateString('pt-PT') + '.' });
+      } catch(e){}
+
+      // 📩 PROVA: quem vota fica a saber, com data e prazo
+      var soBloco = (o.divisao_metodo||'').indexOf('bloco:') === 0 ? o.divisao_metodo.split(':')[1] : null;
+      var alvo = (fracoes||[]).filter(function(f){ return !soBloco || f.bloco === soBloco; });
+      if (alvo.length) {
+        await sb.from('mensagens').insert(alvo.map(function(f){
+          return { condominio_id: currentCondo.id, fracao_id: f.id, autor:'admin', lida_admin:true, lida_condomino:false,
+            texto: '🗳️ VOTAÇÃO ABERTA — ESCOLHE O ORÇAMENTO\n\n' + (o.descricao||'').split('[')[0].trim().substring(0,140) + '\n\nChegaram ' + respondidas.length + ' propostas em envelope fechado e foram abertas ao mesmo tempo. Entra no portal, compara os valores e vota na que preferes.\n\n⏰ A votação encerra a ' + prazoVot.toLocaleDateString('pt-PT') + '. Depois dessa data não é possível votar.\n\n[Registo automático do sistema, com data e hora.]' };
+        }));
+      }
+      toast('🗳️ Concurso fechado e votação aberta automaticamente','ok');
+    }
+    try { updateBadges(); verificarAvisosGerais(); } catch(e){}
+  } catch(e) { console.error('concursos prontos:', e); }
+}
+
+// ⏰ Votações cujo prazo terminou: fechar e registar o resultado
+async function fecharVotacoesExpiradas() {
+  if (!currentCondo) return;
+  try {
+    var r = await sb.from('ocorrencias').select('id,descricao,votacao_prazo,divisao_metodo')
+      .eq('condominio_id', currentCondo.id).eq('precisa_votacao', true)
+      .is('votacao_fechada_em', null).not('votacao_prazo','is',null)
+      .lt('votacao_prazo', new Date().toISOString());
+    var expiradas = r.data || [];
+    for (var i = 0; i < expiradas.length; i++) {
+      var o = expiradas[i];
+      var vR = await sb.from('ocorrencia_votos').select('fracao_id,voto,orcamento_id').eq('ocorrencia_id', o.id);
+      var votos = vR.data || [];
+      var pSim = 0, pNao = 0;
+      votos.forEach(function(v){
+        var f = (fracoes||[]).find(function(x){ return x.id === v.fracao_id; });
+        var perm = f ? parseFloat(f.permilagem||0) : 0;
+        if (v.voto === 'sim' || v.orcamento_id) pSim += perm; else pNao += perm;
+      });
+      await sb.from('ocorrencias').update({ votacao_fechada_em: new Date().toISOString() }).eq('id', o.id);
+      try {
+        await sb.from('ocorrencia_eventos').insert({ ocorrencia_id: o.id, tipo: 'votacao',
+          texto: 'Votação encerrada por fim de prazo: ' + Math.round(pSim) + '‰ a favor, ' + Math.round(pNao) + '‰ contra.' });
+      } catch(e){}
+    }
+    if (expiradas.length) { try { verificarAvisosGerais(); } catch(e){} }
+  } catch(e) { console.error('fechar votacoes:', e); }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -10512,8 +10597,14 @@ async function ocRegistarOrcamento(limite) {
   gerirOcorrencia(_ocAtual.id);
 }
 
-async function ocAbrirVotacao() {
-  await sb.from('ocorrencias').update({ precisa_votacao:true, estado:'aguarda_votacao' }).eq('id',_ocAtual.id);
+async function ocAbrirVotacao(diasPrazo) {
+  var dias = parseInt(diasPrazo) || 8;
+  var prazo = new Date(Date.now() + dias*24*3600*1000);
+  await sb.from('ocorrencias').update({
+    precisa_votacao:true, estado:'aguarda_votacao',
+    votacao_aberta_em: new Date().toISOString(),
+    votacao_prazo: prazo.toISOString(), votacao_fechada_em: null
+  }).eq('id',_ocAtual.id);
   await ocEvento('votacao', 'Aberta votação aos condóminos para aprovar a reparação (' + parseFloat(_ocAtual.orcamento_valor).toFixed(2) + '€).');
 
   // Avisar os condóminos afetados por mensagem no portal (o badge acende)
@@ -15593,6 +15684,7 @@ async function verificarNovidades() {
   if (!currentCondo) return;
   // os badges do menu acompanham SEMPRE (2 queries baratas), mesmo com a barra já visível
   try { updateBadges(); } catch(e){}
+  try { verificarConcursosProntos(); fecharVotacoesExpiradas(); } catch(e){}
   if (_pollAvisado) return;
   var agora = await _pollFotografia();
   if (!agora || !_pollBase) { if (agora) _pollBase = agora; return; }

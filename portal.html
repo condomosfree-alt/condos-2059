@@ -1890,11 +1890,8 @@ async function abrirOcorrencia(id) {
           } else if (el) el.textContent='';
         });
       }
-      if (o.meu_voto) html += '<div style="font-size:11.5px;color:var(--cyan);margin-top:8px;">Já votaste: <strong>'+(o.meu_voto==='sim'?'✅ A favor':'❌ Contra')+'</strong> · podes alterar</div>';
-      html += '<div style="display:flex;gap:8px;margin-top:10px;">';
-      html += '<button onclick="votarOcorrencia(\''+o.id+'\',\'sim\')" style="flex:1;background:rgba(34,229,132,.12);border:1px solid rgba(34,229,132,.4);color:var(--green);border-radius:8px;padding:11px;font-size:13px;font-weight:700;cursor:pointer;">✅ A favor</button>';
-      html += '<button onclick="votarOcorrencia(\''+o.id+'\',\'nao\')" style="flex:1;background:rgba(255,84,112,.12);border:1px solid rgba(255,84,112,.4);color:var(--red);border-radius:8px;padding:11px;font-size:13px;font-weight:700;cursor:pointer;">❌ Contra</button>';
-      html += '</div>';
+      html += '<div id="votest-'+o.id+'" style="margin-top:10px;"></div>';
+      carregarEstadoVotacao(o.id);
       html += '</div>';   // fecha votosn-
     } else {
       // Não pertence ao bloco desta reparação
@@ -1955,7 +1952,19 @@ async function votarProposta(ocId, orcId) {
 
 async function votarOcorrencia(id, voto) {
   const res = await sb.rpc('portal_votar_ocorrencia', { p_token: token, p_ocorrencia: id, p_voto: voto });
-  if (res.error || res.data === false) { toastP('Não foi possível registar o voto.','err'); return; }
+  if (res.error || res.data === false) {
+    // pode ser prazo terminado — vale a pena dizer porquê em vez de um erro seco
+    try {
+      const st = await sb.rpc('portal_votacao_estado', { p_token: token, p_ocorrencia: id });
+      if (!st.error && st.data && st.data.length && st.data[0].fechada) {
+        toastP('A votação já encerrou — não é possível votar nem alterar.','err');
+        carregarEstadoVotacao(id);
+        return;
+      }
+    } catch(e){}
+    toastP('Não foi possível registar o voto.','err');
+    return;
+  }
   // Atualizar o cache e reabrir o detalhe
   if (_ocCache[id]) _ocCache[id].meu_voto = voto;
   abrirOcorrencia(id);
@@ -2268,6 +2277,78 @@ async function votarExigencia(id, voto) {
 
 
 
+
+
+// 🗳️ ESTADO DA VOTAÇÃO — uma votação precisa de fim, e de mostrar o resultado a formar-se
+async function carregarEstadoVotacao(ocId) {
+  const box = document.getElementById('votest-' + ocId);
+  if (!box) return;
+  try {
+    const r = await sb.rpc('portal_votacao_estado', { p_token: token, p_ocorrencia: ocId });
+    if (r.error || !r.data || !r.data.length) { box.innerHTML = ''; return; }
+    const v = r.data[0];
+    const sim = parseFloat(v.perm_sim||0), nao = parseFloat(v.perm_nao||0);
+    const total = parseFloat(v.perm_total||0), maioria = parseFloat(v.perm_maioria||0);
+    const pctSim = total > 0 ? Math.min(100, sim/total*100) : 0;
+    const pctNao = total > 0 ? Math.min(100, nao/total*100) : 0;
+    const aprovada = sim > maioria;
+    let h = '';
+
+    if (v.fechada) {
+      h += '<div style="background:' + (aprovada ? 'rgba(34,229,132,.08)' : 'rgba(255,84,112,.07)') + ';border:1px solid ' + (aprovada ? 'rgba(34,229,132,.4)' : 'rgba(255,84,112,.35)') + ';border-radius:10px;padding:12px 13px;">';
+      h += '<div style="font-size:13px;font-weight:800;color:' + (aprovada ? 'var(--green)' : 'var(--red)') + ';">' + (aprovada ? '✅ Aprovada pelos condóminos' : '❌ Não aprovada') + '</div>';
+      h += '<div style="font-size:11.5px;color:var(--t2);margin-top:4px;">' + Math.round(sim) + '‰ a favor · ' + Math.round(nao) + '‰ contra · eram precisos mais de ' + Math.round(maioria) + '‰</div>';
+      h += '<div style="font-size:10.5px;color:var(--t3);margin-top:4px;">🔒 Votação encerrada' + (v.prazo ? ' a ' + new Date(v.prazo).toLocaleDateString('pt-PT') : '') + '. Já não é possível votar.</div>';
+      h += '</div>';
+      box.innerHTML = h;
+      return;
+    }
+
+    if (v.meu_voto) {
+      h += '<div style="background:rgba(0,212,255,.06);border:1px solid rgba(0,212,255,.3);border-radius:10px;padding:12px 13px;">';
+      h += '<div style="font-size:12.5px;font-weight:800;color:var(--cyan);">✔ O teu voto está registado: ' + (v.meu_voto === 'sim' ? 'a favor' : 'contra') + '</div>';
+      h += '<div style="height:8px;background:rgba(255,255,255,.07);border-radius:5px;overflow:hidden;margin:9px 0 5px;display:flex;">';
+      h += '<div style="width:' + pctSim + '%;background:var(--green);"></div>';
+      h += '<div style="width:' + pctNao + '%;background:var(--red);"></div>';
+      h += '</div>';
+      h += '<div style="font-size:11px;color:var(--t2);">' + Math.round(sim) + '‰ a favor · ' + Math.round(nao) + '‰ contra · ' + v.n_votos + ' de ' + v.n_fracoes + ' frações já votaram</div>';
+      if (sim > maioria) {
+        h += '<div style="font-size:11px;color:var(--green);font-weight:700;margin-top:4px;">🎉 Já há maioria a favor</div>';
+      } else {
+        h += '<div style="font-size:11px;color:var(--t3);margin-top:4px;">Faltam ' + Math.max(0, Math.round(maioria - sim + 1)) + '‰ para a maioria</div>';
+      }
+      if (v.dias_restantes !== null && v.dias_restantes !== undefined) {
+        h += '<div style="font-size:10.5px;color:var(--amber);margin-top:6px;">⏰ ' + (v.dias_restantes === 0 ? 'Última chance: fecha hoje' : 'Fecha daqui a ' + v.dias_restantes + ' dia' + (v.dias_restantes>1?'s':'')) + (v.prazo ? ' (' + new Date(v.prazo).toLocaleDateString('pt-PT') + ')' : '') + '</div>';
+      }
+      h += '<a href="#" onclick="event.preventDefault();mudarVoto(\'' + ocId + '\')" style="display:inline-block;font-size:10.5px;color:var(--t3);text-decoration:underline;margin-top:8px;">mudar o meu voto</a>';
+      h += '</div>';
+    } else {
+      h += '<div style="font-size:13px;color:var(--amber);font-weight:700;margin-bottom:6px;">🗳️ Aprovas esta reparação?</div>';
+      if (v.dias_restantes !== null && v.dias_restantes !== undefined) {
+        h += '<div style="font-size:10.5px;color:var(--t3);margin-bottom:8px;">⏰ ' + (v.dias_restantes === 0 ? 'Fecha hoje' : 'Tens ' + v.dias_restantes + ' dia' + (v.dias_restantes>1?'s':'') + ' para votar') + '. Depois disso a votação encerra.</div>';
+      }
+      h += '<div style="display:flex;gap:8px;">';
+      h += '<button onclick="votarOcorrencia(\'' + ocId + '\',\'sim\')" style="flex:1;background:rgba(34,229,132,.12);border:1px solid rgba(34,229,132,.4);color:var(--green);border-radius:9px;padding:12px;font-size:13px;font-weight:800;cursor:pointer;">✅ A favor</button>';
+      h += '<button onclick="votarOcorrencia(\'' + ocId + '\',\'nao\')" style="flex:1;background:rgba(255,84,112,.12);border:1px solid rgba(255,84,112,.4);color:var(--red);border-radius:9px;padding:12px;font-size:13px;font-weight:800;cursor:pointer;">❌ Contra</button>';
+      h += '</div>';
+    }
+    box.innerHTML = h;
+  } catch(e) { box.innerHTML = ''; }
+}
+
+// mudar o voto é possível, mas é um ato deliberado — não um botão sempre aceso
+async function mudarVoto(ocId) {
+  if (!confirm('Queres mudar o teu voto?\n\nO voto anterior é substituído e fica registado o novo.')) return;
+  const box = document.getElementById('votest-' + ocId);
+  if (!box) return;
+  let h = '<div style="font-size:12.5px;color:var(--t2);margin-bottom:8px;">Escolhe o novo voto:</div>';
+  h += '<div style="display:flex;gap:8px;">';
+  h += '<button onclick="votarOcorrencia(\'' + ocId + '\',\'sim\')" style="flex:1;background:rgba(34,229,132,.12);border:1px solid rgba(34,229,132,.4);color:var(--green);border-radius:9px;padding:12px;font-size:13px;font-weight:800;cursor:pointer;">✅ A favor</button>';
+  h += '<button onclick="votarOcorrencia(\'' + ocId + '\',\'nao\')" style="flex:1;background:rgba(255,84,112,.12);border:1px solid rgba(255,84,112,.4);color:var(--red);border-radius:9px;padding:12px;font-size:13px;font-weight:800;cursor:pointer;">❌ Contra</button>';
+  h += '</div>';
+  h += '<a href="#" onclick="event.preventDefault();carregarEstadoVotacao(\'' + ocId + '\')" style="display:inline-block;font-size:10.5px;color:var(--t3);text-decoration:underline;margin-top:8px;">cancelar</a>';
+  box.innerHTML = h;
+}
 
 // ✋ CONFIRMAÇÃO DE AVARIAS ANÓNIMAS — o gatilho dos automatismos
 // A resposta confirma a existência E resolve o âmbito (prédio ou bloco) de uma vez.
