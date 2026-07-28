@@ -767,7 +767,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.28-0945</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.28-1021</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -9721,6 +9721,137 @@ async function confirmarImportarParceiros() {
 }
 
 
+
+// ═══════════════════════════════════════════════════════════
+// 🧠 MOTOR DE SELEÇÃO DE PARCEIROS
+// As estrelas dos condóminos decidem quem é CONVIDADO — nunca quem ganha.
+// Quem ganha continua a ser decidido por votação sobre as propostas.
+// ═══════════════════════════════════════════════════════════
+var _BAYES_M = 4;          // peso da média global (amostras pequenas encolhem para ela)
+var _MIN_FRACOES = 2;      // frações distintas para entrar na escolha automática
+var _MESES_FRESCOS = 24;   // avaliações mais antigas contam metade
+
+// especialidade compatível com a categoria da avaria
+function _especialidadeCompativel(catOc, catParceiro) {
+  var mapa = {
+    'portao': ['serralh','autom','portõ','porta','metal','ferro'],
+    'porta': ['serralh','autom','portõ','porta','metal','ferro'],
+    'elevador': ['elevad'],
+    'canaliza': ['canaliz','picheleiro','águas','aguas','pichel'],
+    'agua': ['canaliz','picheleiro','águas','aguas'],
+    'infiltra': ['canaliz','impermeab','obras','constru'],
+    'eletric': ['elétric','eletric','eletricista'],
+    'luz': ['elétric','eletric'],
+    'jardim': ['jardin','espaços verdes'],
+    'limpeza': ['limpeza'],
+    'incendio': ['extint','segurança','seguranca'],
+    'seguranca': ['extint','segurança','seguranca'],
+    'telhado': ['obras','constru','impermeab','cobertura'],
+    'fachada': ['obras','constru','pintura']
+  };
+  var oc = (catOc||'').toLowerCase(), cp = (catParceiro||'').toLowerCase();
+  var pistas = [];
+  Object.keys(mapa).forEach(function(k){ if (oc.indexOf(k) > -1) pistas = pistas.concat(mapa[k]); });
+  if (!pistas.length) return null;   // não sabemos classificar esta avaria
+  return pistas.some(function(t){ return cp.indexOf(t) > -1; });
+}
+
+async function sugerirParceirosOrcamento(categoriaOc, ocorrenciaId) {
+  if (!currentCondo) return null;
+  try {
+    var [pR, aR, oR] = await Promise.all([
+      sb.from('parceiros').select('*').eq('condominio_id', currentCondo.id),
+      sb.from('parceiro_avaliacoes').select('parceiro_id,fracao_id,estrelas,criado_em').eq('condominio_id', currentCondo.id),
+      sb.from('orcamentos_obra').select('parceiro_id,criado_em').order('criado_em', {ascending:false})
+    ]);
+    var parceiros = pR.data || [];
+    if (!parceiros.length) return null;
+    var avals = aR.data || [];
+    var convites = oR.data || [];
+
+    // média global do condomínio (âncora do encolhimento bayesiano)
+    var somaG = 0, nG = 0;
+    avals.forEach(function(a){ somaG += parseFloat(a.estrelas||0); nG++; });
+    var mediaGlobal = nG ? somaG / nG : 4;
+
+    var agora = new Date();
+    var porParceiro = {};
+    avals.forEach(function(a){
+      var p = porParceiro[a.parceiro_id] || (porParceiro[a.parceiro_id] = { soma:0, peso:0, n:0, fracoes:{} });
+      var meses = (agora - new Date(a.criado_em)) / (30.44*24*3600*1000);
+      var w = meses <= _MESES_FRESCOS ? 1 : 0.5;      // avaliações antigas valem metade
+      p.soma += parseFloat(a.estrelas||0) * w;
+      p.peso += w;
+      p.n++;
+      p.fracoes[a.fracao_id] = true;
+    });
+
+    var ultimoConvite = {};
+    convites.forEach(function(o){
+      if (!o.parceiro_id) return;
+      if (!ultimoConvite[o.parceiro_id]) ultimoConvite[o.parceiro_id] = o.criado_em;
+    });
+
+    var lista = parceiros.map(function(p){
+      var st = porParceiro[p.id];
+      var n = st ? st.n : 0;
+      var nFracoes = st ? Object.keys(st.fracoes).length : 0;
+      var mediaPond = (st && st.peso > 0) ? st.soma / st.peso : 0;
+      // encolhimento bayesiano: amostras pequenas puxam para a média global
+      var score = n > 0
+        ? (n / (n + _BAYES_M)) * mediaPond + (_BAYES_M / (n + _BAYES_M)) * mediaGlobal
+        : mediaGlobal * 0.85;      // sem histórico: ligeiramente abaixo, mas elegível para rotação
+      var compat = _especialidadeCompativel(categoriaOc, p.categoria);
+      return {
+        p: p, n: n, nFracoes: nFracoes, media: mediaPond, score: score,
+        compat: compat === true, semFiltro: compat === null,
+        elegivel: n > 0 && nFracoes >= _MIN_FRACOES,
+        ultimoConvite: ultimoConvite[p.id] || null
+      };
+    });
+
+    // 1) só os da especialidade certa (se conseguimos classificar a avaria)
+    var pool = lista.filter(function(x){ return x.compat || x.semFiltro; });
+    if (!pool.length) pool = lista;   // nenhum compatível: melhor sugerir algo do que nada
+
+    // 2) dois melhores com histórico credível
+    var comHistorico = pool.filter(function(x){ return x.elegivel; })
+                           .sort(function(a,b){ return b.score - a.score; });
+    var escolhidos = comHistorico.slice(0, 2);
+
+    // 3) terceiro lugar EM ROTAÇÃO — evita cartel e dá hipótese a quem nunca trabalhou aqui
+    var restantes = pool.filter(function(x){
+      return !escolhidos.find(function(e){ return e.p.id === x.p.id; });
+    }).sort(function(a,b){
+      if (!a.ultimoConvite && b.ultimoConvite) return -1;   // nunca convidado vai à frente
+      if (a.ultimoConvite && !b.ultimoConvite) return 1;
+      if (!a.ultimoConvite && !b.ultimoConvite) return b.score - a.score;
+      return new Date(a.ultimoConvite) - new Date(b.ultimoConvite);
+    });
+    var rotativo = restantes[0] || null;
+    if (rotativo) { rotativo.rotacao = true; escolhidos = escolhidos.concat([rotativo]); }
+    // se não houve elegíveis suficientes, completar pelos melhores do pool
+    if (escolhidos.length < 3) {
+      pool.sort(function(a,b){ return b.score - a.score; }).forEach(function(x){
+        if (escolhidos.length < 3 && !escolhidos.find(function(e){ return e.p.id === x.p.id; })) escolhidos.push(x);
+      });
+    }
+
+    return { escolhidos: escolhidos, lista: lista, mediaGlobal: mediaGlobal, temFiltro: pool.length !== lista.length };
+  } catch(e) { console.error('sugerir parceiros:', e); return null; }
+}
+
+// frase que explica porque este parceiro foi escolhido — transparência é a assinatura do produto
+function _motivoParceiro(x) {
+  if (x.rotacao) {
+    return x.n === 0
+      ? 'em rotação — ainda não trabalhou aqui, merece uma hipótese'
+      : 'em rotação — há muito que não é convidado';
+  }
+  if (x.n === 0) return 'sem avaliações ainda';
+  return 'avaliado pelos condóminos: ' + x.media.toFixed(1) + '★ em ' + x.n + ' trabalho(s), ' + x.nFracoes + ' fração(ões)';
+}
+
 // ↩️ Anular um pedido de orçamento (enganou-se no parceiro, ou quer voltar a pedir)
 async function ocAnularPedido(parceiroId) {
   if (!_ocAtual) return;
@@ -9761,33 +9892,37 @@ async function ocPedirOrcamentos() {
   h += '<textarea id="po-desc" class="fi" style="width:100%;min-height:56px;font-size:12px;margin-bottom:12px;">' + ((_ocAtual.descricao||'').replace(/</g,'&lt;')) + '</textarea>';
   h += '<label style="font-size:11px;color:var(--t2);font-weight:600;">Prazo para responderem (dias)</label>';
   h += '<input id="po-prazo" class="fi" type="number" value="15" style="width:100%;font-size:12px;margin-bottom:14px;">';
-  // 🎯 Parceiros relevantes para ESTA avaria aparecem primeiro
-  var catOc = (_ocAtual.categoria || '').toLowerCase();
-  var mapaCat = {
-    'portao': ['serralh','autom','portõ','porta','metal','ferro'],
-    'porta': ['serralh','autom','portõ','porta','metal','ferro'],
-    'elevador': ['elevad'],
-    'canaliza': ['canaliz','picheleiro','águas','aguas','pichel'],
-    'agua': ['canaliz','picheleiro','águas','aguas'],
-    'infiltra': ['canaliz','impermeab','obras','constru'],
-    'eletric': ['elétric','eletric','eletricista'],
-    'luz': ['elétric','eletric'],
-    'jardim': ['jardin','espaços verdes'],
-    'limpeza': ['limpeza'],
-    'incendio': ['extint','segurança','seguranca'],
-    'seguranca': ['extint','segurança','seguranca'],
-    'telhado': ['obras','constru','impermeab','cobertura'],
-    'fachada': ['obras','constru','pintura']
-  };
-  var pistas = [];
-  Object.keys(mapaCat).forEach(function(k){ if (catOc.indexOf(k) > -1) pistas = pistas.concat(mapaCat[k]); });
-  function relevante(p) {
-    if (!pistas.length) return false;
-    var cp = (p.categoria||'').toLowerCase();
-    return pistas.some(function(t){ return cp.indexOf(t) > -1; });
+  // 🧠 MOTOR DE SELEÇÃO: os condóminos já votaram nas estrelas — usa esse mandato
+  var sug = await sugerirParceirosOrcamento(_ocAtual.categoria, _ocAtual.id);
+  var sugeridosIds = [], mapaSug = {};
+  if (sug) {
+    sug.escolhidos.forEach(function(x){
+      if (jaPedidos.indexOf(x.p.id) > -1) return;   // já pedido não se sugere outra vez
+      sugeridosIds.push(x.p.id);
+      mapaSug[x.p.id] = x;
+    });
+    // sugeridos primeiro, depois os restantes
+    var ordem = {};
+    sugeridosIds.forEach(function(id, k){ ordem[id] = k; });
+    parceiros.sort(function(a,b){
+      var oa = ordem[a.id] !== undefined ? ordem[a.id] : 99;
+      var ob = ordem[b.id] !== undefined ? ordem[b.id] : 99;
+      if (oa !== ob) return oa - ob;
+      return (a.nome||'').localeCompare(b.nome||'');
+    });
   }
-  var comMatch = parceiros.filter(relevante);
-  parceiros = comMatch.concat(parceiros.filter(function(p){ return !relevante(p); }));
+  function relevante(p) { return _especialidadeCompativel(_ocAtual.categoria, p.categoria) === true; }
+
+  if (sugeridosIds.length) {
+    h += '<div style="background:rgba(148,216,45,.07);border:1px solid rgba(148,216,45,.35);border-radius:9px;padding:11px 13px;margin-bottom:12px;font-size:11.5px;color:var(--t2);line-height:1.6;">';
+    h += '<div style="font-weight:800;color:#94d82d;margin-bottom:5px;">🧠 Sugestão do sistema — já selecionada</div>';
+    sugeridosIds.forEach(function(id){
+      var x = mapaSug[id];
+      h += '<div style="margin-top:3px;">• <strong>' + (x.p.nome||'') + '</strong> — ' + _motivoParceiro(x) + '</div>';
+    });
+    h += '<div style="font-size:10px;color:var(--t3);margin-top:7px;line-height:1.5;">As estrelas decidem quem é <strong>convidado</strong>, nunca quem ganha — a escolha final continua a ser votada pelos condóminos sobre as propostas. O 3.º lugar roda de propósito, para o mercado não fechar em três nomes.</div>';
+    h += '</div>';
+  }
 
   var nDisp = parceiros.filter(function(p){ return jaPedidos.indexOf(p.id) === -1; }).length;
   var nJa = parceiros.length - nDisp;
@@ -9801,10 +9936,12 @@ async function ocPedirOrcamentos() {
   parceiros.forEach(function(p){
     var ja = jaPedidos.indexOf(p.id) > -1;
     h += '<label style="display:flex;align-items:center;gap:10px;padding:9px 11px;background:var(--s1);border:1px solid var(--b1);border-radius:8px;margin-bottom:7px;cursor:' + (ja?'default':'pointer') + ';opacity:' + (ja?'.55':'1') + ';">';
-    h += '<input type="checkbox" class="po-parc" value="' + p.id + '"' + (ja?' disabled':'') + ' style="accent-color:var(--cyan);' + (ja?'opacity:.4;':'') + '">';
+    var _sug = sugeridosIds.indexOf(p.id) > -1;
+    h += '<input type="checkbox" class="po-parc" value="' + p.id + '"' + (ja?' disabled':'') + (_sug && !ja ? ' checked' : '') + ' style="accent-color:var(--cyan);' + (ja?'opacity:.4;':'') + '">';
     var _star = parseFloat(p.rating||0);
     h += '<div style="flex:1;"><div style="font-size:12.5px;font-weight:600;color:var(--text);">' + (p.nome||'') + (_star ? ' <span style="font-size:10px;color:var(--amber);">' + _star.toFixed(1) + '★' + (p.num_avaliacoes?' ('+p.num_avaliacoes+')':'') + '</span>' : '') + '</div>';
     h += '<div style="font-size:10px;color:var(--t3);">' + (p.categoria||'') + (relevante(p) ? ' <span style="color:var(--green);font-weight:700;">· 🎯 especialidade compatível</span>' : '') + (p.autorizado_ata?' · ⚖️ '+p.autorizado_ata:'') + '</div>';
+    if (_sug && !ja) h += '<div style="font-size:10px;color:#94d82d;margin-top:3px;">🧠 ' + _motivoParceiro(mapaSug[p.id]) + '</div>';
     if (ja) h += '<div style="font-size:10px;color:var(--amber);margin-top:3px;">✔ já lhe pediste orçamento nesta ocorrência <a href="#" onclick="event.preventDefault();event.stopPropagation();ocAnularPedido(\'' + p.id + '\')" style="color:var(--red);text-decoration:underline;">anular pedido</a></div>';
     h += '</div>';
     if (!p.token_acesso) h += '<span style="font-size:9px;color:var(--amber);">sem portal</span>';
@@ -12638,7 +12775,7 @@ async function sugerirOrdemTrabalhos() {
       var sfOT = await analisarSuficienciaFundo(c);
       if (sfOT && sfOT.pctSugerida) {
         contexto.situacoes.push('TAXA DO FUNDO INSUFICIENTE: a taxa em vigor é ' + sfOT.pct + '% (rende ' + sfOT.contribAnual.toFixed(2) + '€/ano com as quotas de ' + sfOT.anoBase + '), mas o condomínio gastou em média ' + sfOT.gastoMedio.toFixed(2) + '€/ano em obras e manutenção nos últimos ' + sfOT.anosAmostra + ' ano(s). Sugerir ponto de deliberação: aumentar a percentagem do fundo de reserva de ' + sfOT.pct + '% para cerca de ' + sfOT.pctSugerida + '% (o DL 268/94 fixa 10% como MÍNIMO; a assembleia pode aprovar mais para acompanhar o ritmo real de conservação, evitando quotas extraordinárias de emergência).');
-      } else if (sfOT && sfOT.gastoMedio > 0) {
+      } else if (sfOT && sfOT.gastoMedio > 0 && sfOT.fiavel) {
         contexto.situacoes.push('Taxa do fundo adequada: ' + sfOT.pct + '% rende ' + sfOT.contribAnual.toFixed(2) + '€/ano e a conservação custa em média ' + sfOT.gastoMedio.toFixed(2) + '€/ano — sem necessidade de aumento.');
       }
     } catch(e){}
@@ -15979,15 +16116,27 @@ async function analisarSuficienciaFundo(cond) {
     });
     var anosG = Object.keys(porAnoG);
     if (!anosG.length) return { pct: pct, anoBase: anoBase, baseAno: baseAno, contribAnual: contribAnual, gastoMedio: 0, anosAmostra: 0, pctSugerida: null };
-    var gastoMedio = anosG.reduce(function(s,k){ return s + porAnoG[k]; }, 0) / anosG.length;
+    // ⚠️ A média tem de ser sobre os anos OBSERVADOS, não sobre os anos com despesas:
+    // uma obra única num ano vazio de outros não significa que se gasta isso todos os anos.
+    var primeiroReg = (mR.data||[]).map(function(m){ return m.data_movimento; }).filter(Boolean).sort()[0];
+    var anosObservados = 1;
+    if (primeiroReg) {
+      anosObservados = (new Date() - new Date(primeiroReg)) / (365.25*24*3600*1000);
+      if (anosObservados < 1) anosObservados = 1;
+      if (anosObservados > 3) anosObservados = 3;
+    }
+    var totalGasto = anosG.reduce(function(s,k){ return s + porAnoG[k]; }, 0);
+    var gastoMedio = totalGasto / anosObservados;
     var pctSugerida = null;
+    // com menos de 2 anos de registos a média não é fiável — informa, não recomenda
+    var fiavel = anosObservados >= 2;
     // só sugere se a diferença for material (>15%) e a sugestão for realmente maior
-    if (gastoMedio > contribAnual * 1.15) {
+    if (fiavel && gastoMedio > contribAnual * 1.15) {
       pctSugerida = Math.ceil(gastoMedio / baseAno * 100);
       if (pctSugerida > 40) pctSugerida = 40;          // travão de sanidade
       if (pctSugerida <= pct) pctSugerida = null;
     }
-    return { pct: pct, anoBase: anoBase, baseAno: baseAno, contribAnual: contribAnual, gastoMedio: gastoMedio, anosAmostra: anosG.length, pctSugerida: pctSugerida };
+    return { pct: pct, anoBase: anoBase, baseAno: baseAno, contribAnual: contribAnual, gastoMedio: gastoMedio, anosAmostra: Math.round(anosObservados*10)/10, fiavel: fiavel, totalGasto: totalGasto, pctSugerida: pctSugerida };
   } catch(e) { console.error('suficiencia fundo:', e); return null; }
 }
 
@@ -16220,9 +16369,11 @@ async function atualizarFundoCartao() {
       if (sf.pctSugerida) {
         h += '<div style="background:rgba(255,179,0,.07);border:1px solid rgba(255,179,0,.3);border-radius:9px;padding:10px 12px;margin-top:10px;font-size:11px;color:var(--t2);line-height:1.6;">';
         h += '📈 <strong style="color:var(--amber);">A taxa de ' + sf.pct + '% pode não chegar.</strong><br>';
-        h += 'O fundo recebe ' + sf.contribAnual.toFixed(2) + '€/ano, mas este prédio gastou em média <strong>' + sf.gastoMedio.toFixed(2) + '€/ano</strong> em obras e manutenção (média de ' + sf.anosAmostra + ' ano' + (sf.anosAmostra>1?'s':'') + ').<br>';
-        h += 'Para acompanhar o ritmo real de conservação seriam precisos <strong style="color:var(--amber);">' + sf.pctSugerida + '%</strong> — subir a taxa exige deliberação da assembleia.';
+        h += 'O fundo recebe ' + sf.contribAnual.toFixed(2) + '€/ano; em obras e manutenção saíram ' + sf.totalGasto.toFixed(2) + '€ em ' + sf.anosAmostra + ' ano(s) de registos, ou seja <strong>' + sf.gastoMedio.toFixed(2) + '€/ano</strong>.<br>';
+        h += 'A esse ritmo seriam precisos <strong style="color:var(--amber);">' + sf.pctSugerida + '%</strong> — subir a taxa exige deliberação da assembleia.';
         h += '</div>';
+      } else if (!sf.fiavel) {
+        h += '<div style="font-size:10.5px;color:var(--t3);margin-top:9px;line-height:1.5;">📈 A taxa de ' + sf.pct + '% rende ' + sf.contribAnual.toFixed(2) + '€/ano. Ainda só há ' + sf.anosAmostra + ' ano de registos de obras (' + sf.totalGasto.toFixed(2) + '€) — pouco para tirar uma média fiável. Com mais um ano de histórico o sistema já consegue dizer-te se a taxa chega.</div>';
       } else {
         h += '<div style="font-size:10.5px;color:var(--t3);margin-top:9px;">📈 A taxa de ' + sf.pct + '% rende ' + sf.contribAnual.toFixed(2) + '€/ano; a conservação tem custado ' + sf.gastoMedio.toFixed(2) + '€/ano — o ritmo está equilibrado.</div>';
       }
