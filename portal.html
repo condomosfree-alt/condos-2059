@@ -234,6 +234,61 @@
   @keyframes surge { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
 
   @keyframes surgeconf { from { transform: scale(.94); opacity: 0; } to { transform: none; opacity: 1; } }
+
+  /* ══ LAYOUT PRO: herói + folha ══ */
+  .heroi{position:relative;background:linear-gradient(160deg,#0d2440 0%,#0a1a30 55%,var(--bg) 100%);padding:18px 16px 74px;overflow:hidden;}
+  .heroi::before{content:'';position:absolute;top:-90px;right:-60px;width:280px;height:280px;border-radius:50%;background:radial-gradient(circle,rgba(0,212,255,.18),transparent 68%);pointer-events:none;}
+  .heroi-top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;position:relative;}
+  .heroi-ola{font-size:21px;font-weight:800;letter-spacing:-.4px;line-height:1.2;}
+  .heroi-sub{font-size:12px;color:var(--t2);margin-top:3px;}
+  .heroi-acoes{display:flex;gap:8px;}
+  .heroi-btn{width:38px;height:38px;border-radius:12px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center;font-size:16px;cursor:pointer;position:relative;}
+  .heroi-btn .pt{position:absolute;top:-3px;right:-3px;min-width:17px;height:17px;border-radius:9px;background:var(--red);color:#fff;font-size:9.5px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 4px;}
+  .heroi-destaque{position:relative;margin-top:16px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:14px 16px;cursor:pointer;}
+  .heroi-destaque .rot{font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.7px;}
+  .heroi-destaque .val{font-family:'Courier New',monospace;font-weight:800;font-size:27px;margin:4px 0 2px;}
+  .heroi-destaque .sub{font-size:11.5px;color:var(--t2);}
+
+  .folha{background:var(--bg);border-radius:22px 22px 0 0;margin-top:-56px;position:relative;padding:20px 14px 0;box-shadow:0 -14px 34px rgba(0,0,0,.4);}
+  .folha::before{content:'';display:block;width:40px;height:4px;border-radius:3px;background:var(--b2);margin:-8px auto 16px;}
+
+  .sec-tit{font-size:16px;font-weight:800;letter-spacing:-.3px;margin:22px 4px 12px;}
+  .sec-tit:first-of-type{margin-top:0;}
+  .sec-sub{font-size:11.5px;color:var(--t3);margin:-8px 4px 12px;line-height:1.45;}
+
+  /* carrossel horizontal */
+  .carrossel{display:flex;gap:11px;overflow-x:auto;padding:2px 4px 8px;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;}
+  .carrossel::-webkit-scrollbar{display:none;}
+  .cc{flex:0 0 82%;max-width:290px;scroll-snap-align:start;background:var(--card);border:1px solid var(--b);border-radius:15px;padding:14px;cursor:pointer;}
+  .cc.urgente{border-color:rgba(255,84,112,.45);background:linear-gradient(145deg,var(--card),rgba(255,84,112,.06));}
+  .cc.aviso{border-color:rgba(255,179,0,.4);background:linear-gradient(145deg,var(--card),rgba(255,179,0,.05));}
+  .cc.oferta{border-color:rgba(148,216,45,.35);background:linear-gradient(145deg,var(--card),rgba(148,216,45,.05));}
+  .cc-ic{font-size:22px;}
+  .cc-t{font-size:13.5px;font-weight:800;margin-top:7px;line-height:1.3;}
+  .cc-d{font-size:11.5px;color:var(--t2);margin-top:4px;line-height:1.45;}
+  .cc-a{font-size:11.5px;font-weight:800;color:var(--cyan);margin-top:9px;}
+
+  /* grelha de dois — o padrão "Explorar" */
+  .grelha{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .gt{background:var(--card);border:1px solid var(--b);border-radius:15px;padding:14px 13px;cursor:pointer;position:relative;transition:transform .12s,border-color .15s;}
+  .gt:active{transform:scale(.97);}
+  .gt-ic{width:38px;height:38px;border-radius:11px;background:rgba(0,212,255,.1);display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:9px;}
+  .gt-t{font-size:13.5px;font-weight:700;}
+  .gt-s{font-size:10.5px;color:var(--t3);margin-top:2px;line-height:1.35;}
+  .gt-b{position:absolute;top:10px;right:10px;min-width:18px;height:18px;border-radius:9px;background:var(--red);color:#fff;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 5px;}
+
+  /* dois cartões de estado lado a lado */
+  .duo{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .duo-c{background:var(--card);border:1px solid var(--b);border-radius:15px;padding:14px;cursor:pointer;}
+  .duo-n{font-size:23px;font-weight:900;line-height:1;}
+  .duo-r{font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;}
+  .duo-s{font-size:11px;color:var(--t2);margin-top:5px;}
+
+  /* botão flutuante do assistente */
+  .fab{position:fixed;right:16px;bottom:78px;width:56px;height:56px;border-radius:50%;background:linear-gradient(140deg,var(--cyan),var(--cyan2));border:none;color:#04121f;font-size:24px;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 8px 26px rgba(0,212,255,.35);z-index:40;}
+  .fab:active{transform:scale(.94);}
+  .ver-mais{display:block;width:100%;background:transparent;border:none;color:var(--cyan);font-size:12.5px;font-weight:700;padding:12px;cursor:pointer;}
+
 </style>
 </head>
 <body>
@@ -257,102 +312,142 @@
     </div>
   </div>
 
-  <div class="page active" id="pg-inicio">
-    <div class="chips" id="chips-relance" style="display:none;">
-      <div class="chip" id="chip-quotas" onclick="irPara('quotas')"><div class="chip-ic">💶</div><div class="chip-t">Quotas</div><div class="chip-v" id="chip-quotas-v">…</div></div>
-      <div class="chip" id="chip-msg" onclick="irPara('mensagens')"><div class="chip-ic">💬</div><div class="chip-t">Mensagens</div><div class="chip-v" id="chip-msg-v">…</div></div>
-      <div class="chip" id="chip-fundo" onclick="irPara('quotas')"><div class="chip-ic">🛡️</div><div class="chip-t">Fundo</div><div class="chip-v" id="chip-fundo-v">…</div></div>
-    </div>
-    <div class="card" id="confirmar-card" style="display:none;border-color:rgba(255,179,0,.45);background:linear-gradient(135deg,var(--card),rgba(255,179,0,.04));">
-      <div style="font-size:13.5px;font-weight:800;">✋ Precisamos da tua confirmação</div>
-      <div style="font-size:10.5px;color:var(--t2);margin:5px 0 12px;line-height:1.5;">Alguém reportou isto pelo QR do átrio. Antes de a administração gastar dinheiro, confirmamos contigo que existe — e quem é que afeta.</div>
-      <div id="confirmar-lista"></div>
-    </div>
+  <div class="page active" id="pg-inicio" style="padding:0;">
 
-    <div class="card" id="card-pergunta" style="border-color:rgba(0,212,255,.35);background:linear-gradient(135deg,var(--card),rgba(0,212,255,.04));">
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <div style="font-size:13.5px;font-weight:800;">🔮 Pergunta ao Prédio</div>
-        <div id="pp-conta" style="font-size:9px;color:var(--t3);"></div>
+    <!-- HERÓI -->
+    <div class="heroi">
+      <div class="heroi-top">
+        <div>
+          <div class="heroi-ola" id="hi-ola">Olá</div>
+          <div class="heroi-sub" id="hi-sub">—</div>
+        </div>
+        <div class="heroi-acoes">
+          <div class="heroi-btn" onclick="irPara('mensagens')" title="Mensagens">✉️<span class="pt" id="hi-pt-msg" style="display:none;"></span></div>
+          <div class="heroi-btn" onclick="irPara('docs')" title="Documentos">📁</div>
+        </div>
       </div>
-      <div style="font-size:10.5px;color:var(--t2);margin:5px 0 10px;line-height:1.45;">Pergunta em linguagem normal: <em>"quanto devo?", "o fundo existe mesmo?", "porque paguei quota extra?", "quando é a assembleia?"</em></div>
-      <div style="display:flex;gap:8px;">
-        <input class="fi" id="pp-input" placeholder="Escreve a tua pergunta…" style="flex:1;font-size:13px;" onkeydown="if(event.key==='Enter')perguntarPredio()">
-        <button onclick="perguntarPredio()" id="pp-btn" style="background:var(--cyan);border:none;color:#02121d;border-radius:10px;padding:0 16px;font-size:15px;font-weight:800;cursor:pointer;">➤</button>
+
+      <div class="heroi-destaque" onclick="irPara('quotas')">
+        <div class="rot">A tua situação de quotas</div>
+        <div id="h-sit" class="val">…</div>
+        <div id="h-sit-sub" class="sub"></div>
       </div>
-      <div id="pp-resposta" style="display:none;margin-top:11px;background:var(--card2);border:1px solid var(--b);border-radius:11px;padding:12px 14px;font-size:12.5px;line-height:1.6;color:var(--text);"></div>
     </div>
 
-    <div class="card" id="ofertas-card" style="display:none;border-color:rgba(148,216,45,.35);">
-      <div style="font-size:13px;font-weight:800;">💼 Ofertas para o prédio <span style="font-size:8.5px;background:rgba(148,216,45,.15);color:#94d82d;padding:2px 7px;border-radius:5px;vertical-align:middle;">OFERTA COMERCIAL</span></div>
-      <div style="font-size:10px;color:var(--t3);margin:4px 0 10px;">Propostas de empresas selecionadas pela administração. Aderir é sempre voluntário.</div>
-      <div id="ofertas-lista"></div>
-    </div>
+    <!-- FOLHA -->
+    <div class="folha">
 
-    <div class="card card-glow">
-      <div style="font-size:11px;color:var(--t3);letter-spacing:.5px;">SITUAÇÃO DE QUOTAS</div>
-      <div id="h-sit" style="font-family:'Courier New',monospace;font-weight:800;font-size:28px;margin:5px 0;">…</div>
-      <div id="h-sit-sub" style="font-size:12px;color:var(--t2);"></div>
-    </div>
-
-    <div class="card" id="score-card" style="display:none;border-color:rgba(255,179,0,.3);">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-        <div style="font-size:13.5px;font-weight:800;">🏆 Saúde do Prédio</div>
-        <button onclick="partilharScore()" style="background:transparent;border:1px solid var(--b2);color:var(--t2);border-radius:8px;padding:5px 12px;font-size:10.5px;cursor:pointer;">📤 Partilhar</button>
+      <!-- PRECISA DE TI -->
+      <div id="sec-precisa" style="display:none;">
+        <div class="sec-tit">Precisa de ti</div>
+        <div class="sec-sub">O que está à tua espera agora.</div>
+        <div class="carrossel" id="precisa-lista"></div>
       </div>
-      <div style="display:flex;align-items:center;gap:18px;">
-        <div id="score-circulo" style="width:96px;height:96px;border-radius:50%;flex-shrink:0;position:relative;">
-          <div style="position:absolute;inset:9px;background:var(--card);border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;">
-            <div id="score-num" style="font-size:26px;font-weight:900;line-height:1;">—</div>
-            <div style="font-size:7.5px;color:var(--t3);">de 100</div>
+
+      <!-- confirmações de avarias anónimas -->
+      <div class="card" id="confirmar-card" style="display:none;border-color:rgba(255,179,0,.45);background:linear-gradient(135deg,var(--card),rgba(255,179,0,.04));">
+        <div style="font-size:13.5px;font-weight:800;">✋ Precisamos da tua confirmação</div>
+        <div style="font-size:10.5px;color:var(--t2);margin:5px 0 12px;line-height:1.5;">Alguém reportou isto pelo QR do átrio. Antes de a administração gastar dinheiro, confirmamos contigo que existe — e quem é que afeta.</div>
+        <div id="confirmar-lista"></div>
+      </div>
+
+      <!-- O TEU PRÉDIO -->
+      <div class="sec-tit">O teu prédio</div>
+      <div class="duo">
+        <div class="duo-c" id="score-card" style="display:none;" onclick="abrirScoreDetalhe()">
+          <div class="duo-r">Saúde do prédio</div>
+          <div style="display:flex;align-items:center;gap:11px;">
+            <div id="score-circulo" style="width:52px;height:52px;border-radius:50%;flex-shrink:0;position:relative;">
+              <div style="position:absolute;inset:6px;background:var(--card);border-radius:50%;display:flex;align-items:center;justify-content:center;">
+                <div id="score-num" style="font-size:16px;font-weight:900;">—</div>
+              </div>
+            </div>
+            <div style="flex:1;min-width:0;">
+              <div id="score-classe" style="font-size:11.5px;font-weight:800;line-height:1.25;">—</div>
+              <div style="font-size:9.5px;color:var(--t3);margin-top:3px;">ver detalhe ›</div>
+            </div>
           </div>
         </div>
-        <div style="flex:1;">
-          <div id="score-classe" style="font-size:13px;font-weight:800;margin-bottom:7px;">—</div>
-          <div id="score-barras" style="font-size:9.5px;line-height:2.1;"></div>
+
+        <div class="duo-c" id="fundo-mini" style="display:none;" onclick="irPara('quotas')">
+          <div class="duo-r">🛡️ Fundo de reserva</div>
+          <div class="duo-n" id="fundo-mini-v" style="color:var(--green);">—</div>
+          <div class="duo-s" id="fundo-mini-s">comprovado</div>
         </div>
       </div>
-      <div style="font-size:9px;color:var(--t3);margin-top:10px;">Calculado automaticamente pelo sistema com os dados reais — o administrador não o pode editar.</div>
+      <div id="score-barras" style="display:none;"></div>
+      <div id="score-detalhe-box" style="display:none;"></div>
+
+      <!-- EXPLORAR -->
+      <div class="sec-tit">Explorar</div>
+      <div class="grelha">
+        <div class="gt" onclick="irPara('quotas')">
+          <span class="gt-b" id="badge-quotas" style="display:none;"></span>
+          <div class="gt-ic">🧾</div>
+          <div class="gt-t">Quotas</div>
+          <div class="gt-s">Histórico e pagamentos</div>
+        </div>
+        <div class="gt" onclick="irPara('reportar')">
+          <span class="gt-b" id="badge-oc" style="display:none;"></span>
+          <div class="gt-ic" style="background:rgba(255,179,0,.12);">🛠️</div>
+          <div class="gt-t">Avarias</div>
+          <div class="gt-s">Reportar e acompanhar</div>
+        </div>
+        <div class="gt" onclick="irPara('contas')">
+          <div class="gt-ic" style="background:rgba(34,229,132,.12);">📊</div>
+          <div class="gt-t">Contas</div>
+          <div class="gt-s">Onde vai o dinheiro</div>
+        </div>
+        <div class="gt" onclick="irPara('mensagens')">
+          <span class="gt-b" id="badge-msg" style="display:none;"></span>
+          <div class="gt-ic" style="background:rgba(0,212,255,.12);">💬</div>
+          <div class="gt-t">Mensagens</div>
+          <div class="gt-s">Falar com a administração</div>
+        </div>
+        <div class="gt" onclick="irPara('docs')">
+          <span class="gt-b" id="badge-docs" style="display:none;"></span>
+          <div class="gt-ic" style="background:rgba(167,139,250,.14);">📁</div>
+          <div class="gt-t">Documentos</div>
+          <div class="gt-s">Atas, contas e regulamento</div>
+        </div>
+        <div class="gt" onclick="abrirAssembleia()">
+          <div class="gt-ic" style="background:rgba(167,139,250,.14);">🏛️</div>
+          <div class="gt-t">Assembleia</div>
+          <div class="gt-s">Convocatórias e presença</div>
+        </div>
+        <div class="gt" onclick="irPara('quotas');setTimeout(function(){var e=document.getElementById('historia-card');if(e)e.scrollIntoView({behavior:'smooth'});},350)">
+          <div class="gt-ic" style="background:rgba(255,179,0,.12);">🕰️</div>
+          <div class="gt-t">A tua história</div>
+          <div class="gt-s">O que já pagaste e votaste</div>
+        </div>
+        <div class="gt" onclick="window.location.href=document.getElementById('h-link-ficha').href">
+          <div class="gt-ic" style="background:rgba(148,216,45,.13);">🧾</div>
+          <div class="gt-t">Os meus dados</div>
+          <div class="gt-s">Ficha do condómino</div>
+        </div>
+      </div>
+
+      <!-- VANTAGENS -->
+      <div id="ofertas-card" style="display:none;">
+        <div class="sec-tit">Vantagens para ti <span style="font-size:9px;background:rgba(148,216,45,.15);color:#94d82d;padding:3px 8px;border-radius:5px;vertical-align:middle;font-weight:700;">OFERTAS COMERCIAIS</span></div>
+        <div class="sec-sub">Propostas negociadas para o prédio, de empresas selecionadas pela administração. Aderir é sempre voluntário.</div>
+        <div class="carrossel" id="ofertas-lista"></div>
+      </div>
+
+      <!-- ATIVIDADE -->
+      <div class="sec-tit">Atividade recente</div>
+      <div id="h-feed"></div>
+
+      <a id="h-link-ficha" href="#" style="display:block;text-align:center;margin:18px 0 8px;font-size:12.5px;color:var(--t2);text-decoration:none;padding:10px;">🧾 Preencher / atualizar a minha ficha</a>
+      <div style="height:26px;"></div>
     </div>
 
-    <div class="menu-grid">
-      <div class="mtile" onclick="irPara('quotas')">
-        <span class="mtile-badge" id="badge-quotas" style="display:none;"></span>
-        <div class="mtile-ic">🧾</div>
-        <div class="mtile-t">Quotas</div>
-        <div class="mtile-s">Ver histórico e pagar</div>
-      </div>
-      <div class="mtile" onclick="irPara('reportar')">
-        <span class="mtile-badge" id="badge-oc" style="display:none;"></span>
-        <div class="mtile-ic">🛠️</div>
-        <div class="mtile-t">Ocorrências</div>
-        <div class="mtile-s">Reportar problemas</div>
-      </div>
-      <div class="mtile" onclick="irPara('contas')">
-        <div class="mtile-ic">💰</div>
-        <div class="mtile-t">Contas</div>
-        <div class="mtile-s">Do condomínio</div>
-      </div>
-      <div class="mtile" onclick="irPara('docs')">
-        <span class="mtile-badge" id="badge-docs" style="display:none;"></span>
-        <div class="mtile-ic">📄</div>
-        <div class="mtile-t">Documentos</div>
-        <div class="mtile-s">Atas, seguros, regulamento</div>
-      </div>
-      <div class="mtile" onclick="irPara('mensagens')" style="grid-column:span 2;">
-        <span class="mtile-badge" id="badge-msg" style="display:none;"></span>
-        <div class="mtile-ic">💬</div>
-        <div class="mtile-t">Mensagens</div>
-        <div class="mtile-s">Falar com a administração</div>
-      </div>
+    <!-- chips antigos, mantidos escondidos: o JS ainda os alimenta -->
+    <div class="chips" id="chips-relance" style="display:none;">
+      <div class="chip" id="chip-quotas"><div class="chip-ic">💶</div><div class="chip-t">Quotas</div><div class="chip-v" id="chip-quotas-v">…</div></div>
+      <div class="chip" id="chip-msg"><div class="chip-ic">💬</div><div class="chip-t">Mensagens</div><div class="chip-v" id="chip-msg-v">…</div></div>
+      <div class="chip" id="chip-fundo"><div class="chip-ic">🛡️</div><div class="chip-t">Fundo</div><div class="chip-v" id="chip-fundo-v">…</div></div>
     </div>
-
-    <div class="sec-h">🔔 ÚLTIMAS NOTIFICAÇÕES</div>
-    <div id="h-feed"><div class="skel">A carregar…</div></div>
-
-    <a id="h-link-ficha" href="#" style="display:block;text-align:center;margin-top:18px;font-size:12.5px;color:var(--t2);text-decoration:none;padding:13px;border:1px dashed var(--b2);border-radius:12px;">✏️ Atualizar os meus dados (NIF, contacto, morada)</a>
-    <a href="#" onclick="mostrarInstalar(event)" style="display:block;text-align:center;margin-top:10px;font-size:12.5px;color:var(--cyan);text-decoration:none;padding:13px;border:1px solid rgba(0,212,255,.3);border-radius:12px;background:rgba(0,212,255,.04);">📲 Adicionar ao ecrã do telemóvel (acesso rápido)</a>
-    <a href="#" id="btn-notif" onclick="toggleNotificacoes(event)" style="display:none;text-align:center;margin-top:10px;font-size:12.5px;color:var(--green);text-decoration:none;padding:13px;border:1px solid rgba(34,229,132,.3);border-radius:12px;background:rgba(34,229,132,.04);">🔔 Receber avisos no telemóvel</a>
-    <div class="rodape">Este portal mostra apenas os dados da sua fração.<br>COND.OS 2059 · Gestão de Condomínios</div>
   </div>
 
   <div class="page" id="pg-quotas">
@@ -491,6 +586,27 @@
   <div id="chat-barra" style="display:none;gap:8px;position:fixed;bottom:calc(var(--nav-h) + 8px);left:50%;transform:translateX(-50%);width:100%;max-width:480px;padding:0 16px;z-index:25;">
     <input id="chat-input" placeholder="Escreve uma mensagem…" style="flex:1;box-shadow:0 4px 16px rgba(0,0,0,.4);" onkeydown="if(event.key==='Enter')enviarMensagem()">
     <button onclick="enviarMensagem()" style="background:linear-gradient(135deg,var(--cyan),var(--cyan2));border:none;border-radius:10px;color:#04121f;font-weight:800;padding:0 18px;font-size:16px;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.4);">➤</button>
+  </div>
+
+  <button class="fab" id="fab-pp" onclick="abrirPergunta()" title="Pergunta ao Prédio">🔮</button>
+
+  <div id="modal-pp" style="display:none;position:fixed;inset:0;z-index:58;background:rgba(4,8,16,.72);backdrop-filter:blur(4px);align-items:flex-end;justify-content:center;">
+    <div style="width:100%;max-width:480px;background:var(--card);border:1px solid var(--b2);border-top:3px solid var(--cyan);border-radius:20px 20px 0 0;padding:20px 18px calc(20px + env(safe-area-inset-bottom));max-height:86vh;overflow-y:auto;">
+      <div style="width:38px;height:4px;background:var(--b2);border-radius:3px;margin:-6px auto 14px;"></div>
+      <div class="card" id="card-pergunta" style="border:none;background:transparent;padding:0;margin:0;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div style="font-size:15px;font-weight:800;">🔮 Pergunta ao Prédio</div>
+          <div id="pp-conta" style="font-size:9.5px;color:var(--t3);"></div>
+        </div>
+        <div style="font-size:11px;color:var(--t2);margin:6px 0 12px;line-height:1.5;">Pergunta em linguagem normal: <em>"quanto devo?", "o fundo existe mesmo?", "porque paguei quota extra?", "quando é a assembleia?"</em></div>
+        <div style="display:flex;gap:8px;">
+          <input class="fi" id="pp-input" placeholder="Escreve a tua pergunta…" style="flex:1;font-size:14px;" onkeydown="if(event.key==='Enter')perguntarPredio()">
+          <button onclick="perguntarPredio()" id="pp-btn" style="background:var(--cyan);border:none;color:#02121d;border-radius:10px;padding:0 17px;font-size:16px;font-weight:800;cursor:pointer;">➤</button>
+        </div>
+        <div id="pp-resposta" style="display:none;margin-top:12px;background:var(--card2);border:1px solid var(--b);border-radius:11px;padding:13px 14px;font-size:13px;line-height:1.6;color:var(--text);"></div>
+      </div>
+      <button onclick="document.getElementById('modal-pp').style.display='none'" style="width:100%;margin-top:16px;background:transparent;border:1px solid var(--b2);color:var(--t2);border-radius:11px;padding:13px;font-size:13.5px;cursor:pointer;">Fechar</button>
+    </div>
   </div>
 
   <div id="modal-conf" style="display:none;position:fixed;inset:0;z-index:60;background:rgba(4,8,16,.72);backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:20px;">
@@ -666,6 +782,12 @@ function aplicarDestinoNotificacao() {
 }
 
 function irPara(pg, semHistorico) {
+  try {
+    var tb = document.querySelector('.topbar');
+    if (tb) tb.style.display = (pg === 'inicio') ? 'none' : '';
+    var fb = document.getElementById('fab-pp');
+    if (fb) fb.style.display = (pg === 'inicio') ? 'flex' : 'none';
+  } catch(e){}
   try { if (!semHistorico && location.hash !== '#' + pg) history.replaceState(null, '', location.pathname + location.search + '#' + pg); } catch(e){}
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav button').forEach(b => b.classList.remove('on'));
@@ -715,7 +837,7 @@ function saudacao() { const h=new Date().getHours(); return h<12?'Bom dia':(h<20
 async function iniciar() {
   if (!token) { document.getElementById('invalido').style.display='block'; return; }
   const res = await sb.rpc('portal_situacao', { p_token: token });
-  if (!res.error && res.data && res.data.length) window._sitCache = res.data[0];
+  if (!res.error && res.data && res.data.length) { window._sitCache = res.data[0]; try { montarHeroi(); } catch(e){} }
   if (res.error || !res.data || !res.data.length) { document.getElementById('invalido').style.display='block'; return; }
   const d = res.data[0];
   document.getElementById('app').style.display = 'block';
@@ -2465,6 +2587,121 @@ async function carregarEstadoVotacao(ocId) {
 }
 
 
+
+// 🔮 assistente em folha própria (saiu do início para não roubar espaço)
+function abrirPergunta() {
+  var m = document.getElementById('modal-pp');
+  if (!m) return;
+  m.style.display = 'flex';
+  m.onclick = function(ev){ if (ev.target === m) m.style.display = 'none'; };
+  setTimeout(function(){ try { document.getElementById('pp-input').focus(); } catch(e){} }, 120);
+}
+
+// 👋 saudação do herói, conforme a hora
+function montarHeroi() {
+  var h = new Date().getHours();
+  var saud = h < 13 ? 'Bom dia' : (h < 20 ? 'Boa tarde' : 'Boa noite');
+  var s = window._sitCache || {};
+  var nome = (s.proprietario_nome || '').split(' ')[0] || '';
+  var el = document.getElementById('hi-ola');
+  if (el) el.textContent = saud + (nome ? ', ' + nome : '');
+  var sub = document.getElementById('hi-sub');
+  if (sub) sub.textContent = (s.condominio_nome || '') + (s.fracao_codigo ? ' · Fração ' + s.fracao_codigo : '') + (s.bloco ? ' · Bloco ' + s.bloco : '');
+}
+
+// 🔔 "Precisa de ti" — só aparece quando há mesmo algo à espera
+function renderPrecisa() {
+  var box = document.getElementById('precisa-lista');
+  var sec = document.getElementById('sec-precisa');
+  if (!box || !sec) return;
+  var itens = [];
+  var ch = window._chips || {};
+
+  if (ch.divida > 0.005) {
+    itens.push({ cls:'urgente', ic:'💶', t:'Tens ' + ch.divida.toFixed(2).replace('.',',') + '€ por pagar',
+      d:'Regulariza para evitar juros e para o prédio não ficar sem meios.', a:'Ver quotas ›', f:"irPara('quotas')" });
+  }
+  try {
+    (_exigencias||[]).forEach(function(e){
+      if (e.estado === 'em_votacao' && !e.meu_voto) {
+        itens.push({ cls:'aviso', ic:'⚖️', t:'Valida a prova do fundo',
+          d:'A administração apresentou o extrato bancário. Diz se aceitas como prova.', a:'Ver e votar ›', f:"irPara('quotas')" });
+      }
+    });
+  } catch(e){}
+  try {
+    Object.values(_ocCache||{}).forEach(function(o){
+      if (o.precisa_votacao && o.estado === 'aguarda_votacao' && !o.meu_voto && !o.meu_orcamento) {
+        itens.push({ cls:'aviso', ic:'🗳️', t:'Votação aberta: ' + (o.categoria||'reparação'),
+          d:(o.descricao||'').split('[')[0].trim().substring(0,70), a:'Votar ›', f:"irPara('reportar')" });
+      }
+    });
+  } catch(e){}
+  if (ch.msgs > 0) {
+    itens.push({ cls:'', ic:'💬', t:ch.msgs + ' mensagem(ns) por ler',
+      d:'Comunicações da administração — ficam registadas com data.', a:'Abrir ›', f:"irPara('mensagens')" });
+  }
+
+  if (!itens.length) { sec.style.display = 'none'; return; }
+  var h = '';
+  itens.slice(0, 5).forEach(function(x){
+    h += '<div class="cc ' + x.cls + '" onclick="' + x.f + '">';
+    h += '<div class="cc-ic">' + x.ic + '</div>';
+    h += '<div class="cc-t">' + x.t + '</div>';
+    h += '<div class="cc-d">' + escapar(x.d) + '</div>';
+    h += '<div class="cc-a">' + x.a + '</div>';
+    h += '</div>';
+  });
+  box.innerHTML = h;
+  sec.style.display = 'block';
+}
+
+// 🛡️ mini-cartão do fundo no início
+function renderFundoMini() {
+  var el = document.getElementById('fundo-mini');
+  if (!el || !window._fundoP) return;
+  var f = window._fundoP;
+  var cob = f.teo > 0 ? (f.comp / f.teo * 100) : 100;
+  document.getElementById('fundo-mini-v').textContent = Math.round(cob) + '%';
+  document.getElementById('fundo-mini-v').style.color = cob >= 95 ? 'var(--green)' : (cob >= 60 ? '#ffb300' : 'var(--red)');
+  document.getElementById('fundo-mini-s').textContent = cob >= 95 ? 'comprovado ✔' : 'comprovado por movimentos';
+  el.style.display = 'block';
+}
+
+// 🏆 detalhe do score numa folha, para o cartão ficar pequeno no início
+function abrirScoreDetalhe() {
+  var barras = document.getElementById('score-barras');
+  var cl = document.getElementById('score-classe');
+  var num = document.getElementById('score-num');
+  var h = '<div style="text-align:center;margin-bottom:14px;">';
+  h += '<div style="font-size:40px;font-weight:900;line-height:1;">' + (num ? num.textContent : '—') + '<span style="font-size:15px;color:var(--t3);font-weight:400;"> / 100</span></div>';
+  h += '<div style="font-size:14px;font-weight:800;margin-top:6px;">' + (cl ? cl.textContent : '') + '</div></div>';
+  h += '<div style="font-size:11.5px;line-height:2;">' + (barras ? barras.innerHTML : '') + '</div>';
+  h += '<div style="font-size:10.5px;color:var(--t3);margin-top:14px;line-height:1.5;">Calculado automaticamente com os dados reais do prédio — a administração não o pode editar.</div>';
+  h += '<button onclick="partilharScore()" style="width:100%;margin-top:16px;background:var(--cyan);border:none;color:#04121f;border-radius:11px;padding:13px;font-size:13.5px;font-weight:800;cursor:pointer;">📤 Partilhar o meu prédio</button>';
+  abrirFolha('🏆 Saúde do prédio', h);
+}
+
+// folha genérica reutilizável
+function abrirFolha(titulo, html) {
+  var m = document.getElementById('modal-folha');
+  if (!m) {
+    m = document.createElement('div');
+    m.id = 'modal-folha';
+    m.style.cssText = 'display:none;position:fixed;inset:0;z-index:57;background:rgba(4,8,16,.72);backdrop-filter:blur(4px);align-items:flex-end;justify-content:center;';
+    m.innerHTML = '<div style="width:100%;max-width:480px;background:var(--card);border:1px solid var(--b2);border-radius:20px 20px 0 0;padding:20px 18px calc(20px + env(safe-area-inset-bottom));max-height:86vh;overflow-y:auto;">' +
+      '<div style="width:38px;height:4px;background:var(--b2);border-radius:3px;margin:-6px auto 14px;"></div>' +
+      '<div id="folha-tit" style="font-size:15px;font-weight:800;margin-bottom:12px;"></div>' +
+      '<div id="folha-corpo"></div>' +
+      '<button onclick="document.getElementById(\'modal-folha\').style.display=\'none\'" style="width:100%;margin-top:16px;background:transparent;border:1px solid var(--b2);color:var(--t2);border-radius:11px;padding:13px;font-size:13.5px;cursor:pointer;">Fechar</button></div>';
+    document.body.appendChild(m);
+  }
+  document.getElementById('folha-tit').textContent = titulo;
+  document.getElementById('folha-corpo').innerHTML = html;
+  m.style.display = 'flex';
+  m.onclick = function(ev){ if (ev.target === m) m.style.display = 'none'; };
+}
+
 // ✋ CONFIRMAÇÃO DE AVARIAS ANÓNIMAS — o gatilho dos automatismos
 // A resposta confirma a existência E resolve o âmbito (prédio ou bloco) de uma vez.
 var _reabrir = {};
@@ -2559,8 +2796,9 @@ async function carregarOfertas() {
     let h = '';
     r.data.forEach(function(o){
       const meta = parseInt(o.meta_aderentes||0), n = parseInt(o.n_interessados||0);
-      h += '<div style="background:var(--card2);border:1px solid var(--b);border-radius:11px;padding:12px 13px;margin-bottom:9px;">';
-      h += '<div style="font-size:13px;font-weight:700;">' + escapar(o.titulo||'') + '</div>';
+      h += '<div class="cc oferta">';
+      h += '<div class="cc-ic">💼</div>';
+      h += '<div class="cc-t">' + escapar(o.titulo||'') + '</div>';
       h += '<div style="font-size:10.5px;color:var(--t3);margin-top:2px;">' + escapar(o.prestador_nome||'') + (o.fecha_em ? ' · até ' + new Date(o.fecha_em).toLocaleDateString('pt-PT') : '') + '</div>';
       if (o.beneficio) h += '<div style="font-size:11.5px;color:#94d82d;font-weight:700;margin-top:5px;">🎁 ' + escapar(o.beneficio) + '</div>';
       if (o.desconto_texto) h += '<div style="font-size:11px;color:var(--t2);margin-top:3px;">💶 Desconto negociado: ' + escapar(o.desconto_texto) + '</div>';
@@ -2665,7 +2903,8 @@ async function carregarScore() {
       barras += '<div style="flex:1;height:5px;background:rgba(255,255,255,.07);border-radius:3px;overflow:hidden;"><div style="width:' + pct + '%;height:100%;background:' + cl.cor + ';border-radius:3px;"></div></div>';
       barras += '<strong style="min-width:34px;text-align:right;">' + x.pts + '/' + x.max + '</strong></div>';
     });
-    document.getElementById('score-barras').innerHTML = barras;
+    var _sb = document.getElementById('score-barras');
+    if (_sb) _sb.innerHTML = barras;
   } catch(e){}
 }
 
@@ -2813,6 +3052,7 @@ async function carregarDinheiro() {
 // 🎯 Relance: o essencial em 3 chips no topo
 window._chips = { divida: null, msgs: null, fundoCob: null };
 function renderChips() {
+  try { renderPrecisa(); } catch(e){}
   var box = document.getElementById('chips-relance');
   if (!box) return;
   var ch = window._chips;
@@ -2829,6 +3069,8 @@ function renderChips() {
     pinta('chip-quotas', ch.divida > 0.005 ? ch.divida.toFixed(0) + '€ em dívida' : 'Em dia ✔', ch.divida > 0.005 ? 'urgente' : 'ok');
   }
   if (ch.msgs !== null) {
+    var _pt = document.getElementById('hi-pt-msg');
+    if (_pt) { if (ch.msgs > 0) { _pt.textContent = ch.msgs; _pt.style.display = 'flex'; } else _pt.style.display = 'none'; }
     pinta('chip-msg', ch.msgs > 0 ? ch.msgs + ' nova(s)' : 'Sem novas', ch.msgs > 0 ? 'atencao' : 'ok');
     // tile das mensagens ganha aura quando há novidades
     var tileMsg = document.querySelector('.mtile[onclick*="mensagens"]');
@@ -2853,6 +3095,7 @@ async function carregarFundo() {
     document.getElementById('fundo-p-comprovado').textContent = comp.toFixed(2).replace('.',',') + '€';
     const cob = teo > 0 ? comp/teo*100 : 100;
     window._chips.fundoCob = cob; renderChips();
+    setTimeout(function(){ try { renderFundoMini(); } catch(e){} }, 40);
     window._fundoP = { teo: teo, comp: comp, ult: d.ultimo_reforco ? new Date(d.ultimo_reforco).toLocaleDateString('pt-PT') : null };
     // taxa realmente em vigor neste prédio (pode ser superior ao mínimo legal)
     const pctVig = parseFloat(d.percentagem||0);
@@ -2910,6 +3153,10 @@ carregarHistoria();
 carregarOfertas();
 carregarPorConfirmar();
 initNotificacoes();
+try {
+  var _tb = document.querySelector('.topbar'); if (_tb) _tb.style.display = 'none';
+  montarHeroi();
+} catch(e){}
 aplicarDestinoNotificacao();
 // se a app já estava aberta e o utilizador carrega noutra notificação
 window.addEventListener('hashchange', aplicarDestinoNotificacao);
