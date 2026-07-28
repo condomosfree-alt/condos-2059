@@ -767,7 +767,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.28-0933</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.28-0945</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -9049,7 +9049,193 @@ function atualizarClassificacao() {
   if (ns) ns.style.display = (tipoEl.value && !cl.precisaOrcamentos) ? 'block' : 'none';
 }
 
+
+// ═══════════════════════════════════════════════════════════
+// 🧭 GESTÃO GUIADA DA OCORRÊNCIA — uma pergunta de cada vez
+// O programa sabe o estado; mostra só a decisão que falta agora.
+// O ecrã completo continua acessível em gerirOcorrenciaCompleto().
+// ═══════════════════════════════════════════════════════════
 async function gerirOcorrencia(id) {
+  var r = await sb.from('ocorrencias').select('*').eq('id', id).single();
+  if (r.error || !r.data) { toast('Não foi possível abrir a ocorrência','err'); return; }
+  var o = r.data;
+  _ocAtual = o;
+  if (o.estado === 'resolvida' || o.estado === 'fechada') return verOcorrencia(id);
+
+  var valor = parseFloat(o.orcamento_valor || 0);
+  var limite = parseFloat((currentCondo||{}).limite_admin) || 0;
+  var cl = classificarIntervencao(o.tipo_legal || '', valor);
+
+  // quantas propostas já chegaram
+  var props = [];
+  try {
+    var pR = await sb.from('orcamentos_obra').select('id,valor,estado,parceiro_id').eq('ocorrencia_id', id);
+    props = pR.data || [];
+  } catch(e){}
+  var submetidas = props.filter(function(p){ return p.valor !== null && p.valor !== undefined; });
+
+  // ── qual é o passo atual? ──
+  var passo = 1;
+  if (o.estado === 'aprovada') passo = 3;
+  else if (o.precisa_votacao || o.estado === 'aguarda_votacao') passo = 2;
+  else if (valor > 0) passo = 2;
+
+  var h = '';
+
+  // ── cabeçalho ──
+  var dias = Math.floor((new Date() - new Date(o.criado_em)) / 86400000);
+  h += '<div style="margin-bottom:14px;">';
+  h += '<div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;">';
+  h += '<div><div style="font-size:15px;font-weight:700;">' + (o.categoria||'') + '</div>';
+  h += '<div style="font-size:11.5px;color:var(--t2);margin-top:2px;">' + (o.descricao||'').substring(0,90) + '</div>';
+  h += '<div style="font-size:10.5px;color:var(--t3);margin-top:3px;">📍 ' + (o.local_ocorrencia||'—') + ' · aberta há ' + (dias === 0 ? 'hoje' : dias + ' dia' + (dias>1?'s':'')) + (o.reportado_por ? ' · ' + o.reportado_por : '') + '</div></div>';
+  var selo = valor > 0 ? parseFloat(valor).toFixed(2) + '€' : 'sem orçamento';
+  h += '<span style="background:var(--s1);border:1px solid var(--b1);color:var(--t2);font-size:10.5px;padding:4px 10px;border-radius:6px;white-space:nowrap;">' + selo + '</span>';
+  h += '</div></div>';
+
+  // ── barra dos 4 passos ──
+  var nomes = ['Orçamento', 'Decisão', 'Obra', 'Fecho'];
+  h += '<div style="display:flex;gap:6px;margin-bottom:14px;">';
+  for (var i = 0; i < 4; i++) {
+    var feito = (i + 1) < passo, atual = (i + 1) === passo;
+    var cor = feito ? 'var(--green)' : (atual ? 'var(--cyan)' : 'var(--b1)');
+    h += '<div style="flex:1;">';
+    h += '<div style="height:3px;border-radius:2px;background:' + cor + ';"></div>';
+    h += '<div style="font-size:9.5px;margin-top:5px;text-align:center;color:' + (atual ? 'var(--cyan)' : 'var(--t3)') + ';">' + (i+1) + ' · ' + nomes[i] + '</div>';
+    h += '</div>';
+  }
+  h += '</div>';
+
+  // ── a lei como GPS, não como parede ──
+  if (o.tipo_legal) {
+    h += '<div style="background:rgba(0,212,255,.06);border:1px solid rgba(0,212,255,.25);border-radius:9px;padding:10px 12px;margin-bottom:14px;font-size:11px;color:var(--t2);line-height:1.5;">';
+    h += '⚖️ <strong>' + cl.label + '</strong> — ' + (cl.precisaVotacao
+      ? 'este valor precisa de votação dos condóminos.'
+      : (limite > 0 ? 'até ' + limite.toFixed(0) + '€ podes decidir sozinho.' : 'podes decidir sem votação.'));
+    if (cl.precisaOrcamentos) h += ' A lei pede ' + cl.minOrcamentos + ' orçamentos de origens diferentes.';
+    h += ' <span style="color:var(--t3);">' + (cl.base||'') + '</span>';
+    h += '</div>';
+  } else {
+    h += '<div style="background:rgba(255,179,0,.07);border:1px solid rgba(255,179,0,.3);border-radius:9px;padding:10px 12px;margin-bottom:14px;font-size:11px;color:var(--t2);line-height:1.5;">';
+    h += '⚖️ <strong>Ainda não classificaste esta intervenção.</strong> É isso que decide se precisas de 3 orçamentos e de votação. <a href="#" onclick="event.preventDefault();ocClassificar()" style="color:var(--cyan);">Classificar agora</a>';
+    h += '</div>';
+  }
+
+  // ── O QUE FAZER AGORA ──
+  h += '<div style="background:var(--s1);border:1px solid var(--b1);border-radius:11px;padding:15px;margin-bottom:12px;">';
+  h += '<div style="font-size:10.5px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;">Agora</div>';
+
+  if (passo === 1 && o.concurso_aberto) {
+    h += '<div style="font-size:15px;font-weight:700;margin:4px 0 4px;">À espera das propostas</div>';
+    h += '<div style="font-size:11.5px;color:var(--t2);margin-bottom:12px;">' + submetidas.length + ' de ' + props.length + ' parceiros já responderam' + (o.concurso_prazo ? ' · prazo ' + new Date(o.concurso_prazo).toLocaleDateString('pt-PT') : '') + '.</div>';
+    if (submetidas.length) {
+      h += _btnGuia('ti-mail-opened', '📂 Abrir envelopes e comparar', 'Vês todas as propostas ao mesmo tempo', 'ocAbrirEnvelopes()', true);
+    }
+    h += _btnGuia('ti-plus', '📨 Pedir a mais parceiros', 'Junta mais alguém ao concurso', 'ocPedirOrcamentos()', false);
+  }
+  else if (passo === 1) {
+    h += '<div style="font-size:15px;font-weight:700;margin:4px 0 10px;">Quanto custa arranjar isto?</div>';
+    h += _btnGuia('ti-mail-forward', '📨 Pedir orçamento a vários parceiros', 'Recebes as propostas fechadas e comparas', 'ocPedirOrcamentos()', true);
+    h += _btnGuia('ti-pencil', '✏️ Já tenho um valor', 'Escreves o orçamento que já te deram', 'ocGuiaValor()', false);
+  }
+  else if (passo === 2 && (o.precisa_votacao || o.estado === 'aguarda_votacao')) {
+    h += '<div style="font-size:15px;font-weight:700;margin:4px 0 4px;">Votação a decorrer</div>';
+    h += '<div style="font-size:11.5px;color:var(--t2);margin-bottom:10px;">Os condóminos estão a decidir. Podes aprovar assim que houver maioria.</div>';
+    h += await ocRenderVotos(id);
+    if (window._ocPodeAprovar === true) {
+      h += '<div style="background:rgba(34,229,132,.12);border:1px solid rgba(34,229,132,.4);border-radius:8px;padding:10px 12px;margin:10px 0;font-size:12px;font-weight:700;color:var(--green);">🎉 Já há maioria — podes avançar.</div>';
+    }
+    h += _btnGuia('ti-check', '👍 Aprovar e mandar reparar', 'Regista a deliberação e avança para a obra', 'ocAprovar()', window._ocPodeAprovar === true);
+    h += _btnGuia('ti-x', '👎 Recusar', 'Os condóminos chumbaram a obra', 'ocRecusar()', false);
+  }
+  else if (passo === 2) {
+    h += '<div style="font-size:15px;font-weight:700;margin:4px 0 4px;">Quem decide esta obra?</div>';
+    h += '<div style="font-size:11.5px;color:var(--t2);margin-bottom:10px;">Orçamento de <strong>' + valor.toFixed(2) + '€</strong>' + (limite > 0 ? ' · o teu limite é ' + limite.toFixed(0) + '€' : '') + '.</div>';
+    if (cl.precisaVotacao) {
+      h += _btnGuia('ti-vote', '🗳️ Abrir votação aos condóminos', 'Obrigatório: o valor passa o teu limite', 'ocAbrirVotacao()', true);
+      h += _btnGuia('ti-check', '👍 Aprovar mesmo assim', 'Só com outra base legal (ex.: urgência)', 'ocAprovar()', false);
+    } else {
+      h += _btnGuia('ti-check', '👍 Aprovar e mandar reparar', 'Dentro do teu limite — decides sozinho', 'ocAprovar()', true);
+      h += _btnGuia('ti-vote', '🗳️ Levar a votação na mesma', 'Não é obrigatório, mas podes', 'ocAbrirVotacao()', false);
+    }
+    h += _btnGuia('ti-x', '👎 Recusar', 'Não avançar com esta reparação', 'ocRecusar()', false);
+  }
+  else if (passo === 3) {
+    h += '<div style="font-size:15px;font-weight:700;margin:4px 0 4px;">Obra aprovada</div>';
+    h += '<div style="font-size:11.5px;color:var(--t2);margin-bottom:10px;">Quando o trabalho estiver feito, fecha aqui — é neste passo que o custo entra nas contas.</div>';
+    h += _btnGuia('ti-checks', '✅ Concluir e lançar o custo', 'Cria a despesa de ' + (valor > 0 ? valor.toFixed(2) + '€' : 'valor a definir'), 'ocConcluir()', true);
+  }
+  h += '</div>';
+
+  // ── o resto, fora do caminho ──
+  h += '<details style="border:1px solid var(--b1);border-radius:9px;margin-bottom:7px;">';
+  h += '<summary style="padding:10px 13px;font-size:12px;color:var(--t2);cursor:pointer;">Detalhes e fotografia</summary>';
+  h += '<div style="padding:0 13px 12px;font-size:11.5px;color:var(--t2);line-height:1.6;">' + (o.descricao||'') + '</div>';
+  if (o.foto_url) h += '<div style="padding:0 13px 12px;"><a href="' + o.foto_url + '" target="_blank"><img src="' + o.foto_url + '" style="width:100%;max-height:200px;object-fit:cover;border-radius:8px;"></a></div>';
+  h += '</details>';
+
+  var evR = await sb.from('ocorrencia_eventos').select('*').eq('ocorrencia_id', id).order('criado_em',{ascending:true});
+  var evs = evR.data || [];
+  h += '<details style="border:1px solid var(--b1);border-radius:9px;margin-bottom:7px;">';
+  h += '<summary style="padding:10px 13px;font-size:12px;color:var(--t2);cursor:pointer;">Histórico · ' + evs.length + ' registo(s)</summary>';
+  h += '<div style="padding:0 13px 12px;">';
+  evs.forEach(function(ev){
+    h += '<div style="display:flex;gap:9px;padding:6px 0;border-bottom:1px solid var(--b1);"><span style="min-width:7px;height:7px;border-radius:50%;background:var(--cyan);margin-top:5px;"></span>';
+    h += '<div style="flex:1;"><div style="font-size:11.5px;">' + (ev.texto||'') + '</div><div style="font-size:9.5px;color:var(--t3);">' + (ev.criado_em||'').slice(0,16).replace('T',' ') + '</div></div></div>';
+  });
+  if (!evs.length) h += '<div style="font-size:11px;color:var(--t3);">Sem registos.</div>';
+  h += '</div></details>';
+
+  h += '<details style="border:1px solid var(--b1);border-radius:9px;">';
+  h += '<summary style="padding:10px 13px;font-size:12px;color:var(--t2);cursor:pointer;">Outras opções</summary>';
+  h += '<div style="padding:0 13px 12px;display:flex;flex-direction:column;gap:7px;">';
+  h += '<button class="btn-ghost" style="width:100%;font-size:11.5px;" onclick="ocClassificar()">⚖️ Classificar / alterar tipo legal</button>';
+  h += '<button class="btn-ghost" style="width:100%;font-size:11.5px;" onclick="ocPartilhar(\'' + id + '\')">🔗 Partilhar com os condóminos</button>';
+  h += '<button class="btn-ghost" style="width:100%;font-size:11.5px;color:var(--t3);" onclick="ocEncerrar()">✕ Encerrar sem reparação</button>';
+  h += '<button class="btn-ghost" style="width:100%;font-size:11.5px;color:var(--t3);" onclick="gerirOcorrenciaCompleto(\'' + id + '\')">⚙️ Ver ecrã completo (todos os passos)</button>';
+  h += '</div></details>';
+
+  abrirModalGenerico('Gerir ocorrência', h);
+}
+
+// botão do modo guiado: título + explicação numa linha
+function _btnGuia(icone, titulo, sub, accao, destaque) {
+  var s = destaque
+    ? 'background:rgba(0,212,255,.12);border:1px solid rgba(0,212,255,.45);'
+    : 'background:transparent;border:1px solid var(--b1);';
+  var h = '<button onclick="' + accao + '" style="' + s + 'width:100%;text-align:left;border-radius:9px;padding:11px 13px;margin-top:8px;cursor:pointer;color:var(--text);">';
+  h += '<div style="font-size:12.5px;font-weight:700;">' + titulo + '</div>';
+  h += '<div style="font-size:10.5px;color:var(--t3);margin-top:2px;">' + sub + '</div>';
+  h += '</button>';
+  return h;
+}
+
+// "Já tenho um valor" — campos mínimos, com os mesmos ids que ocRegistarOrcamento espera
+function ocGuiaValor() {
+  var o = _ocAtual || {};
+  var h = '<div style="font-size:11.5px;color:var(--t2);line-height:1.5;margin-bottom:12px;">Escreve o orçamento que já tens. A classificação legal decide o que acontece a seguir.</div>';
+  h += '<div class="fl"><label>Tipo de intervenção (define a lei aplicável)</label><select class="fi" id="oc-tipo-legal" onchange="atualizarClassificacao()">';
+  [['','— escolher —'],['urgente','🚨 Urgente (risco imediato)'],['corrente','🔧 Manutenção corrente'],['contrato','📄 Contrato já aprovado'],['conservacao','🏗️ Obra de conservação'],['inovacao','✨ Inovação / melhoria']].forEach(function(t){
+    h += '<option value="' + t[0] + '"' + (o.tipo_legal === t[0] ? ' selected' : '') + '>' + t[1] + '</option>';
+  });
+  h += '</select></div>';
+  h += '<div class="fl" style="margin-top:12px;"><label>Valor do orçamento (€)</label><input class="fi" id="oc-orc-valor" type="number" step="0.01" value="' + (o.orcamento_valor || '') + '" oninput="atualizarClassificacao()"></div>';
+  h += '<div class="fl" style="margin-top:12px;"><label>Quem paga</label><select class="fi" id="oc-divisao"><option value="permilagem">Todos, por permilagem</option><option value="igual">Todos, valor igual</option></select></div>';
+  h += '<div class="fl" style="margin-top:12px;"><label>Nota (opcional)</label><input class="fi" id="oc-orc-nota" placeholder="Ex: inclui deslocação e material"></div>';
+  h += '<div id="oc-classificacao" style="margin-top:12px;"></div>';
+  h += '<div style="display:flex;gap:9px;margin-top:16px;">';
+  h += '<button class="btn-ghost" style="flex:1;" onclick="gerirOcorrencia(\'' + o.id + '\')">← Voltar</button>';
+  var _lim = parseFloat((currentCondo||{}).limite_admin) || 0;
+  h += '<button class="btn-primary" style="flex:1;" onclick="ocRegistarOrcamento(' + _lim + ')">Guardar orçamento</button>';
+  h += '</div>';
+  abrirModalGenerico('✏️ Registar orçamento', h);
+  setTimeout(function(){ try { atualizarClassificacao(); } catch(e){} }, 60);
+}
+
+// Classificar sem sair do modo guiado
+function ocClassificar() { ocGuiaValor(); }
+
+async function gerirOcorrenciaCompleto(id) {
   // 🔒 Ocorrência encerrada é história, não gestão — abre a vista de leitura
   try {
     var chk = await sb.from('ocorrencias').select('estado').eq('id', id).single();
@@ -9298,7 +9484,8 @@ async function gerirOcorrencia(id) {
   }
 
   h += '</div>';
-  abrirModalGenerico('Gerir Ocorrência', h);
+  h = '<div style="background:var(--s1);border:1px solid var(--b1);border-radius:8px;padding:9px 12px;margin-bottom:12px;font-size:11px;color:var(--t2);">Estás no ecrã completo, com todos os passos abertos. <a href="#" onclick="event.preventDefault();gerirOcorrencia(\'' + id + '\')" style="color:var(--cyan);">Voltar ao modo guiado</a></div>' + h;
+  abrirModalGenerico('Gerir Ocorrência — ecrã completo', h);
   setTimeout(function(){ try { atualizarClassificacao(); } catch(e){} }, 60);
   try { updateBadges(); verificarAvisosGerais(); } catch(e){}
 }
