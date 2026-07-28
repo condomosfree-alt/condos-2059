@@ -1870,8 +1870,9 @@ async function abrirOcorrencia(id) {
       let t = '<div style="background:rgba(0,212,255,.05);border:1px solid rgba(0,212,255,.22);border-radius:9px;padding:11px 13px;margin-bottom:11px;font-size:11.5px;color:var(--t2);line-height:1.5;">🔒 O concurso fechou com <strong style="color:var(--cyan);">'+pr.data.length+' propostas</strong> em envelope fechado. <strong>És tu que escolhes</strong> qual empresa faz o trabalho.</div>';
       pr.data.forEach(function(p, i){
         const meu = (_ocCache[o.id] && _ocCache[o.id].meu_orcamento === p.orcamento_id);
+      const jaVotou = !!(_ocCache[o.id] && (_ocCache[o.id].meu_orcamento || _ocCache[o.id].meu_voto));
         const quota = perm ? (parseFloat(p.valor||0) * perm / 1000) : null;
-        t += '<div style="background:'+(meu?'rgba(34,229,132,.08)':'var(--card2)')+';border:1px solid '+(meu?'rgba(34,229,132,.45)':'var(--b)')+';border-radius:11px;padding:12px 13px;margin-bottom:9px;">';
+        t += '<div style="background:'+(meu?'rgba(34,229,132,.08)':'var(--card2)')+';border:1px solid '+(meu?'rgba(34,229,132,.45)':'var(--b)')+';opacity:'+((jaVotou && !meu)?'.5':'1')+';border-radius:11px;padding:12px 13px;margin-bottom:9px;">';
         t += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">';
         t += '<div style="flex:1;min-width:0;"><div style="font-size:13.5px;font-weight:700;">'+escapar(p.fornecedor||'Fornecedor')+(i===0?' <span style="font-size:9px;color:var(--green);font-weight:800;">MAIS BARATA</span>':'')+'</div>';
         if (p.prazo_dias) t += '<div style="font-size:10.5px;color:var(--t3);margin-top:2px;">'+p.prazo_dias+' dias de execução</div>';
@@ -1879,10 +1880,21 @@ async function abrirOcorrencia(id) {
         if (quota !== null) t += '<div style="font-size:10.5px;color:var(--amber);margin-top:2px;">a tua parte: '+eur(quota)+'</div>';
         t += '</div></div>';
         if (p.notas) t += '<div style="font-size:11px;color:var(--t2);margin-top:8px;padding-top:8px;border-top:1px solid var(--b);">'+escapar(p.notas)+'</div>';
-        t += '<button onclick="votarProposta(\''+o.id+'\',\''+p.orcamento_id+'\')" style="width:100%;margin-top:10px;background:'+(meu?'var(--green)':'rgba(0,212,255,.12)')+';border:1px solid '+(meu?'var(--green)':'rgba(0,212,255,.4)')+';color:'+(meu?'#02121d':'var(--cyan)')+';border-radius:9px;padding:10px;font-size:12px;font-weight:800;cursor:pointer;">'+(meu?'✅ O teu voto':'Votar nesta')+'</button>';
+        if (meu) {
+          t += '<div style="width:100%;margin-top:10px;background:var(--green);color:#02121d;border-radius:9px;padding:10px;font-size:12px;font-weight:800;text-align:center;">✅ A tua escolha</div>';
+        } else if (jaVotou) {
+          t += '<div style="width:100%;margin-top:10px;background:transparent;border:1px solid var(--b);color:var(--t3);border-radius:9px;padding:10px;font-size:11.5px;text-align:center;">Não escolhida</div>';
+        } else {
+          t += '<button onclick="votarProposta(\''+o.id+'\',\''+p.orcamento_id+'\')" style="width:100%;margin-top:10px;background:rgba(0,212,255,.12);border:1px solid rgba(0,212,255,.4);color:var(--cyan);border-radius:9px;padding:10px;font-size:12px;font-weight:800;cursor:pointer;">Votar nesta</button>';
+        }
         t += '</div>';
       });
-      t += '<button onclick="votarProposta(\''+o.id+'\',null)" style="width:100%;margin-top:4px;background:transparent;border:1px solid rgba(255,84,112,.35);color:var(--red);border-radius:9px;padding:10px;font-size:11.5px;font-weight:700;cursor:pointer;">✕ Voto contra a obra</button>';
+      var _ja = !!(_ocCache[o.id] && (_ocCache[o.id].meu_orcamento || _ocCache[o.id].meu_voto));
+      if (_ja) {
+        t += '<div style="font-size:10.5px;color:var(--t3);margin-top:8px;text-align:center;line-height:1.5;">🔒 Já votaste — o voto é definitivo. Se foi por engano, fala com a administração pelas Mensagens.</div>';
+      } else {
+        t += '<button onclick="votarProposta(\''+o.id+'\',null)" style="width:100%;margin-top:4px;background:transparent;border:1px solid rgba(255,84,112,.35);color:var(--red);border-radius:9px;padding:10px;font-size:11.5px;font-weight:700;cursor:pointer;">✕ Voto contra a obra</button>';
+      }
       el.innerHTML = t;
       // Há propostas para escolher → a pergunta sim/não deixa de fazer sentido
       var sn = document.getElementById('votosn-' + o.id);
@@ -1968,7 +1980,16 @@ async function votarProposta(ocId, orcId) {
     okTexto: orcId ? 'Escolher esta' : 'Sim, contra'
   })) return;
   const res = await sb.rpc('portal_votar_proposta', { p_token: token, p_ocorrencia: ocId, p_orcamento: orcId });
-  if (res.error || res.data === false) { toastP('Não foi possível registar o voto.','err'); return; }
+  if (res.error || res.data === false) {
+    // quase sempre é voto repetido — o voto é definitivo
+    if (_ocCache[ocId] && (_ocCache[ocId].meu_orcamento || _ocCache[ocId].meu_voto)) {
+      toastP('Já votaste nesta reparação — o voto é definitivo.','err');
+    } else {
+      toastP('Não foi possível registar o voto. A votação pode ter encerrado.','err');
+    }
+    abrirOcorrencia(ocId);
+    return;
+  }
   if (_ocCache[ocId]) { _ocCache[ocId].meu_voto = orcId ? 'sim' : 'nao'; _ocCache[ocId].meu_orcamento = orcId; }
   toastP(orcId ? '✅ Voto registado nesta proposta' : '✕ Voto contra registado', 'ok');
   abrirOcorrencia(ocId);
