@@ -1942,6 +1942,10 @@ async function abrirOcorrencia(id) {
 var _propostasCache = {};
 
 async function votarProposta(ocId, orcId) {
+  const _nome = (_propostasCache[ocId]||[]).find(function(p){ return p.orcamento_id === orcId; });
+  if (!confirm(orcId
+      ? 'Vais votar na proposta de ' + ((_nome && _nome.fornecedor) || 'este fornecedor') + '.\n\n🔒 O voto é definitivo e fica registado com a tua fração, data e hora. Não poderás alterá-lo.\n\nConfirmas?'
+      : 'Vais votar CONTRA a obra (nenhuma proposta).\n\n🔒 O voto é definitivo e não poderá ser alterado.\n\nConfirmas?')) return;
   const res = await sb.rpc('portal_votar_proposta', { p_token: token, p_ocorrencia: ocId, p_orcamento: orcId });
   if (res.error || res.data === false) { toastP('Não foi possível registar o voto.','err'); return; }
   if (_ocCache[ocId]) { _ocCache[ocId].meu_voto = orcId ? 'sim' : 'nao'; _ocCache[ocId].meu_orcamento = orcId; }
@@ -1951,6 +1955,7 @@ async function votarProposta(ocId, orcId) {
 }
 
 async function votarOcorrencia(id, voto) {
+  if (!confirm('Vais votar ' + (voto === 'sim' ? 'A FAVOR' : 'CONTRA') + ' desta reparação.\n\n🔒 O voto é definitivo e fica registado com a tua fração, data e hora. Não poderás alterá-lo.\n\nConfirmas?')) return;
   const res = await sb.rpc('portal_votar_ocorrencia', { p_token: token, p_ocorrencia: id, p_voto: voto });
   if (res.error || res.data === false) {
     // pode ser prazo terminado — vale a pena dizer porquê em vez de um erro seco
@@ -2320,7 +2325,7 @@ async function carregarEstadoVotacao(ocId) {
       if (v.dias_restantes !== null && v.dias_restantes !== undefined) {
         h += '<div style="font-size:10.5px;color:var(--amber);margin-top:6px;">⏰ ' + (v.dias_restantes === 0 ? 'Última chance: fecha hoje' : 'Fecha daqui a ' + v.dias_restantes + ' dia' + (v.dias_restantes>1?'s':'')) + (v.prazo ? ' (' + new Date(v.prazo).toLocaleDateString('pt-PT') + ')' : '') + '</div>';
       }
-      h += '<a href="#" onclick="event.preventDefault();mudarVoto(\'' + ocId + '\')" style="display:inline-block;font-size:10.5px;color:var(--t3);text-decoration:underline;margin-top:8px;">mudar o meu voto</a>';
+      h += '<div style="font-size:10px;color:var(--t3);margin-top:8px;line-height:1.45;">🔒 O voto é definitivo, como levantar a mão numa assembleia. Se votaste por engano, fala com a administração pelas Mensagens.</div>';
       h += '</div>';
     } else {
       h += '<div style="font-size:13px;color:var(--amber);font-weight:700;margin-bottom:6px;">🗳️ Aprovas esta reparação?</div>';
@@ -2336,19 +2341,6 @@ async function carregarEstadoVotacao(ocId) {
   } catch(e) { box.innerHTML = ''; }
 }
 
-// mudar o voto é possível, mas é um ato deliberado — não um botão sempre aceso
-async function mudarVoto(ocId) {
-  if (!confirm('Queres mudar o teu voto?\n\nO voto anterior é substituído e fica registado o novo.')) return;
-  const box = document.getElementById('votest-' + ocId);
-  if (!box) return;
-  let h = '<div style="font-size:12.5px;color:var(--t2);margin-bottom:8px;">Escolhe o novo voto:</div>';
-  h += '<div style="display:flex;gap:8px;">';
-  h += '<button onclick="votarOcorrencia(\'' + ocId + '\',\'sim\')" style="flex:1;background:rgba(34,229,132,.12);border:1px solid rgba(34,229,132,.4);color:var(--green);border-radius:9px;padding:12px;font-size:13px;font-weight:800;cursor:pointer;">✅ A favor</button>';
-  h += '<button onclick="votarOcorrencia(\'' + ocId + '\',\'nao\')" style="flex:1;background:rgba(255,84,112,.12);border:1px solid rgba(255,84,112,.4);color:var(--red);border-radius:9px;padding:12px;font-size:13px;font-weight:800;cursor:pointer;">❌ Contra</button>';
-  h += '</div>';
-  h += '<a href="#" onclick="event.preventDefault();carregarEstadoVotacao(\'' + ocId + '\')" style="display:inline-block;font-size:10.5px;color:var(--t3);text-decoration:underline;margin-top:8px;">cancelar</a>';
-  box.innerHTML = h;
-}
 
 // ✋ CONFIRMAÇÃO DE AVARIAS ANÓNIMAS — o gatilho dos automatismos
 // A resposta confirma a existência E resolve o âmbito (prédio ou bloco) de uma vez.
