@@ -767,7 +767,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.28-1507</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.28-1548</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -1984,7 +1984,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
 
 <!-- MODAIS -->
 <div class="mo" id="mo-cond" style="display:none"></div>
-<div class="mo" id="mo-generico" style="display:none;"><div class="mo-box" style="max-width:560px;width:92%;background:var(--s1);border:1px solid var(--b1);border-radius:14px;padding:20px;max-height:88vh;overflow:hidden;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;"><span id="mo-generico-titulo" style="font-size:14px;font-weight:700;color:var(--cyan);">—</span><button onclick="fecharModalGenerico()" style="background:none;border:none;color:var(--t2);font-size:20px;cursor:pointer;">×</button></div><div id="mo-generico-corpo"></div></div></div>
+<div class="mo" id="mo-generico" style="display:none;"><div class="mo-box" style="max-width:560px;width:92%;background:var(--s1);border:1px solid var(--b1);border-radius:14px;padding:20px;max-height:88vh;display:flex;flex-direction:column;overflow:hidden;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-shrink:0;"><span id="mo-generico-titulo" style="font-size:14px;font-weight:700;color:var(--cyan);">—</span><button onclick="fecharModalGenerico()" style="background:none;border:none;color:var(--t2);font-size:20px;cursor:pointer;">×</button></div><div id="mo-generico-corpo" style="overflow-y:auto;overflow-x:hidden;flex:1;min-height:0;padding-right:4px;"></div></div></div>
 
 <div class="mo" id="mo-fracao">
   <div class="mo-box" style="width:640px;">
@@ -9014,6 +9014,26 @@ function classificarIntervencao(tipo, valor) {
     r.explicacao = 'Obra de inovação (acrescenta algo que não existia). Exige PELO MENOS 3 orçamentos de proveniências diferentes E aprovação por maioria de DOIS TERÇOS do valor total do prédio — não basta a maioria simples.';
     r.base = 'Lei 8/2022 · Art. 1425.º CC';
   }
+  // ⚖️ QUEM DECIDE? — a fronteira entre gestão corrente e deliberação de assembleia
+  // O voto do portal é consulta com valor probatório; só a assembleia delibera o que a lei lhe reserva.
+  if (tipo === 'urgente' || tipo === 'contrato') {
+    r.decisor = 'administrador';
+    r.notaDecisor = 'Está nos teus poderes de gestão corrente. A consulta aos condóminos é opcional — serve de transparência e de prova.';
+  } else if (tipo === 'corrente') {
+    r.decisor = r.precisaVotacao ? 'assembleia_ratifica' : 'administrador';
+    r.notaDecisor = r.precisaVotacao
+      ? 'Passa o teu limite de decisão. O voto do portal legitima o ato e prova a vontade dos condóminos, mas a autorização formal pertence à assembleia — leva-o a ratificação.'
+      : 'Dentro do teu limite de decisão. A consulta é opcional.';
+  } else if (tipo === 'conservacao') {
+    r.decisor = 'assembleia_ratifica';
+    r.notaDecisor = 'Obra de conservação fora da gestão corrente: a deliberação pertence à assembleia. O voto do portal prepara a decisão e vai anexo à ata como prova da consulta.';
+  } else if (tipo === 'inovacao') {
+    r.decisor = 'assembleia';
+    r.notaDecisor = 'Inovação: só a assembleia pode deliberar, por dois terços do valor total. O voto do portal NÃO substitui a reunião — serve para preparar e para anexar à ata.';
+  } else {
+    r.decisor = 'indefinido';
+    r.notaDecisor = '';
+  }
   return r;
 }
 
@@ -9179,7 +9199,12 @@ async function gerirOcorrencia(id) {
     h += _btnGuia('ti-pencil', '✏️ Já tenho um valor', 'Escreves o orçamento que já te deram', 'ocGuiaValor()', false);
   }
   else if (passo === 2 && (o.precisa_votacao || o.estado === 'aguarda_votacao')) {
-    h += '<div style="font-size:15px;font-weight:700;margin:4px 0 4px;">Votação a decorrer</div>';
+    var _dec = cl.decisor || 'indefinido';
+    var _souAssembleia = (_dec === 'assembleia' || _dec === 'assembleia_ratifica');
+    h += '<div style="font-size:15px;font-weight:700;margin:4px 0 4px;">' + (_souAssembleia ? 'Consulta aos condóminos a decorrer' : 'Votação a decorrer') + '</div>';
+    if (cl.notaDecisor) {
+      h += '<div style="background:' + (_souAssembleia ? 'rgba(255,179,0,.07);border:1px solid rgba(255,179,0,.3)' : 'rgba(34,229,132,.06);border:1px solid rgba(34,229,132,.28)') + ';border-radius:9px;padding:10px 12px;margin-bottom:10px;font-size:10.5px;color:var(--t2);line-height:1.55;">' + (_souAssembleia ? '⚖️ ' : '✔ ') + cl.notaDecisor + '</div>';
+    }
     var _pz = o.votacao_prazo ? new Date(o.votacao_prazo) : null;
     var _dias = _pz ? Math.ceil((_pz - new Date())/86400000) : null;
     h += '<div style="font-size:11.5px;color:var(--t2);margin-bottom:10px;">Os condóminos estão a decidir. Podes aprovar assim que houver maioria.' + (_pz ? ' <strong style="color:var(--amber);">' + (_dias > 0 ? 'Fecha daqui a ' + _dias + ' dia' + (_dias>1?'s':'') : 'Prazo terminado') + ' (' + _pz.toLocaleDateString('pt-PT') + ').</strong>' : '') + '</div>';
@@ -9305,7 +9330,7 @@ async function gerirOcorrenciaCompleto(id) {
   var estadosCiclo = ['aberta','parceiro_contactado','aguarda_orcamento','aguarda_votacao','aprovada','em_reparacao','resolvida'];
   var estadoLabels = { aberta:'Aberta', parceiro_contactado:'Parceiro contactado', aguarda_orcamento:'Aguarda orçamento', aguarda_votacao:'Em votação', aprovada:'Aprovada', em_reparacao:'Em reparação', resolvida:'Resolvida' };
 
-  var h = '<div style="max-height:75vh;overflow-y:auto;padding:2px;">';
+  var h = '<div style="padding:2px;">';
   // Cabeçalho
   h += '<div style="font-size:16px;font-weight:700;color:var(--text);">' + (_ocAtual.categoria||'') + ' — ' + (_ocAtual.descricao||'').substring(0,60) + '</div>';
   h += '<div style="font-size:11px;color:var(--t3);margin:3px 0 14px;">📍 ' + (_ocAtual.local_ocorrencia||'—') + ' · reportado por ' + (_ocAtual.reportado_por||'—') + ' · ' + (_ocAtual.criado_em||'').slice(0,10) + '</div>';
@@ -10700,26 +10725,51 @@ async function ocRenderVotos(id) {
   var pctNao = permTotal > 0 ? (permNao/permTotal*100) : 0;
   var pctVotou = permTotal > 0 ? ((permSim+permNao)/permTotal*100) : 0;
 
-  // Regra legal: aprovado se a permilagem A FAVOR > 50% do total do grupo
-  window._ocPodeAprovar = (pctSim > 50);
+  // ⚖️ QUE MAIORIA A LEI EXIGE AQUI?
+  // Inovações precisam de DOIS TERÇOS (Art. 1425.º); o resto é maioria simples do capital (Art. 1432.º n.º 3).
+  var clV = classificarIntervencao(_ocAtual.tipo_legal || '', parseFloat(_ocAtual.orcamento_valor||0));
+  var doisTercos = (clV.maioria === 'dois_tercos');
+  var limiar = doisTercos ? (200/3) : 50;          // 66,67% ou 50% do TOTAL
+  var limiarTxt = doisTercos ? 'dois terços' : 'mais de metade';
+  var artigo = doisTercos ? 'Art. 1425.º CC' : 'Art. 1432.º n.º 3 CC';
+
+  // 1.ª fase — maioria sobre o TOTAL do grupo (equivale à 1.ª convocatória)
+  var passouFase1 = pctSim > limiar;
+
+  // 2.ª fase — só depois do prazo: com participação ≥ 25% (250‰), decide a maioria de QUEM VOTOU.
+  // Espelha o Art. 1432.º n.º 4/6 (segunda convocatória), sem inventar regra nova.
+  var prazoFim = _ocAtual.votacao_prazo && new Date(_ocAtual.votacao_prazo) < new Date();
+  var permVotada = permSim + permNao;
+  var pctSimEntreVotantes = permVotada > 0 ? (permSim/permVotada*100) : 0;
+  var passouFase2 = prazoFim && pctVotou >= 25 && pctSimEntreVotantes > limiar && !doisTercos;
+  // nota: para inovações não se aplica a 2.ª fase — os 2/3 são do valor TOTAL do prédio
+
+  window._ocPodeAprovar = (passouFase1 || passouFase2);
 
   var resultado = '';
   if (votos.length === 0) {
-    resultado = '<div style="font-size:10.5px;color:var(--amber);margin-top:6px;">⚠️ Ainda ninguém votou.</div>';
-  } else if (pctSim > 50) {
-    resultado = '<div style="font-size:10.5px;color:var(--green);margin-top:6px;font-weight:700;">✅ APROVADO — mais de 50% da permilagem a favor ('+pctSim.toFixed(1)+'‰%)</div>';
-  } else if (pctNao >= 50) {
-    resultado = '<div style="font-size:10.5px;color:var(--red);margin-top:6px;font-weight:700;">❌ REJEITADO — maioria da permilagem contra</div>';
+    resultado = '<div style="font-size:10.5px;color:var(--amber);margin-top:6px;">⚠️ Ainda ninguém votou. São precisos ' + limiarTxt + ' do capital a favor (' + artigo + ').</div>';
+  } else if (passouFase1) {
+    resultado = '<div style="font-size:10.5px;color:var(--green);margin-top:6px;font-weight:700;">✅ APROVADO — ' + pctSim.toFixed(1) + '% do capital a favor, acima dos ' + limiar.toFixed(doisTercos?1:0) + '% exigidos (' + artigo + ')</div>';
+  } else if (passouFase2) {
+    resultado = '<div style="font-size:10.5px;color:var(--green);margin-top:6px;font-weight:700;">✅ APROVADO em 2.ª fase — participaram ' + pctVotou.toFixed(1) + '% do capital (mínimo 25%) e ' + pctSimEntreVotantes.toFixed(1) + '% desses votaram a favor.<br><span style="font-weight:400;color:var(--t3);">Regra espelhada do Art. 1432.º n.º 4 CC (segunda convocatória).</span></div>';
+  } else if (pctNao >= limiar) {
+    resultado = '<div style="font-size:10.5px;color:var(--red);margin-top:6px;font-weight:700;">❌ REJEITADO — ' + pctNao.toFixed(1) + '% do capital contra</div>';
+  } else if (prazoFim && pctVotou < 25) {
+    resultado = '<div style="font-size:10.5px;color:var(--red);margin-top:6px;font-weight:700;">⚠️ SEM QUÓRUM — só ' + pctVotou.toFixed(1) + '% do capital votou (mínimo 25%). Este assunto tem de ir a assembleia.</div>';
   } else {
-    resultado = '<div style="font-size:10.5px;color:var(--amber);margin-top:6px;">⏳ SEM MAIORIA AINDA — só '+pctVotou.toFixed(1)+'% da permilagem votou. Faltam votos para atingir os 50% necessários (Art. 1432.º CC).</div>';
+    var faltam = Math.max(0, (limiar - pctSim));
+    resultado = '<div style="font-size:10.5px;color:var(--amber);margin-top:6px;">⏳ SEM MAIORIA AINDA — votou ' + pctVotou.toFixed(1) + '% do capital. Faltam ' + faltam.toFixed(1) + '% a favor para os ' + limiarTxt + ' exigidos (' + artigo + ').' + (doisTercos ? ' <strong>Inovação: exige dois terços.</strong>' : '') + '</div>';
   }
 
   return '<div style="font-size:11px;color:var(--t2);margin:8px 0;padding:10px;background:var(--s2);border-radius:6px;">' +
     '<div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span>🗳️ Votação por permilagem</span><span style="color:var(--t3);">'+(nSim+nNao)+'/'+grupo.length+' frações votaram</span></div>' +
-    '<div style="height:8px;background:var(--b1);border-radius:4px;overflow:hidden;display:flex;margin:6px 0;">' +
+    '<div style="position:relative;height:8px;background:var(--b1);border-radius:4px;overflow:hidden;display:flex;margin:6px 0;">' +
     '<div style="width:'+pctSim+'%;background:var(--green);"></div>' +
     '<div style="width:'+pctNao+'%;background:var(--red);"></div>' +
+    '<div style="position:absolute;left:'+limiar+'%;top:-2px;width:2px;height:12px;background:var(--cyan);" title="limiar legal"></div>' +
     '</div>' +
+    '<div style="font-size:9.5px;color:var(--t3);text-align:right;margin-bottom:4px;">│ linha azul = ' + limiarTxt + ' exigidos por lei (' + artigo + ')</div>' +
     '<div style="display:flex;justify-content:space-between;font-size:10.5px;"><span style="color:var(--green);">A favor: '+permSim.toFixed(1)+'‰ ('+pctSim.toFixed(1)+'%)</span><span style="color:var(--red);">Contra: '+permNao.toFixed(1)+'‰</span></div>' +
     resultado + '</div>';
 }
@@ -12503,6 +12553,56 @@ async function gerarAtaDoLivro() {
     var ata = await callIA(prompt, 'ata');
     if (!ata || !ata.trim()) throw new Error('A IA não devolveu texto.');
     // Guardar a ata + o número
+    // 🗳️ ANEXO: REGISTO DAS CONSULTAS ONLINE — o que transforma o voto do portal em peça formal
+    try {
+      var vAta = await sb.from('ocorrencias')
+        .select('id,descricao,categoria,tipo_legal,orcamento_valor,votacao_aberta_em,votacao_prazo,votacao_fechada_em,divisao_metodo')
+        .eq('condominio_id', currentCondo.id).eq('precisa_votacao', true).is('ata_ratificada', null);
+      var paraAta = [];
+      for (var q = 0; q < (vAta.data||[]).length; q++) {
+        var oq = vAta.data[q];
+        var clq = classificarIntervencao(oq.tipo_legal || '', parseFloat(oq.orcamento_valor||0));
+        if (clq.decisor !== 'assembleia' && clq.decisor !== 'assembleia_ratifica') continue;
+        var vqR = await sb.from('ocorrencia_votos').select('fracao_id,voto,orcamento_id,criado_em').eq('ocorrencia_id', oq.id);
+        paraAta.push({ oc: oq, cl: clq, votos: vqR.data || [] });
+      }
+      if (paraAta.length) {
+        ata += '\n\n────────────────────────────────\nANEXO — REGISTO DAS CONSULTAS ONLINE AOS CONDÓMINOS\n';
+        ata += '(Consultas realizadas no portal do condómino. Cada voto está associado a uma fração, com data e hora, e é único e definitivo. Este registo é apresentado à assembleia como prova da vontade manifestada pelos condóminos, para efeitos de deliberação ou ratificação.)\n';
+        paraAta.forEach(function(item, idx) {
+          var o = item.oc, cl = item.cl;
+          var permTot = 0, pSim = 0, pNao = 0;
+          var soBloco = (o.divisao_metodo||'').indexOf('bloco:') === 0 ? o.divisao_metodo.split(':')[1] : null;
+          var grupo = (fracoes||[]).filter(function(f){ return !soBloco || f.bloco === soBloco; });
+          grupo.forEach(function(f){ permTot += parseFloat(f.permilagem||0); });
+          var linhas = [];
+          item.votos.forEach(function(v){
+            var f = grupo.find(function(x){ return x.id === v.fracao_id; });
+            if (!f) return;
+            var pm = parseFloat(f.permilagem||0);
+            var sentido = (v.voto === 'sim' || v.orcamento_id) ? 'A FAVOR' : 'CONTRA';
+            if (sentido === 'A FAVOR') pSim += pm; else pNao += pm;
+            linhas.push('    Fração ' + (f.codigo||'?') + ' (' + pm.toFixed(2) + '‰) — ' + sentido + ' — ' + (v.criado_em||'').slice(0,16).replace('T',' '));
+          });
+          var exigido = cl.maioria === 'dois_tercos' ? 'dois terços do valor total (Art. 1425.º CC)' : 'maioria do capital investido (Art. 1432.º n.º 3 CC)';
+          ata += '\n' + (idx+1) + '. ' + (o.categoria||'') + ' — ' + (o.descricao||'').split('[')[0].trim().substring(0,90);
+          if (o.orcamento_valor) ata += '\n   Valor: ' + parseFloat(o.orcamento_valor).toFixed(2) + '€';
+          ata += '\n   Classificação legal: ' + (cl.label||'') + ' · maioria exigida: ' + exigido;
+          if (soBloco) ata += '\n   Âmbito: apenas o bloco ' + soBloco;
+          ata += '\n   Consulta aberta em ' + (o.votacao_aberta_em ? new Date(o.votacao_aberta_em).toLocaleDateString('pt-PT') : '—') + (o.votacao_prazo ? ', encerrada em ' + new Date(o.votacao_prazo).toLocaleDateString('pt-PT') : '');
+          ata += '\n   Resultado: ' + pSim.toFixed(2) + '‰ a favor · ' + pNao.toFixed(2) + '‰ contra · de um total de ' + permTot.toFixed(2) + '‰ com direito de voto';
+          ata += '\n   Participação: ' + item.votos.length + ' de ' + grupo.length + ' frações';
+          ata += '\n   Sentido de voto por fração:\n' + (linhas.length ? linhas.join('\n') : '    (sem votos registados)');
+          ata += '\n   >> A assembleia é chamada a ' + (cl.decisor === 'assembleia' ? 'DELIBERAR' : 'RATIFICAR') + ' este ponto.\n';
+        });
+        // marcar como levadas a esta assembleia
+        try {
+          await sb.from('ocorrencias').update({ ata_ratificada: _salaAssembleia.id, ratificada_em: new Date().toISOString() })
+            .in('id', paraAta.map(function(x){ return x.oc.id; }));
+        } catch(e){}
+      }
+    } catch(e) { console.error('anexo votacoes:', e); }
+
     // ⚖️ APÊNDICE DE PROVAS: exigências validadas ficam anexadas à ata com hash
     try {
       var exAta = await sb.from('exigencias').select('id,tipo,doc_url,doc_hash,validada_em,criado_em,fracao_id,ai_resultado,fracoes(codigo)').eq('condominio_id', currentCondo.id).eq('estado','validada');
@@ -13015,6 +13115,29 @@ async function sugerirOrdemTrabalhos() {
         if (projC > orcC * 1.1) {
           contexto.situacoes.push('DESVIO ORÇAMENTAL: até ao mês ' + mesC + ' já saíram ' + gastoC.toFixed(2) + '€; a este ritmo o ano fecha em ' + projC.toFixed(2) + '€ contra ' + orcC.toFixed(2) + '€ orçamentados. Sugerir ponto: revisão de despesas ou quota extraordinária (Art. 1424.º) para cobrir a diferença.');
         }
+      }
+    } catch(e){}
+
+    // 🗳️ VOTAÇÕES ONLINE que precisam de deliberação/ratificação da assembleia
+    try {
+      var votOT = await sb.from('ocorrencias')
+        .select('id,descricao,categoria,tipo_legal,orcamento_valor,votacao_prazo,votacao_fechada_em,ata_ratificada')
+        .eq('condominio_id', c.id).eq('precisa_votacao', true)
+        .in('tipo_legal', ['conservacao','inovacao','corrente']);
+      for (var vi = 0; vi < (votOT.data||[]).length; vi++) {
+        var ov = votOT.data[vi];
+        if (ov.ata_ratificada) continue;
+        var clOv = classificarIntervencao(ov.tipo_legal || '', parseFloat(ov.orcamento_valor||0));
+        if (clOv.decisor !== 'assembleia' && clOv.decisor !== 'assembleia_ratifica') continue;
+        var vvR = await sb.from('ocorrencia_votos').select('fracao_id,voto,orcamento_id').eq('ocorrencia_id', ov.id);
+        var vv = vvR.data || [];
+        var pS = 0, pN = 0;
+        vv.forEach(function(x){
+          var fr = (fracoes||[]).find(function(y){ return y.id === x.fracao_id; });
+          var pm = fr ? parseFloat(fr.permilagem||0) : 0;
+          if (x.voto === 'sim' || x.orcamento_id) pS += pm; else pN += pm;
+        });
+        contexto.situacoes.push('RATIFICAÇÃO NECESSÁRIA: "' + (ov.descricao||'').split('[')[0].trim().substring(0,60) + '" (' + (clOv.label||'') + (ov.orcamento_valor ? ', ' + parseFloat(ov.orcamento_valor).toFixed(2) + '€' : '') + '). Foi consultada online: ' + Math.round(pS) + '‰ a favor, ' + Math.round(pN) + '‰ contra, ' + vv.length + ' frações participaram. ' + (clOv.decisor === 'inovacao' || clOv.maioria === 'dois_tercos' ? 'Exige DOIS TERÇOS do valor total (Art. 1425.º).' : 'Exige maioria do capital (Art. 1432.º n.º 3).') + ' O registo da consulta deve ser anexado à ata como prova da vontade dos condóminos.');
       }
     } catch(e){}
 
