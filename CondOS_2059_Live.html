@@ -767,7 +767,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.28-1548</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.28-2307</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -797,7 +797,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
       <div class="ni" onclick="nav('documentos')"><span class="mic">📄</span><span>Documentos</span></div>
       <div class="ni" onclick="nav('assembleias')"><span class="mic">🗳️</span><span>Assembleias</span><span id="badge-assembleias" style="display:none;margin-left:auto;background:#f87171;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;line-height:16px;text-align:center;border-radius:8px;padding:0 4px;"></span></div>
       <div class="nav-section">IA</div>
-      <div class="ni" onclick="nav('assistente')"><span class="mic">🤖</span><span>Assistente IA</span><span class="nb" id="nb-ia">IA</span></div>
+      <div class="ni" onclick="nav('assistente')"><span class="mic">🤖</span><span>Assistente IA</span></div>
       <div class="nav-section">Sistema</div>
       <div class="ni" onclick="nav('definicoes')"><span class="mic">⚙️</span><span>Definições</span></div>
       <div class="ni" onclick="doLogout()"><span class="mic">🚪</span><span>Sair</span></div>
@@ -9231,7 +9231,8 @@ async function gerirOcorrencia(id) {
   else if (passo === 3) {
     h += '<div style="font-size:15px;font-weight:700;margin:4px 0 4px;">Obra aprovada</div>';
     h += '<div style="font-size:11.5px;color:var(--t2);margin-bottom:10px;">Quando o trabalho estiver feito, fecha aqui — é neste passo que o custo entra nas contas.</div>';
-    h += _btnGuia('ti-checks', '✅ Concluir e lançar o custo', 'Cria a despesa de ' + (valor > 0 ? valor.toFixed(2) + '€' : 'valor a definir'), 'ocConcluir()', true);
+    h += _btnGuia('ti-checks', '✅ Concluir e lançar o custo', 'Cria a despesa de ' + (valor > 0 ? valor.toFixed(2) + '€' : 'valor a definir') + ' e pergunta se já pagaste', 'ocConcluir()', true);
+    h += '<div style="font-size:10px;color:var(--t3);margin-top:9px;line-height:1.5;">💡 O dinheiro tem dois passos: a <strong>despesa</strong> é a obrigação de pagar; o <strong>movimento</strong> é a saída real, que aparece no extrato e no portal. Ao concluir, o sistema pergunta se já pagaste e trata dos dois.</div>';
   }
   h += '</div>';
 
@@ -9836,6 +9837,39 @@ async function ocConfirmarAdminGuardar() {
 // ═══════════════════════════════════════════════════════════
 
 
+
+// 📩 Avisar os condóminos afetados — e deixar prova no log, que é o que interessa
+async function ocAvisarCondominos(texto) {
+  if (!currentCondo || !_ocAtual) return 0;
+  try {
+    var metodo = _ocAtual.divisao_metodo || '';
+    var soBloco = metodo.indexOf('bloco:') === 0 ? metodo.split(':')[1] : (_ocAtual.ambito === 'bloco' ? _ocAtual.ambito_bloco : null);
+    var alvo = (fracoes||[]).filter(function(f){ return !soBloco || f.bloco === soBloco; });
+    if (!alvo.length) return 0;
+    var r = await sb.from('mensagens').insert(alvo.map(function(f){
+      return { condominio_id: currentCondo.id, fracao_id: f.id, autor:'admin', lida_admin:true, lida_condomino:false, texto: texto };
+    }));
+    if (r.error) { console.error('avisar condóminos:', r.error); return 0; }
+    return alvo.length;
+  } catch(e) { console.error('avisar condóminos:', e); return 0; }
+}
+
+// resumo do apuramento, para citar nas mensagens
+async function _ocApuramentoTexto() {
+  try {
+    var vR = await sb.from('ocorrencia_votos').select('fracao_id,voto,orcamento_id').eq('ocorrencia_id', _ocAtual.id);
+    var votos = vR.data || [];
+    if (!votos.length) return '';
+    var pS = 0, pN = 0;
+    votos.forEach(function(v){
+      var f = (fracoes||[]).find(function(x){ return x.id === v.fracao_id; });
+      var pm = f ? parseFloat(f.permilagem||0) : 0;
+      if (v.voto === 'sim' || v.orcamento_id) pS += pm; else pN += pm;
+    });
+    return 'Resultado da consulta: ' + Math.round(pS) + '‰ a favor · ' + Math.round(pN) + '‰ contra · ' + votos.length + ' frações participaram.';
+  } catch(e) { return ''; }
+}
+
 // 🗳️ Anular o voto de uma fração — escape para enganos, com rasto
 async function ocAnularVoto() {
   if (!_ocAtual) return;
@@ -9959,6 +9993,31 @@ async function fecharVotacoesExpiradas() {
         await sb.from('ocorrencia_eventos').insert({ ocorrencia_id: o.id, tipo: 'votacao',
           texto: 'Votação encerrada por fim de prazo: ' + Math.round(pSim) + '‰ a favor, ' + Math.round(pNao) + '‰ contra.' });
       } catch(e){}
+
+      // 📩 PROVA: quem votou (e quem não votou) fica a saber como acabou
+      try {
+        var permTotO = 0;
+        var soBlocoO = (o.divisao_metodo||'').indexOf('bloco:') === 0 ? o.divisao_metodo.split(':')[1] : null;
+        var grupoO = (fracoes||[]).filter(function(f){ return !soBlocoO || f.bloco === soBlocoO; });
+        grupoO.forEach(function(f){ permTotO += parseFloat(f.permilagem||0); });
+        var maioriaO = permTotO / 2;
+        var aprovO = pSim > maioriaO;
+        var participO = permTotO > 0 ? ((pSim + pNao) / permTotO * 100) : 0;
+        var txtO = '🏁 VOTAÇÃO ENCERRADA\n\n' + (o.descricao||'').split('[')[0].trim().substring(0,120) + '\n\n';
+        txtO += 'Resultado: ' + Math.round(pSim) + '‰ a favor · ' + Math.round(pNao) + '‰ contra\n';
+        txtO += 'Participação: ' + participO.toFixed(1) + '% do capital · maioria necessária: mais de ' + Math.round(maioriaO) + '‰\n\n';
+        txtO += aprovO
+          ? '✅ APROVADA pela maioria. A administração vai avançar com a reparação.'
+          : (participO < 25
+              ? '⚠️ SEM QUÓRUM — votou menos de 25% do capital. O assunto terá de ser levado a assembleia.'
+              : '❌ NÃO APROVADA. A obra não avança nesta fase.');
+        txtO += '\n\n[Registo automático do sistema, com data e hora. Já não é possível votar.]';
+        if (grupoO.length) {
+          await sb.from('mensagens').insert(grupoO.map(function(f){
+            return { condominio_id: currentCondo.id, fracao_id: f.id, autor:'admin', lida_admin:true, lida_condomino:false, texto: txtO };
+          }));
+        }
+      } catch(e) { console.error('aviso fecho votacao:', e); }
     }
     if (expiradas.length) { try { verificarAvisosGerais(); } catch(e){} }
   } catch(e) { console.error('fechar votacoes:', e); }
@@ -10775,6 +10834,15 @@ async function ocRenderVotos(id) {
 }
 
 async function ocRecusar() {
+  // 📩 PROVA: a recusa é decisão e tem de ficar registada em quem foi afetado
+  try {
+    var _apR = await _ocApuramentoTexto();
+    var _txtR = '❌ REPARAÇÃO NÃO APROVADA\n\n' + ((_ocAtual&&_ocAtual.categoria)||'') + ' — ' + ((_ocAtual&&_ocAtual.descricao)||'').split('[')[0].trim().substring(0,120) + '\n\n';
+    if (_apR) _txtR += _apR + '\n';
+    _txtR += 'A obra não avança nesta fase. Se o problema persistir, pode ser reapreciado em assembleia.\n\n[Registo automático do sistema, com data e hora.]';
+    await ocAvisarCondominos(_txtR);
+  } catch(e){}
+
   if (!confirm('Recusar esta reparação? A ocorrência será encerrada como não aprovada.')) return;
   await sb.from('ocorrencias').update({ estado:'fechada', precisa_votacao:false }).eq('id',_ocAtual.id);
   await ocEvento('estado', 'Reparação RECUSADA. A ocorrência foi encerrada sem intervenção.');
@@ -11158,6 +11226,22 @@ async function ocAprovar() {
   } catch(e) { console.error('fecho do concurso pós-aprovação:', e); }
 
   await ocEvento('estado', 'Reparação APROVADA' + votoTxt + '. Trabalho autorizado ao parceiro.');
+  // 📩 PROVA: a decisão fica registada no log de quem é afetado
+  try {
+    var _ap = await _ocApuramentoTexto();
+    var _vAp = parseFloat(_ocAtual.orcamento_valor||0);
+    var _clAp = classificarIntervencao(_ocAtual.tipo_legal || '', _vAp);
+    var _txtAp = '✅ REPARAÇÃO APROVADA\n\n' + (_ocAtual.categoria||'') + ' — ' + (_ocAtual.descricao||'').split('[')[0].trim().substring(0,120) + '\n\n';
+    if (_vAp > 0) _txtAp += 'Valor aprovado: ' + _vAp.toFixed(2).replace('.',',') + '€\n';
+    if (_ap) _txtAp += _ap + '\n';
+    _txtAp += 'Classificação legal: ' + (_clAp.label||'—') + (_clAp.base ? ' (' + _clAp.base + ')' : '') + '\n';
+    if (_clAp.decisor === 'assembleia' || _clAp.decisor === 'assembleia_ratifica') {
+      _txtAp += '\n⚖️ Este assunto será levado à próxima assembleia para ' + (_clAp.decisor === 'assembleia' ? 'deliberação' : 'ratificação') + ', com o registo da consulta em anexo à ata.\n';
+    }
+    _txtAp += '\nA administração vai mandar executar o trabalho. Serás avisado quando estiver concluído.\n\n[Registo automático do sistema, com data e hora.]';
+    await ocAvisarCondominos(_txtAp);
+  } catch(e){}
+
   var valAp = parseFloat(_ocAtual.orcamento_valor||0);
   toast(valAp > 0
     ? 'Aprovada! O custo de ' + valAp.toFixed(2) + '€ só entra nas Despesas quando marcares como concluída.'
@@ -11166,6 +11250,7 @@ async function ocAprovar() {
 }
 
 async function ocConcluir() {
+  var jaPago = false;
   var valor = parseFloat(_ocAtual.orcamento_valor||0);
   var metodo = _ocAtual.divisao_metodo || 'geral';
   var divTxt = metodo.indexOf('bloco:')===0 ? 'Bloco ' + metodo.split(':')[1] : 'permilagem geral';
@@ -11189,6 +11274,30 @@ async function ocConcluir() {
       return;
     }
     despId = dRes.data && dRes.data[0] ? dRes.data[0].id : null;
+
+    // 💸 O passo que faltava: a despesa é a OBRIGAÇÃO; o movimento é o dinheiro a sair.
+    // Sem isto, quem já pagou ao fornecedor via a reparação nas despesas mas nada no extrato.
+    jaPago = await confirmar(
+      'Já pagaste os ' + valor.toFixed(2).replace('.',',') + '€ ao fornecedor?\n\n' +
+      '• SIM — regista já a saída no extrato (Contas), e a despesa fica paga.\n' +
+      '• AINDA NÃO — fica como despesa por pagar; marcas depois em Financeiro › Despesas.',
+      {titulo:'O dinheiro já saiu?', tipo:'info', icon:'💸', okTexto:'Sim, já paguei', cancelarTexto:'Ainda não'});
+
+    if (jaPago && despId) {
+      var catMovOc = 'Manutenção';
+      var movOc = await sb.from('movimentos').insert({
+        condominio_id: currentCondo.id, tipo: 'despesa', categoria: catMovOc,
+        descricao: 'Reparação: ' + (_ocAtual.categoria||'') + ' — ' + (_ocAtual.descricao||'').split('[')[0].trim().substring(0,80),
+        valor: valor, data_movimento: new Date().toISOString().split('T')[0],
+        conta: 'operacional', fornecedor: null
+      });
+      if (movOc.error) {
+        toast('⚠️ Despesa criada, mas o movimento falhou: ' + movOc.error.message + ' — marca o pagamento em Despesas.','err');
+      } else {
+        await sb.from('despesas').update({ estado: 'paga' }).eq('id', despId);
+        await ocEvento('custo', 'Pagamento de ' + valor.toFixed(2) + '€ registado no extrato (Contas).');
+      }
+    }
   }
   await sb.from('ocorrencias').update({ estado:'resolvida', data_resolucao:new Date().toISOString(), despesa_id:despId, concurso_aberto:false, precisa_votacao:false }).eq('id',_ocAtual.id);
   await ocEvento('estado', 'Reparação concluída. Custo de ' + valor.toFixed(2) + '€ lançado nas despesas, dividido por ' + divTxt + '.');
@@ -11207,7 +11316,23 @@ async function ocConcluir() {
     }
   } catch(e) { console.error('aviso resolvido:', e); }
 
-  toast('✅ Resolvida! Custo de '+valor.toFixed(2)+'€ lançado nas Despesas. Vai lá gerar a quota para cobrar aos condóminos.','ok');
+  // 📩 PROVA + INFORMAÇÃO: o desfecho vai a TODOS os afetados, não só a quem reportou
+  try {
+    var _txtC = '🔧 REPARAÇÃO CONCLUÍDA\n\n' + (_ocAtual.categoria||'') + ' — ' + (_ocAtual.descricao||'').split('[')[0].trim().substring(0,120) + '\n\n';
+    if (valor > 0) {
+      _txtC += 'Custo: ' + valor.toFixed(2).replace('.',',') + '€ · repartido por ' + divTxt + '.\n';
+      _txtC += (jaPago ? 'Pagamento já efetuado e registado nas contas do condomínio.\n' : 'Ainda por pagar ao fornecedor — a saída aparecerá nas contas quando for liquidada.\n');
+    } else {
+      _txtC += 'Sem custo associado.\n';
+    }
+    var _apC = await _ocApuramentoTexto();
+    if (_apC) _txtC += '\n' + _apC + '\n';
+    _txtC += '\nPodes consultar o histórico completo e avaliar o trabalho na secção Avarias do portal.\n\n[Registo automático do sistema, com data e hora.]';
+    var _n = await ocAvisarCondominos(_txtC);
+    if (_n) console.log('desfecho comunicado a ' + _n + ' frações');
+  } catch(e) { console.error('aviso conclusão:', e); }
+
+  toast('✅ Resolvida! Custo de '+valor.toFixed(2)+'€ lançado' + (jaPago ? ' e pago' : ' nas Despesas (por pagar)') + '. Condóminos avisados.','ok');
   fecharModalGenerico();
   loadOcorrencias();
   verificarAvisosGerais();
@@ -15948,7 +16073,36 @@ async function loadDashboard() {
   document.getElementById('kpi-saldo-sub').textContent = saldo>=0?'↑ Saldo positivo':'↓ Saldo negativo';
 }
 
+// 🔴 Avisos do menu que estavam mortos: despesas por pagar, declarações e frações sem acesso
+async function updateBadgesExtra() {
+  if (!currentCondo) return;
+  function pinta(id, n, cor) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    if (n > 0) { el.textContent = n; el.style.display = 'inline-block'; if (cor) el.style.background = cor; }
+    else { el.style.display = 'none'; }
+  }
+  try {
+    // 💸 despesas por pagar — o dinheiro que saiu do papel mas ainda não do banco
+    var dR = await sb.from('despesas').select('id', {count:'exact', head:true})
+      .eq('condominio_id', currentCondo.id).not('estado','in','("paga","cancelada")');
+    pinta('nb-despesas', dR.count || 0, '#ffb300');
+  } catch(e){}
+  try {
+    // 📝 declarações da ficha por confirmar
+    var cR = await sb.from('fracoes').select('id', {count:'exact', head:true})
+      .eq('condominio_id', currentCondo.id).eq('decl_estado', 'pendente');
+    pinta('nb-cond', cR.count || 0, '#ffb300');
+  } catch(e){}
+  try {
+    // 🚪 frações ainda sem acesso ao portal (ninguém lá dentro para votar nem ver)
+    var fSem = (fracoes||[]).filter(function(f){ return !f.token_acesso; }).length;
+    pinta('nb-fracoes', fSem, '#8b95a8');
+  } catch(e){}
+}
+
 async function updateBadges() {
+  try { updateBadgesExtra(); } catch(e){}
   if (!currentCondo) return;
   const { data: qs } = await sb.from('quotas').select('estado').eq('condominio_id',currentCondo.id);
   const pend = (qs||[]).filter(q=>q.estado==='pendente'||q.estado==='atraso').length;
