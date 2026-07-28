@@ -8,6 +8,7 @@
 <meta name="description" content="Apresente serviços a condomínios inteiros com adesão em grupo. Sem comissões escondidas: o benefício reverte para o prédio e converte melhor.">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
   :root{--bg:#060A14;--panel:#0D1526;--panel2:#131D33;--ink:#E9F1FF;--dim:#8496B4;--faint:#44536F;--cyan:#00D4FF;--gold:#F5B942;--green:#22E584;--red:#FF5470;--lime:#94d82d;}
   *{box-sizing:border-box;margin:0;padding:0;}
@@ -71,6 +72,13 @@
   footer{border-top:1px solid var(--panel2);padding:34px 22px;text-align:center;color:var(--faint);font-size:12.5px;margin-top:30px;}
   .footer-links a{color:var(--dim);text-decoration:none;margin:0 10px;font-size:12px;}
   @media(max-width:520px){.row2{grid-template-columns:1fr;}}
+
+  @media print {
+    nav, .hero, section:not(.print-qr), footer { display: none !important; }
+    body { background: #fff !important; color: #000 !important; }
+    .print-qr { display: block !important; }
+    .print-qr .st, .print-qr .ss { color: #000 !important; }
+  }
 </style>
 </head>
 <body>
@@ -87,7 +95,7 @@
   <div class="wrap">
     <div class="tag">💼 Cond.OS para empresas</div>
     <h1>Chegue a <span class="g">prédios inteiros</span>, não a um cliente de cada vez.</h1>
-    <p class="lead">O Cond.OS liga os seus serviços a condomínios que decidem em grupo. Uma proposta, dezenas de frações a aderir ao mesmo tempo — com um modelo de confiança que converte melhor do que a publicidade tradicional.</p>
+    <p class="lead">Um prédio não é um cliente: são dezenas de famílias que decidem em conjunto. O Cond.OS liga o seu negócio a esses grupos — do seguro do edifício à mercearia da esquina — com um modelo de confiança que converte melhor do que qualquer anúncio.</p>
     <a href="#candidatar" class="btn btn-lime">Quero apresentar propostas</a>
   </div>
 </div>
@@ -122,19 +130,110 @@
 
 <section>
   <div class="wrap">
-    <div class="st">Serviços que encaixam</div>
-    <div class="ss">Se o seu serviço faz sentido para um prédio inteiro, tem lugar aqui.</div>
-    <div class="categorias">
-      <div class="cat">🛡️ Seguros do edifício e frações</div>
-      <div class="cat">⚡ Energia e eletricidade</div>
-      <div class="cat">🛗 Manutenção de elevadores</div>
-      <div class="cat">🧹 Limpeza</div>
-      <div class="cat">📡 Telecomunicações</div>
-      <div class="cat">☀️ Painéis solares</div>
-      <div class="cat">🔌 Carregadores elétricos</div>
-      <div class="cat">🔥 Inspeção de gás</div>
-      <div class="cat">🪟 Janelas e eficiência</div>
-      <div class="cat">🐛 Desinfestação</div>
+    <div class="st">Do prédio até à mesa de jantar</div>
+    <div class="ss">Se o seu produto ou serviço faz sentido para várias famílias do mesmo prédio, tem lugar aqui. Não é só manutenção — é tudo o que uma casa consome.</div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+
+      <div class="c">
+        <div class="c-ic">🏢</div>
+        <div class="c-t">O edifício</div>
+        <div class="c-d" style="margin-bottom:10px;">Contratados pelo condomínio, decididos em assembleia.</div>
+        <div class="categorias" style="justify-content:flex-start;">
+          <div class="cat">Seguro multirriscos</div><div class="cat">Elevadores</div><div class="cat">Limpeza</div>
+          <div class="cat">Energia das comuns</div><div class="cat">Obras e pintura</div><div class="cat">Jardinagem</div>
+          <div class="cat">Videovigilância</div><div class="cat">Desinfestação</div><div class="cat">Painéis solares</div>
+          <div class="cat">Carregadores EV</div><div class="cat">Extintores</div><div class="cat">Certificação energética</div>
+        </div>
+      </div>
+
+      <div class="c">
+        <div class="c-ic">🏠</div>
+        <div class="c-t">Cada casa</div>
+        <div class="c-d" style="margin-bottom:10px;">Adesão individual, com desconto por volume do prédio.</div>
+        <div class="categorias" style="justify-content:flex-start;">
+          <div class="cat">Seguro da fração</div><div class="cat">Internet e TV</div><div class="cat">Eletricidade e gás</div>
+          <div class="cat">Eletrodomésticos</div><div class="cat">Canalização urgente</div><div class="cat">Eletricista</div>
+          <div class="cat">Janelas e isolamento</div><div class="cat">Ar condicionado</div><div class="cat">Caldeiras</div>
+          <div class="cat">Alarmes</div><div class="cat">Mobiliário</div><div class="cat">Mudanças</div>
+        </div>
+      </div>
+
+      <div class="c">
+        <div class="c-ic">💚</div>
+        <div class="c-t">As pessoas</div>
+        <div class="c-d" style="margin-bottom:10px;">Saúde e bem-estar, em pacote de vizinhança.</div>
+        <div class="categorias" style="justify-content:flex-start;">
+          <div class="cat">Seguro de vida</div><div class="cat">Seguro de saúde</div><div class="cat">Dentista</div>
+          <div class="cat">Médico ao domicílio</div><div class="cat">Análises clínicas</div><div class="cat">Fisioterapia</div>
+          <div class="cat">Ginásio</div><div class="cat">Yoga e pilates</div><div class="cat">Óptica</div>
+          <div class="cat">Nutrição</div><div class="cat">Apoio a idosos</div><div class="cat">Enfermagem</div>
+        </div>
+      </div>
+
+      <div class="c">
+        <div class="c-ic">🐾</div>
+        <div class="c-t">Família e casa</div>
+        <div class="c-d" style="margin-bottom:10px;">O que faz falta quando se vive com gente e bichos.</div>
+        <div class="categorias" style="justify-content:flex-start;">
+          <div class="cat">Veterinário</div><div class="cat">Seguro animal</div><div class="cat">Pet walker</div>
+          <div class="cat">Banhos e tosquia</div><div class="cat">Explicações</div><div class="cat">Babysitting</div>
+          <div class="cat">Limpeza doméstica</div><div class="cat">Lavandaria</div><div class="cat">Costura</div>
+        </div>
+      </div>
+
+      <div class="c">
+        <div class="c-ic">🛵</div>
+        <div class="c-t">O dia a dia</div>
+        <div class="c-d" style="margin-bottom:10px;">Comércio local, entrega à porta, preço de grupo.</div>
+        <div class="categorias" style="justify-content:flex-start;">
+          <div class="cat">Mercearia</div><div class="cat">Talho e peixaria</div><div class="cat">Padaria</div>
+          <div class="cat">Frutaria</div><div class="cat">Farmácia</div><div class="cat">Restauração</div>
+          <div class="cat">Livraria</div><div class="cat">Papelaria</div><div class="cat">Floricultura</div>
+        </div>
+      </div>
+
+      <div class="c">
+        <div class="c-ic">🚗</div>
+        <div class="c-t">Mobilidade</div>
+        <div class="c-d" style="margin-bottom:10px;">Uma garagem coletiva são dezenas de carros.</div>
+        <div class="categorias" style="justify-content:flex-start;">
+          <div class="cat">Seguro automóvel</div><div class="cat">Oficina</div><div class="cat">Pneus</div>
+          <div class="cat">Inspeção</div><div class="cat">Lavagem ao domicílio</div><div class="cat">Aluguer</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="modelo" style="border-color:rgba(0,212,255,.28);background:linear-gradient(135deg,var(--panel),rgba(0,212,255,.05));">
+      <h2>Comércio local: <span style="color:var(--cyan);">o bairro como cliente único</span></h2>
+      <p>É aqui que fica mais interessante para quem tem loja de rua. Um prédio de 48 frações são 48 famílias que compram todas as semanas. Cinco prédios da mesma zona são <strong>240 famílias</strong> — volume de supermercado, sem sair do bairro.</p>
+      <p style="color:var(--cyan);font-weight:600;margin-top:14px;">Exemplo: "10% de desconto e entrega à porta, se houver encomendas de 5 ou mais condomínios." O sistema conta as adesões e avisa quando a meta é atingida.</p>
+      <div class="passos" style="max-width:820px;">
+        <div class="passo"><div class="passo-n" style="background:var(--cyan);color:#02121d;">1</div><div class="passo-t">Define a oferta e a meta — por exemplo, 30 famílias ou 5 prédios.</div></div>
+        <div class="passo"><div class="passo-n" style="background:var(--cyan);color:#02121d;">2</div><div class="passo-t">Os moradores veem no portal e aderem com um toque.</div></div>
+        <div class="passo"><div class="passo-n" style="background:var(--cyan);color:#02121d;">3</div><div class="passo-t">A barra enche à vista de todos — quem adere puxa os vizinhos.</div></div>
+        <div class="passo"><div class="passo-n" style="background:var(--cyan);color:#02121d;">4</div><div class="passo-t">Meta atingida, recebe a lista de quem autorizou o contacto.</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="print-qr">
+  <div class="wrap">
+    <div class="st">Deixe o código no balcão</div>
+    <div class="ss">Imprima e deixe junto à caixa, na montra ou no cartão de visita. Quem passar aponta o telemóvel e a candidatura chega-nos direta.</div>
+    <div style="display:flex;gap:24px;align-items:center;justify-content:center;flex-wrap:wrap;background:var(--panel);border:1px solid var(--panel2);border-radius:20px;padding:28px;">
+      <div id="qr-box" style="background:#fff;padding:14px;border-radius:14px;"></div>
+      <div style="max-width:330px;">
+        <div style="font-size:17px;font-weight:800;margin-bottom:8px;">Quer chegar a prédios inteiros?</div>
+        <div style="font-size:13.5px;color:var(--dim);line-height:1.6;margin-bottom:14px;">Aponte a câmara para o código e preencha a candidatura em dois minutos. Sem custos, sem exclusividade, sem compromisso.</div>
+        <button class="btn btn-cyan" onclick="window.print()">🖨️ Imprimir para o balcão</button>
+      </div>
     </div>
   </div>
 </section>
@@ -151,14 +250,58 @@
           <div class="fl"><label>Categoria</label>
             <select class="fi" id="e-categoria">
               <option value="">Selecionar…</option>
-              <option value="seguros">Seguros</option>
-              <option value="energia">Energia / eletricidade</option>
-              <option value="elevadores">Elevadores</option>
-              <option value="limpeza">Limpeza</option>
-              <option value="telecom">Telecomunicações</option>
-              <option value="solar">Painéis solares</option>
-              <option value="ev">Carregadores elétricos</option>
-              <option value="gas">Gás / caldeiras</option>
+              <optgroup label="O edifício">
+                <option value="seguros">Seguros</option>
+                <option value="elevadores">Elevadores</option>
+                <option value="limpeza">Limpeza</option>
+                <option value="energia">Energia / eletricidade</option>
+                <option value="obras">Obras, pintura e reabilitação</option>
+                <option value="jardim">Jardinagem</option>
+                <option value="seguranca">Videovigilância / segurança</option>
+                <option value="solar">Painéis solares</option>
+                <option value="ev">Carregadores elétricos</option>
+                <option value="desinfestacao">Desinfestação</option>
+              </optgroup>
+              <optgroup label="Cada casa">
+                <option value="telecom">Internet e TV</option>
+                <option value="gas">Gás e caldeiras</option>
+                <option value="eletrodomesticos">Eletrodomésticos</option>
+                <option value="canalizacao">Canalização / eletricista</option>
+                <option value="janelas">Janelas e isolamento</option>
+                <option value="climatizacao">Ar condicionado</option>
+                <option value="mobiliario">Mobiliário e decoração</option>
+                <option value="mudancas">Mudanças</option>
+              </optgroup>
+              <optgroup label="Saúde e bem-estar">
+                <option value="seguro_vida">Seguro de vida / saúde</option>
+                <option value="dentista">Dentista</option>
+                <option value="medico">Médico ao domicílio / análises</option>
+                <option value="fisioterapia">Fisioterapia</option>
+                <option value="ginasio">Ginásio / yoga / pilates</option>
+                <option value="optica">Óptica</option>
+                <option value="apoio_idosos">Apoio a idosos / enfermagem</option>
+              </optgroup>
+              <optgroup label="Família e casa">
+                <option value="veterinario">Veterinário</option>
+                <option value="pet">Pet walker / banhos e tosquia</option>
+                <option value="explicacoes">Explicações / babysitting</option>
+                <option value="domestica">Limpeza doméstica</option>
+                <option value="lavandaria">Lavandaria</option>
+              </optgroup>
+              <optgroup label="Comércio local">
+                <option value="mercearia">Mercearia / talho / peixaria</option>
+                <option value="padaria">Padaria / pastelaria</option>
+                <option value="farmacia">Farmácia</option>
+                <option value="restauracao">Restauração</option>
+                <option value="livraria">Livraria / papelaria</option>
+                <option value="eletronica">Eletrónica e gadgets</option>
+                <option value="floricultura">Floricultura</option>
+              </optgroup>
+              <optgroup label="Mobilidade">
+                <option value="seguro_auto">Seguro automóvel</option>
+                <option value="oficina">Oficina / pneus / inspeção</option>
+                <option value="lavagem">Lavagem ao domicílio</option>
+              </optgroup>
               <option value="outro">Outro</option>
             </select>
           </div>
@@ -219,6 +362,17 @@ async function candidatar() {
   } catch(e) { erroE('Erro de ligação. Tenta novamente.'); btn.disabled = false; btn.textContent = '📤 Enviar candidatura'; }
 }
 function erroE(m){ const e = document.getElementById('e-erro'); e.textContent = m; e.style.display = 'block'; }
+
+// 📱 QR para deixar no comércio local — aponta para a própria candidatura
+(function(){
+  try {
+    var box = document.getElementById('qr-box');
+    if (box && window.QRCode) {
+      var url = location.origin + location.pathname + '#candidatar';
+      new QRCode(box, { text: url, width: 168, height: 168, colorDark: '#060A14', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.M });
+    }
+  } catch(e){}
+})();
 </script>
 </body>
 </html>
