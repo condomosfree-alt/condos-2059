@@ -767,7 +767,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.24-2152</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.28-0933</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -9123,6 +9123,7 @@ async function gerirOcorrencia(id) {
   parceiros.filter(function(p){ return !sugeridos.find(function(s){return s.id===p.id;}); }).forEach(function(p){ h += '<option value="'+p.id+'"'+(_ocAtual.parceiro_id===p.id?' selected':'')+'>'+p.nome+' ('+(p.categoria||'')+')</option>'; });
   h += '</select>';
   h += '<button class="btn-ghost" style="width:100%;margin-top:8px;font-size:11px;" onclick="ocContactarParceiro()">📞 Marcar como contactado</button>';
+  h += '<div style="font-size:9.5px;color:var(--t3);margin-top:6px;line-height:1.45;">Opcional — serve para registares que já falaste com alguém. <strong>Não é preciso</strong> para pedir orçamentos: o pedido a vários parceiros faz-se no passo 2.</div>';
   h += '</div>';
 
   // 2. ORÇAMENTO
@@ -9532,6 +9533,25 @@ async function confirmarImportarParceiros() {
   } catch(e) { toast('Erro: ' + (e.message||e),'err'); }
 }
 
+
+// ↩️ Anular um pedido de orçamento (enganou-se no parceiro, ou quer voltar a pedir)
+async function ocAnularPedido(parceiroId) {
+  if (!_ocAtual) return;
+  try {
+    var chk = await sb.from('orcamentos_obra').select('id,valor,estado').eq('ocorrencia_id', _ocAtual.id).eq('parceiro_id', parceiroId);
+    var linhas = chk.data || [];
+    var jaRespondeu = linhas.some(function(o){ return o.estado === 'submetido' || (o.valor !== null && o.valor !== undefined); });
+    if (jaRespondeu) {
+      if (!await confirmar('Este parceiro JÁ submeteu uma proposta.\n\nSe anulares o pedido, a proposta dele é apagada e deixa de contar para a comparação e para a votação.\n\nAnular mesmo assim?', {titulo:'Anular pedido', tipo:'aviso', icon:'⚠️', okTexto:'Anular'})) return;
+    }
+    var del = await sb.from('orcamentos_obra').delete().eq('ocorrencia_id', _ocAtual.id).eq('parceiro_id', parceiroId);
+    if (del.error) { toast('Erro: ' + del.error.message,'err'); return; }
+    await ocEvento('orcamento', 'Pedido de orçamento anulado pela administração.');
+    toast('Pedido anulado — já podes voltar a pedir a este parceiro','ok');
+    ocPedirOrcamentos();
+  } catch(e) { toast('Erro: ' + (e.message||e),'err'); }
+}
+
 async function ocPedirOrcamentos() {
   if (!_ocAtual) return;
   var pRes = await sb.from('parceiros').select('*').eq('condominio_id', currentCondo.id).order('nome');
@@ -9582,17 +9602,24 @@ async function ocPedirOrcamentos() {
   var comMatch = parceiros.filter(relevante);
   parceiros = comMatch.concat(parceiros.filter(function(p){ return !relevante(p); }));
 
-  h += '<div style="font-size:11px;color:var(--t2);font-weight:600;margin-bottom:8px;">Parceiros deste condomínio (' + parceiros.length + '):</div>';
+  var nDisp = parceiros.filter(function(p){ return jaPedidos.indexOf(p.id) === -1; }).length;
+  var nJa = parceiros.length - nDisp;
+  h += '<div style="font-size:11px;color:var(--t2);font-weight:600;margin-bottom:8px;">Parceiros deste condomínio: ' + parceiros.length + (nJa ? ' · <span style="color:var(--amber);">' + nJa + ' já pedido(s)</span> · <span style="color:var(--green);">' + nDisp + ' disponível(eis)</span>' : '') + '</div>';
+  if (parceiros.length && !nDisp) {
+    h += '<div style="background:rgba(255,179,0,.08);border:1px solid rgba(255,179,0,.35);border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:11.5px;color:var(--t2);line-height:1.5;">Já pediste orçamento a <strong>todos</strong> os parceiros deste prédio. Para pedir a mais alguém: traz um parceiro de outro prédio teu, ou adiciona um novo.</div>';
+  }
   if (pistas.length && !comMatch.length) {
     h += '<div style="background:rgba(255,179,0,.07);border:1px solid rgba(255,179,0,.3);border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:11.5px;color:var(--t2);line-height:1.5;">⚠️ Nenhum dos parceiros deste prédio tem especialidade compatível com <strong>' + (_ocAtual.categoria||'esta avaria') + '</strong>. Adiciona um, ou traz um de outro prédio teu.</div>';
   }
   parceiros.forEach(function(p){
     var ja = jaPedidos.indexOf(p.id) > -1;
     h += '<label style="display:flex;align-items:center;gap:10px;padding:9px 11px;background:var(--s1);border:1px solid var(--b1);border-radius:8px;margin-bottom:7px;cursor:' + (ja?'default':'pointer') + ';opacity:' + (ja?'.55':'1') + ';">';
-    h += '<input type="checkbox" class="po-parc" value="' + p.id + '"' + (ja?' disabled':'') + ' style="accent-color:var(--cyan);">';
+    h += '<input type="checkbox" class="po-parc" value="' + p.id + '"' + (ja?' disabled':'') + ' style="accent-color:var(--cyan);' + (ja?'opacity:.4;':'') + '">';
     var _star = parseFloat(p.rating||0);
     h += '<div style="flex:1;"><div style="font-size:12.5px;font-weight:600;color:var(--text);">' + (p.nome||'') + (_star ? ' <span style="font-size:10px;color:var(--amber);">' + _star.toFixed(1) + '★' + (p.num_avaliacoes?' ('+p.num_avaliacoes+')':'') + '</span>' : '') + '</div>';
-    h += '<div style="font-size:10px;color:var(--t3);">' + (p.categoria||'') + (relevante(p) ? ' <span style="color:var(--green);font-weight:700;">· 🎯 especialidade compatível</span>' : '') + (p.autorizado_ata?' · ⚖️ '+p.autorizado_ata:'') + (ja?' · já pedido':'') + '</div></div>';
+    h += '<div style="font-size:10px;color:var(--t3);">' + (p.categoria||'') + (relevante(p) ? ' <span style="color:var(--green);font-weight:700;">· 🎯 especialidade compatível</span>' : '') + (p.autorizado_ata?' · ⚖️ '+p.autorizado_ata:'') + '</div>';
+    if (ja) h += '<div style="font-size:10px;color:var(--amber);margin-top:3px;">✔ já lhe pediste orçamento nesta ocorrência <a href="#" onclick="event.preventDefault();event.stopPropagation();ocAnularPedido(\'' + p.id + '\')" style="color:var(--red);text-decoration:underline;">anular pedido</a></div>';
+    h += '</div>';
     if (!p.token_acesso) h += '<span style="font-size:9px;color:var(--amber);">sem portal</span>';
     h += '</label>';
   });
@@ -11931,7 +11958,7 @@ async function gerarAtaDoLivro() {
     // Guardar a ata + o número
     // ⚖️ APÊNDICE DE PROVAS: exigências validadas ficam anexadas à ata com hash
     try {
-      var exAta = await sb.from('exigencias').select('id,tipo,doc_url,doc_hash,validada_em,criado_em,fracao_id,fracoes(codigo)').eq('condominio_id', currentCondo.id).eq('estado','validada');
+      var exAta = await sb.from('exigencias').select('id,tipo,doc_url,doc_hash,validada_em,criado_em,fracao_id,ai_resultado,fracoes(codigo)').eq('condominio_id', currentCondo.id).eq('estado','validada');
       if (exAta.data && exAta.data.length) {
         ata += '\n\n────────────────────────────────\nANEXOS — DOCUMENTOS DE PROVA (registo automático do sistema)\n';
         exAta.data.forEach(function(e, i){
@@ -11939,6 +11966,7 @@ async function gerarAtaDoLivro() {
           ata += '\n  Impressão digital do documento (SHA-256): ' + (e.doc_hash||'—');
           ata += '\n  Localização do documento: ' + (e.doc_url||'—');
           ata += '\n  Nota: a impressão digital permite verificar em qualquer momento que o documento arquivado não foi alterado desde a validação.';
+          if (e.ai_resultado && /DEMONSTRA/i.test(e.ai_resultado)) ata += '\n  ⚠️ ATENÇÃO: este documento foi processado em MODO DEMONSTRAÇÃO — a verificação de autenticidade não foi efetuada. Não constitui prova.';
         });
         // marcar como apresentadas nesta assembleia
         var idsApres = exAta.data.map(function(e){ return e.id; });
@@ -15379,7 +15407,9 @@ async function carregarExigenciasAdmin() {
     } else {
       var rej = exigs.find(function(e){ return e.estado === 'rejeitada_ai'; });
       if (rej) h += '<div style="background:rgba(255,84,112,.06);border:1px solid rgba(255,84,112,.3);border-radius:10px;padding:10px 13px;margin-top:12px;font-size:11px;color:var(--t2);">⚠️ A última prova foi <strong style="color:var(--red);">rejeitada na verificação</strong> (' + (rej.ai_resultado||'documento inválido') + ') e todos os condóminos foram informados. Aguarda nova exigência ou carrega diretamente um documento válido quando ela chegar.</div>';
-      var val = exigs.find(function(e){ return e.estado === 'validada'; });
+      var demo = exigs.find(function(e){ return /DEMONSTRA/i.test(e.ai_resultado||'') && ['validada','apresentada_assembleia','em_votacao'].indexOf(e.estado) > -1; });
+      if (demo) h += '<div style="background:rgba(255,179,0,.09);border:1px solid rgba(255,179,0,.45);border-radius:10px;padding:10px 13px;margin-top:12px;font-size:11px;color:var(--t2);line-height:1.5;">🧪 <strong style="color:var(--amber);">Existe uma prova processada em modo demonstração.</strong> Não conta para a nota de saúde do prédio nem serve como prova — carrega o extrato real quando quiseres substituí-la.</div>';
+      var val = exigs.find(function(e){ return e.estado === 'validada' && !/DEMONSTRA/i.test(e.ai_resultado||''); });
       if (val) h += '<div style="background:rgba(34,229,132,.06);border:1px solid rgba(34,229,132,.3);border-radius:10px;padding:10px 13px;margin-top:12px;font-size:11px;color:var(--t2);">✅ Prova <strong style="color:var(--green);">validada pela maioria</strong> em ' + (val.validada_em?new Date(val.validada_em).toLocaleDateString('pt-PT'):'') + '. Apresenta o extrato físico na próxima assembleia — o sistema vai anexá-lo à ata com a impressão digital.</div>';
     }
     // 📤 SEM exigência de ninguém: o administrador pode (e deve) provar por iniciativa própria
@@ -15390,6 +15420,12 @@ async function carregarExigenciasAdmin() {
       h += '<label style="display:block;cursor:pointer;"><input type="file" id="prova-doc" accept="application/pdf,image/*" style="display:none" onchange="provarFundoAgora(this)">';
       h += '<div style="background:var(--s1);border:1px dashed var(--b2);border-radius:9px;padding:13px;text-align:center;font-size:12px;color:var(--t2);">📤 Carregar extrato bancário do fundo</div></label>';
       h += '<div id="prova-doc-estado" style="font-size:10.5px;color:var(--t3);margin-top:6px;"></div>';
+      h += '<label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:10.5px;color:var(--t3);cursor:pointer;">';
+      h += '<input type="checkbox" id="chk-demo-prova"' + (window._demoProva ? ' checked' : '') + ' onchange="window._demoProva = this.checked; carregarExigenciasAdmin();" style="accent-color:#ffb300;">';
+      h += '🧪 Modo demonstração — salta a verificação de autenticidade (só para testar o circuito)</label>';
+      if (window._demoProva) {
+        h += '<div style="background:rgba(255,179,0,.1);border:1px solid rgba(255,179,0,.45);border-radius:8px;padding:9px 11px;margin-top:7px;font-size:10.5px;color:var(--t2);line-height:1.5;">⚠️ <strong style="color:var(--amber);">Modo demonstração ativo.</strong> Qualquer documento passa a verificação, e tudo o que daqui sair fica marcado como demonstração — nas mensagens aos condóminos e no anexo da ata. Não serve como prova.</div>';
+      }
       h += '</div>';
     }
     zona.innerHTML = h;
@@ -15467,7 +15503,9 @@ async function exigDocEscolhido(inp) {
   await sb.from('exigencias').update({ estado:'doc_carregado', doc_url: docUrl, doc_hash: hash, doc_carregado_em: new Date().toISOString() }).eq('id', _exigAtual.id);
 
   diz('🤖 Verificação automática do documento…');
-  var veredicto = await validarExtratoAI(f);
+  var veredicto = window._demoProva === true
+    ? { valido: true, motivo: 'MODO DEMONSTRAÇÃO — verificação de autenticidade NÃO foi feita', demo: true }
+    : await validarExtratoAI(f);
 
   if (!veredicto.valido) {
     // REJEIÇÃO PÚBLICA — todos os condóminos ficam a saber
@@ -15487,7 +15525,7 @@ async function exigDocEscolhido(inp) {
   await sb.from('exigencias').update({ estado:'em_votacao', ai_resultado: veredicto.motivo }).eq('id', _exigAtual.id);
   var msgsOk = fracoes.map(function(fr){
     return { condominio_id: currentCondo.id, fracao_id: fr.id, autor:'admin', lida_admin:true, lida_condomino:false,
-      texto: '🗳️ VALIDAÇÃO DA PROVA DO FUNDO\n\nA administração carregou o extrato bancário do fundo de reserva' + (_exigAtual.fracao_id ? ' (exigido pela fração ' + ((_exigAtual.fracoes&&_exigAtual.fracoes.codigo)||'') + ')' : ' por sua iniciativa') + '. O documento passou a verificação automática' + (veredicto.motivo ? ' (' + veredicto.motivo + ')' : '') + '.\n\nAgora és tu que validas: vai à secção Quotas do portal, consulta o documento e vota. Impressão digital: ' + hash.substring(0,16) + '…' };
+      texto: (veredicto.demo ? '🧪 DEMONSTRAÇÃO — ESTE NÃO É UM PROCESSO REAL\n\n' : '') + '🗳️ VALIDAÇÃO DA PROVA DO FUNDO\n\nA administração carregou o extrato bancário do fundo de reserva' + (_exigAtual.fracao_id ? ' (exigido pela fração ' + ((_exigAtual.fracoes&&_exigAtual.fracoes.codigo)||'') + ')' : ' por sua iniciativa') + '. O documento passou a verificação automática' + (veredicto.motivo ? ' (' + veredicto.motivo + ')' : '') + '.\n\nAgora és tu que validas: vai à secção Quotas do portal, consulta o documento e vota. Impressão digital: ' + hash.substring(0,16) + '…' };
   });
   await sb.from('mensagens').insert(msgsOk);
   diz('✅ Documento verificado — votação aberta aos condóminos (todos avisados).', 'var(--green)');
@@ -15907,7 +15945,7 @@ async function carregarScoreAdmin() {
       sb.from('ocorrencias').select('estado,criado_em').eq('condominio_id', cid).gte('criado_em', desde),
       sb.from('assembleias').select('data_assembleia,ata_texto').eq('condominio_id', cid).gte('data_assembleia', desde),
       sb.from('documentos').select('id', {count:'exact', head:true}).eq('condominio_id', cid),
-      sb.from('exigencias').select('id').eq('condominio_id', cid).eq('tipo','fundo').in('estado',['validada','apresentada_assembleia']).gte('validada_em', desde)
+      sb.from('exigencias').select('id,ai_resultado').eq('condominio_id', cid).eq('tipo','fundo').in('estado',['validada','apresentada_assembleia']).gte('validada_em', desde)
     ]);
     var pctFundo = parseFloat(currentCondo.fundo_percentagem); if (isNaN(pctFundo)) pctFundo = 10;
     var divPorFr = {};
@@ -15927,7 +15965,8 @@ async function carregarScoreAdmin() {
       teve_assembleia_12m: (aR.data||[]).length > 0,
       teve_ata_12m: (aR.data||[]).some(function(a){ return a.ata_texto && a.ata_texto.trim().length > 50; }),
       n_docs: dR.count || 0,
-      prova_validada_12m: (eR.data||[]).length > 0
+      // 🧪 prova processada em MODO DEMONSTRAÇÃO não conta para o score — não houve verificação
+      prova_validada_12m: (eR.data||[]).filter(function(x){ return !/DEMONSTRA/i.test(x.ai_resultado||''); }).length > 0
     };
     var s = calcularScore(d);
     var cl = _scoreClasse(s.total);
