@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>COND.OS — Portal do Condómino</title>
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -18,15 +18,22 @@
 <meta property="og:locale" content="pt_PT">
 <style>
   :root {
-    --bg:#060B14; --card:#0E1726; --card2:#16223A; --b:rgba(255,255,255,.075); --b2:rgba(255,255,255,.14);
-    --text:#EDF2F9; --t2:#93A3BC; --t3:#5C6B85;
-    --cyan:#00D4FF; --cyan2:#0091FF; --green:#22E584; --red:#FF5470; --amber:#FFB300; --purple:#A78BFA;
-    --brass:#E9B872; --brass-d:#C79A55;
-    --fd:'Space Grotesk',system-ui,sans-serif; --fm:'IBM Plex Mono',ui-monospace,monospace;
+    --bg:#080d14; --card:#0d1520; --card2:#111b2a; --b:#1e2d3d; --b2:#2a3d52;
+    --s1:#0d1520; --s2:#111b2a; --b1:#1e2d3d;
+    --text:#e8f0f8; --t2:#8899aa; --t3:#445566;
+    --cyan:#00d4ff; --cyan2:#0091ff; --violet:#7c3aed; --purple:#7c3aed;
+    --green:#00e676; --amber:#ffb300; --orange:#ff6b35; --red:#ff4444;
+    --cdim:rgba(0,212,255,.06); --gdim:rgba(0,230,118,.06); --adim:rgba(255,179,0,.06); --rdim:rgba(255,68,68,.06);
+    --mono:'JetBrains Mono',monospace; --fm:'JetBrains Mono',monospace; --fd:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
     --nav-h:66px;
   }
   * { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
-  body { font-family:system-ui,-apple-system,'Segoe UI',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+  body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif; color:var(--text); min-height:100vh;
+    background:
+      radial-gradient(ellipse at 30% 12%, rgba(0,212,255,.07) 0%, transparent 58%),
+      radial-gradient(ellipse at 72% 82%, rgba(124,58,237,.07) 0%, transparent 58%),
+      var(--bg);
+    background-attachment:fixed; }
   #app { max-width:480px; margin:0 auto; min-height:100vh; display:none; padding-bottom:calc(var(--nav-h) + 20px); }
 
   .topbar { position:sticky; top:0; z-index:20; background:linear-gradient(180deg,#0d1a30,#0a1524); border-bottom:1px solid var(--b); padding:16px 18px 14px; }
@@ -184,10 +191,10 @@
   @media(hover:hover){.li:hover{background:rgba(0,212,255,.04)}}
 
   /* 9 · Navegação inferior em vidro */
-  .nav{backdrop-filter:blur(14px);background:rgba(10,18,32,.85);box-shadow:0 -8px 30px rgba(0,0,0,.35)}
+  .nav{backdrop-filter:blur(14px);background:rgba(8,13,20,.9);border-top:1px solid var(--b1);box-shadow:0 -8px 30px rgba(0,0,0,.45)}
 
   /* 10 · Topbar em vidro */
-  .topbar{backdrop-filter:blur(12px);background:rgba(10,18,32,.85)}
+  .topbar{backdrop-filter:blur(12px);background:rgba(8,13,20,.9);border-bottom:1px solid var(--b1)}
 
   /* 11 · Cabeçalhos de secção com linha da marca */
   .sec-h{position:relative;padding-bottom:3px}
@@ -397,6 +404,115 @@
   .fab svg{width:23px;height:23px;stroke:#1B1204;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;}
   .fab:active{transform:scale(.94);}
 
+
+  /* ═══ MESMA LÍNGUA DO SISTEMA ═══ */
+
+  /* CABEÇALHO: separa e destaca a fração, como o cabeçalho do sistema */
+  .cab{position:relative;margin:0;padding:20px 16px 18px;
+       background:linear-gradient(180deg,rgba(0,212,255,.07),transparent 70%);
+       border-bottom:1px solid var(--b1);}
+  .cab::after{content:'';position:absolute;left:0;right:0;bottom:-1px;height:2px;
+       background:linear-gradient(90deg,var(--cyan),rgba(0,212,255,.15) 45%,transparent);}
+  .cab-cond{font-size:10px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:var(--cyan);opacity:.85;}
+  .cab-row{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;margin-top:11px;}
+  .cab-frac{font-family:var(--mono);font-size:27px;font-weight:700;line-height:1;letter-spacing:-.02em;}
+  .cab-ola{font-size:12px;color:var(--t2);margin-top:7px;}
+  .cab-perm{background:var(--s1);border:1px solid var(--b1);border-top:2px solid var(--cyan);
+            border-radius:9px;padding:8px 12px;text-align:center;flex-shrink:0;}
+  .cab-perm-v{font-family:var(--mono);font-size:16px;font-weight:700;color:var(--cyan);line-height:1;}
+  .cab-perm-r{font-size:8px;color:var(--t3);letter-spacing:.12em;text-transform:uppercase;margin-top:4px;}
+
+  /* CAIXA KPI: o padrão do sistema — borda de topo a dizer o que é */
+  .kpi{background:var(--s1);border:1px solid var(--b1);border-radius:10px;padding:14px 16px;}
+  .kpi.c{border-top:2px solid var(--cyan);}
+  .kpi.g{border-top:2px solid var(--green);}
+  .kpi.a{border-top:2px solid var(--amber);}
+  .kpi.v{border-top:2px solid var(--violet);}
+  .kpi.r{border-top:2px solid var(--red);}
+  .kpi-r{font-size:9.5px;color:var(--t3);letter-spacing:.14em;text-transform:uppercase;}
+  .kpi-v{font-family:var(--mono);font-size:25px;font-weight:700;line-height:1.05;margin-top:8px;}
+  .kpi-s{font-size:11px;color:var(--t2);margin-top:5px;}
+
+  /* CAIXA DE DESTAQUE: como o aviso alaranjado do dashboard */
+  .destaque{border-radius:10px;padding:13px 15px;border:1px solid;}
+  .destaque.aviso{background:var(--adim);border-color:rgba(255,179,0,.3);}
+  .destaque.info{background:var(--cdim);border-color:rgba(0,212,255,.28);}
+  .destaque.ok{background:var(--gdim);border-color:rgba(0,230,118,.28);}
+  .destaque.perigo{background:var(--rdim);border-color:rgba(255,68,68,.3);}
+
+  /* MENU: caixas dentro de ambiente azul, como a prova do fundo */
+  .menu-amb{margin:16px;padding:14px;background:rgba(0,212,255,.05);border:1px solid rgba(0,212,255,.16);border-radius:14px;}
+  .menu-amb-t{font-size:9.5px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--t3);margin-bottom:12px;}
+  .icones{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:0;}
+  .ico{position:relative;aspect-ratio:1/.9;border-radius:11px;
+       background:linear-gradient(180deg,var(--s2),var(--s1));
+       border:1px solid var(--b1);border-top:1px solid var(--b2);
+       box-shadow:0 2px 0 rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.045);
+       display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;cursor:pointer;
+       transition:transform .12s,box-shadow .12s,border-color .18s;}
+  .ico:active{transform:translateY(2px);box-shadow:0 0 0 rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.03);}
+  .ico svg{width:22px;height:22px;stroke:var(--cyan);fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;}
+  .ico-t{font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--t2);}
+  .ico-b{position:absolute;top:7px;right:7px;min-width:17px;height:17px;border-radius:9px;background:var(--red);color:#fff;
+         font-family:var(--mono);font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;padding:0 4px;
+         box-shadow:0 0 0 2px var(--s1);}
+
+  /* BOTÕES: os do sistema, com relevo */
+  .bt{border-radius:8px;padding:11px 16px;font-size:12.5px;font-weight:700;cursor:pointer;border:1px solid transparent;
+      transition:transform .1s,filter .15s;display:inline-flex;align-items:center;justify-content:center;gap:7px;}
+  .bt:active{transform:translateY(1px);}
+  .bt-p{background:var(--cyan);color:#000;box-shadow:0 2px 0 #0090b0,0 5px 14px rgba(0,212,255,.2);}
+  .bt-p:active{box-shadow:0 1px 0 #0090b0;}
+  .bt-g{background:var(--s2);border-color:var(--b1);color:var(--t2);box-shadow:0 2px 0 rgba(0,0,0,.35);}
+  .bt-ok{background:rgba(0,230,118,.12);border-color:rgba(0,230,118,.4);color:var(--green);box-shadow:0 2px 0 rgba(0,0,0,.3);}
+  .bt-d{background:rgba(255,68,68,.12);border-color:rgba(255,68,68,.4);color:var(--red);box-shadow:0 2px 0 rgba(0,0,0,.3);}
+
+  /* SECÇÃO */
+  .regua{display:flex;align-items:center;gap:11px;margin:22px 16px 12px;}
+  .regua-t{font-size:9.5px;font-weight:700;letter-spacing:.2em;color:var(--t3);text-transform:uppercase;white-space:nowrap;}
+  .regua-l{flex:1;height:1px;background:linear-gradient(90deg,var(--b1),transparent);}
+
+  /* linhas dentro de painel */
+  .linha-est{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid var(--b1);cursor:pointer;}
+  .linha-est:last-child{border-bottom:none;}
+  .linha-esq{display:flex;align-items:center;gap:12px;min-width:0;}
+  .linha-ic{width:38px;height:38px;border-radius:9px;background:var(--s2);border:1px solid var(--b1);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .linha-ic svg{width:17px;height:17px;stroke:var(--t2);fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;}
+  .linha-t{font-size:13px;font-weight:600;}
+  .linha-s{font-size:10.5px;color:var(--t3);margin-top:2px;}
+  .linha-v{font-family:var(--mono);font-size:14px;font-weight:700;white-space:nowrap;}
+
+  .painel{margin:0 16px;padding:0;}
+  .painel-sec{background:var(--s1);border:1px solid var(--b1);border-radius:12px;padding:15px 16px;margin-bottom:12px;}
+  .painel-tit{font-size:9.5px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--t3);margin-bottom:12px;}
+
+  /* busca */
+  .busca{position:relative;margin:14px 16px 0;display:flex;align-items:center;gap:10px;background:var(--s1);border:1px solid var(--b1);border-radius:10px;padding:11px 13px;}
+  .busca input{flex:1;background:none;border:none;color:var(--text);font-size:13px;outline:none;font-family:inherit;}
+  .busca input::placeholder{color:var(--t3);}
+  .busca-res{position:absolute;top:calc(100% + 6px);left:0;right:0;background:var(--s1);border:1px solid var(--b2);border-radius:10px;box-shadow:0 18px 40px rgba(0,0,0,.6);z-index:30;overflow:hidden;display:none;}
+  .busca-item{padding:12px 14px;font-size:12.5px;cursor:pointer;border-bottom:1px solid var(--b1);display:flex;align-items:center;gap:10px;}
+  .busca-item:last-child{border-bottom:none;}
+
+  /* carrossel */
+  .carrossel{display:flex;gap:10px;overflow-x:auto;padding:1px 0 5px;scroll-snap-type:x mandatory;}
+  .carrossel::-webkit-scrollbar{display:none;}
+  .cc{flex:0 0 78%;max-width:270px;scroll-snap-align:start;background:var(--s2);border:1px solid var(--b1);border-radius:11px;padding:14px;cursor:pointer;}
+  .cc.urgente{border-top:2px solid var(--red);}
+  .cc.aviso{border-top:2px solid var(--amber);}
+  .cc.oferta{border-top:2px solid var(--green);}
+  .cc-ic{width:32px;height:32px;border-radius:9px;background:var(--s1);border:1px solid var(--b1);display:flex;align-items:center;justify-content:center;font-size:15px;}
+  .cc-t{font-size:13px;font-weight:700;margin-top:10px;line-height:1.3;}
+  .cc-d{font-size:11px;color:var(--t2);margin-top:5px;line-height:1.5;}
+  .cc-a{font-size:11px;font-weight:700;color:var(--cyan);margin-top:10px;}
+
+  /* flutuante com relevo */
+  .fab{position:fixed;right:16px;bottom:80px;width:52px;height:52px;border-radius:14px;
+       background:var(--cyan);border:none;color:#000;display:flex;align-items:center;justify-content:center;cursor:pointer;
+       box-shadow:0 3px 0 #0090b0,0 10px 26px rgba(0,212,255,.28);z-index:40;}
+  .fab svg{width:22px;height:22px;stroke:#000;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;}
+  .fab:active{transform:translateY(2px);box-shadow:0 1px 0 #0090b0;}
+
 </style>
 </head>
 <body>
@@ -422,84 +538,86 @@
 
   <div class="page active" id="pg-inicio" style="padding:0;">
 
-    <!-- ASSINATURA: a placa do prédio -->
-    <div class="placa">
-      <div class="placa-in">
-        <div class="placa-cond" id="hi-cond">—</div>
-        <div class="placa-l"></div>
-        <div class="placa-row">
-          <div>
-            <div class="placa-frac" id="hi-frac">—</div>
-            <div class="placa-nome" id="hi-ola">—</div>
-          </div>
-          <div class="placa-perm">
-            <div class="placa-perm-v" id="hi-perm">—</div>
-            <div class="placa-perm-r">permilagem</div>
-          </div>
+    <!-- CABEÇALHO: destaca e separa a fração -->
+    <div class="cab">
+      <div class="cab-cond" id="hi-cond">—</div>
+      <div class="cab-row">
+        <div>
+          <div class="cab-frac" id="hi-frac">—</div>
+          <div class="cab-ola" id="hi-ola">—</div>
+        </div>
+        <div class="cab-perm">
+          <div class="cab-perm-v" id="hi-perm">—</div>
+          <div class="cab-perm-r">permilagem</div>
         </div>
       </div>
     </div>
 
-    <!-- o número que interessa -->
-    <div class="saldo-b" onclick="irPara('quotas')">
-      <div>
-        <div class="saldo-r">A tua conta corrente</div>
-        <div class="saldo-v" id="h-sit">…</div>
-        <div class="saldo-s" id="h-sit-sub"></div>
+    <!-- KPIs: o padrão do dashboard, com a borda de topo a dizer o que é -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:11px;padding:16px 16px 0;">
+      <div class="kpi c" onclick="irPara('quotas')" style="cursor:pointer;">
+        <div class="kpi-r">A tua conta</div>
+        <div class="kpi-v" id="h-sit">…</div>
+        <div class="kpi-s" id="h-sit-sub"></div>
       </div>
-      <div style="opacity:.4;"><svg viewBox="0 0 24 24" width="0" height="0"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg><svg viewBox="0 0 24 24" width="19" height="19" style="stroke:var(--t2);fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;"><path d="M9 5l7 7-7 7"/></svg></div>
+      <div class="kpi g" id="fundo-mini" style="display:none;cursor:pointer;" onclick="irPara('quotas')">
+        <div class="kpi-r">Fundo comprovado</div>
+        <div class="kpi-v" id="fundo-mini-v" style="color:var(--green);">—</div>
+        <div class="kpi-s" id="fundo-mini-s">do que devia existir</div>
+      </div>
+    </div>
+
+    <div style="padding:11px 16px 0;">
+      <div class="kpi v" id="score-card" style="display:none;cursor:pointer;" onclick="abrirScoreDetalhe()">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:14px;">
+          <div style="min-width:0;">
+            <div class="kpi-r">Saúde do prédio</div>
+            <div class="kpi-s" id="score-classe" style="margin-top:6px;font-weight:600;">—</div>
+          </div>
+          <div style="text-align:right;flex-shrink:0;">
+            <div class="kpi-v" id="score-num" style="margin:0;">—</div>
+            <div style="font-size:9px;color:var(--t3);letter-spacing:.1em;">DE 100</div>
+          </div>
+        </div>
+        <div id="score-circulo" style="display:none;"></div>
+        <div id="score-barras" style="display:none;"></div>
+      </div>
     </div>
 
     <div class="busca">
-      <svg viewBox="0 0 24 24" width="17" height="17" style="stroke:var(--t3);fill:none;stroke-width:1.7;stroke-linecap:round;"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
+      <svg viewBox="0 0 24 24" width="16" height="16" style="stroke:var(--t3);fill:none;stroke-width:1.7;stroke-linecap:round;"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
       <input id="busca-input" placeholder="Procurar mensagem, avaria, documento…" oninput="buscarPortal(this.value)">
       <div class="busca-res" id="busca-res"></div>
     </div>
 
-    <div class="regua"><span class="regua-t">Menu</span><span class="regua-l"></span></div>
-    <div class="icones">
-      <div class="ico" onclick="irPara('quotas')"><span class="ico-b" id="badge-quotas" style="display:none;"></span><svg viewBox="0 0 24 24" ><path d="M6 3h12a1 1 0 0 1 1 1v17l-3-2-2 2-2-2-2 2-2-2-3 2V4a1 1 0 0 1 1-1z"/><path d="M9 8h6M9 12h6M9 16h3"/></svg><div class="ico-t">Quotas</div></div>
-      <div class="ico" onclick="irPara('reportar')"><span class="ico-b" id="badge-oc" style="display:none;"></span><svg viewBox="0 0 24 24" ><path d="M14.7 6.3a4 4 0 0 0 5.3 5.3L21 12l-8.5 8.5a2.1 2.1 0 0 1-3-3L18 9l.4-1a4 4 0 0 0-3.7-1.7z"/><path d="M5 5l4 4"/></svg><div class="ico-t">Avarias</div></div>
-      <div class="ico" onclick="irPara('contas')"><svg viewBox="0 0 24 24" ><path d="M3 21h18"/><rect x="5" y="12" width="3.6" height="6" rx="1"/><rect x="10.2" y="8" width="3.6" height="10" rx="1"/><rect x="15.4" y="4" width="3.6" height="14" rx="1"/></svg><div class="ico-t">Contas</div></div>
-      <div class="ico" onclick="irPara('mensagens')"><span class="ico-b" id="badge-msg" style="display:none;"></span><svg viewBox="0 0 24 24" ><path d="M21 12a8 8 0 0 1-8 8H7l-4 3 1.2-4.4A8 8 0 1 1 21 12z"/><path d="M8.5 11h7M8.5 14.5h4"/></svg><div class="ico-t">Mensagens</div></div>
-      <div class="ico" onclick="irPara('docs')"><span class="ico-b" id="badge-docs" style="display:none;"></span><svg viewBox="0 0 24 24" ><path d="M3 7a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><div class="ico-t">Documentos</div></div>
-      <div class="ico" onclick="abrirMais()"><svg viewBox="0 0 24 24" ><circle cx="5.5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="18.5" cy="12" r="1.4"/></svg><div class="ico-t">Mais</div></div>
+    <!-- MENU dentro do ambiente azul, com relevo -->
+    <div class="menu-amb">
+      <div class="menu-amb-t">Menu</div>
+      <div class="icones">
+        <div class="ico" onclick="irPara('quotas')"><span class="ico-b" id="badge-quotas" style="display:none;"></span><svg viewBox="0 0 24 24"><path d="M6 3h12a1 1 0 0 1 1 1v17l-3-2-2 2-2-2-2 2-2-2-3 2V4a1 1 0 0 1 1-1z"/><path d="M9 8h6M9 12h6M9 16h3"/></svg><div class="ico-t">Quotas</div></div>
+        <div class="ico" onclick="irPara('reportar')"><span class="ico-b" id="badge-oc" style="display:none;"></span><svg viewBox="0 0 24 24"><path d="M14.7 6.3a4 4 0 0 0 5.3 5.3L21 12l-8.5 8.5a2.1 2.1 0 0 1-3-3L18 9l.4-1a4 4 0 0 0-3.7-1.7z"/><path d="M5 5l4 4"/></svg><div class="ico-t">Avarias</div></div>
+        <div class="ico" onclick="irPara('contas')"><svg viewBox="0 0 24 24"><path d="M3 21h18"/><rect x="5" y="12" width="3.6" height="6" rx="1"/><rect x="10.2" y="8" width="3.6" height="10" rx="1"/><rect x="15.4" y="4" width="3.6" height="14" rx="1"/></svg><div class="ico-t">Contas</div></div>
+        <div class="ico" onclick="irPara('mensagens')"><span class="ico-b" id="badge-msg" style="display:none;"></span><svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-8 8H7l-4 3 1.2-4.4A8 8 0 1 1 21 12z"/><path d="M8.5 11h7M8.5 14.5h4"/></svg><div class="ico-t">Mensagens</div></div>
+        <div class="ico" onclick="irPara('docs')"><span class="ico-b" id="badge-docs" style="display:none;"></span><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><div class="ico-t">Documentos</div></div>
+        <div class="ico" onclick="abrirMais()"><svg viewBox="0 0 24 24"><circle cx="5.5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="18.5" cy="12" r="1.4"/></svg><div class="ico-t">Mais</div></div>
+      </div>
     </div>
 
     <div class="painel">
 
-      <div class="painel-sec" id="sec-precisa" style="display:none;">
+      <div class="painel-sec" id="sec-precisa" style="display:none;border-top:2px solid var(--amber);">
         <div class="painel-tit">Precisa de ti</div>
         <div class="carrossel" id="precisa-lista"></div>
       </div>
 
-      <div class="painel-sec" id="confirmar-card" style="display:none;">
+      <div class="painel-sec" id="confirmar-card" style="display:none;border-top:2px solid var(--orange);">
         <div class="painel-tit">Confirmação pedida</div>
-        <div style="font-size:11.5px;color:var(--t2);margin:-8px 0 13px;line-height:1.55;">Alguém reportou isto pelo QR do átrio. Antes de a administração gastar dinheiro, confirma connosco que existe — e quem afeta.</div>
+        <div class="destaque aviso" style="margin-bottom:12px;font-size:11.5px;color:var(--t2);line-height:1.55;">Alguém reportou isto pelo QR do átrio. Antes de a administração gastar dinheiro, confirma connosco que existe — e quem afeta.</div>
         <div id="confirmar-lista"></div>
       </div>
 
-      <div class="painel-sec">
-        <div class="painel-tit">O prédio</div>
-        <div class="linha-est" id="fundo-mini" style="display:none;" onclick="irPara('quotas')">
-          <div class="linha-esq">
-            <div class="linha-ic"><svg viewBox="0 0 24 24" ><path d="M12 3l8 3.2v5.4c0 4.7-3.3 8.9-8 10.1-4.7-1.2-8-5.4-8-10.1V6.2z"/><path d="M9 12.2l2.1 2.1L15.5 10"/></svg></div>
-            <div><div class="linha-t">Fundo de reserva</div><div class="linha-s" id="fundo-mini-s">comprovado</div></div>
-          </div>
-          <div class="linha-v" id="fundo-mini-v" style="color:var(--green);">—</div>
-        </div>
-        <div class="linha-est" id="score-card" style="display:none;" onclick="abrirScoreDetalhe()">
-          <div class="linha-esq">
-            <div class="linha-ic" id="score-circulo"><svg viewBox="0 0 24 24" ><circle cx="12" cy="9.5" r="5.5"/><path d="M9 14.4L7.5 21l4.5-2.4L16.5 21 15 14.4"/></svg></div>
-            <div><div class="linha-t">Saúde do prédio</div><div class="linha-s" id="score-classe">—</div></div>
-          </div>
-          <div class="linha-v" id="score-num">—</div>
-        </div>
-        <div id="score-barras" style="display:none;"></div>
-      </div>
-
-      <div class="painel-sec" id="ofertas-card" style="display:none;">
-        <div class="painel-tit">Vantagens <span style="font-family:var(--fm);font-size:8px;color:var(--brass);border:1px solid rgba(233,184,114,.3);padding:2px 6px;border-radius:4px;letter-spacing:.1em;margin-left:6px;">COMERCIAL</span></div>
+      <div class="painel-sec" id="ofertas-card" style="display:none;border-top:2px solid var(--green);">
+        <div class="painel-tit">Vantagens <span style="font-family:var(--mono);font-size:8px;color:var(--green);border:1px solid rgba(0,230,118,.3);padding:2px 6px;border-radius:4px;letter-spacing:.1em;margin-left:6px;">COMERCIAL</span></div>
         <div class="carrossel" id="ofertas-lista"></div>
       </div>
 
@@ -508,7 +626,7 @@
         <div id="h-feed"></div>
       </div>
 
-      <a id="h-link-ficha" href="#" style="display:block;text-align:center;font-family:var(--fd);font-size:12px;font-weight:600;letter-spacing:.04em;color:var(--brass);text-decoration:none;padding:4px 10px 24px;">Preencher a minha ficha →</a>
+      <a id="h-link-ficha" href="#" class="bt bt-g" style="display:flex;width:100%;text-decoration:none;margin-bottom:22px;">Preencher a minha ficha</a>
     </div>
 
     <div class="chips" id="chips-relance" style="display:none;">
@@ -3045,7 +3163,8 @@ async function carregarScore() {
     card.style.display = 'block';
     const num = document.getElementById('score-num');
     num.textContent = s.total; num.style.color = cl.cor;
-    document.getElementById('score-circulo').style.background =
+    var _sc = document.getElementById('score-circulo');
+    if (_sc) _sc.style.background =
       'conic-gradient(' + cl.cor + ' 0% ' + s.total + '%, rgba(255,255,255,.08) ' + s.total + '% 100%)';
     const clEl = document.getElementById('score-classe');
     clEl.textContent = cl.txt; clEl.style.color = cl.cor;
