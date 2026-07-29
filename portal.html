@@ -590,6 +590,29 @@
   .nav button:active .ni{transform:scale(.9);transition:transform .1s;}
   .nav button.on::before{width:26px;height:2.5px;box-shadow:0 0 10px var(--cyan),0 0 3px var(--cyan);}
 
+
+  /* ═══ Aviso vivo nas caixas do menu — o tremor onde ele serve para agir ═══ */
+  @keyframes tremor{
+    0%,88%,100%{transform:translateX(0)}
+    90%{transform:translateX(-2px)} 92%{transform:translateX(2px)}
+    94%{transform:translateX(-1.5px)} 96%{transform:translateX(1.5px)} 98%{transform:translateX(-.5px)}
+  }
+  @keyframes pulsa-b{
+    0%,100%{transform:scale(1);box-shadow:0 0 0 2px var(--s1),0 0 0 rgba(255,68,68,0)}
+    50%{transform:scale(1.13);box-shadow:0 0 0 2px var(--s1),0 0 12px rgba(255,68,68,.65)}
+  }
+  .ico.tem-aviso{border-color:rgba(255,68,68,.4);animation:tremor 4.5s ease-in-out infinite;}
+  .ico.tem-aviso::after{content:'';position:absolute;inset:0;border-radius:10px;
+                        background:radial-gradient(circle at 50% 0%,rgba(255,68,68,.1),transparent 62%);pointer-events:none;}
+  .ico.tem-aviso svg{stroke:#ff8a8a;}
+  .ico-b{animation:pulsa-b 2s ease-in-out infinite;}
+  .ico.aviso-suave{border-color:rgba(255,179,0,.38);animation:tremor 6.5s ease-in-out infinite;}
+  .ico.aviso-suave svg{stroke:var(--amber);}
+  .ico.aviso-suave .ico-b{background:var(--amber);color:#1a1200;animation:none;}
+  @media (prefers-reduced-motion:reduce){
+    .ico.tem-aviso,.ico.aviso-suave,.ico-b{animation:none!important;}
+  }
+
 </style>
 </head>
 <body>
@@ -1218,6 +1241,7 @@ async function carregarFeed() {
   // Mensagens não lidas → badge no quadrado
   const rm = await sb.rpc('portal_mensagens_nao_lidas', { p_token: token });
   window._chips.msgs = (!rm.error && rm.data > 0) ? rm.data : 0; renderChips();
+  setTimeout(function(){ try { marcarAvisosMenu(); } catch(e){} }, 60);
   const bm = document.getElementById('badge-msg');
   if (!rm.error && rm.data > 0) {
     if (bm) { bm.textContent = rm.data; bm.style.display = 'block'; }
@@ -2913,6 +2937,24 @@ function vazio(icone, titulo, sub) {
          (sub ? '<div class="vazio-s">' + sub + '</div>' : '') + '</div>';
 }
 
+
+// 🔴 Marca as caixas do menu que têm algo à espera — o aviso vive onde se age
+function marcarAvisosMenu() {
+  function marca(badgeId, classe) {
+    var b = document.getElementById(badgeId);
+    if (!b) return;
+    var caixa = b.closest('.ico');
+    if (!caixa) return;
+    var tem = b.style.display !== 'none' && (b.textContent || '').trim() !== '';
+    caixa.classList.toggle('tem-aviso', tem && classe === 'urgente');
+    caixa.classList.toggle('aviso-suave', tem && classe !== 'urgente');
+  }
+  marca('badge-quotas', 'urgente');   // dinheiro em falta
+  marca('badge-oc', 'suave');         // avarias a decorrer
+  marca('badge-msg', 'suave');        // mensagens por ler
+  marca('badge-docs', 'suave');
+}
+
 // 🔮 assistente em folha própria (saiu do início para não roubar espaço)
 function abrirPergunta() {
   var m = document.getElementById('modal-pp');
@@ -3279,9 +3321,15 @@ async function carregarScore() {
     card.style.display = 'block';
     const num = document.getElementById('score-num');
     num.style.color = cl.cor; animarNumero(num, s.total);
+    // o ícone é um medidor, não um gráfico: só tinge com a cor do resultado
     var _sc = document.getElementById('score-circulo');
-    if (_sc) _sc.style.background =
-      'conic-gradient(' + cl.cor + ' 0% ' + s.total + '%, rgba(255,255,255,.08) ' + s.total + '% 100%)';
+    if (_sc) {
+      _sc.style.background = 'rgba(255,255,255,.03)';
+      _sc.style.borderColor = cl.cor;
+      _sc.style.color = cl.cor;
+      var _svg = _sc.querySelector('svg');
+      if (_svg) _svg.style.stroke = cl.cor;
+    }
     const clEl = document.getElementById('score-classe');
     clEl.textContent = cl.txt; clEl.style.color = cl.cor;
     let barras = '';
@@ -3441,11 +3489,14 @@ async function carregarDinheiro() {
 window._chips = { divida: null, msgs: null, fundoCob: null };
 function renderChips() {
   try { renderPrecisa(); } catch(e){}
+  setTimeout(function(){ try { marcarAvisosMenu(); } catch(e){} }, 30);
   var box = document.getElementById('chips-relance');
   if (!box) return;
   var ch = window._chips;
   if (ch.divida === null && ch.msgs === null && ch.fundoCob === null) return;
-  box.style.display = 'flex';
+  // os chips deixaram de aparecer: quotas e fundo estão nos KPIs, mensagens na barra de baixo.
+  // A função fica porque alimenta window._chips, que o "Precisa de ti" usa.
+  box.style.display = 'none';
   function pinta(id, valor, classe) {
     var el = document.getElementById(id);
     if (!el) return;
