@@ -1124,7 +1124,7 @@ function irPara(pg, semHistorico) {
   if (pg === 'inicio') { try { iniciar(); } catch(e){} }   // recalcula quotas, feed e todos os badges
 }
 
-function saudacao() { const h=new Date().getHours(); return h<12?'Bom dia':(h<20?'Boa tarde':'Boa noite'); }
+
 
 async function iniciar() {
   if (!token) { document.getElementById('invalido').style.display='block'; return; }
@@ -2495,7 +2495,7 @@ function escapar(s){ const d=document.createElement('div'); d.textContent=s||'';
 
 function categoriaLabel(c){ const m={avaria:'Avaria',agua:'Água / infiltração',limpeza:'Limpeza',seguranca:'Segurança',barulho:'Barulho',outro:'Outro'}; return m[c]||c||'Ocorrência'; }
 function categoriaIcon(c){ const m={avaria:'🛠️',agua:'💧',limpeza:'🧹',seguranca:'🛡️',barulho:'🔊',outro:'📌'}; return m[c]||'📌'; }
-function estadoLabel(e){ if(e==='resolvida'||e==='fechada')return 'Resolvida'; if(e==='em_curso'||e==='curso')return 'Em curso'; return 'Aberta'; }
+
 function estadoClasse(e){ if(e==='resolvida'||e==='fechada')return 'resolvida'; if(e==='em_curso'||e==='curso')return 'curso'; return 'aberta'; }
 function tempoRelativo(ts){ if(!ts)return''; const d=Math.floor((Date.now()-new Date(ts))/86400000); if(d<=0)return 'hoje'; if(d===1)return 'ontem'; if(d<30)return 'há '+d+' dias'; return new Date(ts).toLocaleDateString('pt-PT'); }
 function dataCurta(ts){ if(!ts)return''; return new Date(ts).toLocaleDateString('pt-PT',{day:'2-digit',month:'short',year:'numeric'}); }
@@ -2631,53 +2631,7 @@ function atualizarBotaoNotif(ativo) {
   }
 }
 
-async function toggleNotificacoes(e) {
-  if (e) e.preventDefault();
-  if (!pushSuportado()) { toastP('O seu navegador não suporta avisos.','err'); return; }
-  try {
-    const reg = await navigator.serviceWorker.register('sw.js');
-    const existente = await reg.pushManager.getSubscription();
 
-    if (existente) {
-      await sb.rpc('push_remover', { p_endpoint: existente.endpoint });
-      await existente.unsubscribe();
-      atualizarBotaoNotif(false);
-      toastP('Avisos desligados neste telemóvel.','info');
-      return;
-    }
-
-    const perm = await Notification.requestPermission();
-    if (perm !== 'granted') {
-      toastP('Para receber avisos, tem de permitir as notificações.','err');
-      return;
-    }
-
-    const sub = await reg.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: _b64ToUint8(VAPID_PUBLIC)
-    });
-
-    const j = sub.toJSON();
-    const r = await sb.rpc('push_registar', {
-      p_token: token,
-      p_endpoint: sub.endpoint,
-      p_p256dh: j.keys.p256dh,
-      p_auth: j.keys.auth,
-      p_ua: navigator.userAgent.substring(0,180)
-    });
-
-    if (r.error || r.data === false) {
-      await sub.unsubscribe();
-      toastP('Não foi possível ativar. Tente novamente.','err');
-      return;
-    }
-    atualizarBotaoNotif(true);
-    toastP('🔔 Avisos ativos! Vai receber no telemóvel.','ok');
-  } catch(err) {
-    console.error('push:', err);
-    toastP('Erro ao ativar avisos: ' + (err.message||err),'err');
-  }
-}
 
 
 
@@ -2945,6 +2899,9 @@ function vazio(icone, titulo, sub) {
 }
 
 
+
+// 🧹 LIMPEZA 29/07/2026 — removidas por não terem qualquer chamada:
+//   estadoLabel, saudacao, toggleNotificacoes
 // 🔴 Avisos nas caixas do menu.
 // REGRA: o NÚMERO é estado (fica até se resolver); o TREMOR é acontecimento
 // (só chama a atenção enquanto for novidade, e cala-se depois de veres a secção).
