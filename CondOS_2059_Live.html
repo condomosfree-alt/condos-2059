@@ -417,6 +417,8 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   .kpi, .kpi-box { font-size:90%; }
   table.tbl { min-width:560px; font-size:11px; }
 }
+  .mic svg{width:18px;height:18px;display:block;}
+  .mi.active .mic svg{stroke:var(--cyan);}
 </style>
 
 <script>
@@ -767,7 +769,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.28-2307</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.29-0856</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -778,29 +780,29 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
     </div>
     <nav class="sb-nav">
       <div class="nav-section">Principal</div>
-      <div class="ni active" onclick="nav('dashboard')"><span class="mic">📊</span><span>Dashboard</span></div>
-      <div class="ni" onclick="nav('edificio')"><span class="mic">🏢</span><span>Perfil do Edifício</span><span id="badge-edificio" style="display:none;margin-left:auto;background:#f87171;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;line-height:16px;text-align:center;border-radius:8px;padding:0 4px;"></span></div>
-      <div class="ni" onclick="nav('fracoes')"><span class="mic">🏠</span><span>Frações</span><span class="nb" id="nb-fracoes"></span></div>
+      <div class="ni active" onclick="nav('dashboard')"><span class="mic"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><rect x="5" y="12" width="3.6" height="6" rx="1"/><rect x="10.2" y="8" width="3.6" height="10" rx="1"/><rect x="15.4" y="4" width="3.6" height="14" rx="1"/></svg></span><span>Dashboard</span></div>
+      <div class="ni" onclick="nav('edificio')"><span class="mic"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V6a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v15"/><path d="M12 21V10a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v11"/><path d="M2 21h20"/><path d="M7 9h2M7 13h2M7 17h2M15.5 13h1.5M15.5 17h1.5"/></svg></span><span>Perfil do Edifício</span><span id="badge-edificio" style="display:none;margin-left:auto;background:#f87171;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;line-height:16px;text-align:center;border-radius:8px;padding:0 4px;"></span></div>
+      <div class="ni" onclick="nav('fracoes')"><span class="mic"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v17"/><path d="M13 21V8h5a1 1 0 0 1 1 1v12"/><path d="M3 21h18"/><circle cx="10.4" cy="12.5" r=".8"/></svg></span><span>Frações</span><span class="nb" id="nb-fracoes"></span></div>
       <div class="nav-section">💰 Finanças</div>
-      <div class="ni" onclick="nav('quotas')" title="Emitir e receber quotas · registar pagamentos · importar o extrato do banco"><span class="mic">🧾</span><span>Quotas · Receber</span><span class="nb" id="nb-quotas"></span><span id="badge-quotas" style="display:none;margin-left:auto;background:#f87171;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;line-height:16px;text-align:center;border-radius:8px;padding:0 4px;"></span></div>
-      <div class="ni" onclick="nav('despesas')" title="Registar gastos e reparações · pagar fornecedores · gerar quotas extraordinárias"><span class="mic">🔧</span><span>Despesas · Pagar</span><span class="nb" id="nb-despesas"></span></div>
-      <div class="ni" onclick="nav('financeiro')" title="Livro de movimentos — todas as entradas e saídas de dinheiro"><span class="mic">💳</span><span>Movimentos</span></div>
-      <div class="ni" onclick="nav('contas')" title="Resumo do ano · orçado vs real · extrato detalhado mês a mês"><span class="mic">💰</span><span>Fecho do Ano</span></div>
-      <div class="ni" onclick="nav('orcamento')" title="Plano anual de receitas e despesas"><span class="mic">🧮</span><span>Orçamento Anual</span><span id="badge-orcamento" style="display:none;margin-left:auto;background:#f87171;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;line-height:16px;text-align:center;border-radius:8px;padding:0 4px;"></span></div>
-      <div class="ni" onclick="nav('auditoria')" title="Auditoria de contas e passagem de gestão"><span class="mic">🔍</span><span>Raio-X das Contas</span></div>
+      <div class="ni" onclick="nav('quotas')" title="Emitir e receber quotas · registar pagamentos · importar o extrato do banco"><span class="mic"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12a1 1 0 0 1 1 1v17l-3-2-2 2-2-2-2 2-2-2-3 2V4a1 1 0 0 1 1-1z"/><path d="M9 8h6M9 12h6M9 16h3"/></svg></span><span>Quotas · Receber</span><span class="nb" id="nb-quotas"></span><span id="badge-quotas" style="display:none;margin-left:auto;background:#f87171;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;line-height:16px;text-align:center;border-radius:8px;padding:0 4px;"></span></div>
+      <div class="ni" onclick="nav('despesas')" title="Registar gastos e reparações · pagar fornecedores · gerar quotas extraordinárias"><span class="mic"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M3 10h14a2 2 0 0 1 2 2v1a2 2 0 0 1-2 2H3"/><circle cx="16.5" cy="12.5" r=".9"/></svg></span><span>Despesas · Pagar</span><span class="nb" id="nb-despesas"></span></div>
+      <div class="ni" onclick="nav('financeiro')" title="Livro de movimentos — todas as entradas e saídas de dinheiro"><span class="mic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5.5" width="19" height="13" rx="2"/><path d="M2.5 10h19"/><path d="M6 14.5h4"/></svg></span><span>Movimentos</span></div>
+      <div class="ni" onclick="nav('contas')" title="Resumo do ano · orçado vs real · extrato detalhado mês a mês"><span class="mic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="15" rx="2"/><circle cx="10.5" cy="12" r="3.2"/><path d="M10.5 9.4v-1M10.5 15.6v1M7.9 12h-1M14.1 12h1"/><path d="M18 8v8"/></svg></span><span>Fecho do Ano</span></div>
+      <div class="ni" onclick="nav('orcamento')" title="Plano anual de receitas e despesas"><span class="mic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8"/><path d="M8.5 11.5h.01M12 11.5h.01M15.5 11.5h.01M8.5 15h.01M12 15h.01M15.5 15h.01M8.5 18h.01M12 18h3.5"/></svg></span><span>Orçamento Anual</span><span id="badge-orcamento" style="display:none;margin-left:auto;background:#f87171;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;line-height:16px;text-align:center;border-radius:8px;padding:0 4px;"></span></div>
+      <div class="ni" onclick="nav('auditoria')" title="Auditoria de contas e passagem de gestão"><span class="mic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg></span><span>Raio-X das Contas</span></div>
       <div class="nav-section">Comunidade</div>
-      <div class="ni" onclick="nav('condominos')"><span class="mic">👥</span><span>Condóminos</span><span class="nb" id="nb-cond"></span></div>
+      <div class="ni" onclick="nav('condominos')"><span class="mic"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M16 5.5a3.2 3.2 0 0 1 0 5.6"/><path d="M17.5 14.4A6 6 0 0 1 21 20"/></svg></span><span>Condóminos</span><span class="nb" id="nb-cond"></span></div>
       <div class="ni" onclick="nav('ocorrencias')"><span class="mic">⚠️</span><span>Ocorrências</span><span class="nb" id="nb-oc"></span></div>
-      <div class="ni" onclick="nav('mensagens')"><span class="mic">💬</span><span>Mensagens</span><span class="nb" id="nb-msg" style="background:#f87171;"></span></div>
-      <div class="ni" onclick="nav('parceiros')"><span class="mic">🤝</span><span>Parceiros</span></div>
+      <div class="ni" onclick="nav('mensagens')"><span class="mic"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-8 8H7l-4 3 1.2-4.4A8 8 0 1 1 21 12z"/><path d="M8.5 11h7M8.5 14.5h4"/></svg></span><span>Mensagens</span><span class="nb" id="nb-msg" style="background:#f87171;"></span></div>
+      <div class="ni" onclick="nav('parceiros')"><span class="mic"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11 17l-2.2 2.2a2 2 0 0 1-2.8-2.8l5.6-5.6a2 2 0 0 1 2.8 0l1.4 1.4"/><path d="M13 7l2.2-2.2a2 2 0 0 1 2.8 2.8L15 10.6"/><path d="M3 12l3-3M18 15l3-3"/></svg></span><span>Parceiros</span></div>
       <div class="nav-section">Documentos &amp; Reuniões</div>
-      <div class="ni" onclick="nav('documentos')"><span class="mic">📄</span><span>Documentos</span></div>
+      <div class="ni" onclick="nav('documentos')"><span class="mic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3H7a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V8z"/><path d="M13 3v5h5"/><path d="M9.5 13h5M9.5 16.5h5"/></svg></span><span>Documentos</span></div>
       <div class="ni" onclick="nav('assembleias')"><span class="mic">🗳️</span><span>Assembleias</span><span id="badge-assembleias" style="display:none;margin-left:auto;background:#f87171;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;line-height:16px;text-align:center;border-radius:8px;padding:0 4px;"></span></div>
       <div class="nav-section">IA</div>
-      <div class="ni" onclick="nav('assistente')"><span class="mic">🤖</span><span>Assistente IA</span></div>
+      <div class="ni" onclick="nav('assistente')"><span class="mic"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17.5a8.5 8.5 0 1 1 16 0"/><path d="M12 17.5l4.2-5"/><circle cx="12" cy="17.5" r="1.4"/><path d="M4.6 13.6l1.6.6M19.4 13.6l-1.6.6M7.4 8.4l1.1 1.3M16.6 8.4l-1.1 1.3M12 6.6v1.7"/></svg></span><span>Assistente IA</span></div>
       <div class="nav-section">Sistema</div>
-      <div class="ni" onclick="nav('definicoes')"><span class="mic">⚙️</span><span>Definições</span></div>
-      <div class="ni" onclick="doLogout()"><span class="mic">🚪</span><span>Sair</span></div>
+      <div class="ni" onclick="nav('definicoes')"><span class="mic"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v2.6M12 18.9v2.6M21.5 12h-2.6M5.1 12H2.5M18.7 5.3l-1.8 1.8M7.1 16.9l-1.8 1.8M18.7 18.7l-1.8-1.8M7.1 7.1L5.3 5.3"/></svg></span><span>Definições</span></div>
+      <div class="ni" onclick="doLogout()"><span class="mic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 20H6a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h8"/><path d="M17 15l3-3-3-3"/><path d="M20 12h-9"/></svg></span><span>Sair</span></div>
     </nav>
     <div class="sb-foot">
       <div class="sb-user-row">
