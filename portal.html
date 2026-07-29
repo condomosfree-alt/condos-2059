@@ -613,6 +613,12 @@
     .ico.tem-aviso,.ico.aviso-suave,.ico-b{animation:none!important;}
   }
 
+
+  /* pendência já vista: fica marcada, mas não insiste */
+  .ico.tem-pendencia{border-color:rgba(255,179,0,.22);}
+  .ico.tem-pendencia .ico-b{animation:none;opacity:.85;}
+  .ico.tem-pendencia svg{stroke:var(--t2);}
+
 </style>
 </head>
 <body>
@@ -1067,6 +1073,7 @@ function aplicarDestinoNotificacao() {
 }
 
 function irPara(pg, semHistorico) {
+  try { registarVisita(pg); } catch(e){}
   try {
     var tb = document.querySelector('.topbar');
     if (tb) tb.style.display = (pg === 'inicio') ? 'none' : '';
@@ -1150,7 +1157,7 @@ async function iniciar() {
   const bq = document.getElementById('badge-quotas');
   if (bq) {
     if (divida > 0.005) {
-      bq.textContent = d.n_quotas_divida; bq.className = 'mtile-badge amber'; bq.style.display = 'block';
+      bq.textContent = d.n_quotas_divida; bq.className = 'ico-b'; bq.style.display = 'flex';
     } else {
       bq.style.display = 'none';   // sem dívida → badge desaparece
     }
@@ -2938,21 +2945,48 @@ function vazio(icone, titulo, sub) {
 }
 
 
-// 🔴 Marca as caixas do menu que têm algo à espera — o aviso vive onde se age
+// 🔴 Avisos nas caixas do menu.
+// REGRA: o NÚMERO é estado (fica até se resolver); o TREMOR é acontecimento
+// (só chama a atenção enquanto for novidade, e cala-se depois de veres a secção).
+// Um badge que treme durante meses deixa de ser aviso e passa a ruído.
+function _vistoChave(sec) { return 'visto_' + sec + '_' + (typeof token !== 'undefined' ? token : ''); }
+function _lerVisto(sec) {
+  try { return parseInt(localStorage.getItem(_vistoChave(sec)) || '-1'); } catch(e) { return -1; }
+}
+function marcarVisto(sec, valor) {
+  try { localStorage.setItem(_vistoChave(sec), String(valor)); } catch(e){}
+}
+
 function marcarAvisosMenu() {
-  function marca(badgeId, classe) {
+  function marca(badgeId, sec, urgente) {
     var b = document.getElementById(badgeId);
     if (!b) return;
     var caixa = b.closest('.ico');
     if (!caixa) return;
-    var tem = b.style.display !== 'none' && (b.textContent || '').trim() !== '';
-    caixa.classList.toggle('tem-aviso', tem && classe === 'urgente');
-    caixa.classList.toggle('aviso-suave', tem && classe !== 'urgente');
+    var visivel = b.style.display !== 'none' && (b.textContent || '').trim() !== '';
+    var n = visivel ? (parseInt(b.textContent) || 0) : 0;
+    // treme só se houver mais do que da última vez que lá foste
+    var novo = n > 0 && n > _lerVisto(sec);
+    caixa.classList.toggle('tem-aviso', novo && urgente);
+    caixa.classList.toggle('aviso-suave', novo && !urgente);
+    // sem novidade mas com pendência: marca discreta, sem tremer
+    caixa.classList.toggle('tem-pendencia', n > 0 && !novo);
   }
-  marca('badge-quotas', 'urgente');   // dinheiro em falta
-  marca('badge-oc', 'suave');         // avarias a decorrer
-  marca('badge-msg', 'suave');        // mensagens por ler
-  marca('badge-docs', 'suave');
+  marca('badge-quotas', 'quotas', true);
+  marca('badge-oc', 'reportar', false);
+  marca('badge-msg', 'mensagens', false);
+  marca('badge-docs', 'docs', false);
+}
+
+// ao entrares numa secção, o que lá está passa a "visto" — o tremor cala-se
+function registarVisita(pg) {
+  var mapa = { quotas:'badge-quotas', reportar:'badge-oc', mensagens:'badge-msg', docs:'badge-docs' };
+  var id = mapa[pg];
+  if (!id) return;
+  var b = document.getElementById(id);
+  var n = (b && b.style.display !== 'none') ? (parseInt(b.textContent) || 0) : 0;
+  marcarVisto(pg, n);
+  setTimeout(function(){ try { marcarAvisosMenu(); } catch(e){} }, 40);
 }
 
 // 🔮 assistente em folha própria (saiu do início para não roubar espaço)

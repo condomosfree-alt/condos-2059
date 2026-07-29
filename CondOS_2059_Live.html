@@ -801,7 +801,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.29-0909</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.29-0924</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -16782,8 +16782,9 @@ async function carregarBalanco() {
 }
 
 
-// Números que aterram — o mesmo detalhe do portal, para o sistema não ficar atrás
-function animarNumero(el, destino, opts) {
+// Números que aterram — o mesmo detalhe do portal, para o sistema não ficar atrás.
+// ⚠️ NÃO se chama animarNumero: já existe uma com esse nome e outra assinatura (id, valor, sufixoHTML).
+function animarValor(el, destino, opts) {
   if (!el) return;
   var o = opts || {};
   var dec = o.dec || 0, sufixo = o.sufixo || '', prefixo = o.prefixo || '';
@@ -16864,7 +16865,7 @@ async function carregarScoreAdmin() {
     var cl = _scoreClasse(s.total);
     painel.style.display = 'block';
     var num = document.getElementById('sa-num');
-    num.style.color = cl.cor; animarNumero(num, s.total);
+    num.style.color = cl.cor; animarValor(num, s.total);
     document.getElementById('sa-circulo').style.background = 'conic-gradient(' + cl.cor + ' 0% ' + s.total + '%, rgba(255,255,255,.08) ' + s.total + '% 100%)';
     var clEl = document.getElementById('sa-classe');
     clEl.textContent = cl.txt + ' · ' + s.total + '/100'; clEl.style.color = cl.cor;
