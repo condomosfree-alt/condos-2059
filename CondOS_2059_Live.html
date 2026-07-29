@@ -801,7 +801,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.29-2243</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.29-2256</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -16087,6 +16087,9 @@ async function carregarExigenciasAdmin() {
       h += '<div style="background:rgba(0,212,255,.05);border:1px solid rgba(0,212,255,.28);border-radius:10px;padding:12px 14px;margin-top:12px;">';
       h += '<div style="font-size:12px;font-weight:800;color:var(--cyan);">🛡️ Provar o fundo agora</div>';
       h += '<div style="font-size:10.5px;color:var(--t2);margin:5px 0 10px;line-height:1.5;">Não esperes que te exijam. Carrega o extrato bancário da conta do fundo: o sistema calcula a impressão digital, verifica o documento e abre a validação aos condóminos. Fica prova datada de que prestaste contas.</div>';
+      if (!((currentCondo||{}).iban_reserva || '').trim()) {
+        h += '<div style="background:var(--adim);border:1px solid rgba(255,179,0,.3);border-radius:8px;padding:9px 11px;margin-bottom:10px;font-size:10.5px;color:var(--t2);line-height:1.5;">⚠️ O <strong>IBAN da conta reserva</strong> está vazio nas Definições. Com ele preenchido, a verificação confirma que o extrato é <strong>daquela conta</strong> e não de outra qualquer — sem ele, a análise é muito mais fraca. <a href="#" onclick="event.preventDefault();nav(\'definicoes\')" style="color:var(--cyan);">Preencher agora</a></div>';
+      }
       h += '<label style="display:block;cursor:pointer;"><input type="file" id="prova-doc" accept="application/pdf,image/*" style="display:none" onchange="provaSelecionada(this)">';
       h += '<div style="background:var(--s1);border:1px dashed var(--b2);border-radius:9px;padding:13px;text-align:center;font-size:12px;color:var(--t2);">📤 Carregar extrato bancário do fundo</div></label>';
       h += '<div id="prova-doc-estado" style="font-size:10.5px;color:var(--t3);margin-top:6px;"></div>';
@@ -16365,10 +16368,14 @@ async function validarExtratoAI(file) {
     });
     var teorico = (window._fundoTeorico||0).toFixed(2);
     var comprovado = (window._fundoComprovado||0).toFixed(2);
+    // 🔐 Se o condomínio declarou o IBAN da conta do fundo, a verificação deixa de ser vaga:
+    // passa a confirmar que o extrato é DAQUELA conta, e não de outra qualquer.
+    var _ibanFundo = ((currentCondo||{}).iban_reserva || '').trim();
     var prompt = 'Analisa este documento que foi apresentado como EXTRATO BANCÁRIO OFICIAL da conta do fundo de reserva de um condomínio português.\n' +
       'Contexto: o fundo teórico (' + _pctFundoAtual() + '% das quotas pagas, taxa em vigor neste condomínio) é ' + teorico + '€ e o comprovado por movimentos registados é ' + comprovado + '€.\n' +
-      'Verifica: (1) tem elementos de um extrato real — nome de banco português, IBAN PT50, datas, saldos, layout bancário? (2) parece gerado em Excel/Word/editor (colunas perfeitas sem logotipo, fontes de escritório, sem rodapés bancários)? (3) o saldo visível é da ordem de grandeza do fundo esperado?\n' +
-      'Responde APENAS JSON: {"valido": true|false, "motivo": "explicação curta em português (máx 140 caracteres)", "saldo_detetado": número|null, "banco": "nome"|null}';
+      (_ibanFundo ? 'IMPORTANTE — o condomínio declarou que a conta do fundo tem o IBAN ' + _ibanFundo + '. Confirma se ESSE IBAN aparece no documento. Se o documento mostrar outro IBAN, é uma conta diferente e NÃO serve como prova deste fundo.\n' : '') +
+      'Verifica: (1) tem elementos de um extrato real — nome de banco português, IBAN PT50, datas, saldos, layout bancário? (2) parece gerado em Excel/Word/editor (colunas perfeitas sem logotipo, fontes de escritório, sem rodapés bancários)? (3) o saldo visível é da ordem de grandeza do fundo esperado?' + (_ibanFundo ? ' (4) o IBAN indicado acima aparece no documento?' : '') + '\n' +
+      'Responde APENAS JSON: {"valido": true|false, "motivo": "explicação curta em português (máx 140 caracteres)", "saldo_detetado": número|null, "banco": "nome"|null, "iban_visto": "IBAN encontrado no documento"|null}';
     var resp = await fetch(PROXY_URL, {
       method: 'POST', headers: { 'Content-Type':'application/json' },
       body: JSON.stringify({ prompt: prompt, foto: base64, tipo: 'documento_import' })
@@ -16376,7 +16383,15 @@ async function validarExtratoAI(file) {
     var data = await resp.json();
     var texto = (data.resposta || data.text || '').replace(/```json|```/g,'').trim();
     var j = JSON.parse(texto.substring(texto.indexOf('{'), texto.lastIndexOf('}')+1));
-    return { valido: j.valido === true, motivo: j.motivo || (j.valido ? 'elementos bancários confirmados' : 'documento sem elementos de extrato oficial'), saldo: j.saldo_detetado };
+    // 🔒 Travão que não depende do juízo da IA: se o IBAN lido não é o declarado, recusa.
+    var ibanDecl = ((currentCondo||{}).iban_reserva || '').replace(/\s/g,'').toUpperCase();
+    var ibanLido = (j.iban_visto || '').replace(/\s/g,'').toUpperCase();
+    if (ibanDecl.length > 14 && ibanLido.length > 14 && ibanLido.indexOf(ibanDecl.slice(-10)) === -1) {
+      return { valido: false, motivo: 'O extrato é de outra conta (IBAN não corresponde ao declarado para o fundo).', saldo: j.saldo_detetado };
+    }
+    return { valido: j.valido === true,
+             motivo: (j.motivo || (j.valido ? 'elementos bancários confirmados' : 'documento sem elementos de extrato oficial')) + (ibanDecl.length > 14 && ibanLido ? ' · IBAN confere' : ''),
+             saldo: j.saldo_detetado };
   } catch(e) {
     console.error('validarExtratoAI:', e);
     // Falha técnica não pode bloquear a cadeia: segue para votação com nota honesta
