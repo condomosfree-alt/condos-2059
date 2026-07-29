@@ -801,7 +801,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.29-2228</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.29-2243</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -6821,6 +6821,7 @@ function abrirAssociarTransacao(idx) {
 
 async function confirmarAssociacaoTransacao() {
   var tr = window._transacaoParaAssociar;
+  var idx = (window._naoCruzadasCache||[]).indexOf(tr);
   var fracaoId = document.getElementById('assoc-fracao').value;
   if (!tr || !fracaoId) { toast('Selecciona uma fração', 'err'); return; }
 
@@ -6866,9 +6867,28 @@ async function confirmarAssociacaoTransacao() {
     }
   }
 
-  toast('✅ Associação guardada! O programa vai memorizar para o futuro.', 'ok');
+  // ✅ Tirar a linha da lista — sem isto ficava lá para sempre, como se nada tivesse acontecido
+  try {
+    var idxT = (window._naoCruzadasCache||[]).indexOf(tr);
+    if (idxT > -1) window._naoCruzadasCache.splice(idxT, 1);
+    // a linha da tabela some com um fade, e o contador acompanha
+    var linhas = document.querySelectorAll('#raiox-conteudo tr, .tbl tbody tr');
+    for (var li = 0; li < linhas.length; li++) {
+      var b = linhas[li].querySelector('button[onclick*="abrirAssociarTransacao"]');
+      if (b && b.getAttribute('onclick').indexOf('(' + idx + ')') > -1) {
+        linhas[li].style.transition = 'opacity .3s, background .3s';
+        linhas[li].style.background = 'rgba(0,230,118,.12)';
+        setTimeout(function(el){ return function(){ el.style.opacity = '0';
+          setTimeout(function(){ if (el.parentNode) el.parentNode.removeChild(el); }, 320); }; }(linhas[li]), 420);
+        break;
+      }
+    }
+  } catch(e) { console.error('remover linha associada:', e); }
+
+  toast('✅ Associada e registada no extrato. O programa memoriza para a próxima.', 'ok');
   closeModal('mo-assoc-trans');
   loadDashboard();
+  try { updateBadges(); verificarAvisosGerais(); } catch(e){}
 }
 
 async function importarExtratoBancario(input) {
@@ -9124,6 +9144,7 @@ async function gerirOcorrencia(id) {
   h += '<details style="border:1px solid var(--b1);border-radius:9px;">';
   h += '<summary style="padding:10px 13px;font-size:12px;color:var(--t2);cursor:pointer;">Outras opções</summary>';
   h += '<div style="padding:0 13px 12px;display:flex;flex-direction:column;gap:7px;">';
+  h += '<button class="btn-ghost" style="width:100%;font-size:11.5px;" onclick="seguirDinheiro(\'' + id + '\')">🔗 Seguir o dinheiro (orçamento → despesa → extrato)</button>';
   h += '<button class="btn-ghost" style="width:100%;font-size:11.5px;" onclick="ocClassificar()">⚖️ Classificar / alterar tipo legal</button>';
   h += '<button class="btn-ghost" style="width:100%;font-size:11.5px;" onclick="ocPartilhar(\'' + id + '\')">🔗 Partilhar com os condóminos</button>';
   h += '<button class="btn-ghost" style="width:100%;font-size:11.5px;color:var(--t3);" onclick="ocEncerrar()">✕ Encerrar sem reparação</button>';
@@ -12582,6 +12603,52 @@ async function gerarAtaDoLivro() {
       }
     } catch(e) { console.error('anexo votacoes:', e); }
 
+    // 🛡️ SITUAÇÃO DO FUNDO — entra SEMPRE na ata, porque prestar contas do fundo é obrigação
+    try {
+      var pctAta = parseFloat(currentCondo.fundo_percentagem); if (isNaN(pctAta)) pctAta = 10;
+      var [qAta, mAta] = await Promise.all([
+        sb.from('quotas').select('valor_pago').eq('condominio_id', currentCondo.id),
+        sb.from('movimentos').select('tipo,valor,data_movimento').eq('condominio_id', currentCondo.id).eq('categoria','fundo_reserva')
+      ]);
+      var pagasAta = (qAta.data||[]).reduce(function(s,q){ return s + parseFloat(q.valor_pago||0); }, 0);
+      var teoAta = pagasAta * pctAta / 100;
+      var reforcos = 0, usos = 0, ultimoRef = null;
+      (mAta.data||[]).forEach(function(m){
+        var v = parseFloat(m.valor||0);
+        if (m.tipo === 'despesa') { reforcos += v; if (!ultimoRef || m.data_movimento > ultimoRef) ultimoRef = m.data_movimento; }
+        else usos += v;
+      });
+      var compAta = reforcos - usos;
+      var cobAta = teoAta > 0 ? Math.round(compAta / teoAta * 100) : 100;
+
+      // última prova validada, se houver
+      var pvR = await sb.from('exigencias').select('doc_hash,doc_url,validada_em,ai_resultado')
+        .eq('condominio_id', currentCondo.id).eq('tipo','fundo')
+        .in('estado', ['validada','apresentada_assembleia'])
+        .order('validada_em', {ascending:false}).limit(1);
+      var pv = (pvR.data || [])[0] || null;
+
+      ata += '\n\n────────────────────────────────\nSITUAÇÃO DO FUNDO DE RESERVA (DL 268/94, Art. 4.º)\n';
+      ata += '\nTaxa em vigor neste condomínio: ' + pctAta + '% das quotas pagas' + (pctAta > 10 ? ' (acima do mínimo legal de 10%)' : ' (mínimo legal)') + '.';
+      ata += '\nValor que deve existir por lei: ' + teoAta.toFixed(2) + ' EUR';
+      ata += '\nValor comprovado por movimentos registados: ' + compAta.toFixed(2) + ' EUR (' + cobAta + '% do devido)';
+      ata += '\n  · reforços acumulados: ' + reforcos.toFixed(2) + ' EUR' + (ultimoRef ? ' (último em ' + new Date(ultimoRef).toLocaleDateString('pt-PT') + ')' : '');
+      ata += '\n  · utilizações registadas: ' + usos.toFixed(2) + ' EUR';
+      if (pv && pv.validada_em) {
+        ata += '\n\nPROVA BANCÁRIA: apresentada e validada pela maioria dos condóminos em ' + new Date(pv.validada_em).toLocaleDateString('pt-PT') + '.';
+        ata += '\n  Impressão digital do documento (SHA-256): ' + (pv.doc_hash || '—');
+        if (/DEMONSTRA/i.test(pv.ai_resultado||'')) ata += '\n  ATENÇÃO: processada em modo demonstração — a autenticidade NÃO foi verificada. Não constitui prova.';
+        ata += '\n  O documento é apresentado nesta assembleia para consulta dos condóminos.';
+      } else {
+        ata += '\n\nPROVA BANCÁRIA: ainda NÃO foi apresentada nem validada pelos condóminos.';
+        ata += '\n  Qualquer condómino pode exigi-la pelo portal, e a administração deve apresentá-la ao menos uma vez por ano.';
+      }
+      if (cobAta < 85 && teoAta >= 50) {
+        ata += '\n\nNOTA: existe uma diferença de ' + Math.max(0, teoAta - compAta).toFixed(2) + ' EUR entre o valor devido e o comprovado. A assembleia deve pronunciar-se sobre a regularização.';
+      }
+      ata += '\n';
+    } catch(e) { console.error('situacao fundo na ata:', e); }
+
     // ⚖️ APÊNDICE DE PROVAS: exigências validadas ficam anexadas à ata com hash
     try {
       var exAta = await sb.from('exigencias').select('id,tipo,doc_url,doc_hash,validada_em,criado_em,fracao_id,ai_resultado,fracoes(codigo)').eq('condominio_id', currentCondo.id).eq('estado','validada');
@@ -15998,7 +16065,7 @@ async function carregarExigenciasAdmin() {
       h += '<div style="font-size:12px;font-weight:800;color:#b48cff;">⚖️ Exigência formal de prova — fração ' + ((ativa.fracoes&&ativa.fracoes.codigo)||'?') + ' · ' + new Date(ativa.criado_em).toLocaleDateString('pt-PT') + '</div>';
       if (ativa.estado === 'pendente') {
         h += '<div style="font-size:11px;color:var(--t2);margin:6px 0 10px;line-height:1.5;">Um condómino exige a prova bancária do fundo. Carrega o <strong>extrato oficial do banco</strong> (PDF descarregado do homebanking). O sistema verifica o documento, os condóminos votam a validação, e o documento fica anexado à próxima ata — com impressão digital SHA-256.</div>';
-        h += '<label style="display:block;cursor:pointer;"><input type="file" id="exig-doc" accept="application/pdf,image/*" style="display:none" onchange="exigDocEscolhido(this)">';
+        h += '<label style="display:block;cursor:pointer;"><input type="file" id="exig-doc" accept="application/pdf,image/*" style="display:none" onchange="provaSelecionada(this)">';
         h += '<div style="background:var(--s1);border:1px dashed var(--b2);border-radius:9px;padding:13px;text-align:center;font-size:12px;color:var(--t2);">📤 Carregar extrato bancário oficial (PDF)</div></label>';
         h += '<div id="exig-doc-estado" style="font-size:10.5px;color:var(--t3);margin-top:6px;"></div>';
       } else if (ativa.estado === 'doc_carregado') {
@@ -16020,7 +16087,7 @@ async function carregarExigenciasAdmin() {
       h += '<div style="background:rgba(0,212,255,.05);border:1px solid rgba(0,212,255,.28);border-radius:10px;padding:12px 14px;margin-top:12px;">';
       h += '<div style="font-size:12px;font-weight:800;color:var(--cyan);">🛡️ Provar o fundo agora</div>';
       h += '<div style="font-size:10.5px;color:var(--t2);margin:5px 0 10px;line-height:1.5;">Não esperes que te exijam. Carrega o extrato bancário da conta do fundo: o sistema calcula a impressão digital, verifica o documento e abre a validação aos condóminos. Fica prova datada de que prestaste contas.</div>';
-      h += '<label style="display:block;cursor:pointer;"><input type="file" id="prova-doc" accept="application/pdf,image/*" style="display:none" onchange="provarFundoAgora(this)">';
+      h += '<label style="display:block;cursor:pointer;"><input type="file" id="prova-doc" accept="application/pdf,image/*" style="display:none" onchange="provaSelecionada(this)">';
       h += '<div style="background:var(--s1);border:1px dashed var(--b2);border-radius:9px;padding:13px;text-align:center;font-size:12px;color:var(--t2);">📤 Carregar extrato bancário do fundo</div></label>';
       h += '<div id="prova-doc-estado" style="font-size:10.5px;color:var(--t3);margin-top:6px;"></div>';
       h += '<label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:10.5px;color:var(--t3);cursor:pointer;">';
@@ -16070,6 +16137,157 @@ async function provarFundoAgora(inp) {
     if (est && res) { est.textContent = res.textContent; est.style.color = res.style.color || 'var(--t3)'; }
   } catch(e) {
     if (est) { est.textContent = '❌ ' + (e.message||e); est.style.color = 'var(--red)'; }
+  }
+}
+
+
+// ═══════════════════════════════════════════════════════════
+// 🛡️ PROVA DO FUNDO — dois passos, com progresso à vista
+// Antes: escolher o ficheiro disparava tudo e o progresso ia para um div escondido.
+// Agora: escolhes → confirmas o que vais enviar → vês cada etapa a acontecer.
+// ═══════════════════════════════════════════════════════════
+var _provaFicheiro = null;
+
+function _provaMsg(txt, cor) {
+  ['prova-doc-estado','exig-doc-estado'].forEach(function(id){
+    var el = document.getElementById(id);
+    if (el) { el.innerHTML = txt; el.style.color = cor || 'var(--t3)'; }
+  });
+}
+
+function _provaEtapas(atual) {
+  var etapas = [
+    ['🔐', 'Impressão digital (SHA-256)'],
+    ['📤', 'Carregar o documento'],
+    ['🤖', 'Verificar autenticidade'],
+    ['🗳️', 'Abrir validação aos condóminos']
+  ];
+  var h = '<div style="margin-top:10px;">';
+  etapas.forEach(function(e, i){
+    var feito = i < atual, agora = i === atual;
+    var cor = feito ? 'var(--green)' : (agora ? 'var(--cyan)' : 'var(--t3)');
+    var marca = feito ? '✓' : (agora ? '●' : '○');
+    h += '<div style="display:flex;align-items:center;gap:9px;padding:4px 0;font-size:11.5px;color:' + cor + ';">';
+    h += '<span style="width:14px;text-align:center;font-weight:700;">' + marca + '</span>';
+    h += '<span>' + e[0] + ' ' + e[1] + '</span>';
+    if (agora) h += '<span style="margin-left:auto;font-size:10px;opacity:.7;">a decorrer…</span>';
+    h += '</div>';
+  });
+  h += '</div>';
+  return h;
+}
+
+// 1.º passo: escolheste o ficheiro — mostra o que é e pede confirmação
+function provaSelecionada(inp) {
+  var f = inp && inp.files && inp.files[0];
+  if (!f) return;
+  _provaFicheiro = f;
+  var nome = (f.name || '').toLowerCase();
+  var kb = Math.round(f.size / 1024);
+
+  var problemas = [];
+  if (/\.(xls|xlsx|csv|doc|docx|txt)$/.test(nome)) problemas.push('Um extrato bancário oficial é um <strong>PDF do banco</strong>, não um ficheiro ' + nome.split('.').pop().toUpperCase() + '.');
+  if (f.size < 8000) problemas.push('O ficheiro tem apenas ' + kb + ' KB — pequeno demais para um extrato real (os do banco andam nos 50-200 KB).');
+
+  var h = '<div style="background:var(--s2);border:1px solid var(--b1);border-radius:9px;padding:11px 13px;margin-top:10px;">';
+  h += '<div style="display:flex;align-items:center;gap:10px;">';
+  h += '<span style="font-size:20px;">📄</span>';
+  h += '<div style="flex:1;min-width:0;"><div style="font-size:12.5px;font-weight:700;word-break:break-all;">' + (f.name || 'documento') + '</div>';
+  h += '<div style="font-size:10.5px;color:var(--t3);">' + kb + ' KB · ' + (f.type || 'tipo desconhecido') + '</div></div>';
+  h += '</div>';
+
+  if (problemas.length) {
+    h += '<div style="background:rgba(255,68,68,.08);border:1px solid rgba(255,68,68,.3);border-radius:8px;padding:10px 12px;margin-top:10px;font-size:11px;color:var(--t2);line-height:1.55;">❌ <strong style="color:var(--red);">Este ficheiro será rejeitado:</strong><br>' + problemas.join('<br>') + '</div>';
+    h += '<div style="display:flex;gap:8px;margin-top:10px;">';
+    h += '<button class="btn-ghost" style="flex:1;font-size:11.5px;" onclick="provaCancelar()">Escolher outro</button>';
+    h += '<button class="btn-ghost" style="flex:1;font-size:11.5px;color:var(--amber);border-color:rgba(255,179,0,.35);" onclick="provaEnviar()">Enviar mesmo assim</button>';
+    h += '</div>';
+  } else {
+    h += '<div style="font-size:11px;color:var(--t2);margin-top:10px;line-height:1.55;">Ao validar, o sistema calcula a impressão digital do documento, guarda-o, verifica se tem elementos de um extrato bancário real e abre a <strong>validação aos condóminos</strong>. Depois de validado, entra na próxima ata como anexo.</div>';
+    h += '<div style="display:flex;gap:8px;margin-top:12px;">';
+    h += '<button class="btn-ghost" style="flex:1;font-size:11.5px;" onclick="provaCancelar()">Cancelar</button>';
+    h += '<button class="btn-primary" style="flex:1.4;font-size:12px;" onclick="provaEnviar()">🔐 Validar e enviar prova</button>';
+    h += '</div>';
+  }
+  h += '</div>';
+  _provaMsg(h, 'var(--t2)');
+}
+
+function provaCancelar() {
+  _provaFicheiro = null;
+  ['prova-doc','exig-doc'].forEach(function(id){ var el = document.getElementById(id); if (el) el.value = ''; });
+  _provaMsg('', 'var(--t3)');
+}
+
+// 2.º passo: agora sim, com cada etapa à vista
+async function provaEnviar() {
+  var f = _provaFicheiro;
+  if (!f || !currentCondo) { _provaMsg('❌ Escolhe primeiro o ficheiro.', 'var(--red)'); return; }
+  _provaMsg(_provaEtapas(0), 'var(--t2)');
+
+  try {
+    // se não há exigência ativa, cria-se uma por iniciativa da administração
+    if (!_exigAtual || ['validada','rejeitada_ai','apresentada_assembleia'].indexOf(_exigAtual.estado) > -1) {
+      var ins = await sb.from('exigencias').insert({
+        condominio_id: currentCondo.id, fracao_id: null, tipo: 'fundo',
+        texto: 'Prova apresentada por iniciativa da administração.',
+        estado: 'pendente'
+      }).select();
+      if (ins.error) {
+        _provaMsg('❌ ' + ins.error.message + '<br><span style="font-size:10.5px;">Corre o <strong>sql_prova_fundo.sql</strong> no Supabase.</span>', 'var(--red)');
+        return;
+      }
+      _exigAtual = ins.data && ins.data[0] ? ins.data[0] : null;
+    }
+    if (!_exigAtual) { _provaMsg('❌ Não foi possível iniciar o processo.', 'var(--red)'); return; }
+
+    // 1) impressão digital
+    var hash = await _hashFicheiro(f);
+    _provaMsg(_provaEtapas(1), 'var(--t2)');
+
+    // 2) guardar o documento
+    var nomeSeguro = (f.name || 'extrato.pdf').replace(/[^\w.\-]/g, '_');
+    var caminho = 'provas/' + currentCondo.id.substring(0,8) + '_' + Date.now() + '_' + nomeSeguro;
+    var up = await sb.storage.from('fotos').upload(caminho, f, { contentType: f.type || 'application/pdf' });
+    if (up.error) { _provaMsg('❌ Falha ao guardar: ' + up.error.message, 'var(--red)'); return; }
+    var pu = sb.storage.from('fotos').getPublicUrl(caminho);
+    var docUrl = (pu.data && pu.data.publicUrl) || null;
+    await sb.from('exigencias').update({ estado:'doc_carregado', doc_url: docUrl, doc_hash: hash, doc_carregado_em: new Date().toISOString() }).eq('id', _exigAtual.id);
+    _provaMsg(_provaEtapas(2), 'var(--t2)');
+
+    // 3) verificação
+    var veredicto = window._demoProva === true
+      ? { valido: true, motivo: 'MODO DEMONSTRAÇÃO — verificação de autenticidade NÃO foi feita', demo: true }
+      : await validarExtratoAI(f);
+
+    if (!veredicto.valido) {
+      await sb.from('exigencias').update({ estado:'rejeitada_ai', ai_resultado: veredicto.motivo }).eq('id', _exigAtual.id);
+      var quem = (_exigAtual.fracoes && _exigAtual.fracoes.codigo) ? ('exigida pela fração ' + _exigAtual.fracoes.codigo) : 'apresentada pela administração';
+      await sb.from('mensagens').insert((fracoes||[]).map(function(fr){
+        return { condominio_id: currentCondo.id, fracao_id: fr.id, autor:'admin', lida_admin:true, lida_condomino:false,
+          texto: '⚠️ VERIFICAÇÃO DA PROVA DO FUNDO\n\nA prova bancária do fundo de reserva, ' + quem + ', foi REJEITADA na verificação automática.\nMotivo: ' + veredicto.motivo + '\n\n[Registo automático. Impressão digital do documento rejeitado: ' + hash.substring(0,16) + '…]' };
+      }));
+      _provaMsg('<div style="background:rgba(255,68,68,.08);border:1px solid rgba(255,68,68,.32);border-radius:9px;padding:11px 13px;font-size:11.5px;color:var(--t2);line-height:1.55;">❌ <strong style="color:var(--red);">Documento rejeitado na verificação.</strong><br>' + veredicto.motivo + '<br><span style="font-size:10.5px;color:var(--t3);">Todos os condóminos foram informados, com a impressão digital do documento recusado. Podes carregar outro.</span></div>', 'var(--t2)');
+      toast('Documento rejeitado — rejeição comunicada a todos','err');
+      provaCancelar();
+      carregarExigenciasAdmin();
+      return;
+    }
+
+    // 4) votação
+    await sb.from('exigencias').update({ estado:'em_votacao', ai_resultado: veredicto.motivo }).eq('id', _exigAtual.id);
+    var quem2 = (_exigAtual.fracoes && _exigAtual.fracoes.codigo) ? (' (exigido pela fração ' + _exigAtual.fracoes.codigo + ')') : ' por sua iniciativa';
+    await sb.from('mensagens').insert((fracoes||[]).map(function(fr){
+      return { condominio_id: currentCondo.id, fracao_id: fr.id, autor:'admin', lida_admin:true, lida_condomino:false,
+        texto: (veredicto.demo ? '🧪 DEMONSTRAÇÃO — ESTE NÃO É UM PROCESSO REAL\n\n' : '') + '🗳️ VALIDAÇÃO DA PROVA DO FUNDO\n\nA administração carregou o extrato bancário do fundo de reserva' + quem2 + '. O documento passou a verificação automática' + (veredicto.motivo ? ' (' + veredicto.motivo + ')' : '') + '.\n\nAgora és tu que validas: vai à secção Quotas do portal, consulta o documento e vota.\nImpressão digital: ' + hash.substring(0,16) + '…' };
+    }));
+
+    _provaMsg('<div style="background:rgba(0,230,118,.08);border:1px solid rgba(0,230,118,.32);border-radius:9px;padding:11px 13px;font-size:11.5px;color:var(--t2);line-height:1.55;">✅ <strong style="color:var(--green);">Prova enviada e verificada.</strong><br>' + (veredicto.motivo || '') + '<br><span style="font-size:10.5px;color:var(--t3);">A votação está aberta aos condóminos e todos foram avisados. Quando a maioria validar, o documento entra na próxima ata como anexo, com a impressão digital.</span></div>', 'var(--t2)');
+    toast('🗳️ Validação aberta a todos os condóminos','ok');
+    provaCancelar();
+    carregarExigenciasAdmin();
+  } catch(e) {
+    _provaMsg('❌ ' + (e.message || e), 'var(--red)');
   }
 }
 
@@ -16196,6 +16414,91 @@ async function apurarExigencia(exig) {
 
 
 
+
+
+// 🔗 SEGUIR O DINHEIRO — mostra a cadeia ocorrência → despesa → movimento
+// Serve para responder de uma vez: "paguei, mas onde está o dinheiro no programa?"
+async function seguirDinheiro(ocId) {
+  var id = ocId || (_ocAtual && _ocAtual.id);
+  if (!id) return;
+  try {
+    var oR = await sb.from('ocorrencias').select('*').eq('id', id).single();
+    var o = oR.data;
+    if (!o) { toast('Ocorrência não encontrada','err'); return; }
+
+    // despesas ligadas: pela ligação nova (ocorrencia_id) ou pelo despesa_id antigo
+    var dR = await sb.from('despesas').select('*').eq('condominio_id', currentCondo.id);
+    var todas = dR.data || [];
+    var desps = todas.filter(function(d){
+      return d.ocorrencia_id === id || (o.despesa_id && d.id === o.despesa_id);
+    });
+    // rede: se não houver ligação, procurar por descrição parecida
+    if (!desps.length) {
+      var chave = (o.descricao||'').split('[')[0].trim().substring(0, 22).toLowerCase();
+      if (chave.length > 6) desps = todas.filter(function(d){ return (d.descricao||'').toLowerCase().indexOf(chave) > -1; });
+    }
+
+    var mR = await sb.from('movimentos').select('*').eq('condominio_id', currentCondo.id).eq('tipo','despesa').order('data_movimento',{ascending:false}).limit(300);
+    var movs = mR.data || [];
+
+    function passo(n, titulo, ok, detalhe, aviso) {
+      var cor = ok ? 'var(--green)' : (aviso ? 'var(--amber)' : 'var(--red)');
+      var ic = ok ? '✓' : (aviso ? '!' : '✕');
+      var h = '<div style="display:flex;gap:12px;padding:13px 0;border-bottom:1px solid var(--b1);">';
+      h += '<div style="width:26px;height:26px;border-radius:50%;border:1.5px solid ' + cor + ';color:' + cor + ';display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0;">' + ic + '</div>';
+      h += '<div style="flex:1;min-width:0;"><div style="font-size:12.5px;font-weight:700;">' + n + '. ' + titulo + '</div>';
+      h += '<div style="font-size:11px;color:var(--t2);margin-top:3px;line-height:1.5;">' + detalhe + '</div></div></div>';
+      return h;
+    }
+
+    var valor = parseFloat(o.orcamento_valor||0);
+    var h = '<div style="font-size:11.5px;color:var(--t2);line-height:1.55;margin-bottom:14px;">O dinheiro de uma reparação passa por três degraus. Aqui vês em qual deles está — e o que falta fazer.</div>';
+
+    // 1 — orçamento
+    h += passo(1, 'Valor registado na ocorrência',
+      valor > 0,
+      valor > 0 ? '<strong>' + valor.toFixed(2).replace('.',',') + '€</strong> · estado: ' + (o.estado||'—')
+                : 'Sem valor de orçamento. Sem isto não há despesa nem movimento.');
+
+    // 2 — despesa (a obrigação)
+    var dPaga = desps.filter(function(d){ return d.estado === 'paga'; });
+    h += passo(2, 'Despesa criada (a obrigação de pagar)',
+      desps.length > 0,
+      desps.length
+        ? desps.map(function(d){ return parseFloat(d.valor_total||0).toFixed(2).replace('.',',') + '€ · ' + (d.estado||'?') + (d.ocorrencia_id ? '' : ' <span style="color:var(--amber);">(sem ligação à ocorrência)</span>'); }).join('<br>')
+        : 'Nenhuma despesa encontrada. Acontece se concluíste a ocorrência sem valor, ou se a criação falhou.',
+      false);
+
+    // 3 — movimento (o dinheiro a sair)
+    var achados = [];
+    desps.forEach(function(d){
+      var v = parseFloat(d.valor_total||0);
+      movs.forEach(function(m){
+        if (Math.abs(parseFloat(m.valor||0) - v) < 0.02) achados.push(m);
+      });
+    });
+    if (!achados.length && valor > 0) {
+      movs.forEach(function(m){ if (Math.abs(parseFloat(m.valor||0) - valor) < 0.02) achados.push(m); });
+    }
+    var unicos = [];
+    achados.forEach(function(m){ if (!unicos.find(function(x){ return x.id === m.id; })) unicos.push(m); });
+
+    h += passo(3, 'Movimento no extrato (o dinheiro a sair)',
+      unicos.length > 0,
+      unicos.length
+        ? unicos.slice(0,3).map(function(m){ return (m.data_movimento||'') + ' · ' + (m.descricao||'').substring(0,42) + ' · <strong>' + parseFloat(m.valor||0).toFixed(2).replace('.',',') + '€</strong>'; }).join('<br>')
+        : (dPaga.length
+            ? 'A despesa está marcada como PAGA mas não encontrei movimento com este valor — ou foi apagado, ou foi pago antes de o programa passar a criar o movimento.'
+            : 'Ainda não existe. A despesa é só a obrigação; o movimento nasce quando marcas o pagamento em <strong>Financeiro › Despesas</strong>.'),
+      dPaga.length > 0 && !unicos.length);
+
+    if (desps.length && !unicos.length && !dPaga.length) {
+      h += '<div style="background:var(--cdim);border:1px solid rgba(0,212,255,.3);border-radius:9px;padding:12px 14px;margin-top:14px;font-size:11.5px;color:var(--t2);line-height:1.55;">💡 <strong>É este o passo que falta:</strong> vai a Financeiro › Despesas, encontra esta despesa e marca como paga. É aí que a saída entra no extrato e aparece no portal dos condóminos.</div>';
+      h += '<button class="btn-primary" style="width:100%;margin-top:12px;" onclick="fecharModalGenerico();nav(\'despesas\')">Ir às Despesas</button>';
+    }
+    abrirModalGenerico('🔗 Seguir o dinheiro', h);
+  } catch(e) { toast('Erro: ' + (e.message||e),'err'); }
+}
 
 // 🔗 Link do prestador — ele submete a proposta sem ter conta
 function copiarLinkPrestador(tok) {
