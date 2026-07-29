@@ -518,7 +518,10 @@
   /* ═══ LIMPEZA: menos molduras, mais ar ═══ */
   /* o menu deixa de viver dentro de outra caixa — os ícones já têm relevo próprio */
   .menu-amb{margin:18px 16px 0;padding:0;background:none;border:none;}
-  .menu-amb-t{font-size:9.5px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:var(--t3);margin-bottom:11px;}
+  .menu-amb-t{position:relative;font-size:9.5px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:var(--t2);margin-bottom:15px;padding-bottom:7px;}
+  .menu-amb-t::after{content:'';position:absolute;left:0;bottom:0;width:28px;height:2px;border-radius:2px;background:linear-gradient(90deg,var(--cyan),transparent);}
+  .painel-tit{position:relative;padding-bottom:7px;}
+  .painel-tit::after{content:'';position:absolute;left:0;bottom:0;width:24px;height:2px;border-radius:2px;background:linear-gradient(90deg,var(--cyan),transparent);}
 
   /* as secções do painel passam a lista com separadores, não caixas empilhadas */
   .painel{margin:22px 16px 0;background:var(--s1);border:1px solid var(--b1);border-radius:12px;padding:0 16px;}

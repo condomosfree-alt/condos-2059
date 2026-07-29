@@ -76,7 +76,17 @@ textarea.fi{resize:vertical;min-height:60px;}
 .cond-add-btn{background:rgba(0,212,255,.08);border:1px solid rgba(0,212,255,.3);border-radius:6px;padding:4px 8px;height:26px;color:var(--cyan);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:4px;transition:all .2s;flex-shrink:0;font-size:10px;font-weight:600;white-space:nowrap;}
 .cond-add-btn:hover{border-color:var(--cyan);color:var(--cyan);}
 .sb-nav{flex:1;overflow-y:auto;padding:10px 8px;}
-.nav-section{font-size:9px;color:var(--t3);letter-spacing:1.5px;text-transform:uppercase;padding:8px 8px 4px;}
+/* Separadores do menu: a mesma régua da marca que já usamos nos títulos de secção */
+.nav-section{position:relative;font-size:9px;color:var(--t2);letter-spacing:1.6px;text-transform:uppercase;
+             font-weight:700;padding:16px 8px 9px;margin-top:2px;}
+.nav-section:first-child{padding-top:8px;}
+.nav-section::after{content:'';position:absolute;left:8px;bottom:4px;width:28px;height:2px;border-radius:2px;
+                    background:linear-gradient(90deg,var(--cyan),transparent);
+                    transition:width .3s cubic-bezier(.2,.9,.3,1);}
+/* a régua do grupo onde estás alarga e acende */
+.nav-section.aqui{color:var(--text);}
+.nav-section.aqui::after{width:52px;background:linear-gradient(90deg,var(--cyan),rgba(0,212,255,.25) 60%,transparent);
+                         box-shadow:0 0 7px rgba(0,212,255,.5);}
 .ni{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;cursor:pointer;color:var(--t2);font-size:12px;font-weight:500;transition:all .15s;position:relative;margin-bottom:1px;}
 .mic{width:18px;display:inline-flex;align-items:center;justify-content:center;font-size:14px;line-height:1;filter:grayscale(.2);}
 .ni:hover{background:var(--s2);color:var(--text);}
@@ -419,6 +429,28 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
 }
   .mic svg{width:18px;height:18px;display:block;}
   .mi.active .mic svg{stroke:var(--cyan);}
+
+  /* ═══ Piso de qualidade + esqueletos ═══ */
+  .sk{display:inline-block;position:relative;overflow:hidden;border-radius:5px;
+      background:linear-gradient(90deg,rgba(255,255,255,.04) 0%,rgba(255,255,255,.085) 42%,rgba(255,255,255,.04) 84%);
+      background-size:220% 100%;animation:brilho 1.35s ease-in-out infinite;vertical-align:middle;}
+  @keyframes brilho{0%{background-position:120% 0}100%{background-position:-120% 0}}
+  @keyframes entra{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  .entra{animation:entra .32s cubic-bezier(.2,.9,.3,1) both;}
+  .kpi-grid .kpi:nth-child(1){animation:entra .32s cubic-bezier(.2,.9,.3,1) both;animation-delay:.02s}
+  .kpi-grid .kpi:nth-child(2){animation:entra .32s cubic-bezier(.2,.9,.3,1) both;animation-delay:.07s}
+  .kpi-grid .kpi:nth-child(3){animation:entra .32s cubic-bezier(.2,.9,.3,1) both;animation-delay:.12s}
+  .kpi-grid .kpi:nth-child(4){animation:entra .32s cubic-bezier(.2,.9,.3,1) both;animation-delay:.17s}
+  @media (prefers-reduced-motion:reduce){
+    *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;
+                         transition-duration:.01ms!important;scroll-behavior:auto!important;}
+    .sk{animation:none;background:rgba(255,255,255,.05);}
+  }
+  :focus-visible{outline:2px solid var(--cyan);outline-offset:2px;border-radius:6px;}
+  button:focus:not(:focus-visible),input:focus:not(:focus-visible){outline:none;}
+  /* linhas de tabela entram em cascata curta */
+  .tbl tbody tr{animation:entra .26s ease-out both;}
+
 </style>
 
 <script>
@@ -769,7 +801,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.29-0856</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.29-0909</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -783,7 +815,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
       <div class="ni active" onclick="nav('dashboard')"><span class="mic"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><rect x="5" y="12" width="3.6" height="6" rx="1"/><rect x="10.2" y="8" width="3.6" height="10" rx="1"/><rect x="15.4" y="4" width="3.6" height="14" rx="1"/></svg></span><span>Dashboard</span></div>
       <div class="ni" onclick="nav('edificio')"><span class="mic"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V6a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v15"/><path d="M12 21V10a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v11"/><path d="M2 21h20"/><path d="M7 9h2M7 13h2M7 17h2M15.5 13h1.5M15.5 17h1.5"/></svg></span><span>Perfil do Edifício</span><span id="badge-edificio" style="display:none;margin-left:auto;background:#f87171;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;line-height:16px;text-align:center;border-radius:8px;padding:0 4px;"></span></div>
       <div class="ni" onclick="nav('fracoes')"><span class="mic"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v17"/><path d="M13 21V8h5a1 1 0 0 1 1 1v12"/><path d="M3 21h18"/><circle cx="10.4" cy="12.5" r=".8"/></svg></span><span>Frações</span><span class="nb" id="nb-fracoes"></span></div>
-      <div class="nav-section">💰 Finanças</div>
+      <div class="nav-section">Finanças</div>
       <div class="ni" onclick="nav('quotas')" title="Emitir e receber quotas · registar pagamentos · importar o extrato do banco"><span class="mic"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12a1 1 0 0 1 1 1v17l-3-2-2 2-2-2-2 2-2-2-3 2V4a1 1 0 0 1 1-1z"/><path d="M9 8h6M9 12h6M9 16h3"/></svg></span><span>Quotas · Receber</span><span class="nb" id="nb-quotas"></span><span id="badge-quotas" style="display:none;margin-left:auto;background:#f87171;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;line-height:16px;text-align:center;border-radius:8px;padding:0 4px;"></span></div>
       <div class="ni" onclick="nav('despesas')" title="Registar gastos e reparações · pagar fornecedores · gerar quotas extraordinárias"><span class="mic"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M3 10h14a2 2 0 0 1 2 2v1a2 2 0 0 1-2 2H3"/><circle cx="16.5" cy="12.5" r=".9"/></svg></span><span>Despesas · Pagar</span><span class="nb" id="nb-despesas"></span></div>
       <div class="ni" onclick="nav('financeiro')" title="Livro de movimentos — todas as entradas e saídas de dinheiro"><span class="mic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5.5" width="19" height="13" rx="2"/><path d="M2.5 10h19"/><path d="M6 14.5h4"/></svg></span><span>Movimentos</span></div>
@@ -16749,6 +16781,27 @@ async function carregarBalanco() {
   } catch(e) { console.error('balanço:', e); }
 }
 
+
+// Números que aterram — o mesmo detalhe do portal, para o sistema não ficar atrás
+function animarNumero(el, destino, opts) {
+  if (!el) return;
+  var o = opts || {};
+  var dec = o.dec || 0, sufixo = o.sufixo || '', prefixo = o.prefixo || '';
+  function escreve(v) {
+    var t = v.toFixed(dec);
+    if (dec > 0) t = t.replace('.', ',');
+    el.textContent = prefixo + t + sufixo;
+  }
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) { escreve(destino); return; }
+  var ini = performance.now(), dur = o.dur || 600;
+  function passo(agora) {
+    var p = Math.min(1, (agora - ini) / dur);
+    escreve(destino * (1 - Math.pow(1 - p, 3)));
+    if (p < 1) requestAnimationFrame(passo);
+  }
+  requestAnimationFrame(passo);
+}
+
 // 🏆 SCORE DE SAÚDE — lado do administrador, com o caminho para subir
 
 function calcularScore(d) {
@@ -16811,7 +16864,7 @@ async function carregarScoreAdmin() {
     var cl = _scoreClasse(s.total);
     painel.style.display = 'block';
     var num = document.getElementById('sa-num');
-    num.textContent = s.total; num.style.color = cl.cor;
+    num.style.color = cl.cor; animarNumero(num, s.total);
     document.getElementById('sa-circulo').style.background = 'conic-gradient(' + cl.cor + ' 0% ' + s.total + '%, rgba(255,255,255,.08) ' + s.total + '% 100%)';
     var clEl = document.getElementById('sa-classe');
     clEl.textContent = cl.txt + ' · ' + s.total + '/100'; clEl.style.color = cl.cor;
@@ -21256,6 +21309,16 @@ function nav(p) {
   const _tbt=document.getElementById('tb-title')||document.getElementById('tb-page'); if(_tbt) _tbt.textContent=pageMap[p]||p;
   const _tbp=document.getElementById('tb-path'); if(_tbp) _tbp.textContent=pathMap[p]||'';
   document.querySelectorAll('.ni').forEach(el=>{const oc=el.getAttribute('onclick')||'';if(oc.includes("'"+p+"'"))el.classList.add('active');});
+  // acende a régua do grupo a que a página pertence
+  try {
+    document.querySelectorAll('.nav-section').forEach(s=>s.classList.remove('aqui'));
+    const ativo = document.querySelector('.ni.active');
+    if (ativo) {
+      let n = ativo.previousElementSibling;
+      while (n && !n.classList.contains('nav-section')) n = n.previousElementSibling;
+      if (n) n.classList.add('aqui');
+    }
+  } catch(e){}
   injetarBarraDinheiro(p);
   // Badges e avisos recalculam ao navegar — o que já foi tratado deixa de aparecer
   try { updateBadges(); atualizarBadgeMensagens(); } catch(e){}
