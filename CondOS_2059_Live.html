@@ -801,7 +801,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.29-2256</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.30-0833</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -4082,7 +4082,9 @@ async function verificarAvisosGerais() {
 
     // 5e-000) ✋ AVARIAS À ESPERA DE CONFIRMAÇÃO — não podem ficar penduradas
     try {
+      if (_semColuna('precisa_confirmacao')) throw new Error('sem coluna');
       var pcR = await sb.from('ocorrencias').select('id,descricao,criado_em').eq('condominio_id', currentCondo.id).eq('precisa_confirmacao', true).is('confirmada_em', null).not('estado','in','("resolvida","fechada")');
+      if (pcR.error && _registarFalta('precisa_confirmacao', pcR.error, 'sql_confirmacao_ocorrencias.sql')) throw new Error('sem coluna');
       var pcs = pcR.data || [];
       var paradas = pcs.filter(function(o){ return (new Date() - new Date(o.criado_em)) > 3*24*3600*1000; });
       if (paradas.length) {
@@ -4098,7 +4100,9 @@ async function verificarAvisosGerais() {
 
     // 5e-00) 📝 DECLARAÇÕES DA FICHA por confirmar
     try {
+      if (_semColuna('decl_estado')) throw new Error('sem coluna');
       var dclR = await sb.from('fracoes').select('codigo,decl_permilagem').eq('condominio_id', currentCondo.id).eq('decl_estado','pendente');
+      if (dclR.error && _registarFalta('decl_estado', dclR.error, 'sql_ficha_separada.sql')) throw new Error('sem coluna');
       var dcls = dclR.data || [];
       if (dcls.length) {
         var comPerm = dcls.filter(function(x){ return x.decl_permilagem !== null && x.decl_permilagem !== undefined; }).length;
@@ -9860,10 +9864,12 @@ async function verificarConcursosProntos() {
 async function fecharVotacoesExpiradas() {
   if (!currentCondo) return;
   try {
+    if (_semColuna('votacao_prazo')) return;
     var r = await sb.from('ocorrencias').select('id,descricao,votacao_prazo,divisao_metodo')
       .eq('condominio_id', currentCondo.id).eq('precisa_votacao', true)
       .is('votacao_fechada_em', null).not('votacao_prazo','is',null)
       .lt('votacao_prazo', new Date().toISOString());
+    if (r.error) { _registarFalta('votacao_prazo', r.error, 'sql_votacao_prazo.sql'); return; }
     var expiradas = r.data || [];
     for (var i = 0; i < expiradas.length; i++) {
       var o = expiradas[i];
@@ -11276,10 +11282,11 @@ async function carregarDeclaracoes() {
   var lista = document.getElementById('decl-lista');
   if (!painel || !lista || !currentCondo) return;
   try {
+    if (_semColuna('decl_estado')) { painel.style.display = 'none'; return; }
     var r = await sb.from('fracoes')
       .select('id,codigo,permilagem,garagem,garagem_tipo,arrecadacao,lugares,decl_garagem,decl_garagem_tipo,decl_arrecadacao,decl_lugares,decl_permilagem,decl_nota,decl_fracao_nota,decl_em,decl_estado')
       .eq('condominio_id', currentCondo.id).eq('decl_estado', 'pendente');
-    if (r.error) { painel.style.display = 'none'; return; }
+    if (r.error) { _registarFalta('decl_estado', r.error, 'sql_ficha_separada.sql'); painel.style.display = 'none'; return; }
     var decls = r.data || [];
     if (!decls.length) { painel.style.display = 'none'; return; }
     var h = '';
@@ -13166,10 +13173,12 @@ async function sugerirOrdemTrabalhos() {
 
     // 🗳️ VOTAÇÕES ONLINE que precisam de deliberação/ratificação da assembleia
     try {
+      if (_semColuna('ata_ratificada')) throw new Error('sem coluna');
       var votOT = await sb.from('ocorrencias')
         .select('id,descricao,categoria,tipo_legal,orcamento_valor,votacao_prazo,votacao_fechada_em,ata_ratificada')
         .eq('condominio_id', c.id).eq('precisa_votacao', true)
         .in('tipo_legal', ['conservacao','inovacao','corrente']);
+      if (votOT.error && _registarFalta('ata_ratificada', votOT.error, 'sql_ratificacao_votacoes.sql')) throw new Error('sem coluna');
       for (var vi = 0; vi < (votOT.data||[]).length; vi++) {
         var ov = votOT.data[vi];
         if (ov.ata_ratificada) continue;
@@ -15935,9 +15944,12 @@ async function updateBadgesExtra() {
   } catch(e){}
   try {
     // 📝 declarações da ficha por confirmar
-    var cR = await sb.from('fracoes').select('id', {count:'exact', head:true})
-      .eq('condominio_id', currentCondo.id).eq('decl_estado', 'pendente');
-    pinta('nb-cond', cR.count || 0, '#ffb300');
+    if (!_semColuna('decl_estado')) {
+      var cR = await sb.from('fracoes').select('id', {count:'exact', head:true})
+        .eq('condominio_id', currentCondo.id).eq('decl_estado', 'pendente');
+      if (cR.error) _registarFalta('decl_estado', cR.error, 'sql_ficha_separada.sql');
+      else pinta('nb-cond', cR.count || 0, '#ffb300');
+    }
   } catch(e){}
   try {
     // 🚪 frações ainda sem acesso ao portal (ninguém lá dentro para votar nem ver)
@@ -16056,6 +16068,7 @@ async function carregarExigenciasAdmin() {
   if (!zona || !currentCondo) return;
   try {
     var r = await sb.from('exigencias').select('*, fracoes(codigo)').eq('condominio_id', currentCondo.id).order('criado_em', {ascending:false}).limit(6);
+    if (r.error) { _registarFalta('exigencias', r.error, 'sql_prova_fundo.sql'); zona.innerHTML = ''; return; }
     var exigs = r.data || [];
     var h = '';
     var ativa = exigs.find(function(e){ return ['pendente','doc_carregado','em_votacao'].indexOf(e.estado) > -1; });
@@ -16252,7 +16265,17 @@ async function provaEnviar() {
     var nomeSeguro = (f.name || 'extrato.pdf').replace(/[^\w.\-]/g, '_');
     var caminho = 'provas/' + currentCondo.id.substring(0,8) + '_' + Date.now() + '_' + nomeSeguro;
     var up = await sb.storage.from('fotos').upload(caminho, f, { contentType: f.type || 'application/pdf' });
-    if (up.error) { _provaMsg('❌ Falha ao guardar: ' + up.error.message, 'var(--red)'); return; }
+    if (up.error) {
+      var m = (up.error.message || '').toLowerCase();
+      if (m.indexOf('mime type') > -1 || m.indexOf('not supported') > -1) {
+        _provaMsg('<div style="background:rgba(255,68,68,.08);border:1px solid rgba(255,68,68,.32);border-radius:9px;padding:11px 13px;font-size:11.5px;color:var(--t2);line-height:1.55;">❌ <strong style="color:var(--red);">O armazenamento ainda não aceita PDF.</strong><br>Quando limitámos as fotos das ocorrências, o bucket ficou restrito a imagens. Corre o <strong>sql_bucket_pdf.sql</strong> no Supabase — é um comando só — e volta a tentar.</div>', 'var(--t2)');
+      } else if (m.indexOf('exceeded') > -1 || m.indexOf('too large') > -1 || m.indexOf('size') > -1) {
+        _provaMsg('<div style="background:rgba(255,179,0,.08);border:1px solid rgba(255,179,0,.32);border-radius:9px;padding:11px 13px;font-size:11.5px;color:var(--t2);line-height:1.55;">⚠️ <strong style="color:var(--amber);">Ficheiro grande demais para o armazenamento.</strong><br>O limite atual é 1 MB. O <strong>sql_bucket_pdf.sql</strong> sobe-o para 5 MB.</div>', 'var(--t2)');
+      } else {
+        _provaMsg('❌ Falha ao guardar: ' + up.error.message, 'var(--red)');
+      }
+      return;
+    }
     var pu = sb.storage.from('fotos').getPublicUrl(caminho);
     var docUrl = (pu.data && pu.data.publicUrl) || null;
     await sb.from('exigencias').update({ estado:'doc_carregado', doc_url: docUrl, doc_hash: hash, doc_carregado_em: new Date().toISOString() }).eq('id', _exigAtual.id);
@@ -16430,6 +16453,51 @@ async function apurarExigencia(exig) {
 
 
 
+
+
+// ═══════════════════════════════════════════════════════════
+// 🛡️ COLUNAS QUE PODEM AINDA NÃO EXISTIR
+// Se um SQL ainda não correu, o Supabase devolve 400 — e o código que
+// insiste enche a consola de erros a cada ciclo. Isto pergunta UMA vez
+// por sessão e desiste em silêncio até a coluna existir.
+// ═══════════════════════════════════════════════════════════
+window._colunasEmFalta = window._colunasEmFalta || {};
+window._sqlsEmFalta = window._sqlsEmFalta || {};
+
+function _semColuna(chave) { return window._colunasEmFalta[chave] === true; }
+
+function _registarFalta(chave, erro, ficheiroSql) {
+  var msg = (erro && (erro.message || erro.msg || '')) || '';
+  var cod = (erro && erro.code) || '';
+  // 42703 = coluna não existe · 42P01 = tabela não existe
+  if (cod === '42703' || cod === '42P01' || /column .* does not exist|relation .* does not exist/i.test(msg)) {
+    window._colunasEmFalta[chave] = true;
+    if (ficheiroSql) window._sqlsEmFalta[ficheiroSql] = true;
+    console.warn('⚠️ ' + chave + ' ainda não existe na base de dados. Corre ' + (ficheiroSql || 'o SQL correspondente') + ' — o sistema continua a funcionar sem isso.');
+    try { mostrarAvisoSqlEmFalta(); } catch(e){}
+    return true;
+  }
+  return false;
+}
+
+// aviso discreto e único, em vez de erros a repetir na consola
+function mostrarAvisoSqlEmFalta() {
+  var faltam = Object.keys(window._sqlsEmFalta || {});
+  if (!faltam.length) return;
+  var el = document.getElementById('aviso-sql-falta');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'aviso-sql-falta';
+    el.style.cssText = 'position:fixed;bottom:14px;left:14px;z-index:60;max-width:330px;background:var(--s1);' +
+      'border:1px solid rgba(255,179,0,.4);border-left:3px solid var(--amber);border-radius:9px;padding:11px 13px;' +
+      'font-size:11.5px;color:var(--t2);line-height:1.5;box-shadow:0 10px 30px rgba(0,0,0,.5);';
+    document.body.appendChild(el);
+  }
+  el.innerHTML = '⚠️ <strong style="color:var(--amber);">Falta correr SQL no Supabase</strong><br>' +
+    faltam.map(function(f){ return '· ' + f; }).join('<br>') +
+    '<br><span style="font-size:10.5px;color:var(--t3);">As funcionalidades que dependem disto estão desligadas; o resto funciona.</span>' +
+    '<div style="text-align:right;margin-top:7px;"><button onclick="this.closest(\'div\').remove()" style="background:none;border:none;color:var(--t3);font-size:11px;cursor:pointer;">dispensar</button></div>';
+}
 
 // 🔗 SEGUIR O DINHEIRO — mostra a cadeia ocorrência → despesa → movimento
 // Serve para responder de uma vez: "paguei, mas onde está o dinheiro no programa?"
@@ -16624,6 +16692,7 @@ async function carregarOfertasAdmin() {
   if (!el || !currentCondo) return;
   try {
     var r = await sb.from('ofertas').select('*, oferta_interesses(fracao_id, consentimento)').eq('condominio_id', currentCondo.id).order('criado_em', {ascending:false}).limit(8);
+    if (r.error) { _registarFalta('ofertas', r.error, 'sql_historia_ofertas.sql'); el.innerHTML = '<div style="font-size:11px;color:var(--t3);">Corre o sql_historia_ofertas.sql para ativar as ofertas.</div>'; return; }
     var ofs = r.data||[];
     if (!ofs.length) { el.innerHTML = 'Sem ofertas. Cria a primeira — seguros, internet, energia… o prédio junto negoceia melhor.'; return; }
     var h = '';
