@@ -870,7 +870,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.30-2138</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.30-2142</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -16152,7 +16152,8 @@ async function carregarExigenciasAdmin() {
       if (ativa.estado === 'pendente') {
         h += '<div style="font-size:11px;color:var(--t2);margin:6px 0 10px;line-height:1.5;">Um condómino exige a prova bancária do fundo. Carrega o <strong>extrato oficial do banco</strong> (PDF descarregado do homebanking). O sistema verifica o documento, os condóminos votam a validação, e o documento fica anexado à próxima ata — com impressão digital SHA-256.</div>';
         h += '<label style="display:block;cursor:pointer;"><input type="file" id="exig-doc" accept="application/pdf,image/*" style="display:none" onchange="provaSelecionada(this)">';
-        h += '<div style="background:var(--s1);border:1px dashed var(--b2);border-radius:9px;padding:13px;text-align:center;font-size:12px;color:var(--t2);">📤 Carregar extrato bancário oficial (PDF)</div></label>';
+        h += '<div class="btn-primary" style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:13px;font-size:12.5px;font-weight:700;cursor:pointer;"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="M7.5 8.5L12 4l4.5 4.5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>Escolher o extrato bancário (PDF)</div></label>';
+      h += '<div style="font-size:9.5px;color:var(--t3);text-align:center;margin-top:6px;">Depois de escolheres, aparece um botão para confirmares o envio.</div>';
         h += '<div id="exig-doc-estado" style="font-size:10.5px;color:var(--t3);margin-top:6px;"></div>';
       } else if (ativa.estado === 'doc_carregado') {
         // Se a verificação foi interrompida (erro de rede, IA em baixo, separador fechado),
@@ -16181,16 +16182,21 @@ async function carregarExigenciasAdmin() {
       var val = exigs.find(function(e){ return e.estado === 'validada' && !/DEMONSTRA/i.test(e.ai_resultado||''); });
       if (val) h += '<div style="background:rgba(34,229,132,.06);border:1px solid rgba(34,229,132,.3);border-radius:10px;padding:10px 13px;margin-top:12px;font-size:11px;color:var(--t2);">✅ Prova <strong style="color:var(--green);">validada pela maioria</strong> em ' + (val.validada_em?new Date(val.validada_em).toLocaleDateString('pt-PT'):'') + '. Apresenta o extrato físico na próxima assembleia — o sistema vai anexá-lo à ata com a impressão digital.</div>';
     }
-    // 📤 SEM exigência de ninguém: o administrador pode (e deve) provar por iniciativa própria
-    if (!ativa) {
+    // 📤 CARREGAR A PROVA — existe SEMPRE, em qualquer estado.
+    // Antes só aparecia quando não havia processo ativo, e o administrador ficava sem porta.
+    {
+      var _emCurso = !!ativa;
       h += '<div style="background:rgba(0,212,255,.05);border:1px solid rgba(0,212,255,.28);border-radius:10px;padding:12px 14px;margin-top:12px;">';
-      h += '<div style="font-size:12px;font-weight:800;color:var(--cyan);">🛡️ Provar o fundo agora</div>';
-      h += '<div style="font-size:10.5px;color:var(--t2);margin:5px 0 10px;line-height:1.5;">Não esperes que te exijam. Carrega o extrato bancário da conta do fundo: o sistema calcula a impressão digital, verifica o documento e abre a validação aos condóminos. Fica prova datada de que prestaste contas.</div>';
+      h += '<div style="font-size:12px;font-weight:800;color:var(--cyan);">🛡️ ' + (_emCurso ? 'Carregar outro documento' : 'Provar o fundo agora') + '</div>';
+      h += '<div style="font-size:10.5px;color:var(--t2);margin:5px 0 10px;line-height:1.5;">' + (_emCurso
+        ? 'Já existe um processo a decorrer acima. Se quiseres substituir o documento — porque enviaste o errado ou tens um extrato mais recente — carrega aqui e o processo recomeça com o novo ficheiro.'
+        : 'Não esperes que te exijam. Carrega o extrato bancário da conta do fundo: o sistema calcula a impressão digital, verifica o documento e abre a validação aos condóminos. Fica prova datada de que prestaste contas.') + '</div>';
       if (!((currentCondo||{}).iban_reserva || '').trim()) {
         h += '<div style="background:var(--adim);border:1px solid rgba(255,179,0,.3);border-radius:8px;padding:9px 11px;margin-bottom:10px;font-size:10.5px;color:var(--t2);line-height:1.5;">⚠️ O <strong>IBAN da conta reserva</strong> está vazio nas Definições. Com ele preenchido, a verificação confirma que o extrato é <strong>daquela conta</strong> e não de outra qualquer — sem ele, a análise é muito mais fraca. <a href="#" onclick="event.preventDefault();nav(\'definicoes\')" style="color:var(--cyan);">Preencher agora</a></div>';
       }
       h += '<label style="display:block;cursor:pointer;"><input type="file" id="prova-doc" accept="application/pdf,image/*" style="display:none" onchange="provaSelecionada(this)">';
-      h += '<div style="background:var(--s1);border:1px dashed var(--b2);border-radius:9px;padding:13px;text-align:center;font-size:12px;color:var(--t2);">📤 Carregar extrato bancário do fundo</div></label>';
+      h += '<div class="btn-primary" style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:13px;font-size:12.5px;font-weight:700;cursor:pointer;"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="M7.5 8.5L12 4l4.5 4.5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>Escolher o extrato bancário (PDF)</div></label>';
+      h += '<div style="font-size:9.5px;color:var(--t3);text-align:center;margin-top:6px;">Depois de escolheres, aparece um botão para confirmares o envio.</div>';
       h += '<div id="prova-doc-estado" style="font-size:10.5px;color:var(--t3);margin-top:6px;"></div>';
       h += '<label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:10.5px;color:var(--t3);cursor:pointer;">';
       h += '<input type="checkbox" id="chk-demo-prova"' + (window._demoProva ? ' checked' : '') + ' onchange="window._demoProva = this.checked; carregarExigenciasAdmin();" style="accent-color:#ffb300;">';
@@ -16199,6 +16205,14 @@ async function carregarExigenciasAdmin() {
         h += '<div style="background:rgba(255,179,0,.1);border:1px solid rgba(255,179,0,.45);border-radius:8px;padding:9px 11px;margin-top:7px;font-size:10.5px;color:var(--t2);line-height:1.5;">⚠️ <strong style="color:var(--amber);">Modo demonstração ativo.</strong> Qualquer documento passa a verificação, e tudo o que daqui sair fica marcado como demonstração — nas mensagens aos condóminos e no anexo da ata. Não serve como prova.</div>';
       }
       h += '</div>';
+    }
+    if (!h || h.trim().length < 20) {
+      // nunca deixar o administrador sem porta de entrada
+      h = '<div style="background:rgba(0,212,255,.05);border:1px solid rgba(0,212,255,.28);border-radius:10px;padding:12px 14px;margin-top:12px;">' +
+          '<div style="font-size:12px;font-weight:800;color:var(--cyan);">🛡️ Provar o fundo</div>' +
+          '<label style="display:block;cursor:pointer;margin-top:10px;"><input type="file" id="prova-doc" accept="application/pdf,image/*" style="display:none" onchange="provaSelecionada(this)">' +
+          '<div class="btn-primary" style="display:flex;align-items:center;justify-content:center;width:100%;padding:13px;font-size:12.5px;font-weight:700;cursor:pointer;">Escolher o extrato bancário (PDF)</div></label>' +
+          '<div id="prova-doc-estado" style="font-size:10.5px;color:var(--t3);margin-top:6px;"></div></div>';
     }
     zona.innerHTML = h;
     if (ativa && ativa.estado === 'em_votacao') apurarExigencia(ativa);
@@ -16384,6 +16398,14 @@ async function provaEnviar() {
 
   try {
     // se não há exigência ativa, cria-se uma por iniciativa da administração
+    // se já havia um processo a decorrer, o documento novo substitui-o (volta ao início)
+    if (_exigAtual && ['pendente','doc_carregado','em_votacao'].indexOf(_exigAtual.estado) > -1) {
+      try {
+        await sb.from('exigencias').update({ estado:'pendente', doc_url:null, doc_hash:null, doc_carregado_em:null, ai_resultado:null }).eq('id', _exigAtual.id);
+        await sb.from('ocorrencia_votos').select('id').limit(0);   // no-op, mantém o padrão de await
+        _exigAtual.estado = 'pendente';
+      } catch(e){}
+    }
     if (!_exigAtual || ['validada','rejeitada_ai','apresentada_assembleia'].indexOf(_exigAtual.estado) > -1) {
       var ins = await sb.from('exigencias').insert({
         condominio_id: currentCondo.id, fracao_id: null, tipo: 'fundo',
