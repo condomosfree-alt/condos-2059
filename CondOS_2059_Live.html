@@ -451,6 +451,75 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   /* linhas de tabela entram em cascata curta */
   .tbl tbody tr{animation:entra .26s ease-out both;}
 
+
+  /* ═══ LOGÓTIPO VIVO — um prédio a acender ao anoitecer ═══ */
+  .auth-logo-title{position:relative;display:inline-block;}
+
+  /* cada letra é uma janela que acende */
+  .auth-logo-title .lt{
+    display:inline-block;
+    color:var(--t3);
+    animation:acende .55s cubic-bezier(.2,.9,.3,1) forwards;
+    opacity:0;
+  }
+  @keyframes acende{
+    0%{opacity:0;transform:translateY(6px);color:var(--t3);text-shadow:none;}
+    55%{opacity:1;transform:translateY(-2px);color:#a8ecff;text-shadow:0 0 22px rgba(0,212,255,.75);}
+    100%{opacity:1;transform:none;color:var(--text);text-shadow:0 0 0 rgba(0,212,255,0);}
+  }
+  .auth-logo-title .lt:nth-child(1){animation-delay:.10s}
+  .auth-logo-title .lt:nth-child(2){animation-delay:.20s}
+  .auth-logo-title .lt:nth-child(3){animation-delay:.30s}
+  .auth-logo-title .lt:nth-child(4){animation-delay:.40s}
+  .auth-logo-title .lt:nth-child(6){animation-delay:.62s}
+  .auth-logo-title .lt:nth-child(7){animation-delay:.72s}
+
+  /* o ponto é o LED de estado: o sistema está online */
+  .auth-logo-title .ponto{
+    display:inline-block;color:var(--cyan);
+    animation:ledEntra .5s ease-out .52s both, ledPulsa 2.4s ease-in-out 1.1s infinite;
+  }
+  @keyframes ledEntra{from{opacity:0;transform:scale(.4)}to{opacity:1;transform:none}}
+  @keyframes ledPulsa{
+    0%,100%{text-shadow:0 0 7px rgba(0,212,255,.55);opacity:.9}
+    50%{text-shadow:0 0 18px rgba(0,212,255,1),0 0 34px rgba(0,212,255,.5);opacity:1}
+  }
+
+  /* a luz que varre as letras — como quem verifica */
+  .auth-logo-title::after{
+    content:attr(aria-label);
+    position:absolute;left:0;top:0;
+    background:linear-gradient(100deg,
+      transparent 38%, rgba(0,212,255,.15) 44%, #9ceaff 50%, rgba(0,212,255,.15) 56%, transparent 62%);
+    background-size:280% 100%;
+    -webkit-background-clip:text;background-clip:text;
+    -webkit-text-fill-color:transparent;color:transparent;
+    pointer-events:none;
+    animation:varre 5.5s ease-in-out 1.6s infinite;
+  }
+  @keyframes varre{
+    0%{background-position:135% 0}
+    38%,100%{background-position:-55% 0}
+  }
+
+  /* halo que respira por trás */
+  .auth-logo::before{
+    content:'';position:absolute;left:50%;top:34px;transform:translateX(-50%);
+    width:230px;height:80px;border-radius:50%;
+    background:radial-gradient(ellipse,rgba(0,212,255,.16),transparent 68%);
+    filter:blur(6px);pointer-events:none;
+    animation:respira 5s ease-in-out 1.2s infinite;
+  }
+  .auth-logo{position:relative;}
+  @keyframes respira{0%,100%{opacity:.5;transform:translateX(-50%) scale(.96)}50%{opacity:1;transform:translateX(-50%) scale(1.04)}}
+
+  @media (prefers-reduced-motion:reduce){
+    .auth-logo-title .lt{animation:none;opacity:1;color:var(--text);}
+    .auth-logo-title .ponto{animation:none;opacity:1;}
+    .auth-logo-title::after{animation:none;display:none;}
+    .auth-logo::before{animation:none;opacity:.6;}
+  }
+
 </style>
 
 <script>
@@ -479,7 +548,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="auth-card">
     <div class="auth-logo">
       <div class="auth-logo-tag">Gestão de Condomínios</div>
-      <div class="auth-logo-title">COND.OS</div>
+      <div class="auth-logo-title" id="logo-vivo" aria-label="COND.OS"><span class="lt">C</span><span class="lt">O</span><span class="lt">N</span><span class="lt">D</span><span class="ponto" aria-hidden="true">.</span><span class="lt">O</span><span class="lt">S</span></div>
       <div class="auth-logo-sub">Plataforma gratuita para todos</div>
     </div>
     <div class="auth-tabs">
@@ -801,7 +870,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.30-0841</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.30-2138</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
