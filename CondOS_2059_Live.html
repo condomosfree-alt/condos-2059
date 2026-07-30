@@ -801,7 +801,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.30-0833</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.30-0841</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -16068,7 +16068,11 @@ async function carregarExigenciasAdmin() {
   if (!zona || !currentCondo) return;
   try {
     var r = await sb.from('exigencias').select('*, fracoes(codigo)').eq('condominio_id', currentCondo.id).order('criado_em', {ascending:false}).limit(6);
-    if (r.error) { _registarFalta('exigencias', r.error, 'sql_prova_fundo.sql'); zona.innerHTML = ''; return; }
+    if (r.error) {
+      _registarFalta('exigencias', r.error, 'sql_prova_fundo.sql');
+      zona.innerHTML = '<div style="background:var(--adim);border:1px solid rgba(255,179,0,.3);border-radius:9px;padding:10px 12px;margin-top:12px;font-size:11px;color:var(--t2);line-height:1.5;">⚠️ Não consegui ler as provas do fundo: ' + (r.error.message || 'erro') + '<br><span style="font-size:10.5px;color:var(--t3);">Se for coluna em falta, corre o <strong>sql_prova_fundo.sql</strong>.</span></div>';
+      return;
+    }
     var exigs = r.data || [];
     var h = '';
     var ativa = exigs.find(function(e){ return ['pendente','doc_carregado','em_votacao'].indexOf(e.estado) > -1; });
@@ -16082,10 +16086,23 @@ async function carregarExigenciasAdmin() {
         h += '<div style="background:var(--s1);border:1px dashed var(--b2);border-radius:9px;padding:13px;text-align:center;font-size:12px;color:var(--t2);">📤 Carregar extrato bancário oficial (PDF)</div></label>';
         h += '<div id="exig-doc-estado" style="font-size:10.5px;color:var(--t3);margin-top:6px;"></div>';
       } else if (ativa.estado === 'doc_carregado') {
-        h += '<div style="font-size:11px;color:var(--amber);margin-top:6px;">Documento em verificação…</div>';
+        // Se a verificação foi interrompida (erro de rede, IA em baixo, separador fechado),
+        // o processo ficava preso aqui SEM saída. Agora dá para retomar ou recomeçar.
+        var minutos = ativa.doc_carregado_em ? Math.floor((new Date() - new Date(ativa.doc_carregado_em)) / 60000) : 999;
+        if (minutos < 3) {
+          h += '<div style="font-size:11px;color:var(--amber);margin-top:6px;">Documento carregado — verificação a decorrer…</div>';
+        } else {
+          h += '<div style="background:var(--adim);border:1px solid rgba(255,179,0,.32);border-radius:8px;padding:10px 12px;margin-top:8px;font-size:11px;color:var(--t2);line-height:1.55;">⚠️ <strong style="color:var(--amber);">Verificação interrompida.</strong> O documento foi carregado há ' + minutos + ' minutos mas a análise não terminou — costuma ser falha de rede ou do serviço de IA.</div>';
+          h += '<div style="display:flex;gap:8px;margin-top:9px;">';
+          h += '<button class="btn-primary" style="flex:1;font-size:11.5px;" onclick="provaRetomar()">🔄 Retomar verificação</button>';
+          h += '<button class="btn-ghost" style="flex:1;font-size:11.5px;" onclick="provaRecomecar()">↩️ Carregar outro</button>';
+          h += '</div>';
+        }
       } else if (ativa.estado === 'em_votacao') {
         h += '<div id="exig-votos" style="font-size:11px;color:var(--t2);margin-top:6px;">🗳️ Em votação pelos condóminos…</div>';
       }
+      // saída de emergência: em qualquer estado dá para abandonar o processo
+      h += '<div style="text-align:right;margin-top:9px;"><a href="#" onclick="event.preventDefault();provaCancelarProcesso()" style="font-size:10px;color:var(--t3);text-decoration:underline;">cancelar este processo</a></div>';
       h += '</div>';
     } else {
       var rej = exigs.find(function(e){ return e.estado === 'rejeitada_ai'; });
@@ -16156,6 +16173,61 @@ async function provarFundoAgora(inp) {
   }
 }
 
+
+// ═══════════════════════════════════════════════════════════
+
+
+// 🚪 Abandonar por completo um processo de prova — para nunca ficar tudo preso
+async function provaCancelarProcesso() {
+  if (!_exigAtual) return;
+  if (!await confirmar('Cancelar este processo de prova do fundo?\n\nSe foi um condómino a exigir a prova, o pedido dele continua válido e terás de a apresentar na mesma — o cancelamento fica registado.', {titulo:'Cancelar processo', tipo:'aviso', icon:'🚪', okTexto:'Cancelar processo'})) return;
+  try {
+    var eraExigencia = !!_exigAtual.fracao_id;
+    await sb.from('exigencias').update({ estado:'rejeitada_ai', ai_resultado:'Processo cancelado pela administração.' }).eq('id', _exigAtual.id);
+    if (eraExigencia) {
+      await sb.from('mensagens').insert({
+        condominio_id: currentCondo.id, fracao_id: _exigAtual.fracao_id, autor:'admin', lida_admin:true, lida_condomino:false,
+        texto: 'ℹ️ PROCESSO DE PROVA CANCELADO\n\nA administração cancelou o processo de apresentação da prova bancária do fundo que tinhas exigido. A tua exigência continua registada e a prova deve ser apresentada.\n\n[Registo automático do sistema, com data e hora.]'
+      });
+    }
+    _exigAtual = null;
+    _provaFicheiro = null;
+    toast('Processo cancelado','ok');
+    carregarExigenciasAdmin();
+  } catch(e) { toast('Erro: ' + (e.message||e),'err'); }
+}
+
+// 🔄 Retomar uma verificação que ficou a meio (o ficheiro já está guardado)
+async function provaRetomar() {
+  if (!_exigAtual) { toast('Nada para retomar','warn'); return; }
+  _provaMsg('🤖 A retomar a verificação…', 'var(--t2)');
+  try {
+    var veredicto = window._demoProva === true
+      ? { valido: true, motivo: 'MODO DEMONSTRAÇÃO — verificação de autenticidade NÃO foi feita', demo: true }
+      : { valido: true, motivo: 'verificação automática indisponível — validação fica inteiramente nos condóminos' };
+    // sem o ficheiro em memória não dá para reanalisar: segue para votação com a nota honesta
+    await sb.from('exigencias').update({ estado:'em_votacao', ai_resultado: veredicto.motivo }).eq('id', _exigAtual.id);
+    var quem = (_exigAtual.fracao_id && _exigAtual.fracoes && _exigAtual.fracoes.codigo) ? (' (exigido pela fração ' + _exigAtual.fracoes.codigo + ')') : ' por sua iniciativa';
+    await sb.from('mensagens').insert((fracoes||[]).map(function(fr){
+      return { condominio_id: currentCondo.id, fracao_id: fr.id, autor:'admin', lida_admin:true, lida_condomino:false,
+        texto: (veredicto.demo ? '🧪 DEMONSTRAÇÃO — ESTE NÃO É UM PROCESSO REAL\n\n' : '') + '🗳️ VALIDAÇÃO DA PROVA DO FUNDO\n\nA administração carregou o extrato bancário do fundo de reserva' + quem + '.\n' + veredicto.motivo + '\n\nEntra no portal, consulta o documento e vota se o aceitas como prova.\nImpressão digital: ' + ((_exigAtual.doc_hash||'').substring(0,16)) + '…' };
+    }));
+    toast('🗳️ Validação aberta aos condóminos','ok');
+    carregarExigenciasAdmin();
+  } catch(e) { _provaMsg('❌ ' + (e.message||e), 'var(--red)'); }
+}
+
+// ↩️ Descartar a tentativa presa e voltar ao início
+async function provaRecomecar() {
+  if (!_exigAtual) return;
+  if (!await confirmar('Descartar este documento e voltar ao início?\n\nO ficheiro carregado deixa de contar; podes escolher outro.', {titulo:'Recomeçar', tipo:'aviso', icon:'↩️', okTexto:'Recomeçar'})) return;
+  try {
+    await sb.from('exigencias').update({ estado:'pendente', doc_url:null, doc_hash:null, doc_carregado_em:null, ai_resultado:null }).eq('id', _exigAtual.id);
+    _provaFicheiro = null;
+    toast('Pronto — podes carregar outro documento','ok');
+    carregarExigenciasAdmin();
+  } catch(e) { toast('Erro: ' + (e.message||e),'err'); }
+}
 
 // ═══════════════════════════════════════════════════════════
 // 🛡️ PROVA DO FUNDO — dois passos, com progresso à vista
@@ -16313,7 +16385,14 @@ async function provaEnviar() {
     provaCancelar();
     carregarExigenciasAdmin();
   } catch(e) {
-    _provaMsg('❌ ' + (e.message || e), 'var(--red)');
+    // não deixar a exigência presa em 'doc_carregado' por causa de um erro
+    try {
+      if (_exigAtual && _exigAtual.id) {
+        await sb.from('exigencias').update({ estado:'pendente' }).eq('id', _exigAtual.id);
+      }
+    } catch(e2){}
+    _provaMsg('❌ ' + (e.message || e) + '<br><span style="font-size:10.5px;color:var(--t3);">O processo voltou ao início — podes tentar de novo.</span>', 'var(--red)');
+    carregarExigenciasAdmin();
   }
 }
 
