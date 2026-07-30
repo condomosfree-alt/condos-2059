@@ -870,7 +870,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.30-2142</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.30-2148</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -12727,11 +12727,11 @@ async function gerarAtaDoLivro() {
 
     // ⚖️ APÊNDICE DE PROVAS: exigências validadas ficam anexadas à ata com hash
     try {
-      var exAta = await sb.from('exigencias').select('id,tipo,doc_url,doc_hash,validada_em,criado_em,fracao_id,ai_resultado,fracoes(codigo)').eq('condominio_id', currentCondo.id).eq('estado','validada');
+      var exAta = await sb.from('exigencias').select('id,tipo,doc_url,doc_hash,validada_em,criado_em,fracao_id,ai_resultado').eq('condominio_id', currentCondo.id).eq('estado','validada');
       if (exAta.data && exAta.data.length) {
         ata += '\n\n────────────────────────────────\nANEXOS — DOCUMENTOS DE PROVA (registo automático do sistema)\n';
         exAta.data.forEach(function(e, i){
-          ata += '\nAnexo ' + (i+1) + ': Prova bancária do fundo de reserva, ' + (e.fracao_id ? 'exigida pela fração ' + ((e.fracoes&&e.fracoes.codigo)||'?') : 'apresentada pela administração') + ' em ' + new Date(e.criado_em).toLocaleDateString('pt-PT') + ', validada pela maioria dos condóminos em ' + (e.validada_em?new Date(e.validada_em).toLocaleDateString('pt-PT'):'') + '.';
+          ata += '\nAnexo ' + (i+1) + ': Prova bancária do fundo de reserva, ' + (e.fracao_id ? 'exigida pela fração ' + (codigoFracao(e.fracao_id)||'?') : 'apresentada pela administração') + ' em ' + new Date(e.criado_em).toLocaleDateString('pt-PT') + ', validada pela maioria dos condóminos em ' + (e.validada_em?new Date(e.validada_em).toLocaleDateString('pt-PT'):'') + '.';
           ata += '\n  Impressão digital do documento (SHA-256): ' + (e.doc_hash||'—');
           ata += '\n  Localização do documento: ' + (e.doc_url||'—');
           ata += '\n  Nota: a impressão digital permite verificar em qualquer momento que o documento arquivado não foi alterado desde a validação.';
@@ -13309,10 +13309,10 @@ async function sugerirOrdemTrabalhos() {
 
     // ⚖️ Exigências formais dos condóminos = pontos obrigatórios da ordem de trabalhos
     try {
-      var exOT = await sb.from('exigencias').select('tipo,estado,criado_em,fracoes(codigo)').eq('condominio_id', c.id).in('estado', ['pendente','doc_carregado','em_votacao','validada']);
+      var exOT = await sb.from('exigencias').select('tipo,estado,criado_em,fracao_id').eq('condominio_id', c.id).in('estado', ['pendente','doc_carregado','em_votacao','validada']);
       (exOT.data||[]).forEach(function(e){
         var nomes = { fundo:'apresentação física da prova bancária do fundo de reserva', extratos:'apresentação dos extratos bancários do condomínio', quotas:'esclarecimento sobre quotas', outro:'esclarecimento exigido' };
-        contexto.situacoes.push('EXIGÊNCIA FORMAL registada pela fração ' + ((e.fracoes&&e.fracoes.codigo)||'?') + ' em ' + new Date(e.criado_em).toLocaleDateString('pt-PT') + ': ' + (nomes[e.tipo]||e.tipo) + (e.estado==='validada' ? ' (prova já validada online — falta a apresentação física e anexação à ata)' : '') + '. Este ponto DEVE constar da ordem de trabalhos.');
+        contexto.situacoes.push('EXIGÊNCIA FORMAL registada pela fração ' + (codigoFracao(e.fracao_id)||'?') + ' em ' + new Date(e.criado_em).toLocaleDateString('pt-PT') + ': ' + (nomes[e.tipo]||e.tipo) + (e.estado==='validada' ? ' (prova já validada online — falta a apresentação física e anexação à ata)' : '') + '. Este ponto DEVE constar da ordem de trabalhos.');
       });
     } catch(e){}
     if (aRes.data && aRes.data.length) {
@@ -16136,19 +16136,21 @@ async function carregarExigenciasAdmin() {
   var zona = document.getElementById('exig-admin-zona');
   if (!zona || !currentCondo) return;
   try {
-    var r = await sb.from('exigencias').select('*, fracoes(codigo)').eq('condominio_id', currentCondo.id).order('criado_em', {ascending:false}).limit(6);
+    var r = await sb.from('exigencias').select('*').eq('condominio_id', currentCondo.id).order('criado_em', {ascending:false}).limit(6);
+    // ⚠️ Mesmo que a leitura falhe, o botão de carregar TEM de aparecer.
+    // Antes o código saía aqui e o administrador ficava sem porta nenhuma.
+    var avisoErro = '';
     if (r.error) {
       _registarFalta('exigencias', r.error, 'sql_prova_fundo.sql');
-      zona.innerHTML = '<div style="background:var(--adim);border:1px solid rgba(255,179,0,.3);border-radius:9px;padding:10px 12px;margin-top:12px;font-size:11px;color:var(--t2);line-height:1.5;">⚠️ Não consegui ler as provas do fundo: ' + (r.error.message || 'erro') + '<br><span style="font-size:10.5px;color:var(--t3);">Se for coluna em falta, corre o <strong>sql_prova_fundo.sql</strong>.</span></div>';
-      return;
+      avisoErro = '<div style="background:var(--adim);border:1px solid rgba(255,179,0,.3);border-radius:9px;padding:10px 12px;margin-top:12px;font-size:11px;color:var(--t2);line-height:1.5;">⚠️ Não consegui ler o histórico de provas: ' + (r.error.message || 'erro') + '<br><span style="font-size:10.5px;color:var(--t3);">Podes carregar a prova na mesma — só não vês o histórico.</span></div>';
     }
-    var exigs = r.data || [];
-    var h = '';
+    var exigs = r.error ? [] : (r.data || []);
+    var h = avisoErro;
     var ativa = exigs.find(function(e){ return ['pendente','doc_carregado','em_votacao'].indexOf(e.estado) > -1; });
     if (ativa) {
       _exigAtual = ativa;
       h += '<div style="background:rgba(180,140,255,.06);border:1px solid rgba(180,140,255,.35);border-radius:10px;padding:12px 14px;margin-top:12px;">';
-      h += '<div style="font-size:12px;font-weight:800;color:#b48cff;">⚖️ Exigência formal de prova — fração ' + ((ativa.fracoes&&ativa.fracoes.codigo)||'?') + ' · ' + new Date(ativa.criado_em).toLocaleDateString('pt-PT') + '</div>';
+      h += '<div style="font-size:12px;font-weight:800;color:#b48cff;">⚖️ Exigência formal de prova — fração ' + (codigoFracao(ativa.fracao_id)||'?') + ' · ' + new Date(ativa.criado_em).toLocaleDateString('pt-PT') + '</div>';
       if (ativa.estado === 'pendente') {
         h += '<div style="font-size:11px;color:var(--t2);margin:6px 0 10px;line-height:1.5;">Um condómino exige a prova bancária do fundo. Carrega o <strong>extrato oficial do banco</strong> (PDF descarregado do homebanking). O sistema verifica o documento, os condóminos votam a validação, e o documento fica anexado à próxima ata — com impressão digital SHA-256.</div>';
         h += '<label style="display:block;cursor:pointer;"><input type="file" id="exig-doc" accept="application/pdf,image/*" style="display:none" onchange="provaSelecionada(this)">';
@@ -16290,7 +16292,7 @@ async function provaRetomar() {
       : { valido: true, motivo: 'verificação automática indisponível — validação fica inteiramente nos condóminos' };
     // sem o ficheiro em memória não dá para reanalisar: segue para votação com a nota honesta
     await sb.from('exigencias').update({ estado:'em_votacao', ai_resultado: veredicto.motivo }).eq('id', _exigAtual.id);
-    var quem = (_exigAtual.fracao_id && _exigAtual.fracoes && _exigAtual.fracoes.codigo) ? (' (exigido pela fração ' + _exigAtual.fracoes.codigo + ')') : ' por sua iniciativa';
+    var quem = codigoFracao(_exigAtual.fracao_id) ? (' (exigido pela fração ' + codigoFracao(_exigAtual.fracao_id) + ')') : ' por sua iniciativa';
     await sb.from('mensagens').insert((fracoes||[]).map(function(fr){
       return { condominio_id: currentCondo.id, fracao_id: fr.id, autor:'admin', lida_admin:true, lida_condomino:false,
         texto: (veredicto.demo ? '🧪 DEMONSTRAÇÃO — ESTE NÃO É UM PROCESSO REAL\n\n' : '') + '🗳️ VALIDAÇÃO DA PROVA DO FUNDO\n\nA administração carregou o extrato bancário do fundo de reserva' + quem + '.\n' + veredicto.motivo + '\n\nEntra no portal, consulta o documento e vota se o aceitas como prova.\nImpressão digital: ' + ((_exigAtual.doc_hash||'').substring(0,16)) + '…' };
@@ -16310,6 +16312,16 @@ async function provaRecomecar() {
     toast('Pronto — podes carregar outro documento','ok');
     carregarExigenciasAdmin();
   } catch(e) { toast('Erro: ' + (e.message||e),'err'); }
+}
+
+// ═══════════════════════════════════════════════════════════
+
+// 🔎 Código da fração sem depender de embutes do PostgREST.
+// (havia duas ligações entre 'exigencias' e 'fracoes', logo o embute era ambíguo e a consulta falhava)
+function codigoFracao(fracaoId) {
+  if (!fracaoId) return null;
+  var f = (fracoes || []).find(function(x){ return x.id === fracaoId; });
+  return f ? (f.codigo || null) : null;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -16451,7 +16463,7 @@ async function provaEnviar() {
 
     if (!veredicto.valido) {
       await sb.from('exigencias').update({ estado:'rejeitada_ai', ai_resultado: veredicto.motivo }).eq('id', _exigAtual.id);
-      var quem = (_exigAtual.fracoes && _exigAtual.fracoes.codigo) ? ('exigida pela fração ' + _exigAtual.fracoes.codigo) : 'apresentada pela administração';
+      var quem = codigoFracao(_exigAtual.fracao_id) ? ('exigida pela fração ' + codigoFracao(_exigAtual.fracao_id)) : 'apresentada pela administração';
       await sb.from('mensagens').insert((fracoes||[]).map(function(fr){
         return { condominio_id: currentCondo.id, fracao_id: fr.id, autor:'admin', lida_admin:true, lida_condomino:false,
           texto: '⚠️ VERIFICAÇÃO DA PROVA DO FUNDO\n\nA prova bancária do fundo de reserva, ' + quem + ', foi REJEITADA na verificação automática.\nMotivo: ' + veredicto.motivo + '\n\n[Registo automático. Impressão digital do documento rejeitado: ' + hash.substring(0,16) + '…]' };
@@ -16465,7 +16477,7 @@ async function provaEnviar() {
 
     // 4) votação
     await sb.from('exigencias').update({ estado:'em_votacao', ai_resultado: veredicto.motivo }).eq('id', _exigAtual.id);
-    var quem2 = (_exigAtual.fracoes && _exigAtual.fracoes.codigo) ? (' (exigido pela fração ' + _exigAtual.fracoes.codigo + ')') : ' por sua iniciativa';
+    var quem2 = codigoFracao(_exigAtual.fracao_id) ? (' (exigido pela fração ' + codigoFracao(_exigAtual.fracao_id) + ')') : ' por sua iniciativa';
     await sb.from('mensagens').insert((fracoes||[]).map(function(fr){
       return { condominio_id: currentCondo.id, fracao_id: fr.id, autor:'admin', lida_admin:true, lida_condomino:false,
         texto: (veredicto.demo ? '🧪 DEMONSTRAÇÃO — ESTE NÃO É UM PROCESSO REAL\n\n' : '') + '🗳️ VALIDAÇÃO DA PROVA DO FUNDO\n\nA administração carregou o extrato bancário do fundo de reserva' + quem2 + '. O documento passou a verificação automática' + (veredicto.motivo ? ' (' + veredicto.motivo + ')' : '') + '.\n\nAgora és tu que validas: vai à secção Quotas do portal, consulta o documento e vota.\nImpressão digital: ' + hash.substring(0,16) + '…' };
@@ -16529,7 +16541,7 @@ async function exigDocEscolhido(inp) {
     await sb.from('exigencias').update({ estado:'rejeitada_ai', ai_resultado: veredicto.motivo }).eq('id', _exigAtual.id);
     var msgsRej = fracoes.map(function(fr){
       return { condominio_id: currentCondo.id, fracao_id: fr.id, autor:'admin', lida_admin:true, lida_condomino:false,
-        texto: '⚠️ VERIFICAÇÃO DA PROVA DO FUNDO\n\nA prova bancária do fundo de reserva' + (_exigAtual.fracao_id ? ', exigida pela fração ' + ((_exigAtual.fracoes&&_exigAtual.fracoes.codigo)||'') : ', apresentada pela administração') + ', foi REJEITADA na verificação automática.\nMotivo: ' + veredicto.motivo + '\n\n[Registo automático do sistema — impressão digital do documento rejeitado: ' + hash.substring(0,16) + '…]' };
+        texto: '⚠️ VERIFICAÇÃO DA PROVA DO FUNDO\n\nA prova bancária do fundo de reserva' + (_exigAtual.fracao_id ? ', exigida pela fração ' + (codigoFracao(_exigAtual.fracao_id)||'') : ', apresentada pela administração') + ', foi REJEITADA na verificação automática.\nMotivo: ' + veredicto.motivo + '\n\n[Registo automático do sistema — impressão digital do documento rejeitado: ' + hash.substring(0,16) + '…]' };
     });
     await sb.from('mensagens').insert(msgsRej);
     diz('❌ Documento rejeitado: ' + veredicto.motivo + ' — todos os condóminos foram informados.', 'var(--red)');
@@ -16542,7 +16554,7 @@ async function exigDocEscolhido(inp) {
   await sb.from('exigencias').update({ estado:'em_votacao', ai_resultado: veredicto.motivo }).eq('id', _exigAtual.id);
   var msgsOk = fracoes.map(function(fr){
     return { condominio_id: currentCondo.id, fracao_id: fr.id, autor:'admin', lida_admin:true, lida_condomino:false,
-      texto: (veredicto.demo ? '🧪 DEMONSTRAÇÃO — ESTE NÃO É UM PROCESSO REAL\n\n' : '') + '🗳️ VALIDAÇÃO DA PROVA DO FUNDO\n\nA administração carregou o extrato bancário do fundo de reserva' + (_exigAtual.fracao_id ? ' (exigido pela fração ' + ((_exigAtual.fracoes&&_exigAtual.fracoes.codigo)||'') + ')' : ' por sua iniciativa') + '. O documento passou a verificação automática' + (veredicto.motivo ? ' (' + veredicto.motivo + ')' : '') + '.\n\nAgora és tu que validas: vai à secção Quotas do portal, consulta o documento e vota. Impressão digital: ' + hash.substring(0,16) + '…' };
+      texto: (veredicto.demo ? '🧪 DEMONSTRAÇÃO — ESTE NÃO É UM PROCESSO REAL\n\n' : '') + '🗳️ VALIDAÇÃO DA PROVA DO FUNDO\n\nA administração carregou o extrato bancário do fundo de reserva' + (_exigAtual.fracao_id ? ' (exigido pela fração ' + (codigoFracao(_exigAtual.fracao_id)||'') + ')' : ' por sua iniciativa') + '. O documento passou a verificação automática' + (veredicto.motivo ? ' (' + veredicto.motivo + ')' : '') + '.\n\nAgora és tu que validas: vai à secção Quotas do portal, consulta o documento e vota. Impressão digital: ' + hash.substring(0,16) + '…' };
   });
   await sb.from('mensagens').insert(msgsOk);
   diz('✅ Documento verificado — votação aberta aos condóminos (todos avisados).', 'var(--green)');
