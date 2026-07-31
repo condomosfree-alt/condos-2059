@@ -870,7 +870,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.30-2151</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.31-0837</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -1550,6 +1550,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
             </div>
             <div style="height:9px;background:rgba(255,255,255,.06);border-radius:6px;overflow:hidden;margin-bottom:10px;"><div id="fundo-barra" style="height:100%;width:0%;background:#b48cff;border-radius:6px;transition:width .5s;"></div></div>
             <div id="fundo-nota" style="font-size:10.5px;color:var(--t3);line-height:1.5;"></div>
+            <div id="fundo-provado"></div>
             <div id="fundo-suficiencia"></div>
             <div id="exig-admin-zona"></div>
           </div>
@@ -12712,6 +12713,14 @@ async function gerarAtaDoLivro() {
       ata += '\n  · utilizações registadas: ' + usos.toFixed(2) + ' EUR';
       if (pv && pv.validada_em) {
         ata += '\n\nPROVA BANCÁRIA: apresentada e validada pela maioria dos condóminos em ' + new Date(pv.validada_em).toLocaleDateString('pt-PT') + '.';
+        var spAta = currentCondo.fundo_saldo_provado;
+        if (spAta !== null && spAta !== undefined && !isNaN(parseFloat(spAta))) {
+          spAta = parseFloat(spAta);
+          ata += '\n  SALDO PROVADO EM BANCO: ' + spAta.toFixed(2) + ' EUR (valor lido no extrato e aceite pelos condóminos)';
+          var dTeo = spAta - teoAta, dReg = spAta - compAta;
+          if (Math.abs(dReg) >= 1) ata += '\n  Diferença face aos movimentos registados: ' + (dReg >= 0 ? '+' : '') + dReg.toFixed(2) + ' EUR';
+          if (dTeo < -1) ata += '\n  ATENÇÃO: está ' + Math.abs(dTeo).toFixed(2) + ' EUR ABAIXO do mínimo legal. A assembleia deve deliberar sobre a regularização.';
+        }
         ata += '\n  Impressão digital do documento (SHA-256): ' + (pv.doc_hash || '—');
         if (/DEMONSTRA/i.test(pv.ai_resultado||'')) ata += '\n  ATENÇÃO: processada em modo demonstração — a autenticidade NÃO foi verificada. Não constitui prova.';
         ata += '\n  O documento é apresentado nesta assembleia para consulta dos condóminos.';
@@ -16475,12 +16484,15 @@ async function provaEnviar() {
       return;
     }
 
-    // 4) votação
-    await sb.from('exigencias').update({ estado:'em_votacao', ai_resultado: veredicto.motivo }).eq('id', _exigAtual.id);
+    // 4) votação — o SALDO LIDO vai junto: é sobre ele que os condóminos votam
+    var saldoLido = (veredicto.saldo !== null && veredicto.saldo !== undefined) ? parseFloat(veredicto.saldo) : null;
+    if (isNaN(saldoLido)) saldoLido = null;
+    await sb.from('exigencias').update({ estado:'em_votacao', ai_resultado: veredicto.motivo, saldo_extrato: saldoLido }).eq('id', _exigAtual.id);
+    _exigAtual.saldo_extrato = saldoLido;
     var quem2 = codigoFracao(_exigAtual.fracao_id) ? (' (exigido pela fração ' + codigoFracao(_exigAtual.fracao_id) + ')') : ' por sua iniciativa';
     await sb.from('mensagens').insert((fracoes||[]).map(function(fr){
       return { condominio_id: currentCondo.id, fracao_id: fr.id, autor:'admin', lida_admin:true, lida_condomino:false,
-        texto: (veredicto.demo ? '🧪 DEMONSTRAÇÃO — ESTE NÃO É UM PROCESSO REAL\n\n' : '') + '🗳️ VALIDAÇÃO DA PROVA DO FUNDO\n\nA administração carregou o extrato bancário do fundo de reserva' + quem2 + '. O documento passou a verificação automática' + (veredicto.motivo ? ' (' + veredicto.motivo + ')' : '') + '.\n\nAgora és tu que validas: vai à secção Quotas do portal, consulta o documento e vota.\nImpressão digital: ' + hash.substring(0,16) + '…' };
+        texto: (veredicto.demo ? '🧪 DEMONSTRAÇÃO — ESTE NÃO É UM PROCESSO REAL\n\n' : '') + '🗳️ VALIDAÇÃO DA PROVA DO FUNDO\n\nA administração carregou o extrato bancário do fundo de reserva' + quem2 + '.' + (saldoLido !== null ? '\n\n💶 Saldo lido no extrato: ' + saldoLido.toFixed(2).replace('.',',') + '€\nÉ este valor que vais validar — se o aceitares, passa a ser o saldo provado do fundo no sistema.' : '\n\n⚠️ Não foi possível ler o saldo automaticamente. Confirma-o tu no documento.') + '\n\nVai à secção Quotas do portal, consulta o documento e vota.\nImpressão digital: ' + hash.substring(0,16) + '…' };
     }));
 
     _provaMsg('<div style="background:rgba(0,230,118,.08);border:1px solid rgba(0,230,118,.32);border-radius:9px;padding:11px 13px;font-size:11.5px;color:var(--t2);line-height:1.55;">✅ <strong style="color:var(--green);">Prova enviada e verificada.</strong><br>' + (veredicto.motivo || '') + '<br><span style="font-size:10.5px;color:var(--t3);">A votação está aberta aos condóminos e todos foram avisados. Quando a maioria validar, o documento entra na próxima ata como anexo, com a impressão digital.</span></div>', 'var(--t2)');
@@ -16619,10 +16631,26 @@ async function apurarExigencia(exig) {
     var el = document.getElementById('exig-votos');
     if (el) el.innerHTML = '🗳️ Votação: <strong style="color:var(--green);">' + Math.round(pSim) + '‰ aceitam</strong> · <strong style="color:var(--red);">' + Math.round(pNao) + '‰ rejeitam</strong> · maioria necessária: ' + Math.round(totalPerm/2) + '‰';
     if (pSim > totalPerm/2) {
-      await sb.from('exigencias').update({ estado:'validada', validada_em: new Date().toISOString() }).eq('id', exig.id);
+      await sb.from('exigencias').update({ estado:'validada', validada_em: new Date().toISOString(), saldo_confirmado: true }).eq('id', exig.id);
+
+      // 💶 O VALOR PROVADO entra no sistema — é isto que faltava
+      var saldoProv = (exig.saldo_extrato !== null && exig.saldo_extrato !== undefined) ? parseFloat(exig.saldo_extrato) : null;
+      if (saldoProv !== null && !isNaN(saldoProv)) {
+        try {
+          await sb.from('condominios').update({
+            fundo_saldo_provado: saldoProv,
+            fundo_provado_em: new Date().toISOString(),
+            fundo_provado_hash: exig.doc_hash || null
+          }).eq('id', currentCondo.id);
+          currentCondo.fundo_saldo_provado = saldoProv;
+          currentCondo.fundo_provado_em = new Date().toISOString();
+          currentCondo.fundo_provado_hash = exig.doc_hash || null;
+          try { atualizarFundoCartao(); } catch(e){}
+        } catch(e) { console.error('gravar saldo provado:', e); }
+      }
       var msgsV = fracoes.map(function(fr){
         return { condominio_id: currentCondo.id, fracao_id: fr.id, autor:'admin', lida_admin:true, lida_condomino:false,
-          texto: '✅ PROVA DO FUNDO VALIDADA\n\nA prova bancária do fundo de reserva foi validada pela maioria dos condóminos (' + Math.round(pSim) + '‰ a favor). O documento fica registado com impressão digital ' + (exig.doc_hash||'').substring(0,16) + '… e será apresentado fisicamente na próxima assembleia, ficando anexado à ata.' };
+          texto: '✅ PROVA DO FUNDO VALIDADA\n\nA prova bancária do fundo de reserva foi validada pela maioria dos condóminos (' + Math.round(pSim) + '‰ a favor).' + (saldoProv !== null && !isNaN(saldoProv) ? '\n\n💶 Saldo provado do fundo: ' + saldoProv.toFixed(2).replace('.',',') + '€\nEste valor passa a constar no sistema como o saldo comprovado em banco, com esta data.' : '') + '\n\nO documento fica registado com impressão digital ' + (exig.doc_hash||'').substring(0,16) + '… e será apresentado fisicamente na próxima assembleia, ficando anexado à ata.' };
       });
       await sb.from('mensagens').insert(msgsV);
       toast('✅ Prova validada pela maioria (' + Math.round(pSim) + '‰)','ok');
@@ -17228,6 +17256,43 @@ async function atualizarFundoCartao() {
     var barra = document.getElementById('fundo-barra');
     barra.style.width = Math.min(100, cob) + '%';
     barra.style.background = cor;
+    // 💶 TERCEIRO NÚMERO: o saldo provado em banco, validado pelos condóminos
+    var zonaProv = document.getElementById('fundo-provado');
+    if (zonaProv) {
+      var sp = currentCondo.fundo_saldo_provado;
+      if (sp !== null && sp !== undefined && !isNaN(parseFloat(sp))) {
+        sp = parseFloat(sp);
+        var quando = currentCondo.fundo_provado_em ? new Date(currentCondo.fundo_provado_em) : null;
+        var dias = quando ? Math.floor((new Date() - quando) / 86400000) : null;
+        var difReg = sp - comprovado;      // banco vs movimentos registados
+        var difTeo = sp - teorico;         // banco vs o que devia existir
+        var corP = Math.abs(difTeo) < 1 ? 'var(--green)' : (sp >= teorico ? 'var(--green)' : 'var(--amber)');
+        var hP = '<div style="background:rgba(0,212,255,.05);border:1px solid rgba(0,212,255,.28);border-radius:10px;padding:12px 14px;margin-top:12px;">';
+        hP += '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;">';
+        hP += '<div><div style="font-size:9.5px;color:var(--t3);letter-spacing:.14em;text-transform:uppercase;">Provado em banco</div>';
+        hP += '<div style="font-family:var(--mono);font-size:23px;font-weight:700;color:' + corP + ';margin-top:5px;">' + sp.toFixed(2) + '€</div></div>';
+        hP += '<div style="text-align:right;font-size:10px;color:var(--t3);line-height:1.5;">validado pelos<br>condóminos' + (quando ? '<br><strong style="color:var(--t2);">' + quando.toLocaleDateString('pt-PT') + '</strong>' : '') + '</div>';
+        hP += '</div>';
+        if (Math.abs(difReg) >= 1) {
+          hP += '<div style="background:' + (difReg < 0 ? 'rgba(255,68,68,.08);border:1px solid rgba(255,68,68,.3)' : 'rgba(255,179,0,.07);border:1px solid rgba(255,179,0,.3)') + ';border-radius:8px;padding:9px 11px;margin-top:10px;font-size:10.5px;color:var(--t2);line-height:1.5;">';
+          hP += (difReg < 0
+            ? '⚠️ O banco tem <strong>' + Math.abs(difReg).toFixed(2) + '€ a menos</strong> do que os movimentos registados no programa. Há saídas do fundo por registar — ou o extrato é anterior a um reforço.'
+            : 'ℹ️ O banco tem <strong>' + difReg.toFixed(2) + '€ a mais</strong> do que os movimentos registados. Faltam reforços por lançar no programa.');
+          hP += '</div>';
+        }
+        if (difTeo < -1) {
+          hP += '<div style="background:rgba(255,68,68,.08);border:1px solid rgba(255,68,68,.3);border-radius:8px;padding:9px 11px;margin-top:8px;font-size:10.5px;color:var(--t2);line-height:1.5;">🚨 O saldo provado está <strong>' + Math.abs(difTeo).toFixed(2) + '€ abaixo</strong> do mínimo legal (' + teorico.toFixed(2) + '€). Isto tem de ser explicado e regularizado em assembleia.</div>';
+        }
+        if (dias !== null && dias > 365) {
+          hP += '<div style="font-size:10px;color:var(--amber);margin-top:8px;">📅 A prova tem ' + Math.floor(dias/30) + ' meses. Convém apresentar um extrato mais recente.</div>';
+        }
+        hP += '</div>';
+        zonaProv.innerHTML = hP;
+      } else {
+        zonaProv.innerHTML = '<div style="font-size:10.5px;color:var(--t3);margin-top:10px;line-height:1.5;">💶 <strong>Saldo provado em banco:</strong> ainda nenhum. Os números acima vêm do que está registado no programa — só um extrato validado pelos condóminos prova o dinheiro que existe mesmo.</div>';
+      }
+    }
+
     var pm = document.getElementById('fundo-pm');
     if (pm) pm.textContent = 'DL 268/94, Art. 4.º — mínimo legal 10% · em vigor neste prédio: ' + pct + '%';
     // projeção de suficiência (assíncrona, não trava o cartão)

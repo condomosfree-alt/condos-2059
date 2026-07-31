@@ -763,6 +763,7 @@
       </div>
       <div style="height:8px;background:rgba(255,255,255,.06);border-radius:5px;overflow:hidden;"><div id="fundo-p-barra" style="height:100%;width:0%;border-radius:5px;transition:width .5s;"></div></div>
       <div id="fundo-p-nota" style="font-size:10px;color:var(--t3);margin-top:8px;line-height:1.5;"></div>
+      <div id="fundo-provado-p"></div>
       <div id="exig-zona" style="margin-top:12px;"></div>
       <div id="historia-card" style="display:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--b);">
         <div style="font-size:12.5px;font-weight:800;">🕰️ A tua história neste prédio</div>
@@ -2673,7 +2674,16 @@ async function carregarExigencias() {
       } else if (ativa.estado === 'doc_carregado') {
         h += '<div style="font-size:10.5px;color:var(--t2);margin-top:5px;">Documento carregado — em verificação automática.</div>';
       } else if (ativa.estado === 'em_votacao') {
-        h += '<div style="font-size:10.5px;color:var(--t2);margin-top:5px;">O documento passou a verificação automática. <strong>Vota tu:</strong> o extrato apresentado comprova o fundo?</div>';
+        h += '<div style="font-size:10.5px;color:var(--t2);margin-top:5px;">O documento passou a verificação automática. <strong>Agora és tu que validas.</strong></div>';
+        if (ativa.saldo_extrato !== null && ativa.saldo_extrato !== undefined) {
+          h += '<div style="background:rgba(0,212,255,.07);border:1px solid rgba(0,212,255,.3);border-radius:9px;padding:11px 13px;margin-top:9px;text-align:center;">';
+          h += '<div style="font-size:9.5px;color:var(--t3);letter-spacing:.12em;text-transform:uppercase;">Saldo lido no extrato</div>';
+          h += '<div style="font-family:var(--mono);font-size:25px;font-weight:700;color:var(--cyan);margin:6px 0 4px;">' + parseFloat(ativa.saldo_extrato).toFixed(2).replace('.',',') + '€</div>';
+          h += '<div style="font-size:10.5px;color:var(--t2);line-height:1.5;">Confirmas que o documento prova este saldo no fundo?<br>Se a maioria aceitar, passa a ser o valor comprovado do prédio.</div>';
+          h += '</div>';
+        } else {
+          h += '<div style="font-size:10.5px;color:var(--amber);margin-top:8px;line-height:1.5;">⚠️ Não foi possível ler o saldo automaticamente. Abre o documento e confirma tu o valor antes de votares.</div>';
+        }
         if (ativa.doc_url) h += '<a href="' + ativa.doc_url + '" target="_blank" style="display:block;font-size:11px;color:var(--cyan);margin-top:6px;">📄 Ver o documento apresentado</a>';
         if (ativa.doc_hash) h += '<div style="font-size:8.5px;color:var(--t3);margin-top:3px;word-break:break-all;">Impressão digital (SHA-256): ' + ativa.doc_hash + '</div>';
         if (ativa.meu_voto) {
@@ -3532,6 +3542,21 @@ async function carregarFundo() {
     const elTaxa = document.getElementById('fundo-taxa-vigor');
     if (elTaxa && pctVig > 0) {
       elTaxa.innerHTML = 'Neste prédio está em vigor <strong style="color:#b48cff;">' + pctVig + '%</strong> de cada quota' + (pctVig > 10 ? ' — acima do mínimo, aprovado em assembleia.' : '.');
+    }
+    // 💶 saldo provado em banco, se os condóminos já validaram algum
+    const elProv = document.getElementById('fundo-provado-p');
+    if (elProv) {
+      const sp = d.saldo_provado;
+      if (sp !== null && sp !== undefined) {
+        const q = d.provado_em ? new Date(d.provado_em) : null;
+        elProv.innerHTML = '<div style="background:rgba(0,212,255,.06);border:1px solid rgba(0,212,255,.28);border-radius:9px;padding:11px 13px;margin-top:11px;">' +
+          '<div style="font-size:9.5px;color:var(--t3);letter-spacing:.12em;text-transform:uppercase;">Provado em banco</div>' +
+          '<div style="font-family:var(--mono);font-size:22px;font-weight:700;color:var(--cyan);margin:5px 0 3px;">' + parseFloat(sp).toFixed(2).replace('.',',') + '€</div>' +
+          '<div style="font-size:10px;color:var(--t2);line-height:1.5;">Extrato bancário validado pelos condóminos' + (q ? ' em ' + q.toLocaleDateString('pt-PT') : '') + '.' +
+          (d.provado_hash ? '<br><span style="font-size:9px;color:var(--t3);word-break:break-all;">impressão digital: ' + String(d.provado_hash).substring(0,20) + '…</span>' : '') + '</div></div>';
+      } else {
+        elProv.innerHTML = '<div style="font-size:10px;color:var(--t3);margin-top:10px;line-height:1.5;">💶 Ainda não há extrato bancário validado. Os valores acima vêm dos movimentos registados — podes exigir a prova bancária abaixo.</div>';
+      }
     }
     const cor = cob >= 95 ? 'var(--green)' : (cob >= 60 ? '#ffb300' : 'var(--red)');
     const barra = document.getElementById('fundo-p-barra');
