@@ -870,7 +870,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.31-0837</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.31-2231</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -4235,11 +4235,11 @@ async function verificarAvisosGerais() {
       var pctFv = parseFloat(currentCondo.fundo_percentagem); if (isNaN(pctFv)) pctFv = 10;
       var [qPagasR, mFundoR] = await Promise.all([
         sb.from('quotas').select('valor_pago').eq('condominio_id', currentCondo.id),
-        sb.from('movimentos').select('tipo,valor').eq('condominio_id', currentCondo.id).eq('categoria','fundo_reserva')
+        sb.from('movimentos').select('tipo,valor,categoria,conta').eq('condominio_id', currentCondo.id).or(SEL_FUNDO)
       ]);
       var pagasFv = (qPagasR.data||[]).reduce(function(s,q){ return s + parseFloat(q.valor_pago||0); }, 0);
       var teoricoFv = pagasFv * pctFv / 100;
-      var comprovadoFv = (mFundoR.data||[]).reduce(function(s,m){ return s + (m.tipo==='despesa'?1:-1)*parseFloat(m.valor||0); }, 0);
+      var comprovadoFv = (mFundoR.data||[]).reduce(function(s,m){ return s + movFundoValor(m); }, 0);
       window._fundoComprovado = comprovadoFv; window._fundoTeorico = teoricoFv;
       if (teoricoFv >= 50 && comprovadoFv < teoricoFv * 0.85) {
         avisos.push({ pagina:'financeiro', badge:'🛡️', cor:'#b48cff',
@@ -8157,28 +8157,160 @@ async function apagarMovimento(id) {
 
 // ═══════════════ 🏦 FUNDO COMUM DE RESERVA (DL 268/94, Art. 4.º) ═══════════════
 // Quando uma quota é paga, a percentagem legal (mín. 10%) vai para a conta de reserva.
+// 🛡️ AS DUAS CONVENÇÕES DO FUNDO ------------------------------------------
+// Um movimento do fundo pode estar escrito de duas maneiras:
+//   NOVA   categoria='fundo_reserva'  -> despesa = reforço · receita = utilização
+//   ANTIGA conta='reserva'            -> receita = reforço · despesa = utilização
+// (a antiga é a que transferirParaFundo grava sozinho quando uma quota é paga)
+// Classifica cada movimento UMA vez. Devolve + reforço / − utilização / 0.
+var SEL_FUNDO = 'categoria.eq.fundo_reserva,conta.eq.reserva';
+function movFundoValor(m) {
+  if (!m) return 0;
+  var v = parseFloat(m.valor || 0); if (!v) return 0;
+  if (m.categoria === 'fundo_reserva') return m.tipo === 'despesa' ? v : -v;
+  if (m.conta === 'reserva') return m.tipo === 'receita' ? v : -v;
+  return 0;
+}
+function fundoRegistado(movs) {
+  return Math.round((movs || []).reduce(function(s, m){ return s + movFundoValor(m); }, 0) * 100) / 100;
+}
+// ---------------------------------------------------------------------------
+
 async function transferirParaFundo(valorQuota, descricao, dataMov, fracaoId) {
   var pct = parseFloat(currentCondo.fundo_percentagem);
   if (isNaN(pct)) pct = 10;              // por defeito, o mínimo legal
   if (pct <= 0) return 0;
   var valorFundo = Math.round(parseFloat(valorQuota||0) * (pct/100) * 100) / 100;
   if (valorFundo <= 0) return 0;
+  // ATENÇÃO: o supabase-js NÃO atira exceção quando o insert falha — devolve
+  // { error }. O try/catch antigo não apanhava nada e o reforço desaparecia
+  // em silêncio. Um reforço que falha é dinheiro por reservar: tem de gritar.
+  var res;
   try {
-    await sb.from('movimentos').insert({
+    res = await sb.from('movimentos').insert({
       condominio_id: currentCondo.id, tipo: 'receita', categoria: 'Fundo de Reserva',
       descricao: '🏦 ' + pct + '% p/ fundo — ' + (descricao||'quota'),
       valor: valorFundo, data_movimento: dataMov || new Date().toISOString().split('T')[0],
       conta: 'reserva', fracao_id: fracaoId || null
     });
-    return valorFundo;
-  } catch(e) { console.error('fundo reserva:', e); return 0; }
+  } catch(e) { res = { error: e }; }
+  if (res && res.error) {
+    console.error('fundo reserva:', res.error);
+    try {
+      toast('⚠️ O reforço de ' + valorFundo.toFixed(2) + '€ para o fundo NÃO foi registado: ' + (res.error.message || 'erro desconhecido'), 'err');
+    } catch(e) {}
+    return 0;
+  }
+  return valorFundo;
+}
+
+// 🔧 REPOR REFORÇOS EM FALTA ------------------------------------------------
+// Compara as quotas pagas com os reforços do fundo já registados e lança os
+// que faltam, com a data de cada pagamento. NUNCA grava sozinha: mostra
+// primeiro, uma linha por reforço, e só escreve depois de confirmares.
+var _reporLista = null;
+
+async function reporReforcosFundo() {
+  var pct = parseFloat(currentCondo.fundo_percentagem); if (isNaN(pct)) pct = 10;
+  if (pct <= 0) { toast('A taxa do fundo está a 0% — não há reforços a lançar.', 'err'); return; }
+  toast('A comparar quotas pagas com reforços registados…');
+  var qR, mR;
+  try {
+    var pares = await Promise.all([
+      sb.from('quotas').select('id,fracao_id,mes,ano,valor_pago,data_pagamento').eq('condominio_id', currentCondo.id).gt('valor_pago', 0),
+      sb.from('movimentos').select('valor,data_movimento,fracao_id,categoria,conta,tipo').eq('condominio_id', currentCondo.id).or(SEL_FUNDO)
+    ]);
+    qR = pares[0]; mR = pares[1];
+  } catch(e) { toast('Não consegui ler os dados: ' + (e.message||e), 'err'); return; }
+  if ((qR && qR.error) || (mR && mR.error)) {
+    toast('Não consegui ler os dados: ' + (((qR && qR.error) || (mR && mR.error)).message || ''), 'err'); return;
+  }
+
+  // reforços que já existem, contados por fração + mês
+  var jaTem = {};
+  (mR.data || []).forEach(function(m){
+    if (movFundoValor(m) <= 0) return;
+    var k = (m.fracao_id || '-') + '|' + String(m.data_movimento || '').substring(0,7);
+    jaTem[k] = (jaTem[k] || 0) + 1;
+  });
+
+  var falta = [], total = 0;
+  (qR.data || []).forEach(function(q){
+    var data = q.data_pagamento ? String(q.data_pagamento).substring(0,10)
+                                : (q.ano + '-' + ('0' + q.mes).slice(-2) + '-08');
+    var k = (q.fracao_id || '-') + '|' + data.substring(0,7);
+    if (jaTem[k] > 0) { jaTem[k]--; return; }          // já tem reforço nesse mês
+    var v = Math.round(parseFloat(q.valor_pago || 0) * (pct/100) * 100) / 100;
+    if (v <= 0) return;
+    falta.push({ fracao_id: q.fracao_id, data: data, valor: v, mes: q.mes, ano: q.ano });
+    total += v;
+  });
+  total = Math.round(total * 100) / 100;
+  _reporLista = falta;
+
+  if (!falta.length) {
+    abrirModalGenerico('🔧 Reforços do fundo', '<div style="padding:14px;text-align:center;font-size:12px;color:var(--t2);line-height:1.6;">Não encontrei nenhuma quota paga sem reforço.<br>O que falta ao fundo não vem de reforços por lançar.</div>');
+    return;
+  }
+
+  var meses = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  var h = '<div style="padding:2px;">';
+  h += '<div style="background:rgba(255,179,0,.07);border:1px solid rgba(255,179,0,.32);border-radius:10px;padding:12px 14px;font-size:11.5px;color:var(--t2);line-height:1.6;">';
+  h += 'Encontrei <strong style="color:var(--amber);">' + falta.length + '</strong> quotas pagas sem o reforço do fundo correspondente, num total de <strong style="color:var(--amber);">' + total.toFixed(2) + '€</strong> (' + pct + '% de cada uma).<br>';
+  h += 'Vou criar um movimento por cada, com a <strong>data do pagamento</strong>, para o histórico ficar fiel. Nada é apagado nem alterado.';
+  h += '</div>';
+  h += '<div style="font-size:11px;font-weight:700;color:var(--t2);margin:14px 0 8px;">O QUE VAI SER LANÇADO</div>';
+  h += '<div style="max-height:230px;overflow-y:auto;border:1px solid var(--b1);border-radius:9px;">';
+  falta.slice(0, 60).forEach(function(x){
+    h += '<div style="display:flex;justify-content:space-between;padding:7px 11px;border-bottom:1px solid var(--b1);font-size:11.5px;">';
+    h += '<div style="color:var(--t2);">Fração ' + (codigoFracao(x.fracao_id) || '—') + ' · ' + (meses[(x.mes||1)-1] || '') + '/' + x.ano + '<div style="font-size:9.5px;color:var(--t3);">' + x.data + '</div></div>';
+    h += '<div style="font-weight:700;color:#b48cff;font-family:monospace;">+' + x.valor.toFixed(2) + '€</div>';
+    h += '</div>';
+  });
+  h += '</div>';
+  if (falta.length > 60) h += '<div style="font-size:10px;color:var(--t3);margin-top:6px;">(mostro os primeiros 60; são lançados todos os ' + falta.length + ')</div>';
+  h += '<button class="btn-primary" style="width:100%;margin-top:14px;" onclick="reporReforcosExecutar()">Lançar os ' + falta.length + ' reforços (' + total.toFixed(2) + '€)</button>';
+  h += '<div style="font-size:10px;color:var(--t3);margin-top:8px;text-align:center;line-height:1.5;">Isto não move dinheiro nenhum no banco — só regista no programa o que já devia lá estar.</div>';
+  h += '</div>';
+  abrirModalGenerico('🔧 Repor reforços em falta', h);
+}
+
+async function reporReforcosExecutar() {
+  if (!_reporLista || !_reporLista.length) return;
+  var lista = _reporLista, pct = parseFloat(currentCondo.fundo_percentagem);
+  if (isNaN(pct)) pct = 10;
+  var meses = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  var feitos = 0, falhas = [], i;
+  toast('A lançar ' + lista.length + ' reforços…');
+  for (i = 0; i < lista.length; i += 25) {
+    var bloco = lista.slice(i, i + 25).map(function(x){
+      return {
+        condominio_id: currentCondo.id, tipo: 'receita', categoria: 'Fundo de Reserva',
+        descricao: '🏦 ' + pct + '% p/ fundo — regularização · ' + (meses[(x.mes||1)-1] || '') + '/' + x.ano + ' — ' + (codigoFracao(x.fracao_id) || ''),
+        valor: x.valor, data_movimento: x.data, conta: 'reserva', fracao_id: x.fracao_id || null
+      };
+    });
+    var r;
+    try { r = await sb.from('movimentos').insert(bloco); } catch(e) { r = { error: e }; }
+    if (r && r.error) { falhas.push(r.error.message || 'erro'); console.error('repor fundo:', r.error); }
+    else feitos += bloco.length;
+  }
+  _reporLista = null;
+  fecharModalGenerico();
+  if (falhas.length) {
+    toast('⚠️ Lançados ' + feitos + ' de ' + lista.length + '. Falhou: ' + falhas[0], 'err');
+  } else {
+    toast('✔ ' + feitos + ' reforços lançados. O fundo já os conta.', 'ok');
+  }
+  try { await atualizarFundoCartao(); } catch(e) {}
+  try { await carregarBalanco(); } catch(e) {}
 }
 
 async function saldoFundoReserva() {
-  var res = await sb.from('movimentos').select('tipo,valor').eq('condominio_id', currentCondo.id).eq('conta','reserva');
+  var res = await sb.from('movimentos').select('tipo,valor,categoria,conta').eq('condominio_id', currentCondo.id).or(SEL_FUNDO);
   var movs = res.data || [];
   var ini = parseFloat(currentCondo.fundo_saldo_inicial||0);
-  return ini + movs.reduce(function(s,m){ return s + (m.tipo==='receita' ? parseFloat(m.valor||0) : -parseFloat(m.valor||0)); }, 0);
+  return ini + movs.reduce(function(s,m){ return s + movFundoValor(m); }, 0);
 }
 
 // Quanto o fundo DEVIA ter (inclui a parte presa nas quotas por pagar)
@@ -8190,11 +8322,11 @@ async function fundoEmFalta() {
 }
 
 async function abrirFundoReserva() {
-  var res = await sb.from('movimentos').select('*').eq('condominio_id', currentCondo.id).eq('conta','reserva').order('data_movimento',{ascending:false});
+  var res = await sb.from('movimentos').select('*').eq('condominio_id', currentCondo.id).or(SEL_FUNDO).order('data_movimento',{ascending:false});
   var movs = res.data || [];
   var ini = parseFloat(currentCondo.fundo_saldo_inicial||0);
-  var entradas = movs.filter(function(m){return m.tipo==='receita';}).reduce(function(s,m){return s+parseFloat(m.valor||0);},0);
-  var saidas = movs.filter(function(m){return m.tipo!=='receita';}).reduce(function(s,m){return s+parseFloat(m.valor||0);},0);
+  var entradas = movs.reduce(function(s,m){ var v = movFundoValor(m); return s + (v > 0 ? v : 0); }, 0);
+  var saidas = movs.reduce(function(s,m){ var v = movFundoValor(m); return s + (v < 0 ? -v : 0); }, 0);
   var saldo = ini + entradas - saidas;
   var pct = parseFloat(currentCondo.fundo_percentagem); if (isNaN(pct)) pct = 10;
   var emFalta = await fundoEmFalta();
@@ -8234,7 +8366,7 @@ async function abrirFundoReserva() {
     h += '<div style="font-size:11px;font-weight:700;color:var(--t2);margin-bottom:8px;">MOVIMENTOS DO FUNDO (' + movs.length + ')</div>';
     h += '<div style="max-height:240px;overflow-y:auto;">';
     movs.slice(0,40).forEach(function(m){
-      var ent = m.tipo === 'receita';
+      var ent = movFundoValor(m) > 0;
       h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--b1);font-size:11.5px;">';
       h += '<div style="flex:1;"><div>' + (m.descricao||'—') + '</div><div style="font-size:9.5px;color:var(--t3);">' + (m.data_movimento||'') + '</div></div>';
       h += '<div style="font-weight:700;color:' + (ent?'var(--green)':'var(--red)') + ';">' + (ent?'+':'-') + eur(m.valor) + '</div>';
@@ -12685,15 +12817,15 @@ async function gerarAtaDoLivro() {
       var pctAta = parseFloat(currentCondo.fundo_percentagem); if (isNaN(pctAta)) pctAta = 10;
       var [qAta, mAta] = await Promise.all([
         sb.from('quotas').select('valor_pago').eq('condominio_id', currentCondo.id),
-        sb.from('movimentos').select('tipo,valor,data_movimento').eq('condominio_id', currentCondo.id).eq('categoria','fundo_reserva')
+        sb.from('movimentos').select('tipo,valor,categoria,conta,data_movimento').eq('condominio_id', currentCondo.id).or(SEL_FUNDO)
       ]);
       var pagasAta = (qAta.data||[]).reduce(function(s,q){ return s + parseFloat(q.valor_pago||0); }, 0);
       var teoAta = pagasAta * pctAta / 100;
       var reforcos = 0, usos = 0, ultimoRef = null;
       (mAta.data||[]).forEach(function(m){
-        var v = parseFloat(m.valor||0);
-        if (m.tipo === 'despesa') { reforcos += v; if (!ultimoRef || m.data_movimento > ultimoRef) ultimoRef = m.data_movimento; }
-        else usos += v;
+        var v = movFundoValor(m);
+        if (v > 0) { reforcos += v; if (!ultimoRef || m.data_movimento > ultimoRef) ultimoRef = m.data_movimento; }
+        else if (v < 0) usos += -v;
       });
       var compAta = reforcos - usos;
       var cobAta = teoAta > 0 ? Math.round(compAta / teoAta * 100) : 100;
@@ -13213,10 +13345,10 @@ async function sugerirOrdemTrabalhos() {
       var pctF = parseFloat(c.fundo_percentagem); if (isNaN(pctF)) pctF = 10;
       var [qFR, mFR] = await Promise.all([
         sb.from('quotas').select('valor_pago').eq('condominio_id', c.id),
-        sb.from('movimentos').select('tipo,valor').eq('condominio_id', c.id).eq('categoria','fundo_reserva')
+        sb.from('movimentos').select('tipo,valor,categoria,conta').eq('condominio_id', c.id).or(SEL_FUNDO)
       ]);
       var teorF = (qFR.data||[]).reduce(function(s,q){ return s + parseFloat(q.valor_pago||0); }, 0) * pctF / 100;
-      var compF = (mFR.data||[]).reduce(function(s,x){ return s + (x.tipo==='despesa'?1:-1)*parseFloat(x.valor||0); }, 0);
+      var compF = (mFR.data||[]).reduce(function(s,x){ return s + movFundoValor(x); }, 0);
       if (teorF >= 50 && compF < teorF * 0.85) {
         contexto.situacoes.push('FUNDO DE RESERVA SEM PROVA COMPLETA: por lei (DL 268/94) deviam existir ' + teorF.toFixed(2) + '€ (' + pctF + '% das quotas pagas) mas só ' + compF.toFixed(2) + '€ estão comprovados por movimentos. Sugerir ponto de prestação de contas do fundo com apresentação do extrato bancário.');
       } else if (teorF >= 50) {
@@ -17090,7 +17222,7 @@ async function carregarBalanco() {
   var painel = document.getElementById('balanco-hist');
   if (!painel || !currentCondo) return;
   try {
-    var r = await sb.from('movimentos').select('tipo,valor,categoria,data_movimento').eq('condominio_id', currentCondo.id);
+    var r = await sb.from('movimentos').select('tipo,valor,categoria,conta,data_movimento').eq('condominio_id', currentCondo.id);
     var movs = r.data||[];
     if (!movs.length) return;
     var porAno = {}, tot = { ent:0, sai:0, fIn:0, fOut:0 };
@@ -17098,7 +17230,8 @@ async function carregarBalanco() {
       var ano = (m.data_movimento||'').substring(0,4) || '?';
       porAno[ano] = porAno[ano] || { ent:0, sai:0 };
       var v = parseFloat(m.valor||0);
-      if (m.categoria === 'fundo_reserva') { if (m.tipo==='despesa') tot.fIn += v; else tot.fOut += v; return; }
+      var vf = movFundoValor(m);
+      if (vf !== 0) { if (vf > 0) tot.fIn += vf; else tot.fOut += -vf; return; }
       if (m.tipo === 'receita') { porAno[ano].ent += v; tot.ent += v; }
       else { porAno[ano].sai += v; tot.sai += v; }
     });
@@ -17175,7 +17308,7 @@ async function carregarScoreAdmin() {
     var desde = new Date(Date.now() - 365*24*3600*1000).toISOString();
     var [qR, mR, oR, aR, dR, eR] = await Promise.all([
       sb.from('quotas').select('fracao_id,valor_emitido,valor_pago').eq('condominio_id', cid),
-      sb.from('movimentos').select('tipo,valor').eq('condominio_id', cid).eq('categoria','fundo_reserva'),
+      sb.from('movimentos').select('tipo,valor,categoria,conta').eq('condominio_id', cid).or(SEL_FUNDO),
       sb.from('ocorrencias').select('estado,criado_em').eq('condominio_id', cid).gte('criado_em', desde),
       sb.from('assembleias').select('data_assembleia,ata_texto').eq('condominio_id', cid).gte('data_assembleia', desde),
       sb.from('documentos').select('id', {count:'exact', head:true}).eq('condominio_id', cid),
@@ -17188,7 +17321,7 @@ async function carregarScoreAdmin() {
     });
     var pagas = (qR.data||[]).reduce(function(s,q){ return s + parseFloat(q.valor_pago||0); }, 0);
     var teorico = pagas * pctFundo / 100;
-    var comprovado = (mR.data||[]).reduce(function(s,m){ return s + (m.tipo==='despesa'?1:-1)*parseFloat(m.valor||0); }, 0);
+    var comprovado = (mR.data||[]).reduce(function(s,m){ return s + movFundoValor(m); }, 0);
     var ocs = oR.data||[];
     var d = {
       n_fracoes: (fracoes||[]).length,
@@ -17236,12 +17369,12 @@ async function atualizarFundoCartao() {
     var pct = parseFloat(currentCondo.fundo_percentagem); if (isNaN(pct)) pct = 10;
     var [qR, mR] = await Promise.all([
       sb.from('quotas').select('valor_pago').eq('condominio_id', currentCondo.id),
-      sb.from('movimentos').select('tipo,valor,data_movimento').eq('condominio_id', currentCondo.id).eq('categoria','fundo_reserva')
+      sb.from('movimentos').select('tipo,valor,categoria,conta,data_movimento').eq('condominio_id', currentCondo.id).or(SEL_FUNDO)
     ]);
     var pagas = (qR.data||[]).reduce(function(s,q){ return s + parseFloat(q.valor_pago||0); }, 0);
     var teorico = Math.round(pagas * pct) / 100;
-    var comprovado = (mR.data||[]).reduce(function(s,m){ return s + (m.tipo==='despesa'?1:-1)*parseFloat(m.valor||0); }, 0);
-    var ultimo = (mR.data||[]).filter(function(m){ return m.tipo==='despesa'; }).map(function(m){ return m.data_movimento; }).sort().pop();
+    var comprovado = (mR.data||[]).reduce(function(s,m){ return s + movFundoValor(m); }, 0);
+    var ultimo = (mR.data||[]).filter(function(m){ return movFundoValor(m) > 0; }).map(function(m){ return m.data_movimento; }).sort().pop();
     window._fundoComprovado = comprovado;
     window._fundoTeorico = teorico;
 
@@ -17278,6 +17411,8 @@ async function atualizarFundoCartao() {
           hP += (difReg < 0
             ? '⚠️ O banco tem <strong>' + Math.abs(difReg).toFixed(2) + '€ a menos</strong> do que os movimentos registados no programa. Há saídas do fundo por registar — ou o extrato é anterior a um reforço.'
             : 'ℹ️ O banco tem <strong>' + difReg.toFixed(2) + '€ a mais</strong> do que os movimentos registados. Faltam reforços por lançar no programa.');
+          var iniDecl = parseFloat(currentCondo.fundo_saldo_inicial||0) || 0;
+          if (iniDecl > 0) hP += '<div style="font-size:9.5px;color:var(--t3);margin-top:6px;line-height:1.5;">O prédio declarou <strong>' + iniDecl.toFixed(2) + '€</strong> de saldo inicial (dinheiro anterior ao programa, nas Definições). Isso explica parte desta diferença.</div>';
           hP += '</div>';
         }
         if (difTeo < -1) {
@@ -17295,6 +17430,17 @@ async function atualizarFundoCartao() {
 
     var pm = document.getElementById('fundo-pm');
     if (pm) pm.textContent = 'DL 268/94, Art. 4.º — mínimo legal 10% · em vigor neste prédio: ' + pct + '%';
+    // 🔧 porta para repor reforços — só existe se houver mesmo falta
+    try {
+      var zRep = document.getElementById('fundo-repor');
+      if (!zRep && pm && pm.parentNode) { zRep = document.createElement('div'); zRep.id = 'fundo-repor'; pm.parentNode.insertBefore(zRep, pm); }
+      if (zRep) {
+        var faltaReg = Math.round((teorico - comprovado) * 100) / 100;
+        zRep.innerHTML = faltaReg > 1
+          ? '<div style="background:rgba(255,179,0,.07);border:1px solid rgba(255,179,0,.32);border-radius:9px;padding:10px 12px;margin-top:10px;font-size:11px;color:var(--t2);line-height:1.55;">🔧 <strong style="color:var(--amber);">Faltam ' + faltaReg.toFixed(2) + '€ de reforços registados.</strong><br>Se houve quotas pagas sem o reforço lançado, isto repõe-nos um a um, com a data de cada pagamento.<div style="margin-top:8px;"><button class="btn-ghost" style="font-size:11px;" onclick="reporReforcosFundo()">Ver o que falta lançar</button></div></div>'
+          : '';
+      }
+    } catch(e) {}
     // projeção de suficiência (assíncrona, não trava o cartão)
     analisarSuficienciaFundo().then(function(sf){
       var zona = document.getElementById('fundo-suficiencia');
@@ -21410,10 +21556,10 @@ async function massaModeloAuto(m, t) {
       var pct2 = parseFloat(currentCondo.fundo_percentagem); if (isNaN(pct2)) pct2 = 10;
       var [q2R, f2R] = await Promise.all([
         sb.from('quotas').select('valor_pago').eq('condominio_id', currentCondo.id),
-        sb.from('movimentos').select('tipo,valor').eq('condominio_id', currentCondo.id).eq('categoria','fundo_reserva')
+        sb.from('movimentos').select('tipo,valor,categoria,conta').eq('condominio_id', currentCondo.id).or(SEL_FUNDO)
       ]);
       var teor = (q2R.data||[]).reduce(function(s,q){ return s + parseFloat(q.valor_pago||0); }, 0) * pct2 / 100;
-      var comp = (f2R.data||[]).reduce(function(s,x){ return s + (x.tipo==='despesa'?1:-1)*parseFloat(x.valor||0); }, 0);
+      var comp = (f2R.data||[]).reduce(function(s,x){ return s + movFundoValor(x); }, 0);
       var cob = teor > 0 ? Math.round(comp/teor*100) : 100;
       var txt2 = '🛡️ FUNDO DE RESERVA — PONTO DE SITUAÇÃO\n\n';
       txt2 += 'Valor que deve existir por lei (' + pct2 + '% das quotas pagas, DL 268/94): ' + teor.toFixed(2) + '€\n';
