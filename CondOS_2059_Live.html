@@ -3925,15 +3925,20 @@ function instalarInterceptorPush() {
               var titulo = 'Nova mensagem do condomínio';
               var destino = 'mensagens';
               var t = String(m.texto);
+              // ORDEM IMPORTA: do específico para o genérico. O teste do
+              // /vota/ apanha "consulta o documento e vota" que aparece na
+              // mensagem da prova do fundo — se vier primeiro, rouba-a.
               if (/RECIBO/i.test(t)) { titulo = '🧾 Recibo disponível'; destino = 'quotas'; }
+              else if (/FUNDO DE RESERVA|PROVA DO FUNDO|SALDO PROVADO/i.test(t)) { titulo = '🛡️ Fundo de reserva'; destino = 'quotas'; }
               else if (/QUOTA EM ATRASO|dívida/i.test(t)) { titulo = '⚠️ Aviso de quota'; destino = 'quotas'; }
-              else if (/CONVOCAT/i.test(t)) { titulo = '📨 Convocatória de assembleia'; destino = 'mensagens'; }
-              else if (/ATA /i.test(t)) { titulo = '📋 Ata da assembleia'; destino = 'docs'; }
-              else if (/vota|VOTAÇÃO/i.test(t)) { titulo = '🗳️ Votação à sua espera'; destino = 'reportar'; }
               else if (/quota extraordinária/i.test(t)) { titulo = '💶 Quota extraordinária'; destino = 'quotas'; }
-              else if (/FUNDO DE RESERVA|PROVA DO FUNDO/i.test(t)) { titulo = '🛡️ Fundo de reserva'; destino = 'quotas'; }
+              else if (/CONVOCAT/i.test(t)) { titulo = '📨 Convocatória de assembleia'; destino = 'mensagens'; }
+              // "ATA " apanhava a palavra dATA — daí o \b e o contexto
+              else if (/\bATA\b\s*(DA|N|DE|:|\d)/i.test(t) || /📋\s*ATA/.test(t)) { titulo = '📋 Ata da assembleia'; destino = 'docs'; }
+              else if (/ASSEMBLEIA N[ÃA]O REALIZADA|SEM QU[ÓO]RUM/i.test(t)) { titulo = '📅 Assembleia não realizada'; destino = 'mensagens'; }
               else if (/OFERTA/i.test(t)) { titulo = '💼 Oferta para o prédio'; destino = 'inicio'; }
               else if (/avaria|ocorrência|reparação/i.test(t)) { titulo = '🔧 Avaria no prédio'; destino = 'reportar'; }
+              else if (/vota|VOTAÇÃO/i.test(t)) { titulo = '🗳️ Votação à sua espera'; destino = 'reportar'; }
               var resumo = t.replace(/\n+/g, ' ').substring(0, 110);
               enviarPush(m.fracao_id, titulo, resumo, destino);
             }
