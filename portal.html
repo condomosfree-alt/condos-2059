@@ -1581,6 +1581,7 @@ async function carregarFundoPortal() {
   if (r.error || !r.data || !r.data.length) { box.innerHTML = ''; return; }
   const f = r.data[0];
   const saldo = parseFloat(f.saldo_atual||0);
+  const iniF = parseFloat(f.saldo_inicial||0) || 0;
   const pct = parseFloat(f.percentagem||10);
 
   let h = '<div class="card" style="margin-top:12px;border-color:rgba(180,140,255,.35);background:linear-gradient(160deg,rgba(139,92,246,.08),transparent);">';
@@ -1591,11 +1592,12 @@ async function carregarFundoPortal() {
   h += '</div>';
   h += '<div style="text-align:right;">';
   h += '<div style="font-size:22px;font-weight:700;color:#b48cff;font-family:monospace;">' + eur(saldo) + '</div>';
-  h += '<div style="font-size:9.5px;color:var(--t3);">movimentos registados</div>';
+  h += '<div style="font-size:9.5px;color:var(--t3);">saldo segundo o programa</div>';
   h += '<div style="font-size:9.5px;color:#b48cff;font-weight:700;">taxa em vigor: ' + pct + '%</div>';
   h += '</div></div>';
   h += '<button onclick="toggleFundoDetalhe()" style="width:100%;margin-top:10px;background:transparent;border:1px solid rgba(180,140,255,.3);color:var(--t2);border-radius:8px;padding:8px;font-size:11px;font-weight:600;cursor:pointer;">👁️ Ver movimentos do fundo</button>';
   h += '<div id="c-fundo-movs"></div>';
+  if (iniF > 0) h += '<div style="font-size:10px;color:var(--t2);margin-top:8px;line-height:1.5;background:rgba(180,140,255,.06);border:1px solid rgba(180,140,255,.2);border-radius:8px;padding:8px 10px;">Deste valor, <strong>' + eur(iniF) + '</strong> é saldo inicial declarado pela administração — dinheiro que já existia antes deste programa e que não tem movimento registado aqui. O resto vem dos movimentos.</div>';
   h += '<div style="font-size:9.5px;color:var(--t3);margin-top:8px;line-height:1.4;">⚖️ O DL 268/94 fixa 10% como <strong>mínimo</strong> — este prédio aplica ' + pct + '%. O valor acima conta só os movimentos do fundo já registados; o quadro 🛡️ em cima compara-o com o que devia existir.</div>';
   h += '</div>';
   box.innerHTML = h;
@@ -2681,6 +2683,18 @@ async function carregarExigencias() {
           h += '<div style="font-family:var(--mono);font-size:25px;font-weight:700;color:var(--cyan);margin:6px 0 4px;">' + parseFloat(ativa.saldo_extrato).toFixed(2).replace('.',',') + '€</div>';
           h += '<div style="font-size:10.5px;color:var(--t2);line-height:1.5;">Confirmas que o documento prova este saldo no fundo?<br>Se a maioria aceitar, passa a ser o valor comprovado do prédio.</div>';
           h += '</div>';
+          var av = avaliarSaldoProvado(ativa.saldo_extrato, window._pTeorico, window._pRegistado);
+          var cor = av.nivel === 'ok' ? '34,229,132' : (av.nivel === 'grave' ? '255,84,112' : '255,179,0');
+          var ico = av.nivel === 'ok' ? '\u2714' : (av.nivel === 'grave' ? '\uD83D\uDEA8' : '\u26A0\uFE0F');
+          h += '<div style="background:rgba(' + cor + ',.07);border:1px solid rgba(' + cor + ',.32);border-radius:9px;padding:10px 12px;margin-top:8px;">';
+          h += '<div style="font-size:11px;font-weight:700;color:rgb(' + cor + ');">' + ico + ' ' + av.titulo + '</div>';
+          h += '<div style="font-size:10.5px;color:var(--t2);line-height:1.55;margin-top:4px;">' + av.texto + '</div>';
+          h += '<div style="display:flex;gap:10px;margin-top:9px;font-size:9.5px;color:var(--t3);text-align:center;">';
+          h += '<div style="flex:1;">DEVIA TER<div style="font-family:var(--mono);font-size:12px;color:var(--t2);font-weight:700;">' + (parseFloat(window._pTeorico||0)).toFixed(2).replace('.',',') + '\u20AC</div></div>';
+          h += '<div style="flex:1;">MOVIMENTOS<div style="font-family:var(--mono);font-size:12px;color:var(--t2);font-weight:700;">' + (parseFloat(window._pRegistado||0)).toFixed(2).replace('.',',') + '\u20AC</div></div>';
+          h += '<div style="flex:1;">NO BANCO<div style="font-family:var(--mono);font-size:12px;color:var(--cyan);font-weight:700;">' + parseFloat(ativa.saldo_extrato).toFixed(2).replace('.',',') + '\u20AC</div></div>';
+          h += '</div></div>';
+          
         } else {
           h += '<div style="font-size:10.5px;color:var(--amber);margin-top:8px;line-height:1.5;">⚠️ Não foi possível ler o saldo automaticamente. Abre o documento e confirma tu o valor antes de votares.</div>';
         }
@@ -3522,12 +3536,54 @@ function renderChips() {
 }
 
 // 🛡️ Fundo de reserva — a prova pública
+// AVALIACAO DO SALDO LIDO ---------------------------------------------------
+// Ler um numero num documento nao e valida-lo. Esta funcao confronta o saldo
+// lido com o que os registos do predio justificam e devolve um veredicto que
+// segue com o valor para todo o lado: mensagem aos condominos, portal e ata.
+// nivel: 'ok' | 'atencao' | 'grave' | 'ilegivel'
+function avaliarSaldoProvado(saldo, teorico, registado) {
+  var s = parseFloat(saldo), t = parseFloat(teorico) || 0, r = parseFloat(registado) || 0;
+  var eur = function(n){ return n.toFixed(2).replace('.', ',') + '\u20AC'; };
+  if (saldo === null || saldo === undefined || isNaN(s)) {
+    return { nivel:'ilegivel', titulo:'Saldo nao foi lido',
+      texto:'A verificacao automatica nao conseguiu ler o saldo no documento. Abre o documento e confirma tu o valor antes de votares.' };
+  }
+  var ref = Math.max(t, r);
+  if (s < 0) {
+    return { nivel:'grave', titulo:'Saldo negativo',
+      texto:'O documento indica um saldo negativo (' + eur(s) + '). O fundo de reserva nao pode estar a descoberto.' };
+  }
+  if (ref >= 1 && s > ref * 50) {
+    return { nivel:'grave', titulo:'Valor implausivel - possivel erro de leitura',
+      texto:'O documento indica ' + eur(s) + ', mas os registos so justificam ' + eur(ref) + '. Uma diferenca desta ordem costuma ser um separador de milhares lido como decimal. Nao aceites sem abrir o documento e conferir o numero.' };
+  }
+  if (t >= 1 && s < t * 0.95) {
+    return { nivel:'grave', titulo:'Abaixo do minimo legal',
+      texto:'Pelas quotas ja pagas o fundo devia ter pelo menos ' + eur(t) + ', mas o banco mostra ' + eur(s) + ' - faltam ' + eur(t - s) + '. Se aceitares, fica provado que o fundo esta incompleto e a administracao tera de o explicar em assembleia.' };
+  }
+  if (t < 1 && r < 1 && s >= 100) {
+    return { nivel:'atencao', titulo:'Dinheiro sem registo por tras',
+      texto:'O banco mostra ' + eur(s) + ', mas no programa nao ha um unico movimento de fundo registado. O valor pode ser verdadeiro (dinheiro anterior a este programa), mas nada aqui o explica - pede o historico a administracao.' };
+  }
+  if (ref >= 1 && s > ref * 3) {
+    return { nivel:'atencao', titulo:'Muito acima do que os registos explicam',
+      texto:'O banco mostra ' + eur(s) + ' e os registos so justificam ' + eur(ref) + '. Pode ser legitimo (saldo anterior ao programa, ou reforcos acima do minimo), mas convem a administracao dizer de onde vem a diferenca.' };
+  }
+  if (r >= 1 && s < r * 0.95) {
+    return { nivel:'atencao', titulo:'Banco abaixo dos movimentos registados',
+      texto:'Os movimentos do programa somam ' + eur(r) + ' mas o banco tem ' + eur(s) + '. Ha saidas do fundo por registar, ou o extrato nao e da conta certa.' };
+  }
+  return { nivel:'ok', titulo:'Coerente com os registos',
+    texto:'O saldo do banco (' + eur(s) + ') bate certo com o que o predio tem registado.' };
+}
+
 async function carregarFundo() {
   try {
     const r = await sb.rpc('portal_fundo', { p_token: token });
     if (r.error || !r.data || !r.data.length) return;
     const d = r.data[0];
     const teo = parseFloat(d.teorico||0), comp = parseFloat(d.comprovado||0);
+    window._pTeorico = teo; window._pRegistado = comp;
     if (teo < 1 && comp < 1) return;   // sem histórico ainda — não mostrar vazio
     const card = document.getElementById('fundo-card');
     card.style.display = 'block';
