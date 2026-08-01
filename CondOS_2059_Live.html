@@ -870,7 +870,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.31-2358</div>
+      <div class="sb-tag">2059 Pro · build v2026.08.01-0930</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -1417,6 +1417,8 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
           <div style="display:flex;gap:8px;">
             <button class="btn-ghost" onclick="exportarCondominosPDF()" style="display:inline-flex;align-items:center;gap:6px;" title="Exportar lista em PDF profissional"><i class="ti ti-file-type-pdf"></i>Exportar PDF</button>
             <button class="btn-ghost" onclick="gerarQRTodosPDF()" style="display:inline-flex;align-items:center;gap:6px;" title="Gerar PDF com 1 QR Code por página para distribuir em cada caixa de correio"><i class="ti ti-qrcode"></i>Gerar QR (carta)</button>
+              <button class="btn-ghost" onclick="cartoesContactosPDF()" style="display:inline-flex;align-items:center;gap:6px;" title="Cartão de carteira por fração: frente com o nome e o QR do portal, verso com os contactos úteis"><i class="ti ti-id"></i>Cartões (carteira)</button>
+              <button class="btn-ghost" onclick="cartazContactosPDF()" style="display:inline-flex;align-items:center;gap:6px;" title="Folha A4 de contactos úteis para afixar no hall"><i class="ti ti-printer"></i>Cartaz (hall)</button>
             <button class="btn-ghost" style="display:inline-flex;align-items:center;gap:6px;background:rgba(180,140,255,.08);border-color:rgba(180,140,255,.35);color:#b48cff;" onclick="convidarPortalTodos()" title="Enviar o acesso ao Portal: email aos que têm, PDF/carta aos que não"><span>🔗</span>Convidar p/ Portal</button>
             <button class="btn-ghost" style="display:inline-flex;align-items:center;gap:6px;background:rgba(0,212,255,.06);border-color:rgba(0,212,255,.3);color:var(--cyan);" onclick="notificarTodos()"><i class="ti ti-send"></i>Notificar Todos</button>
             <button class="btn-primary" onclick="abrirNovoCondomino()"><i class="ti ti-plus"></i>Adicionar</button>
@@ -6323,6 +6325,231 @@ function gerarQRDataURL(texto) {
       resolve(dataURL);
     }, 200);
   });
+}
+
+// =====================================================================
+//  CONTACTOS UTEIS EM PAPEL
+// =====================================================================
+//  Papel nao precisa de bateria, nao precisa de rede, funciona na cave
+//  onde nao ha sinal, chega a quem nunca leu um QR na vida e nao deixa
+//  historico nenhum. E um cartao guarda-se dentro do sapato.
+//
+//  Duas pecas:
+//    cartazContactosPDF()  - A4 para o hall, ao lado dos avisos de obras
+//    cartoesContactosPDF() - cartoes de carteira, um por fracao, frente
+//                            com o nome e o QR do portal, verso com os
+//                            contactos. Sai a 8 por folha, frente/verso.
+//
+//  Os numeros vivem TODOS em _numerosUteis(), num sitio so, para nao
+//  divergirem do contactos.html.
+// =====================================================================
+
+function _numerosUteis() {
+  return {
+    nacionais: [
+      { n:'112',          t:'Emergencia',              d:'Policia, bombeiros, ambulancia', urg:true },
+      { n:'800 202 148',  t:'Violencia domestica',     d:'24h, gratuita, anonima' },
+      { n:'116 006',      t:'Apoio a vitima (APAV)',   d:'Gratuita' },
+      { n:'144',          t:'Emergencia social',       d:'Idosos, negligencia, sem-abrigo' },
+      { n:'116 111',      t:'SOS Crianca',             d:'Tambem para criancas ligarem' },
+      { n:'808 24 24 24', t:'SNS 24',                  d:'Saude, 24h' },
+      { n:'808 200 520',  t:'SOS Ambiente (GNR)',      d:'Maus tratos a animais' },
+      { n:'800 506 506',  t:'Avarias de eletricidade', d:'E-Redes' }
+    ],
+    // Preenche-se a partir da tabela ZONAS do contactos.html quando
+    // houver. Por agora entra a mao nas Definicoes do condominio.
+    locais: (currentCondo && currentCondo.contactos_locais) || null
+  };
+}
+
+function _urlContactos() {
+  var base = location.href.substring(0, location.href.lastIndexOf('/') + 1);
+  var morada = (currentCondo && (currentCondo.morada || currentCondo.nome)) || '';
+  return base + 'contactos.html' + (morada ? ('?c=' + encodeURIComponent(morada)) : '');
+}
+
+// ---------------------------------------------------------------------
+//  A4 PARA O HALL
+// ---------------------------------------------------------------------
+async function cartazContactosPDF() {
+  if (!window.jspdf || !window.jspdf.jsPDF) { toast('Biblioteca PDF nao carregada','err'); return; }
+  if (typeof QRCode === 'undefined') { toast('Biblioteca QR nao carregada','err'); return; }
+  toast('A preparar o cartaz...');
+
+  var jsPDF = window.jspdf.jsPDF;
+  var doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+  var W = 210, M = 16;
+  var dados = _numerosUteis();
+
+  // cabecalho discreto: e uma folha de contactos, nao um cartaz de campanha
+  doc.setFillColor(8,13,20); doc.rect(0,0,W,34,'F');
+  doc.setFillColor(0,212,255); doc.rect(0,34,W,1.2,'F');
+  doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(26);
+  doc.text('Contactos uteis', M, 20);
+  doc.setTextColor(150,160,170); doc.setFont('helvetica','normal'); doc.setFontSize(10);
+  doc.text((currentCondo && currentCondo.nome) || 'Condominio', M, 28);
+
+  var y = 48;
+  doc.setTextColor(40,45,50); doc.setFont('helvetica','normal'); doc.setFontSize(11);
+  doc.text('Guarde esta folha. Nao precisa de telemovel com internet para usar estes numeros.', M, y);
+  y += 12;
+
+  function linha(num, titulo, desc, grande, urgente) {
+    var alt = grande ? 20 : 14;
+    doc.setDrawColor(225,230,235); doc.setLineWidth(0.3);
+    doc.line(M, y + alt, W - M, y + alt);
+    doc.setTextColor(urgente ? 200 : 20, urgente ? 40 : 30, urgente ? 40 : 35);
+    doc.setFont('courier','bold'); doc.setFontSize(grande ? 30 : 17);
+    doc.text(num, M, y + (grande ? 14 : 10));
+    doc.setTextColor(30,35,40); doc.setFont('helvetica','bold'); doc.setFontSize(grande ? 14 : 11);
+    doc.text(titulo, M + (grande ? 62 : 46), y + (grande ? 10 : 8));
+    if (desc) {
+      doc.setTextColor(120,130,140); doc.setFont('helvetica','normal'); doc.setFontSize(grande ? 10 : 8.5);
+      doc.text(desc, M + (grande ? 62 : 46), y + (grande ? 16 : 13));
+    }
+    y += alt + 4;
+  }
+
+  linha('112', 'Emergencia', 'Policia, bombeiros e ambulancia. Perigo a acontecer agora.', true, true);
+  y += 4;
+
+  dados.nacionais.forEach(function(x){ if (x.n !== '112') linha(x.n, x.t, x.d); });
+
+  if (dados.locais && dados.locais.length) {
+    y += 4;
+    doc.setTextColor(120,130,140); doc.setFont('helvetica','bold'); doc.setFontSize(9);
+    doc.text('NA NOSSA ZONA', M, y); y += 6;
+    dados.locais.forEach(function(x){ linha(x.n, x.t, x.d || ''); });
+  }
+
+  // QR + nota final
+  var qr = await gerarQRDataURL(_urlContactos());
+  var qy = Math.min(y + 6, 236);
+  doc.addImage(qr, 'PNG', M, qy, 30, 30);
+  doc.setTextColor(40,45,50); doc.setFont('helvetica','bold'); doc.setFontSize(10.5);
+  doc.text('Mais contactos e o que dizer ao telefone', M + 36, qy + 9);
+  doc.setTextColor(110,120,130); doc.setFont('helvetica','normal'); doc.setFontSize(9);
+  doc.text('Aponte a camara do telemovel a este codigo.', M + 36, qy + 15);
+  doc.text('Nao e preciso instalar nada.', M + 36, qy + 20);
+
+  doc.setDrawColor(225,230,235); doc.line(M, 272, W-M, 272);
+  doc.setTextColor(130,140,150); doc.setFont('helvetica','normal'); doc.setFontSize(8.5);
+  doc.text('Se nao tem telemovel: na farmacia, no centro de saude ou na junta de freguesia ligam por si.', W/2, 279, {align:'center'});
+  doc.setFontSize(7.5); doc.setTextColor(160,168,176);
+  doc.text('Afixado pela administracao do condominio  ·  COND.OS 2059', W/2, 287, {align:'center'});
+
+  doc.save('contactos-uteis-' + ((currentCondo && currentCondo.nome) || 'condominio').replace(/[^a-zA-Z0-9]+/g,'-').toLowerCase() + '.pdf');
+  toast('Cartaz pronto. Imprime em A4 e afixa no hall.', 'ok');
+}
+
+// ---------------------------------------------------------------------
+//  CARTOES DE CARTEIRA, UM POR FRACAO
+// ---------------------------------------------------------------------
+//  85x54mm (tamanho de cartao de banco), 8 por folha A4.
+//  A folha do VERSO tem as colunas TROCADAS de proposito: e isso que
+//  faz o verso cair em cima da frente certa numa impressao duplex.
+// ---------------------------------------------------------------------
+async function cartoesContactosPDF() {
+  if (!currentCondo || !fracoes || !fracoes.length) { toast('Sem fracoes','warn'); return; }
+  if (!window.jspdf || !window.jspdf.jsPDF) { toast('Biblioteca PDF nao carregada','err'); return; }
+  if (typeof QRCode === 'undefined') { toast('Biblioteca QR nao carregada','err'); return; }
+
+  var lista = fracoes.slice().sort(function(a,b){ return String(a.codigo||'').localeCompare(String(b.codigo||''), 'pt', {numeric:true}); });
+  toast('A gerar ' + lista.length + ' cartoes...');
+
+  var jsPDF = window.jspdf.jsPDF;
+  var doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+  var CW = 85, CH = 54, COLS = 2, ROWS = 4, PORPAG = COLS * ROWS;
+  var X0 = 15, GX = 10, Y0 = 21, GY = 13;
+  var xs = [X0, X0 + CW + GX];
+  var ys = [Y0, Y0 + CH + GY, Y0 + 2*(CH+GY), Y0 + 3*(CH+GY)];
+  var base = location.href.substring(0, location.href.lastIndexOf('/') + 1);
+  var condoNome = (currentCondo.nome || 'Condominio');
+  var dados = _numerosUteis();
+
+  // QR do portal de cada fracao + QR dos contactos (um so, repetido)
+  var qrPortal = {};
+  for (var i = 0; i < lista.length; i++) {
+    if (lista[i].token_acesso) qrPortal[lista[i].id] = await gerarQRDataURL(base + 'portal.html?t=' + lista[i].token_acesso);
+  }
+  var qrCont = await gerarQRDataURL(_urlContactos());
+
+  function moldura(x, y) {
+    doc.setDrawColor(205,212,220); doc.setLineWidth(0.25);
+    doc.roundedRect(x, y, CW, CH, 2.5, 2.5, 'S');
+  }
+
+  function frente(f, x, y) {
+    moldura(x, y);
+    doc.setFillColor(8,13,20);
+    doc.roundedRect(x, y, CW, 13, 2.5, 2.5, 'F');
+    doc.rect(x, y + 9, CW, 4, 'F');
+    doc.setTextColor(0,212,255); doc.setFont('courier','bold'); doc.setFontSize(9);
+    doc.text('COND.OS', x + 5, y + 8.5);
+    doc.setTextColor(150,160,170); doc.setFont('helvetica','normal'); doc.setFontSize(6.2);
+    doc.text(condoNome.substring(0, 34), x + CW - 5, y + 8.5, {align:'right'});
+
+    doc.setTextColor(25,30,35); doc.setFont('helvetica','bold'); doc.setFontSize(11);
+    doc.text(String(f.proprietario_nome || 'Condomino').substring(0, 30), x + 5, y + 24);
+    doc.setTextColor(0,110,160); doc.setFont('helvetica','bold'); doc.setFontSize(15);
+    doc.text('Fracao ' + (f.codigo || '-') + (f.bloco ? ' · ' + f.bloco : ''), x + 5, y + 34);
+
+    if (qrPortal[f.id]) {
+      doc.addImage(qrPortal[f.id], 'PNG', x + CW - 26, y + 18, 21, 21);
+      doc.setTextColor(120,130,140); doc.setFont('helvetica','normal'); doc.setFontSize(5.4);
+      doc.text('O meu portal', x + CW - 15.5, y + 42, {align:'center'});
+    }
+    doc.setTextColor(130,140,150); doc.setFont('helvetica','normal'); doc.setFontSize(6);
+    doc.text('Quotas, ocorrencias e documentos do predio', x + 5, y + 43);
+    doc.setDrawColor(0,212,255); doc.setLineWidth(0.6);
+    doc.line(x + 5, y + 47, x + 22, y + 47);
+    doc.setTextColor(160,168,176); doc.setFontSize(5.6);
+    doc.text('Guarde este cartao', x + 5, y + 50.5);
+  }
+
+  function verso(x, y) {
+    moldura(x, y);
+    doc.setTextColor(30,35,40); doc.setFont('helvetica','bold'); doc.setFontSize(8);
+    doc.text('Contactos uteis', x + 5, y + 7);
+
+    doc.setTextColor(200,40,40); doc.setFont('courier','bold'); doc.setFontSize(17);
+    doc.text('112', x + 5, y + 16.5);
+    doc.setTextColor(60,66,72); doc.setFont('helvetica','normal'); doc.setFontSize(6);
+    doc.text('Emergencia', x + 22, y + 15.5);
+    doc.setDrawColor(225,230,235); doc.setLineWidth(0.25); doc.line(x + 5, y + 19, x + CW - 5, y + 19);
+
+    var ly = y + 24;
+    var curtos = dados.nacionais.filter(function(v){ return v.n !== '112'; }).slice(0, 6);
+    if (dados.locais && dados.locais.length) curtos = curtos.slice(0, 4).concat(dados.locais.slice(0, 2));
+    curtos.forEach(function(v){
+      doc.setTextColor(35,40,45); doc.setFont('courier','bold'); doc.setFontSize(7);
+      doc.text(v.n, x + 5, ly);
+      doc.setTextColor(95,105,115); doc.setFont('helvetica','normal'); doc.setFontSize(6);
+      doc.text(String(v.t).substring(0, 30), x + 27, ly);
+      ly += 4.6;
+    });
+
+    doc.addImage(qrCont, 'PNG', x + CW - 21, y + CH - 21, 16, 16);
+    doc.setTextColor(140,150,160); doc.setFont('helvetica','normal'); doc.setFontSize(5);
+    doc.text('Todos os contactos', x + CW - 13, y + CH - 3.5, {align:'center'});
+    doc.setTextColor(110,120,130); doc.setFontSize(5.4);
+    doc.text('Sem telemovel? Na farmacia', x + 5, y + CH - 8);
+    doc.text('ou junta de freguesia ligam por si.', x + 5, y + CH - 4.6);
+  }
+
+  for (var p = 0; p < Math.ceil(lista.length / PORPAG); p++) {
+    var bloco = lista.slice(p * PORPAG, (p + 1) * PORPAG);
+
+    if (p > 0) doc.addPage();
+    bloco.forEach(function(f, k){ frente(f, xs[k % COLS], ys[Math.floor(k / COLS)]); });
+
+    doc.addPage();
+    // colunas trocadas para o verso assentar na frente certa (duplex)
+    bloco.forEach(function(f, k){ verso(xs[COLS - 1 - (k % COLS)], ys[Math.floor(k / COLS)]); });
+  }
+
+  doc.save('cartoes-contactos-' + condoNome.replace(/[^a-zA-Z0-9]+/g,'-').toLowerCase() + '.pdf');
+  toast(lista.length + ' cartoes prontos. Imprime frente e verso, vira pelo lado comprido.', 'ok');
 }
 
 async function gerarQRTodosPDF() {

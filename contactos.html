@@ -51,6 +51,14 @@
         padding:13px 16px;font-size:15px;font-weight:600;
         font-family:inherit;cursor:pointer;text-align:left}
   .sair button:active{background:#1e242b}
+  .lang{background:transparent;color:var(--ink3);border:1px solid var(--line);
+        border-radius:7px;padding:6px 11px;font-size:12px;font-family:inherit;cursor:pointer}
+  .lang.on{color:var(--ink);border-color:var(--ink3);background:var(--raise)}
+  body.tm{font-size:19px}
+  body.tm a.tel .num{font-size:23px}
+  body.tm a.tel .quem b{font-size:17px}
+  body.tm a.tel .quem{font-size:15.5px}
+  body.tm summary{font-size:17px}
   .sair small{color:var(--ink3);font-size:11.5px;white-space:nowrap}
 
   h1{font-size:20px;font-weight:650;letter-spacing:-.01em;margin:22px 0 4px}
@@ -118,6 +126,12 @@
   <div class="sair">
     <button onclick="sairJa()">Fechar esta página</button>
     <small>ou tecla Esc</small>
+  </div>
+  <div style="display:flex;gap:6px;align-items:center;padding:9px 0 2px;flex-wrap:wrap">
+    <button class="lang" data-l="pt" onclick="idioma('pt')">PT</button>
+    <button class="lang" data-l="en" onclick="idioma('en')">EN</button>
+    <button class="lang" data-l="es" onclick="idioma('es')">ES</button>
+    <button class="lang" onclick="textoMaior()" id="btn-tm" style="margin-left:auto">A+ Texto maior</button>
   </div>
 
   <h1>Contactos úteis</h1>
@@ -207,6 +221,10 @@
     Esta página não fica guardada em lado nenhum. Mas o <b>telemóvel</b> guarda: no histórico do browser e no registo de chamadas.
     <br><br>
     Fechar com o botão acima não deixa esta página no histórico. As <b>chamadas</b> ficam no registo do telefone &mdash; apaga-as tu se for preciso, ou usa outro aparelho desde o início.
+  </div>
+
+  <div class="nota" style="border-left-color:var(--calm);margin-top:22px">
+    <b>Não tens telemóvel, ou não queres ligar deste?</b> Na farmácia, no centro de saúde ou na junta de freguesia ligam por ti. Basta entrares e pedires.
   </div>
 
   <footer>
@@ -317,6 +335,74 @@
       if (limpo && nt2) nt2.textContent = 'Procura por "CPCJ ' + limpo + '".';
     }
   } catch(e) {}
+
+  // --- Texto maior: metade de quem precisa desta página tem mais de 70 anos
+  window.textoMaior = function(){
+    document.body.classList.toggle('tm');
+    document.getElementById('btn-tm').classList.toggle('on', document.body.classList.contains('tm'));
+  };
+
+  // --- Idiomas. Só os títulos mudam: os números são universais, e a
+  //     pessoa mais isolada de um prédio português é muitas vezes a
+  //     que não fala português.
+  var T = {
+    en: {
+      'Contactos úteis':'Useful contacts',
+      'Números do prédio e linhas de apoio. Esta página não envia nem guarda nada.':'Building numbers and helplines. This page sends and stores nothing.',
+      'Fechar esta página':'Close this page',
+      'Emergência':'Emergency',
+      'Quando alguém precisa de ajuda':'When someone needs help',
+      'Alguém em minha casa magoa-me':'Someone at home is hurting me',
+      'Preocupa-me uma criança — ou sou eu':'I am worried about a child — or it is me',
+      'Uma pessoa idosa ou dependente':'An older or dependent person',
+      'Não vejo um vizinho há dias':'I have not seen a neighbour for days',
+      'Um animal em maus tratos':'An animal being mistreated',
+      'Só preciso de falar com alguém':'I just need to talk to someone',
+      'Avarias e saúde':'Breakdowns and health',
+      'Apagar o rasto':'Clearing your tracks'
+    },
+    es: {
+      'Contactos úteis':'Contactos útiles',
+      'Números do prédio e linhas de apoio. Esta página não envia nem guarda nada.':'Números del edificio y líneas de ayuda. Esta página no envía ni guarda nada.',
+      'Fechar esta página':'Cerrar esta página',
+      'Emergência':'Emergencia',
+      'Quando alguém precisa de ajuda':'Cuando alguien necesita ayuda',
+      'Alguém em minha casa magoa-me':'Alguien en mi casa me hace daño',
+      'Preocupa-me uma criança — ou sou eu':'Me preocupa un niño — o soy yo',
+      'Uma pessoa idosa ou dependente':'Una persona mayor o dependiente',
+      'Não vejo um vizinho há dias':'No veo a un vecino desde hace días',
+      'Um animal em maus tratos':'Un animal maltratado',
+      'Só preciso de falar com alguém':'Solo necesito hablar con alguien',
+      'Avarias e saúde':'Averías y salud',
+      'Apagar o rasto':'Borrar el rastro'
+    }
+  };
+  var _orig = null;
+  window.idioma = function(l){
+    var alvos = document.querySelectorAll('h1,h2,summary,.sub,.sair button,button[onclick*="sairJa"]');
+    if (!_orig) { _orig = []; alvos.forEach(function(e,i){ _orig[i] = e.textContent.trim(); }); }
+    alvos.forEach(function(e,i){
+      var base = _orig[i];
+      e.textContent = (l !== 'pt' && T[l] && T[l][base]) ? T[l][base] : base;
+    });
+    document.querySelectorAll('.lang[data-l]').forEach(function(b){ b.classList.toggle('on', b.dataset.l === l); });
+    document.documentElement.lang = l;
+  };
+  idioma('pt');
+
+  // --- Aberto agora? Poupa uma chamada frustrada às onze da noite.
+  (function(){
+    var h = new Date().getHours(), dia = new Date().getDay();
+    var expediente = dia >= 1 && dia <= 5 && h >= 9 && h < 17;
+    if (!expediente) {
+      document.querySelectorAll('a.tel').forEach(function(a){
+        var q = a.querySelector('.quem');
+        if (q && /\u00fateis|expediente|8h30/.test(q.textContent)) {
+          q.insertAdjacentHTML('beforeend', '<span style="display:block;color:var(--warn);font-size:11.5px;margin-top:2px">Fechado agora</span>');
+        }
+      });
+    }
+  })();
 
   // Não registar service worker nem tocar em armazenamento nenhum.
   // Se algum ficou registado por outra página do domínio, esta não
