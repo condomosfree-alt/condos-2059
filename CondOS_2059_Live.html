@@ -870,7 +870,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.08.01-1145</div>
+      <div class="sb-tag">2059 Pro · build v2026.08.01-1420</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -1420,6 +1420,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
               <button class="btn-ghost" onclick="cartoesContactosPDF()" style="display:inline-flex;align-items:center;gap:6px;" title="Cartão de carteira por fração: frente com o nome e o QR do portal, verso com os contactos úteis"><i class="ti ti-id"></i>Cartões (carteira)</button>
               <button class="btn-ghost" onclick="cartazContactosPDF()" style="display:inline-flex;align-items:center;gap:6px;" title="Folha A4 de contactos úteis para afixar no hall"><i class="ti ti-printer"></i>Cartaz (hall)</button>
               <button class="btn-ghost" onclick="abrirImportadorContactos()" style="display:inline-flex;align-items:center;gap:6px;" title="Importar as listas oficiais de contactos locais (CPCJ, bombeiros, câmaras, águas)"><i class="ti ti-map-pin"></i>Contactos locais</button>
+              <button class="btn-ghost" onclick="abrirAdminAusente()" style="display:inline-flex;align-items:center;gap:6px;" title="Avisar os condóminos de que a administração vai estar ausente e dizer quem responde por urgências"><i class="ti ti-plane"></i>Administração ausente</button>
             <button class="btn-ghost" style="display:inline-flex;align-items:center;gap:6px;background:rgba(180,140,255,.08);border-color:rgba(180,140,255,.35);color:#b48cff;" onclick="convidarPortalTodos()" title="Enviar o acesso ao Portal: email aos que têm, PDF/carta aos que não"><span>🔗</span>Convidar p/ Portal</button>
             <button class="btn-ghost" style="display:inline-flex;align-items:center;gap:6px;background:rgba(0,212,255,.06);border-color:rgba(0,212,255,.3);color:var(--cyan);" onclick="notificarTodos()"><i class="ti ti-send"></i>Notificar Todos</button>
             <button class="btn-primary" onclick="abrirNovoCondomino()"><i class="ti ti-plus"></i>Adicionar</button>
@@ -3941,7 +3942,7 @@ function instalarInterceptorPush() {
               else if (/avaria|ocorrência|reparação/i.test(t)) { titulo = '🔧 Avaria no prédio'; destino = 'reportar'; }
               else if (/vota|VOTAÇÃO/i.test(t)) { titulo = '🗳️ Votação à sua espera'; destino = 'reportar'; }
               var resumo = t.replace(/\n+/g, ' ').substring(0, 110);
-              enviarPush(m.fracao_id, titulo, resumo, destino);
+              if (!_silenciada(m.fracao_id, destino, titulo)) enviarPush(m.fracao_id, titulo, resumo, destino);
             }
           });
         } catch(e) { /* nunca bloquear o insert */ }
@@ -6354,6 +6355,153 @@ function gerarQRDataURL(texto) {
 //  do contactos.html, com a data de verificacao ja preenchida.
 // =====================================================================
 
+// =====================================================================
+//  MODO DE AUSENCIA — lado do administrador
+// =====================================================================
+//  Tres coisas:
+//    1. A administracao tambem vai de ferias, e hoje isso nao esta em
+//       lado nenhum. O predio fica sem quem autorize uma reparacao,
+//       sem quem atenda o telefone e sem quem receba o canalizador.
+//    2. Semaforo antes de marcar assembleia — vago de proposito.
+//    3. O silencio dos condominos passa a ser respeitado pelo push.
+// =====================================================================
+
+// ---------------------------------------------------------------------
+//  1 · A administracao ausente
+// ---------------------------------------------------------------------
+function abrirAdminAusente() {
+  var c = currentCondo || {};
+  var de = c.admin_ausente_de ? String(c.admin_ausente_de).substring(0, 10) : '';
+  var ate = c.admin_ausente_ate ? String(c.admin_ausente_ate).substring(0, 10) : '';
+  var sub = c.admin_substituto || '';
+
+  var h = '<div style="padding:2px">';
+  h += '<div style="background:rgba(0,212,255,.05);border:1px solid rgba(0,212,255,.25);border-radius:10px;padding:12px 14px;font-size:11.5px;color:var(--t2);line-height:1.6">';
+  h += 'Quando a administração está fora, o prédio fica sem quem autorize uma reparação urgente e sem quem atenda o telefone. Isto avisa <strong style="color:var(--t1)">toda a gente</strong>: aparece no portal de cada condómino e sai no cartaz para o hall.';
+  h += '</div>';
+
+  h += '<div style="display:flex;gap:10px;margin-top:14px">';
+  h += '<div style="flex:1"><label style="font-size:11px;color:var(--t3);display:block;margin-bottom:5px">De</label><input type="date" id="aa-de" value="' + de + '" style="width:100%;background:var(--c2);border:1px solid var(--b1);border-radius:8px;padding:10px;color:var(--text);font-family:inherit"></div>';
+  h += '<div style="flex:1"><label style="font-size:11px;color:var(--t3);display:block;margin-bottom:5px">Até</label><input type="date" id="aa-ate" value="' + ate + '" style="width:100%;background:var(--c2);border:1px solid var(--b1);border-radius:8px;padding:10px;color:var(--text);font-family:inherit"></div>';
+  h += '</div>';
+
+  h += '<label style="font-size:11px;color:var(--t3);display:block;margin:14px 0 5px">Quem responde por urgências</label>';
+  h += '<input type="text" id="aa-sub" value="' + String(sub).replace(/"/g, '&quot;') + '" placeholder="Nome e telefone" style="width:100%;background:var(--c2);border:1px solid var(--b1);border-radius:8px;padding:10px;color:var(--text);font-family:inherit">';
+  h += '<div style="font-size:10.5px;color:var(--t3);margin-top:6px;line-height:1.5">Pode ser outro condómino, um familiar ou uma empresa. Se ficar vazio, o portal diz só que a administração está ausente.</div>';
+
+  h += '<button class="btn-primary" style="width:100%;margin-top:16px" onclick="guardarAdminAusente()">Guardar e avisar os condóminos</button>';
+  if (ate) h += '<button class="btn-ghost" style="width:100%;margin-top:8px" onclick="limparAdminAusente()">Já voltei — apagar o aviso</button>';
+  h += '</div>';
+  abrirModalGenerico('Administração ausente', h);
+}
+
+async function guardarAdminAusente() {
+  var de = (document.getElementById('aa-de') || {}).value || null;
+  var ate = (document.getElementById('aa-ate') || {}).value || null;
+  var sub = ((document.getElementById('aa-sub') || {}).value || '').trim();
+  if (!ate) { toast('Falta dizer até quando', 'warn'); return; }
+  if (de && ate && de > ate) { toast('A data de início é depois do fim', 'err'); return; }
+
+  var r;
+  try {
+    r = await sb.from('condominios').update({
+      admin_ausente_de: de, admin_ausente_ate: ate, admin_substituto: sub || null
+    }).eq('id', currentCondo.id);
+  } catch (e) { r = { error: e }; }
+  if (r && r.error) { toast('Não consegui gravar: ' + (r.error.message || ''), 'err'); return; }
+
+  currentCondo.admin_ausente_de = de;
+  currentCondo.admin_ausente_ate = ate;
+  currentCondo.admin_substituto = sub || null;
+
+  // avisar todas as frações — é do interesse de todos, não é assunto interno
+  try {
+    var fim = new Date(ate).toLocaleDateString('pt-PT');
+    await sb.from('mensagens').insert((fracoes || []).map(function (f) {
+      return {
+        condominio_id: currentCondo.id, fracao_id: f.id, autor: 'admin',
+        lida_admin: true, lida_condomino: false,
+        texto: 'ADMINISTRACAO AUSENTE\n\nA administração vai estar ausente até ' + fim + '.' +
+               (sub ? ('\n\nPara urgências durante este período: ' + sub) : '') +
+               '\n\nEmergências com risco para pessoas ou para o edifício: 112.\n\nAssuntos que possam esperar são tratados no regresso.'
+      };
+    }));
+    toast('Guardado e condóminos avisados', 'ok');
+  } catch (e) { toast('Guardado. Não consegui avisar os condóminos.', 'warn'); }
+
+  fecharModalGenerico();
+  try { await verificarAvisosGerais(); } catch (e) {}
+}
+
+async function limparAdminAusente() {
+  var r;
+  try {
+    r = await sb.from('condominios').update({ admin_ausente_de: null, admin_ausente_ate: null, admin_substituto: null }).eq('id', currentCondo.id);
+  } catch (e) { r = { error: e }; }
+  if (r && r.error) { toast('Não consegui gravar', 'err'); return; }
+  currentCondo.admin_ausente_de = null;
+  currentCondo.admin_ausente_ate = null;
+  currentCondo.admin_substituto = null;
+  toast('Aviso retirado', 'ok');
+  fecharModalGenerico();
+  try { await verificarAvisosGerais(); } catch (e) {}
+}
+
+// ---------------------------------------------------------------------
+//  2 · Boa altura para marcar assembleia?
+// ---------------------------------------------------------------------
+//  Devolve um semaforo, NUNCA um numero nem uma lista. E cala-se em
+//  predios pequenos: com poucas fracoes, dizer "metade esta fora" e o
+//  mesmo que dizer quais.
+// ---------------------------------------------------------------------
+async function semaforoAssembleia(dataISO) {
+  if (!currentCondo || !dataISO) return null;
+  try {
+    var r = await sb.rpc('condo_semaforo_assembleia', { p_condominio: currentCondo.id, p_data: dataISO });
+    if (r.error) return null;
+    return r.data || null;
+  } catch (e) { return null; }
+}
+
+async function pintarSemaforoAssembleia(dataISO, elId) {
+  var el = document.getElementById(elId);
+  if (!el) return;
+  var s = await semaforoAssembleia(dataISO);
+  if (!s || s === 'sem_dados' || s === 'boa') { el.innerHTML = ''; return; }
+  var mau = s === 'ma';
+  var cor = mau ? '255,84,112' : '255,179,0';
+  el.innerHTML = '<div style="background:rgba(' + cor + ',.07);border:1px solid rgba(' + cor + ',.3);border-radius:9px;padding:10px 12px;margin-top:9px;font-size:11.5px;color:var(--t2);line-height:1.55">' +
+    (mau ? 'Muitos condóminos pediram para não ser incomodados nesta altura.' : 'Vários condóminos pediram para não ser incomodados nesta altura.') +
+    ' Pode ser má altura para reunir — arriscas ficar sem quórum. Não te digo quais nem quantos, porque isso é assunto deles.' +
+    '</div>';
+}
+
+// ---------------------------------------------------------------------
+//  3 · O push passa a respeitar o silencio
+// ---------------------------------------------------------------------
+//  De nada serve o condomino pedir sossego se o telemovel continua a
+//  tocar. urgente = deixa passar o que e mesmo urgente. minimo = so o
+//  que toca a fracao dele. Emergencias passam sempre.
+// ---------------------------------------------------------------------
+function _silenciada(fracaoId, destino, titulo) {
+  try {
+    var f = (fracoes || []).filter(function (x) { return x.id === fracaoId; })[0];
+    if (!f || !f.notificacoes_ate) return false;
+    if (new Date(f.notificacoes_ate) < new Date(new Date().toDateString())) return false;
+
+    var t = String(titulo || '');
+    // o que atravessa qualquer silencio
+    if (/emerg|urgente|112|inunda|incend|fuga de gas|gás/i.test(t)) return false;
+
+    if (f.notificacoes_nivel === 'minimo') {
+      // so o que toca a fracao dele: quotas, recibos, mensagens diretas
+      return !(destino === 'quotas' || destino === 'mensagens');
+    }
+    // 'urgente': cala o que e informativo
+    return (destino === 'inicio' || destino === 'docs');
+  } catch (e) { return false; }
+}
+
 function abrirImportadorContactos() {
   var h = '<div style="padding:2px">';
   h += '<div style="background:rgba(0,212,255,.05);border:1px solid rgba(0,212,255,.25);border-radius:10px;padding:12px 14px;font-size:11.5px;color:var(--t2);line-height:1.6">';
@@ -6500,6 +6648,23 @@ async function cartazContactosPDF() {
   doc.setTextColor(40,45,50); doc.setFont('helvetica','normal'); doc.setFontSize(11);
   doc.text('Guarde esta folha. Nao precisa de telemovel com internet para usar estes numeros.', M, y);
   y += 12;
+
+  // a administracao ausente vai no topo, porque e a informacao mais
+  // perecivel da folha e a que mais gente vai la procurar
+  try {
+    if (currentCondo && currentCondo.admin_ausente_ate && new Date(currentCondo.admin_ausente_ate) >= new Date(new Date().toDateString())) {
+      var fimA = new Date(currentCondo.admin_ausente_ate).toLocaleDateString('pt-PT');
+      doc.setFillColor(255,248,230); doc.setDrawColor(230,180,60); doc.setLineWidth(0.4);
+      doc.roundedRect(M, y, W - 2*M, currentCondo.admin_substituto ? 22 : 15, 2, 2, 'FD');
+      doc.setTextColor(150,100,10); doc.setFont('helvetica','bold'); doc.setFontSize(11);
+      doc.text('Administracao ausente ate ' + fimA, M + 5, y + 9);
+      if (currentCondo.admin_substituto) {
+        doc.setTextColor(70,60,30); doc.setFont('helvetica','normal'); doc.setFontSize(10);
+        doc.text('Urgencias: ' + String(currentCondo.admin_substituto).substring(0, 70), M + 5, y + 17);
+      }
+      y += (currentCondo.admin_substituto ? 22 : 15) + 8;
+    }
+  } catch(e) {}
 
   function linha(num, titulo, desc, grande, urgente) {
     var alt = grande ? 20 : 14;

@@ -711,6 +711,8 @@
         <div class="carrossel" id="ofertas-lista"></div>
       </div>
 
+      <div id="ausencia-card" onclick="abrirAusencia()" style="display:flex;align-items:center;gap:13px;cursor:pointer;background:var(--c2);border:1px solid var(--b);border-radius:14px;padding:15px 16px;margin-bottom:14px"></div>
+
       <a href="contactos.html" id="link-contactos" style="display:flex;align-items:center;gap:13px;text-decoration:none;background:var(--c2);border:1px solid var(--b);border-radius:14px;padding:15px 16px;margin-bottom:14px">
         <div style="font-size:23px;line-height:1">&#9742;</div>
         <div style="flex:1">
@@ -1304,6 +1306,172 @@ function abrirAssembleia() {
     '<button onclick="fecharModal()" style="width:100%;background:none;border:none;color:var(--t3);font-size:12px;margin-top:14px;cursor:pointer;">Fechar</button>';
   m.style.display = 'flex';
 }
+// =====================================================================
+//  VOU ESTAR FORA — lado do condomino
+// =====================================================================
+//  Nada aqui diz "estou de ferias". O que se grava e ate quando a
+//  pessoa nao quer ser incomodada. Muita gente silencia estando em
+//  casa, e essa ambiguidade e a protecao: uma lista de casas vazias
+//  em agosto e exatamente o que nao queremos que exista.
+// =====================================================================
+
+var _aus = null;
+
+// modal proprio — nao mexemos no modal-ass que ja existe e funciona
+function _ausModal(titulo, html) {
+  var m = document.getElementById('modal-aus');
+  if (!m) {
+    m = document.createElement('div');
+    m.id = 'modal-aus';
+    m.style.cssText = 'display:none;position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.72);align-items:flex-end;justify-content:center;padding:0';
+    m.addEventListener('click', function (e) { if (e.target === m) _ausFechar(); });
+    document.body.appendChild(m);
+  }
+  m.innerHTML = '<div style="background:var(--c1);border:1px solid var(--b);border-radius:18px 18px 0 0;width:100%;max-width:520px;max-height:88vh;overflow-y:auto;padding:20px 18px 30px">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">' +
+      '<div style="font-size:16px;font-weight:700;color:var(--t1)">' + titulo + '</div>' +
+      '<button onclick="_ausFechar()" style="background:none;border:none;color:var(--t3);font-size:24px;line-height:1;cursor:pointer;padding:0 4px">&times;</button>' +
+    '</div>' + html + '</div>';
+  m.style.display = 'flex';
+}
+function _ausFechar() { var m = document.getElementById('modal-aus'); if (m) m.style.display = 'none'; }
+
+
+async function carregarAusencia() {
+  try {
+    var r = await sb.rpc('portal_ausencia', { p_token: token });
+    if (r.error || !r.data || !r.data.length) return;
+    _aus = r.data[0];
+    pintarCartaoAusencia();
+    avisoAdminAusente();
+  } catch (e) {}
+}
+
+function _dataPT(d) {
+  if (!d) return '';
+  var p = String(d).substring(0, 10).split('-');
+  return p[2] + '/' + p[1];
+}
+
+function pintarCartaoAusencia() {
+  var el = document.getElementById('ausencia-card');
+  if (!el || !_aus) return;
+  var ativo = _aus.notificacoes_ate && new Date(_aus.notificacoes_ate) >= new Date(new Date().toDateString());
+  var sub = ativo
+    ? ('Notificações reduzidas até ' + _dataPT(_aus.notificacoes_ate))
+    : 'Silenciar avisos, deixar um contacto de urgência e ver o que fechar antes de sair';
+  el.innerHTML =
+    '<div style="font-size:23px;line-height:1">' + (ativo ? '&#9788;' : '&#9992;') + '</div>' +
+    '<div style="flex:1">' +
+      '<div style="font-size:14px;font-weight:650;color:var(--t1)">Vou estar fora</div>' +
+      '<div style="font-size:11.5px;color:' + (ativo ? 'var(--cyan)' : 'var(--t3)') + ';margin-top:2px;line-height:1.45">' + sub + '</div>' +
+    '</div>' +
+    '<div style="color:var(--t3);font-size:17px">&rsaquo;</div>';
+}
+
+// Se a administracao estiver ausente, isso e do interesse de todos
+// e aparece sozinho — nao esta escondido dentro de nenhum menu.
+function avisoAdminAusente() {
+  if (!_aus || !_aus.admin_ausente_ate) return;
+  var hoje = new Date(new Date().toDateString());
+  if (new Date(_aus.admin_ausente_ate) < hoje) return;
+  if (_aus.admin_ausente_de && new Date(_aus.admin_ausente_de) > hoje) return;
+  var alvo = document.getElementById('ausencia-card');
+  if (!alvo || document.getElementById('admin-fora')) return;
+  var d = document.createElement('div');
+  d.id = 'admin-fora';
+  d.style.cssText = 'background:rgba(255,179,0,.07);border:1px solid rgba(255,179,0,.3);border-radius:14px;padding:14px 16px;margin-bottom:14px;font-size:12px;color:var(--t2);line-height:1.6';
+  d.innerHTML = '<strong style="color:var(--amber)">A administração está ausente até ' + _dataPT(_aus.admin_ausente_ate) + '.</strong>' +
+    (_aus.admin_substituto ? ('<br>Para urgências: <strong style="color:var(--t1)">' + String(_aus.admin_substituto).replace(/[<>]/g, '') + '</strong>') : '') +
+    '<br><span style="color:var(--t3);font-size:11px">Emergências com risco para pessoas ou para o edifício: 112.</span>';
+  alvo.parentNode.insertBefore(d, alvo);
+}
+
+function abrirAusencia() {
+  var a = _aus || {};
+  var ate = a.notificacoes_ate ? String(a.notificacoes_ate).substring(0, 10) : '';
+  var nivel = a.notificacoes_nivel || 'urgente';
+  var cont = a.contacto_urgencia || '';
+  var feita = a.saida_verificada_em;
+
+  var h = '<div style="padding:2px">';
+
+  // --- silencio ---
+  h += '<div style="font-size:11px;font-weight:700;color:var(--t3);letter-spacing:.08em;margin-bottom:8px">SOSSEGO</div>';
+  h += '<div style="font-size:12px;color:var(--t2);line-height:1.6;margin-bottom:11px">Até quando não queres ser incomodado com avisos do prédio. Isto <strong style="color:var(--t1)">não diz a ninguém que estás fora</strong> — é só uma preferência de notificações.</div>';
+  h += '<label style="font-size:11.5px;color:var(--t3);display:block;margin-bottom:5px">Até</label>';
+  h += '<input type="date" id="aus-ate" value="' + ate + '" style="width:100%;background:var(--c2);border:1px solid var(--b);border-radius:9px;padding:11px;color:var(--t1);font-family:inherit;font-size:14px">';
+  h += '<div style="display:flex;gap:8px;margin-top:9px">';
+  h += '<label style="flex:1;background:var(--c2);border:1px solid var(--b);border-radius:9px;padding:10px 12px;font-size:12px;color:var(--t2);cursor:pointer;line-height:1.4"><input type="radio" name="ausn" value="urgente"' + (nivel !== 'minimo' ? ' checked' : '') + '> Só o que for urgente</label>';
+  h += '<label style="flex:1;background:var(--c2);border:1px solid var(--b);border-radius:9px;padding:10px 12px;font-size:12px;color:var(--t2);cursor:pointer;line-height:1.4"><input type="radio" name="ausn" value="minimo"' + (nivel === 'minimo' ? ' checked' : '') + '> Só o que toca à minha fração</label>';
+  h += '</div>';
+  h += '<div style="font-size:10.5px;color:var(--t3);margin-top:7px;line-height:1.5">Uma emergência no prédio chega-te sempre, escolhas o que escolheres.</div>';
+
+  // --- contacto ---
+  h += '<div style="font-size:11px;font-weight:700;color:var(--t3);letter-spacing:.08em;margin:20px 0 8px">QUEM CONTACTAR NUMA URGÊNCIA</div>';
+  h += '<div style="font-size:12px;color:var(--t2);line-height:1.6;margin-bottom:9px">Se rebentar um cano às três da manhã, é a esta pessoa que se liga. Vale o ano inteiro, não só quando estás fora.</div>';
+  h += '<input type="text" id="aus-cont" value="' + String(cont).replace(/"/g, '&quot;') + '" placeholder="Nome e telefone" style="width:100%;background:var(--c2);border:1px solid var(--b);border-radius:9px;padding:11px;color:var(--t1);font-family:inherit;font-size:14px">';
+
+  h += '<button class="btn-primary" style="width:100%;margin-top:14px" onclick="guardarAusencia()">Guardar</button>';
+
+  // --- lista de saida ---
+  h += '<div style="font-size:11px;font-weight:700;color:var(--t3);letter-spacing:.08em;margin:24px 0 8px">ANTES DE SAIR</div>';
+  h += '<div style="background:rgba(0,212,255,.05);border:1px solid rgba(0,212,255,.22);border-radius:10px;padding:12px 14px;font-size:12px;color:var(--t2);line-height:1.6;margin-bottom:11px">A maior parte das inundações em prédios começa num apartamento vazio: rebenta um tubo e ninguém dá por isso durante duas semanas. <strong style="color:var(--t1)">Fechar a torneira de segurança é o que evita mais estragos</strong> — e muitas apólices reduzem a cobertura em ausências longas sem corte de água.</div>';
+  var itens = [
+    'Fechar a torneira de segurança da água',
+    'Desligar o esquentador ou a caldeira',
+    'Tirar da tomada o que não precisa de ficar ligado',
+    'Fechar bem janelas, estores e portas de varanda',
+    'Pedir a alguém para recolher o correio',
+    'Deixar aqui em cima um contacto de urgência'
+  ];
+  h += '<div id="aus-lista">';
+  itens.forEach(function (t, i) {
+    h += '<label style="display:flex;gap:11px;align-items:flex-start;padding:11px 13px;background:var(--c2);border:1px solid var(--b);border-radius:9px;margin-bottom:7px;font-size:13px;color:var(--t2);cursor:pointer;line-height:1.45">' +
+         '<input type="checkbox" class="aus-ck" style="margin-top:2px">' + (i === 0 ? '<strong style="color:var(--t1)">' + t + '</strong>' : t) + '</label>';
+  });
+  h += '</div>';
+  h += '<button class="btn-ghost" style="width:100%;margin-top:6px" onclick="marcarSaidaVerificada()">Está tudo feito</button>';
+  if (feita) h += '<div style="font-size:11px;color:var(--ok);margin-top:8px;text-align:center">Última verificação: ' + new Date(feita).toLocaleDateString('pt-PT') + '</div>';
+  h += '<div style="font-size:10.5px;color:var(--t3);margin-top:8px;line-height:1.5;text-align:center">Fica registada a data. Num sinistro, isso é prova de que tomaste as precauções.</div>';
+
+  h += '</div>';
+  _ausModal('Vou estar fora', h);
+}
+
+async function guardarAusencia() {
+  var ate = (document.getElementById('aus-ate') || {}).value || null;
+  var cont = ((document.getElementById('aus-cont') || {}).value || '').trim();
+  var radio = document.querySelector('input[name="ausn"]:checked');
+  var nivel = radio ? radio.value : 'urgente';
+  try {
+    var r = await sb.rpc('portal_ausencia_definir', {
+      p_token: token, p_ate: ate || null, p_nivel: nivel, p_contacto: cont || null
+    });
+    if (r.error) { toast('Não consegui guardar: ' + r.error.message, 'err'); return; }
+    if (r.data && r.data !== 'ok') { toast(r.data === 'prazo demasiado longo' ? 'O prazo máximo é de 180 dias' : String(r.data), 'err'); return; }
+    toast(ate ? ('Avisos reduzidos até ' + _dataPT(ate)) : 'Avisos normais outra vez', 'ok');
+    _ausFechar();
+    await carregarAusencia();
+  } catch (e) { toast('Não consegui guardar', 'err'); }
+}
+
+async function marcarSaidaVerificada() {
+  var cks = document.querySelectorAll('.aus-ck');
+  var feitos = 0;
+  cks.forEach(function (c) { if (c.checked) feitos++; });
+  if (feitos < cks.length) {
+    if (!confirm('Ainda tens ' + (cks.length - feitos) + ' por marcar. Queres registar na mesma?')) return;
+  }
+  try {
+    var r = await sb.rpc('portal_saida_verificada', { p_token: token });
+    if (r.error) { toast('Não consegui registar', 'err'); return; }
+    toast('Registado com a data de hoje', 'ok');
+    _ausFechar();
+    await carregarAusencia();
+  } catch (e) { toast('Não consegui registar', 'err'); }
+}
+
 function fecharModal() { document.getElementById('modal-ass').style.display = 'none'; }
 
 async function confirmarPresenca(estado) {
@@ -3676,6 +3844,7 @@ iniciar();
 cIniciarPolling();
 carregarPermilagem();
 carregarFundo();
+carregarAusencia();
 carregarExigencias();
 carregarDinheiro();
 _ppAtualizaConta();
