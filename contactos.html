@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow,noarchive">
+<meta name="referrer" content="no-referrer">
+<title>Contactos úteis</title>
+<!--
+  ============================================================
+  CONTACTOS ÚTEIS — Cond.OS 2059 Pro
+  ============================================================
+  Esta página NÃO envia nada, NÃO grava nada e NÃO fala com
+  a base de dados. Não tem localStorage, cookies, tipos de
+  letra externos nem qualquer pedido para fora. É deliberado:
+  tudo o que sai daqui é um telefonema feito pela própria
+  pessoa, do aparelho dela, para a entidade certa.
+
+  Se algum dia alguém quiser acrescentar um formulário aqui,
+  leia isto primeiro: no momento em que esta página envia
+  seja o que for, passa a existir um registo de uma alegação
+  de abuso ligada a uma morada. É exatamente o que não
+  queremos ter.
+
+  >>> OS NÚMEROS TÊM DE SER CONFIRMADOS COM A APAV <<<
+  Estão todos no bloco LINHAS, mais abaixo, num sítio só.
+  ============================================================
+-->
+<style>
+  :root{
+    /* escuro e baixo em luminância de propósito: um ecrã claro
+       num corredor às escuras vê-se de longe */
+    --paper:#12161a; --raise:#181d23; --line:#242b33;
+    --ink:#d9dfe5; --ink2:#8e99a4; --ink3:#5d6874;
+    --urgent:#d9534f; --calm:#4f9d8c; --warn:#c9973f;
+    --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  body{background:var(--paper);color:var(--ink);font-family:var(--sans);
+       font-size:16px;line-height:1.55;padding-bottom:48px}
+  .wrap{max-width:620px;margin:0 auto;padding:0 18px}
+
+  /* ---- a barra de saída é o elemento mais pesado da página,
+         e isso é a afirmação: o controlo mais importante aqui
+         é a maneira de sair ---- */
+  .sair{position:sticky;top:0;z-index:9;background:var(--paper);
+        border-bottom:1px solid var(--line);padding:10px 0;
+        display:flex;align-items:center;gap:12px}
+  .sair button{flex:1;background:var(--raise);color:var(--ink);
+        border:1px solid var(--line);border-radius:10px;
+        padding:13px 16px;font-size:15px;font-weight:600;
+        font-family:inherit;cursor:pointer;text-align:left}
+  .sair button:active{background:#1e242b}
+  .sair small{color:var(--ink3);font-size:11.5px;white-space:nowrap}
+
+  h1{font-size:20px;font-weight:650;letter-spacing:-.01em;margin:22px 0 4px}
+  .sub{color:var(--ink2);font-size:13.5px;margin-bottom:18px}
+
+  .nota{background:var(--raise);border:1px solid var(--line);
+        border-left:3px solid var(--warn);border-radius:8px;
+        padding:12px 14px;font-size:13px;color:var(--ink2);
+        line-height:1.6;margin-bottom:22px}
+  .nota b{color:var(--ink);font-weight:600}
+
+  h2{font-size:11.5px;font-weight:700;letter-spacing:.11em;
+     text-transform:uppercase;color:var(--ink3);
+     margin:30px 0 10px;padding-bottom:7px;border-bottom:1px solid var(--line)}
+
+  /* cada linha é um alvo de toque grande: quem usa isto
+     pode estar com as mãos a tremer */
+  a.tel{display:flex;align-items:baseline;gap:12px;
+        text-decoration:none;color:inherit;padding:13px 14px;
+        background:var(--raise);border:1px solid var(--line);
+        border-radius:10px;margin-bottom:8px}
+  a.tel:active{background:#1e242b}
+  a.tel .num{font-size:17px;font-weight:700;letter-spacing:.01em;
+        white-space:nowrap;font-variant-numeric:tabular-nums}
+  a.tel .quem{flex:1;font-size:13.5px;color:var(--ink2);line-height:1.45}
+  a.tel .quem b{display:block;color:var(--ink);font-size:14.5px;
+        font-weight:600;margin-bottom:1px}
+  a.tel.u .num{color:var(--urgent)}
+  a.tel.c .num{color:var(--calm)}
+
+  details{background:var(--raise);border:1px solid var(--line);
+          border-radius:10px;margin-bottom:8px;overflow:hidden}
+  summary{padding:13px 14px;font-size:14.5px;font-weight:600;
+          cursor:pointer;list-style:none;display:flex;
+          justify-content:space-between;align-items:center;gap:10px}
+  summary::-webkit-details-marker{display:none}
+  summary::after{content:'+';color:var(--ink3);font-size:19px;font-weight:400}
+  details[open] summary::after{content:'\2212'}
+  details[open] summary{border-bottom:1px solid var(--line)}
+  .corpo{padding:13px 14px 4px}
+  .corpo p{font-size:13.5px;color:var(--ink2);margin-bottom:11px;line-height:1.6}
+
+  /* o guião: as pessoas gelam ao telefone. dar a frase é ajuda a sério */
+  .guiao{border-left:2px solid var(--calm);padding:2px 0 2px 12px;
+         margin:0 0 13px;font-size:13.5px;color:var(--ink);
+         line-height:1.6;font-style:italic}
+  .guiao span{display:block;font-style:normal;font-size:11px;
+         color:var(--ink3);letter-spacing:.06em;text-transform:uppercase;
+         margin-bottom:4px}
+
+  footer{margin-top:34px;padding-top:18px;border-top:1px solid var(--line);
+         font-size:12.5px;color:var(--ink3);line-height:1.65}
+  footer b{color:var(--ink2);font-weight:600}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+  :focus-visible{outline:2px solid var(--calm);outline-offset:2px}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <div class="sair">
+    <button onclick="sairJa()">Fechar esta página</button>
+    <small>ou tecla Esc</small>
+  </div>
+
+  <h1>Contactos úteis</h1>
+  <div class="sub">Números do prédio e linhas de apoio. Esta página não envia nem guarda nada.</div>
+
+  <div class="nota">
+    <b>Se alguém consegue ver este telemóvel</b>, não faças chamadas a partir daqui. Numa farmácia podes pedir a <b>Máscara&#8209;19</b>: dizes só isso ao balcão e eles tratam do resto, sem perguntas. Ou usa o telefone de outra pessoa.
+  </div>
+
+  <h2>Emergência</h2>
+  <a class="tel u" href="tel:112"><span class="num">112</span><span class="quem"><b>Emergência</b>Polícia, bombeiros e ambulância. Perigo a acontecer agora.</span></a>
+
+  <h2>Quando alguém precisa de ajuda</h2>
+
+  <details>
+    <summary>Alguém em minha casa magoa-me</summary>
+    <div class="corpo">
+      <p>Podes ligar sem dizer o teu nome. Não és obrigada a apresentar queixa para receber ajuda, e podem ajudar-te a preparar um plano antes de qualquer passo.</p>
+      <a class="tel u" href="tel:800202148"><span class="num">800 202 148</span><span class="quem"><b>Violência doméstica</b>24 horas, gratuita, anónima</span></a>
+      <a class="tel c" href="tel:116006"><span class="num">116 006</span><span class="quem"><b>Apoio à vítima (APAV)</b>Gratuita. Apoio jurídico e psicológico</span></a>
+      <div class="guiao"><span>Se não souberes como começar</span>&ldquo;Estou a ligar porque preciso de falar sobre uma situação em casa. Não sei bem o que fazer.&rdquo;</div>
+    </div>
+  </details>
+
+  <details>
+    <summary>Preocupa-me uma criança &mdash; ou sou eu</summary>
+    <div class="corpo">
+      <p>Não é preciso ter a certeza. Quem recebe é que avalia, e é para isso que existem. Se és tu, podes ligar sozinho e não tens de dizer quem és.</p>
+      <a class="tel c" href="tel:116111"><span class="num">116 111</span><span class="quem"><b>SOS Criança</b>Gratuita. Também para crianças e jovens ligarem</span></a>
+      <a class="tel u" href="tel:112"><span class="num">112</span><span class="quem"><b>Se o perigo é agora</b></span></a>
+      <div id="cpcj-slot"></div>
+      <p>A <b>CPCJ</b> do concelho acompanha situações que não são emergência. <span id="cpcj-nota"></span></p>
+      <div class="guiao"><span>Se não souberes como começar</span>&ldquo;Não tenho a certeza, mas há uma criança aqui perto que me preocupa. Posso contar o que vejo?&rdquo;</div>
+    </div>
+  </details>
+
+  <details>
+    <summary>Uma pessoa idosa ou dependente</summary>
+    <div class="corpo">
+      <p>Abandono, falta de comida ou de medicamentos, alguém que fica fechado em casa, dinheiro que desaparece. A linha de emergência social existe para isto e é muito pouco usada.</p>
+      <a class="tel c" href="tel:144"><span class="num">144</span><span class="quem"><b>Emergência social</b>24 horas, gratuita</span></a>
+      <a class="tel u" href="tel:112"><span class="num">112</span><span class="quem"><b>Se houver perigo imediato</b></span></a>
+    </div>
+  </details>
+
+  <details>
+    <summary>Não vejo um vizinho há dias</summary>
+    <div class="corpo">
+      <p>Correio acumulado, estores sempre fechados, um cheiro, o cão a ladrar sem parar. Vale sempre a pena. Ninguém repara nestas coisas melhor do que quem vive no prédio.</p>
+      <a class="tel c" href="tel:144"><span class="num">144</span><span class="quem"><b>Emergência social</b>Para quem pode estar em casa sem ajuda</span></a>
+      <a class="tel u" href="tel:112"><span class="num">112</span><span class="quem"><b>Se achas que pode estar em risco</b></span></a>
+      <div id="bomb-slot"></div>
+      <div class="guiao"><span>Se não souberes como começar</span>&ldquo;Moro no mesmo prédio que uma pessoa que não vejo há alguns dias e não responde à porta.&rdquo;</div>
+    </div>
+  </details>
+
+  <details>
+    <summary>Um animal em maus tratos</summary>
+    <div class="corpo">
+      <p>Animal sem água ou sombra, fechado numa varanda, ferido e sem tratamento, ou agredido.</p>
+      <a class="tel c" href="tel:808200520"><span class="num">808 200 520</span><span class="quem"><b>SOS Ambiente (GNR/SEPNA)</b></span></a>
+      <p>A <b>câmara municipal</b> e a junta de freguesia também recebem estas queixas e costumam ser mais rápidas.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Só preciso de falar com alguém</summary>
+    <div class="corpo">
+      <p>Não é preciso estar em perigo para ligar. Se andas mal, se tens pensamentos que te assustam, há quem atenda a qualquer hora.</p>
+      <a class="tel c" href="tel:213544545"><span class="num">213 544 545</span><span class="quem"><b>Voz de Apoio</b>Apoio emocional, todos os dias</span></a>
+      <a class="tel c" href="tel:808242424"><span class="num">808 24 24 24</span><span class="quem"><b>SNS 24</b>Aconselhamento de saúde, 24 horas</span></a>
+    </div>
+  </details>
+
+  <div id="zona-bloco" style="display:none">
+    <h2 id="zona-titulo">Na tua zona</h2>
+    <div id="zona-lista"></div>
+    <p style="font-size:12px;color:var(--ink3);line-height:1.6;margin:-2px 0 4px">Estes números são para o que não é emergência. <b style="color:var(--ink2)">Se o perigo é agora, é sempre 112.</b></p>
+  </div>
+
+  <h2>Do prédio</h2>
+  <a class="tel c" href="tel:117"><span class="num">117</span><span class="quem"><b>Incêndios</b>Proteção civil</span></a>
+  <a class="tel c" href="tel:800506506"><span class="num">800 506 506</span><span class="quem"><b>Avarias de eletricidade (E&#8209;Redes)</b></span></a>
+  <a class="tel c" href="tel:808242424"><span class="num">808 24 24 24</span><span class="quem"><b>SNS 24</b>Saúde, 24 horas</span></a>
+
+  <h2>Apagar o rasto</h2>
+  <div class="nota" style="border-left-color:var(--calm)">
+    Esta página não fica guardada em lado nenhum. Mas o <b>telemóvel</b> guarda: no histórico do browser e no registo de chamadas.
+    <br><br>
+    Fechar com o botão acima não deixa esta página no histórico. As <b>chamadas</b> ficam no registo do telefone &mdash; apaga-as tu se for preciso, ou usa outro aparelho desde o início.
+  </div>
+
+  <footer>
+    <b>Esta página é só informação.</b> Não é enviada a ninguém, não passa pela administração do condomínio e não fica registada. Quem decide ligar, e o que diz, és tu.
+    <br><br>
+    Se preferires que a administração do prédio saiba de alguma coisa &mdash; uma luz fundida, uma porta que não fecha, uma ocorrência &mdash; isso faz&#8209;se no portal do condomínio, que é outro sítio.
+  </footer>
+
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  // Sair sem deixar entrada no histórico: replace() não empilha,
+  // logo o botão "voltar atrás" não traz esta página de volta.
+  window.sairJa = function(){
+    try { location.replace('https://www.ipma.pt/pt/otempo/prev.localidade.hora/'); }
+    catch(e) { location.href = 'https://www.ipma.pt/'; }
+  };
+
+  document.addEventListener('keydown', function(e){
+    if (e.key === 'Escape') sairJa();
+  });
+
+  // =========================================================
+  //  ZONAS — contactos locais, por concelho
+  // =========================================================
+  //  Preenche-se à medida que entram prédios novos. Melhor
+  //  dois concelhos certos do que 308 a adivinhar: um número
+  //  errado nesta página é pior do que não ter número.
+  //
+  //  Para acrescentar um concelho: copia o bloco, mete a chave
+  //  em minúsculas e com hífens (sem acentos), e confirma os
+  //  números por telefone antes de publicar.
+  //
+  //  Nem todos os concelhos têm PSP e GNR — uns têm só um.
+  //  Deixa de fora o que não existir; a página trata disso.
+  // =========================================================
+  var ZONAS = {
+    'santa-maria-da-feira': {
+      nome: 'Santa Maria da Feira',
+      psp:  { n:'256114210', t:'PSP &mdash; Santa Maria da Feira' },
+      gnr:  { n:'256377260', t:'GNR &mdash; Santa Maria da Feira' },
+      bomb: { n:'256377600', t:'Bombeiros Volunt\u00e1rios de Santa Maria da Feira' },
+      cpcj: { n:'256374141', t:'CPCJ de Santa Maria da Feira' },
+      cm:   { n:'256370800', t:'C\u00e2mara Municipal de Santa Maria da Feira' }
+    }
+  };
+
+  // aceita "Santa Maria da Feira", "SANTA MARIA DA FEIRA" ou o slug
+  function chaveZona(t) {
+    return String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  }
+
+  function linhaTel(num, titulo, sub) {
+    var bonito = num.replace(/(\d{3})(?=\d)/g, '$1 ').trim();
+    return '<a class="tel c" href="tel:' + num + '"><span class="num">' + bonito +
+           '</span><span class="quem"><b>' + titulo + '</b>' + (sub || '') + '</span></a>';
+  }
+
+  // O concelho vem do endereço (?c=santa-maria-da-feira). Serve só para
+  // escolher os números certos e escrevê-los no ecrã. Nunca é enviado
+  // nem guardado em lado nenhum.
+  try {
+    var bruto = new URLSearchParams(location.search).get('c') || '';
+    var chave = chaveZona(bruto);
+    var z = ZONAS[chave];
+    // se não bater certo, procurar o nome de um concelho dentro do texto
+    // (assim basta passar a morada do prédio, sem coluna nova na base de dados)
+    if (!z && chave) {
+      for (var k in ZONAS) {
+        if (ZONAS.hasOwnProperty(k) && chave.indexOf(k) > -1) { z = ZONAS[k]; break; }
+      }
+    }
+
+    if (z) {
+      var h = '';
+      if (z.psp)  h += linhaTel(z.psp.n,  z.psp.t,  'Assuntos que n\u00e3o s\u00e3o emerg\u00eancia');
+      if (z.gnr)  h += linhaTel(z.gnr.n,  z.gnr.t,  'Assuntos que n\u00e3o s\u00e3o emerg\u00eancia');
+      if (z.bomb) h += linhaTel(z.bomb.n, z.bomb.t, 'Quartel local');
+      if (z.cm)   h += linhaTel(z.cm.n,   z.cm.t,   'A\u00e7\u00e3o social, animais, ru\u00eddo');
+      if (h) {
+        document.getElementById('zona-lista').innerHTML = h;
+        document.getElementById('zona-titulo').textContent = 'Na tua zona \u00b7 ' + z.nome;
+        document.getElementById('zona-bloco').style.display = 'block';
+      }
+      // a CPCJ certa entra dentro da secção da criança, que é onde faz falta
+      if (z.cpcj) document.getElementById('cpcj-slot').innerHTML = linhaTel(z.cpcj.n, z.cpcj.t, 'Situa\u00e7\u00f5es que n\u00e3o s\u00e3o emerg\u00eancia');
+      // e o quartel local na secção do vizinho que não aparece
+      if (z.bomb) document.getElementById('bomb-slot').innerHTML = linhaTel(z.bomb.n, z.bomb.t, 'Podem abrir a porta com a autoridade');
+      var nt = document.getElementById('cpcj-nota');
+      if (nt && !z.cpcj) nt.textContent = 'Procura por "CPCJ ' + z.nome + '".';
+    } else if (bruto) {
+      // concelho ainda não preenchido: dizer o nome dele na mesma
+      var limpo = bruto.replace(/[<>&"']/g, '').substring(0, 60).trim();
+      var nt2 = document.getElementById('cpcj-nota');
+      if (limpo && nt2) nt2.textContent = 'Procura por "CPCJ ' + limpo + '".';
+    }
+  } catch(e) {}
+
+  // Não registar service worker nem tocar em armazenamento nenhum.
+  // Se algum ficou registado por outra página do domínio, esta não
+  // o usa — o sw.js do Cond.OS só trata de notificações e não
+  // guarda páginas.
+})();
+</script>
+
+</body>
+</html>
