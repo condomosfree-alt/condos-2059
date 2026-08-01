@@ -31,7 +31,7 @@
     /* escuro e baixo em luminância de propósito: um ecrã claro
        num corredor às escuras vê-se de longe */
     --paper:#12161a; --raise:#181d23; --line:#242b33;
-    --ink:#d9dfe5; --ink2:#8e99a4; --ink3:#5d6874;
+    --ink:#e4e9ee; --ink2:#9aa5b0; --ink3:#6b7883;
     --urgent:#d9534f; --calm:#4f9d8c; --warn:#c9973f;
     --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,system-ui,sans-serif;
   }
@@ -68,17 +68,20 @@
 
   /* cada linha é um alvo de toque grande: quem usa isto
      pode estar com as mãos a tremer */
-  a.tel{display:flex;align-items:baseline;gap:12px;
-        text-decoration:none;color:inherit;padding:13px 14px;
+  a.tel{display:flex;align-items:center;gap:14px;
+        text-decoration:none;color:inherit;padding:15px 16px;
         background:var(--raise);border:1px solid var(--line);
-        border-radius:10px;margin-bottom:8px}
+        border-radius:11px;margin-bottom:11px;min-height:62px}
   a.tel:active{background:#1e242b}
-  a.tel .num{font-size:17px;font-weight:700;letter-spacing:.01em;
+  a.tel .num{font-size:19px;font-weight:700;letter-spacing:.01em;
         white-space:nowrap;font-variant-numeric:tabular-nums}
   a.tel .quem{flex:1;font-size:13.5px;color:var(--ink2);line-height:1.45}
   a.tel .quem b{display:block;color:var(--ink);font-size:14.5px;
         font-weight:600;margin-bottom:1px}
   a.tel.u .num{color:var(--urgent)}
+  a.tel.primeiro{border-color:rgba(217,83,79,.45);background:#1b1618;
+        min-height:74px;margin-bottom:13px}
+  a.tel.primeiro .num{font-size:27px;font-weight:800;letter-spacing:.02em}
   a.tel.c .num{color:var(--calm)}
 
   details{background:var(--raise);border:1px solid var(--line);
@@ -125,7 +128,7 @@
   </div>
 
   <h2>Emergência</h2>
-  <a class="tel u" href="tel:112"><span class="num">112</span><span class="quem"><b>Emergência</b>Polícia, bombeiros e ambulância. Perigo a acontecer agora.</span></a>
+  <a class="tel u primeiro" href="tel:112"><span class="num">112</span><span class="quem"><b>Emergência</b>Polícia, bombeiros e ambulância. Perigo a acontecer agora.</span></a>
 
   <h2>Quando alguém precisa de ajuda</h2>
 
@@ -195,8 +198,7 @@
     <p style="font-size:12px;color:var(--ink3);line-height:1.6;margin:-2px 0 4px">Estes números são para o que não é emergência. <b style="color:var(--ink2)">Se o perigo é agora, é sempre 112.</b></p>
   </div>
 
-  <h2>Do prédio</h2>
-  <a class="tel c" href="tel:117"><span class="num">117</span><span class="quem"><b>Incêndios</b>Proteção civil</span></a>
+  <h2>Avarias e saúde</h2>
   <a class="tel c" href="tel:800506506"><span class="num">800 506 506</span><span class="quem"><b>Avarias de eletricidade (E&#8209;Redes)</b></span></a>
   <a class="tel c" href="tel:808242424"><span class="num">808 24 24 24</span><span class="quem"><b>SNS 24</b>Saúde, 24 horas</span></a>
 
@@ -212,6 +214,10 @@
     <br><br>
     Se preferires que a administração do prédio saiba de alguma coisa &mdash; uma luz fundida, uma porta que não fecha, uma ocorrência &mdash; isso faz&#8209;se no portal do condomínio, que é outro sítio.
   </footer>
+
+  <button onclick="sairJa()" style="width:100%;margin-top:20px;background:var(--raise);
+    color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:15px;
+    font-size:15px;font-weight:600;font-family:inherit;cursor:pointer">Fechar esta página</button>
 
 </div>
 
@@ -251,7 +257,11 @@
       gnr:  { n:'256377260', t:'GNR &mdash; Santa Maria da Feira' },
       bomb: { n:'256377600', t:'Bombeiros Volunt\u00e1rios de Santa Maria da Feira' },
       cpcj: { n:'256374141', t:'CPCJ de Santa Maria da Feira' },
-      cm:   { n:'256370800', t:'C\u00e2mara Municipal de Santa Maria da Feira' }
+      cm:   { n:'256370800', t:'C\u00e2mara Municipal de Santa Maria da Feira' },
+      agua: { n:'256371500', t:'INDAQUA Feira', h:'dias \u00fateis, 8h30\u201317h' }
+      // NOTA: 256 371 500 \u00e9 o atendimento em hor\u00e1rio de expediente. A linha
+      // de avarias 24h da INDAQUA vem impressa na fatura da \u00e1gua \u2014 mete-a
+      // aqui em vez desta assim que a tiveres.
     }
   };
 
@@ -288,6 +298,7 @@
       if (z.gnr)  h += linhaTel(z.gnr.n,  z.gnr.t,  'Assuntos que n\u00e3o s\u00e3o emerg\u00eancia');
       if (z.bomb) h += linhaTel(z.bomb.n, z.bomb.t, 'Quartel local');
       if (z.cm)   h += linhaTel(z.cm.n,   z.cm.t,   'A\u00e7\u00e3o social, animais, ru\u00eddo');
+      if (z.agua) h += linhaTel(z.agua.n, z.agua.t, 'Falta de \u00e1gua e avarias' + (z.agua.h ? ' \u00b7 ' + z.agua.h : ''));
       if (h) {
         document.getElementById('zona-lista').innerHTML = h;
         document.getElementById('zona-titulo').textContent = 'Na tua zona \u00b7 ' + z.nome;
