@@ -870,7 +870,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.07.31-2312</div>
+      <div class="sb-tag">2059 Pro · build v2026.07.31-2358</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -4193,9 +4193,11 @@ async function verificarAvisosGerais() {
           detalhe: 'Um condómino exigiu prova/esclarecimento. Isto está no log de comunicações com data — a não-resposta também fica registada. Responde no Financeiro (prova do fundo) ou nas Mensagens.' });
       }
       var exVal = exTodas.filter(function(e){ return e.estado === 'validada' && !e.apresentada_em; });
+      var exValId = exVal.length ? exVal[0].id : null;
       if (exVal.length) {
         avisos.push({ pagina:'assembleias', badge:'📎', cor:'#22e584',
           texto: 'Prova validada — apresentar na próxima assembleia',
+          acao: exValId ? ('marcarProvaApresentada(\'' + exValId + '\')') : null, acaoTexto: 'Ja apresentei',
           detalhe: 'A prova do fundo foi validada pelos condóminos. Apresenta o extrato físico na próxima assembleia; ao gerar a ata, o sistema anexa a referência do documento (com impressão digital SHA-256) automaticamente.' });
       }
 
@@ -4317,7 +4319,12 @@ async function verificarAvisosGerais() {
       // presenças confirmadas pelo portal
       var presRes = await sb.from('assembleia_presencas').select('id,estado,origem').eq('assembleia_id', prox.id).eq('origem','portal');
       var nConf = (presRes.data||[]).length;
-      if (diasAte !== null && diasAte >= 0 && diasAte <= 15) {
+      if (diasAte !== null && diasAte < 0) {
+        avisos.push({ pagina:'assembleias', badge:'!', cor:'#ff5470',
+          texto: 'Assembleia de ' + (dataAss ? dataAss.toLocaleDateString('pt-PT') : '') + ' passou sem registo',
+          detalhe: 'Passaram ' + Math.abs(diasAte) + ' dia(s) e ninguem registou o que aconteceu. Enquanto ficar assim o sistema trata-a como a proxima e nao te avisa de mais nenhuma. Diz o que aconteceu em Assembleias.',
+          acao: 'resolverAssembleiaPassada(\'' + prox.id + '\')', acaoTexto: 'Resolver agora' });
+      } else if (diasAte !== null && diasAte >= 0 && diasAte <= 15) {
         avisos.push({ pagina:'assembleias', badge:'!', cor:'#00d4ff',
           texto: 'Assembleia ' + (prox.tipo||'') + ' em ' + (diasAte===0?'HOJE':(diasAte+' dia(s)')),
           detalhe: (nConf>0 ? nConf + ' condómino(s) já confirmaram presença pelo portal. ' : '') + 'Prepara a ordem de trabalhos e a convocatória.' });
@@ -4383,6 +4390,7 @@ async function verificarAvisosGerais() {
         html += '<span style="min-width:18px;height:18px;line-height:18px;text-align:center;border-radius:9px;background:' + a.cor + ';color:#fff;font-size:10px;font-weight:700;">' + a.badge + '</span>';
         html += '<div style="flex:1;"><div style="font-size:12px;font-weight:600;color:var(--text);">' + a.texto + '</div><div style="font-size:11px;color:var(--t3);margin-top:1px;">' + a.detalhe + '</div></div>';
         html += '<span style="color:var(--t3);font-size:16px;">›</span></div>';
+        if (a.acao) html += '<div style="padding:0 0 9px 28px;"><button class="btn-primary" style="font-size:11px;padding:7px 12px;" onclick="event.stopPropagation();' + a.acao + '">' + (a.acaoTexto || 'Resolver') + '</button></div>';
       });
       html += '</div>';
       dash.innerHTML = html;
@@ -4404,6 +4412,7 @@ function renderPainelNotificacoes(avisos) {
     html += '<span style="min-width:8px;height:8px;border-radius:50%;background:' + a.cor + ';margin-top:5px;"></span>';
     html += '<div style="flex:1;"><div style="font-size:12px;font-weight:600;color:var(--text);">' + a.texto + '</div><div style="font-size:11px;color:var(--t3);margin-top:2px;line-height:1.4;">' + a.detalhe + '</div></div>';
     html += '</div>';
+    if (a.acao) html += '<div style="padding:0 16px 11px 44px;"><button class="btn-primary" style="font-size:11px;padding:7px 12px;" onclick="event.stopPropagation();' + a.acao + '">' + (a.acaoTexto || 'Resolver') + '</button></div>';
   });
   painel.innerHTML = html;
 }
@@ -16272,6 +16281,84 @@ async function saveCondDef() {
 // ⚖️ CADEIA DE PROVA DO FUNDO — lado do administrador
 // ═══════════════════════════════════════════════════════════
 var _exigAtual = null;
+
+// ASSEMBLEIA QUE PASSOU SEM REGISTO ----------------------------------------
+// Uma assembleia marcada cuja data passou ficava em silencio para sempre:
+// nao saia dos avisos, nao mudava de estado, e como e sempre "a proxima"
+// tapava qualquer assembleia futura. A lei nao permite este limbo - ou se
+// realizou (ha ata), ou nao se realizou (e ha consequencias).
+async function resolverAssembleiaPassada(asId) {
+  var r = await sb.from('assembleias').select('*').eq('id', asId).single();
+  if (r.error || !r.data) { toast('Nao consegui ler a assembleia', 'err'); return; }
+  var a = r.data;
+  var dataFmt = a.data_assembleia ? new Date(a.data_assembleia).toLocaleDateString('pt-PT') : '?';
+  var dias = a.data_assembleia ? Math.floor((new Date() - new Date(a.data_assembleia)) / 86400000) : 0;
+  var h = '<div style="padding:2px;">';
+  h += '<div style="background:rgba(255,84,112,.07);border:1px solid rgba(255,84,112,.32);border-radius:10px;padding:12px 14px;font-size:11.5px;color:var(--t2);line-height:1.6;">';
+  h += 'A assembleia <strong>' + (a.tipo || '') + '</strong> estava marcada para <strong>' + dataFmt + '</strong> - ha ' + dias + ' dia(s) - e continua sem registo do que aconteceu.<br>';
+  h += 'Enquanto ficar assim, o sistema trata-a como a proxima assembleia e nao te avisa de mais nenhuma.';
+  h += '</div>';
+  h += '<div style="font-size:11px;font-weight:700;color:var(--t2);margin:14px 0 8px;">O QUE ACONTECEU NESSE DIA?</div>';
+
+  h += '<button class="btn-primary" style="width:100%;margin-bottom:8px;text-align:left;padding:12px 14px;" onclick="resolverAssembleiaEstado(\'' + asId + '\',\'realizada\')">';
+  h += 'Realizou-se<div style="font-size:10px;font-weight:400;opacity:.85;margin-top:3px;">Fica em estado realizada. Tens 30 dias desde ' + dataFmt + ' para comunicar a ata aos ausentes.</div></button>';
+
+  h += '<button class="btn-ghost" style="width:100%;margin-bottom:8px;text-align:left;padding:12px 14px;" onclick="resolverAssembleiaEstado(\'' + asId + '\',\'nao_realizada\')">';
+  h += 'Nao se realizou - faltou quorum<div style="font-size:10px;font-weight:400;opacity:.85;margin-top:3px;">Art. 1432.o n.o 4: pode reunir em segunda convocatoria com 1/4 do capital. O sistema regista a falta e ajuda-te a marcar a segunda data.</div></button>';
+
+  h += '<button class="btn-ghost" style="width:100%;text-align:left;padding:12px 14px;" onclick="resolverAssembleiaEstado(\'' + asId + '\',\'cancelada\')">';
+  h += 'Foi cancelada ou adiada<div style="font-size:10px;font-weight:400;opacity:.85;margin-top:3px;">Fica registada como cancelada. Se for para adiar, marca depois uma nova.</div></button>';
+
+  h += '<div style="font-size:10px;color:var(--t3);margin-top:12px;line-height:1.5;text-align:center;">Escolhas assim ficam no historico do predio - e a tua prova de que nao houve omissao.</div>';
+  h += '</div>';
+  abrirModalGenerico('Assembleia de ' + dataFmt + ' por resolver', h);
+}
+
+async function resolverAssembleiaEstado(asId, estado) {
+  var upd = { estado: estado };
+  if (estado === 'nao_realizada') upd.nao_realizada_em = new Date().toISOString();
+  var r;
+  try { r = await sb.from('assembleias').update(upd).eq('id', asId); } catch(e) { r = { error: e }; }
+  if (r && r.error) {
+    // a coluna nao_realizada_em pode nao existir - tentar so o estado
+    try { r = await sb.from('assembleias').update({ estado: estado }).eq('id', asId); } catch(e) { r = { error: e }; }
+  }
+  if (r && r.error) { toast('Nao consegui gravar: ' + (r.error.message || ''), 'err'); return; }
+  fecharModalGenerico();
+
+  if (estado === 'nao_realizada') {
+    // avisar todas as fracoes - a falta de quorum e um facto do predio, nao um assunto interno
+    try {
+      var ar = await sb.from('assembleias').select('tipo,data_assembleia').eq('id', asId).single();
+      var d = ar.data && ar.data.data_assembleia ? new Date(ar.data.data_assembleia).toLocaleDateString('pt-PT') : '';
+      await sb.from('mensagens').insert((fracoes || []).map(function(fr){
+        return { condominio_id: currentCondo.id, fracao_id: fr.id, autor:'admin', lida_admin:true, lida_condomino:false,
+          texto: 'ASSEMBLEIA NAO REALIZADA\n\nA assembleia marcada para ' + d + ' nao se realizou por falta de quorum.\n\nA lei (Art. 1432.o n.o 4 do Codigo Civil) permite que reuna em segunda convocatoria, e nessa basta um quarto do capital do predio para poder deliberar.\n\nSera marcada nova data e receberas a convocatoria.' };
+      }));
+      toast('Registada como nao realizada - condominos avisados', 'ok');
+    } catch(e) { toast('Registada. Nao consegui avisar os condominos.', 'warn'); }
+  } else {
+    toast('Assembleia registada como ' + estado, 'ok');
+  }
+  try { await verificarAvisosGerais(); } catch(e) {}
+  try { await loadAssembleias(); } catch(e) {}
+}
+
+// EXIGENCIA VALIDADA QUE NAO SAI DOS AVISOS ---------------------------------
+// O aviso "prova validada - apresentar na proxima assembleia" so se calava
+// quando se gerava uma ata (unico sitio que preenchia apresentada_em). Quem
+// apresentasse o extrato em mao ficava com o aviso para sempre e sem botao.
+async function marcarProvaApresentada(exigId) {
+  if (!await confirmar('Confirmas que ja apresentaste este documento aos condominos em assembleia?\n\nFica registado com a data de hoje. Se ainda nao apresentaste, o aviso deve continuar.')) return;
+  var r;
+  try {
+    r = await sb.from('exigencias').update({ estado:'apresentada_assembleia', apresentada_em: new Date().toISOString() }).eq('id', exigId);
+  } catch(e) { r = { error: e }; }
+  if (r && r.error) { toast('Nao consegui gravar: ' + (r.error.message || ''), 'err'); return; }
+  toast('Registado como apresentado em assembleia', 'ok');
+  try { await verificarAvisosGerais(); } catch(e) {}
+  try { await carregarExigenciasAdmin(); } catch(e) {}
+}
 
 async function carregarExigenciasAdmin() {
   var zona = document.getElementById('exig-admin-zona');
