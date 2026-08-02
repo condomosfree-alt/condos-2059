@@ -870,7 +870,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.08.02-1030</div>
+      <div class="sb-tag">2059 Pro · build v2026.08.02-1610</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -3942,7 +3942,7 @@ function instalarInterceptorPush() {
               else if (/avaria|ocorrência|reparação/i.test(t)) { titulo = '🔧 Avaria no prédio'; destino = 'reportar'; }
               else if (/vota|VOTAÇÃO/i.test(t)) { titulo = '🗳️ Votação à sua espera'; destino = 'reportar'; }
               var resumo = t.replace(/\n+/g, ' ').substring(0, 110);
-              if (!_silenciada(m.fracao_id, destino, titulo)) enviarPush(m.fracao_id, titulo, resumo, destino);
+              _deveNotificar(m.fracao_id, destino, titulo).then(function(ok){ if (ok) enviarPush(m.fracao_id, titulo, resumo, destino); });
             }
           });
         } catch(e) { /* nunca bloquear o insert */ }
@@ -6483,23 +6483,17 @@ async function pintarSemaforoAssembleia(dataISO, elId) {
 //  tocar. urgente = deixa passar o que e mesmo urgente. minimo = so o
 //  que toca a fracao dele. Emergencias passam sempre.
 // ---------------------------------------------------------------------
-function _silenciada(fracaoId, destino, titulo) {
+// A decisao de notificar NAO pode viver no computador do administrador:
+// para ele saber que nao te deve incomodar, teria de saber que estas fora.
+// Passa a perguntar a base de dados "mando ou nao?" e recebe so sim/nao.
+// O prazo e o nivel nunca lhe chegam.
+async function _deveNotificar(fracaoId, destino, titulo) {
   try {
-    var f = (fracoes || []).filter(function (x) { return x.id === fracaoId; })[0];
-    if (!f || !f.notificacoes_ate) return false;
-    if (new Date(f.notificacoes_ate) < new Date(new Date().toDateString())) return false;
-
-    var t = String(titulo || '');
-    // o que atravessa qualquer silencio
-    if (/emerg|urgente|112|inunda|incend|fuga de gas|gás/i.test(t)) return false;
-
-    if (f.notificacoes_nivel === 'minimo') {
-      // so o que toca a fracao dele: quotas, recibos, mensagens diretas
-      return !(destino === 'quotas' || destino === 'mensagens');
-    }
-    // 'urgente': cala o que e informativo
-    return (destino === 'inicio' || destino === 'docs');
-  } catch (e) { return false; }
+    var urgente = /emerg|urgente|112|inunda|incend|fuga de gas|g\u00e1s/i.test(String(titulo || ''));
+    var r = await sb.rpc('deve_notificar', { p_fracao: fracaoId, p_destino: destino || 'mensagens', p_urgente: urgente });
+    if (r.error) return true;              // na duvida, notifica
+    return r.data !== false;
+  } catch (e) { return true; }
 }
 
 function abrirImportadorContactos() {
