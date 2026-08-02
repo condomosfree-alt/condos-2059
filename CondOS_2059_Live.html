@@ -870,7 +870,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.08.02-1855</div>
+      <div class="sb-tag">2059 Pro · build v2026.08.02-2140</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -4341,7 +4341,7 @@ async function verificarAvisosGerais() {
     try {
       var pctFv = parseFloat(currentCondo.fundo_percentagem); if (isNaN(pctFv)) pctFv = 10;
       var [qPagasR, mFundoR] = await Promise.all([
-        sb.from('quotas').select('valor_pago').eq('condominio_id', currentCondo.id),
+        sb.from('quotas').select('valor_pago').eq('condominio_id', currentCondo.id).or('tipo.is.null,tipo.neq.extraordinaria'),
         sb.from('movimentos').select('tipo,valor,categoria,conta').eq('condominio_id', currentCondo.id).or(SEL_FUNDO)
       ]);
       var pagasFv = (qPagasR.data||[]).reduce(function(s,q){ return s + parseFloat(q.valor_pago||0); }, 0);
@@ -7439,7 +7439,7 @@ async function saveQuota() {
     await sb.from('quotas').insert({condominio_id:currentCondo.id,fracao_id:fracId,mes,ano,valor_emitido:quota_base,valor_pago:val,estado,metodo_pagamento:document.getElementById('qp-metodo').value,data_pagamento:document.getElementById('qp-data').value,notas:document.getElementById('qp-notas').value});
   }
   await sb.from('movimentos').insert({condominio_id:currentCondo.id,tipo:'receita',categoria:'Quota',descricao:`Quota ${['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][mes-1]}/${ano} — ${frac?frac.codigo:''}`,valor:val,data_movimento:document.getElementById('qp-data').value,conta:'operacional',fracao_id:fracId});
-  await transferirParaFundo(val, `Quota ${['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][mes-1]}/${ano} — ${frac?frac.codigo:''}`, document.getElementById('qp-data').value, fracId);
+  await transferirParaFundo(val, `Quota ${['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][mes-1]}/${ano} — ${frac?frac.codigo:''}`, document.getElementById('qp-data').value, fracId, null);
   // 🧾 Recibo automático (só se ficou totalmente pago)
   if (estado === 'pago') {
     await processarRecibo(
@@ -7534,7 +7534,7 @@ async function confirmarAssociacaoTransacao() {
         data_movimento: tr.data || new Date().toISOString().split('T')[0],
         conta: 'operacional', fracao_id: fracaoId
       });
-      await transferirParaFundo(parseFloat(qExist[0].valor_emitido), descA, tr.data, fracaoId);
+      await transferirParaFundo(parseFloat(qExist[0].valor_emitido), descA, tr.data, fracaoId, qExist[0].tipo);
       await loadQuotas();
     }
   }
@@ -7811,7 +7811,7 @@ async function importarExtratoBancario(input) {
             conta: 'operacional',
             fracao_id: qg.fracao_id
           });
-          await transferirParaFundo(parseFloat(qg.valor_emitido), TIPO_LABEL(qg) + ' ' + mesesNomes[(qg.mes||mes)-1] + '/' + (qg.ano||ano) + ' — ' + (qg.fracoes ? qg.fracoes.codigo : ''), dataP, qg.fracao_id);
+          await transferirParaFundo(parseFloat(qg.valor_emitido), TIPO_LABEL(qg) + ' ' + mesesNomes[(qg.mes||mes)-1] + '/' + (qg.ano||ano) + ' — ' + (qg.fracoes ? qg.fracoes.codigo : ''), dataP, qg.fracao_id, qg.tipo);
           marcadas.push({ tr: tr, quota: qg, agrupado: true });
         }
       }
@@ -7835,7 +7835,7 @@ async function importarExtratoBancario(input) {
           conta: 'operacional',
           fracao_id: matched.fracao_id
         });
-        await transferirParaFundo(parseFloat(matched.valor_emitido), TIPO_LABEL(matched) + ' ' + mesesNomes[(matched.mes||mes)-1] + '/' + (matched.ano||ano) + ' — ' + (matched.fracoes ? matched.fracoes.codigo : ''), dataP, matched.fracao_id);
+        await transferirParaFundo(parseFloat(matched.valor_emitido), TIPO_LABEL(matched) + ' ' + mesesNomes[(matched.mes||mes)-1] + '/' + (matched.ano||ano) + ' — ' + (matched.fracoes ? matched.fracoes.codigo : ''), dataP, matched.fracao_id, matched.tipo);
         marcadas.push({ tr: tr, quota: matched });
       } else {
         naoCruzadas.push(tr);
@@ -8606,7 +8606,7 @@ async function markPago(qid, val) {
       data_movimento: hoje, conta: 'operacional', fracao_id: q.fracao_id
     });
     // 🏦 Fundo de reserva
-    await transferirParaFundo(parseFloat(val), descQ, hoje, q.fracao_id);
+    await transferirParaFundo(parseFloat(val), descQ, hoje, q.fracao_id, q.tipo);
     // 🧾 Recibo automático (portal sempre; email se houver; carta se não)
     var viaR = await processarRecibo(q, q.fracoes || {});
     toast('Quota paga! Recibo ' + (viaR==='email'?'enviado por email':(viaR==='carta'?'pronto p/ carta':'no portal')) + '.','ok');
@@ -8774,7 +8774,11 @@ function fundoRegistado(movs) {
 }
 // ---------------------------------------------------------------------------
 
-async function transferirParaFundo(valorQuota, descricao, dataMov, fracaoId) {
+async function transferirParaFundo(valorQuota, descricao, dataMov, fracaoId, tipoQuota) {
+  // DL 268/94, Art. 4.o: o fundo e uma percentagem da quota de DESPESAS
+  // COMUNS. Uma quota extraordinaria ja tem destino proprio — a obra que a
+  // motivou — e nao gera fundo. Cobra-la duas vezes seria cobrar a mais.
+  if (tipoQuota === 'extraordinaria') return 0;
   var pct = parseFloat(currentCondo.fundo_percentagem);
   if (isNaN(pct)) pct = 10;              // por defeito, o mínimo legal
   if (pct <= 0) return 0;
@@ -8815,7 +8819,7 @@ async function reporReforcosFundo() {
   var qR, mR;
   try {
     var pares = await Promise.all([
-      sb.from('quotas').select('id,fracao_id,mes,ano,valor_pago,data_pagamento').eq('condominio_id', currentCondo.id).gt('valor_pago', 0),
+      sb.from('quotas').select('id,fracao_id,mes,ano,valor_pago,data_pagamento,tipo').eq('condominio_id', currentCondo.id).gt('valor_pago', 0),
       sb.from('movimentos').select('valor,data_movimento,fracao_id,categoria,conta,tipo').eq('condominio_id', currentCondo.id).or(SEL_FUNDO)
     ]);
     qR = pares[0]; mR = pares[1];
@@ -8834,6 +8838,7 @@ async function reporReforcosFundo() {
 
   var falta = [], total = 0;
   (qR.data || []).forEach(function(q){
+    if (q.tipo === 'extraordinaria') return;   // quota extraordinária não gera fundo
     var data = q.data_pagamento ? String(q.data_pagamento).substring(0,10)
                                 : (q.ano + '-' + ('0' + q.mes).slice(-2) + '-08');
     var k = (q.fracao_id || '-') + '|' + data.substring(0,7);
@@ -13414,7 +13419,7 @@ async function gerarAtaDoLivro() {
     try {
       var pctAta = parseFloat(currentCondo.fundo_percentagem); if (isNaN(pctAta)) pctAta = 10;
       var [qAta, mAta] = await Promise.all([
-        sb.from('quotas').select('valor_pago').eq('condominio_id', currentCondo.id),
+        sb.from('quotas').select('valor_pago').eq('condominio_id', currentCondo.id).or('tipo.is.null,tipo.neq.extraordinaria'),
         sb.from('movimentos').select('tipo,valor,categoria,conta,data_movimento').eq('condominio_id', currentCondo.id).or(SEL_FUNDO)
       ]);
       var pagasAta = (qAta.data||[]).reduce(function(s,q){ return s + parseFloat(q.valor_pago||0); }, 0);
@@ -13942,7 +13947,7 @@ async function sugerirOrdemTrabalhos() {
     try {
       var pctF = parseFloat(c.fundo_percentagem); if (isNaN(pctF)) pctF = 10;
       var [qFR, mFR] = await Promise.all([
-        sb.from('quotas').select('valor_pago').eq('condominio_id', c.id),
+        sb.from('quotas').select('valor_pago').eq('condominio_id', c.id).or('tipo.is.null,tipo.neq.extraordinaria'),
         sb.from('movimentos').select('tipo,valor,categoria,conta').eq('condominio_id', c.id).or(SEL_FUNDO)
       ]);
       var teorF = (qFR.data||[]).reduce(function(s,q){ return s + parseFloat(q.valor_pago||0); }, 0) * pctF / 100;
@@ -18086,7 +18091,7 @@ async function atualizarFundoCartao() {
   try {
     var pct = parseFloat(currentCondo.fundo_percentagem); if (isNaN(pct)) pct = 10;
     var [qR, mR] = await Promise.all([
-      sb.from('quotas').select('valor_pago').eq('condominio_id', currentCondo.id),
+      sb.from('quotas').select('valor_pago').eq('condominio_id', currentCondo.id).or('tipo.is.null,tipo.neq.extraordinaria'),
       sb.from('movimentos').select('tipo,valor,categoria,conta,data_movimento').eq('condominio_id', currentCondo.id).or(SEL_FUNDO)
     ]);
     var pagas = (qR.data||[]).reduce(function(s,q){ return s + parseFloat(q.valor_pago||0); }, 0);
@@ -22274,7 +22279,7 @@ async function massaModeloAuto(m, t) {
     } else if (m === 'auto_fundo') {
       var pct2 = parseFloat(currentCondo.fundo_percentagem); if (isNaN(pct2)) pct2 = 10;
       var [q2R, f2R] = await Promise.all([
-        sb.from('quotas').select('valor_pago').eq('condominio_id', currentCondo.id),
+        sb.from('quotas').select('valor_pago').eq('condominio_id', currentCondo.id).or('tipo.is.null,tipo.neq.extraordinaria'),
         sb.from('movimentos').select('tipo,valor,categoria,conta').eq('condominio_id', currentCondo.id).or(SEL_FUNDO)
       ]);
       var teor = (q2R.data||[]).reduce(function(s,q){ return s + parseFloat(q.valor_pago||0); }, 0) * pct2 / 100;
