@@ -4133,7 +4133,18 @@ async function carregarFundo() {
     barra.style.width = Math.min(100, cob) + '%'; barra.style.background = cor;
     const selo = document.getElementById('fundo-selo');
     const nota = document.getElementById('fundo-p-nota');
-    if (cob >= 95) {
+    // O selo estava a olhar só para os MOVIMENTOS. Um extrato bancário
+    // validado pelos condóminos é prova mais forte do que qualquer
+    // movimento registado — se existe e cobre o mínimo legal, o prédio
+    // está comprovado, ponto.
+    var spNum = parseFloat(d.saldo_provado);
+    var provaCobre = !isNaN(spNum) && teo > 0 && spNum >= teo * 0.95;
+    if (provaCobre) {
+      selo.textContent = '✔ PROVADO EM BANCO';
+      selo.style.background = 'rgba(34,229,132,.14)'; selo.style.color = 'var(--green)';
+      nota.textContent = 'Extrato bancário validado pelos condóminos: ' + spNum.toFixed(2).replace('.',',') + '€'
+        + (d.provado_em ? ' · ' + new Date(d.provado_em).toLocaleDateString('pt-PT') : '') + '.';
+    } else if (cob >= 95) {
       selo.textContent = '✔ COMPROVADO'; selo.style.background = 'rgba(34,229,132,.14)'; selo.style.color = 'var(--green)';
       nota.textContent = 'As transferências registadas cobrem o valor legal' + (d.ultimo_reforco ? ' · último reforço: ' + new Date(d.ultimo_reforco).toLocaleDateString('pt-PT') : '') + '.';
     } else {

@@ -870,7 +870,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.08.02-2140</div>
+      <div class="sb-tag">2059 Pro · build v2026.08.02-2310</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -17487,6 +17487,40 @@ async function apurarExigencia(exig) {
     if (el) el.innerHTML = '🗳️ Votação: <strong style="color:var(--green);">' + Math.round(pSim) + '‰ aceitam</strong> · <strong style="color:var(--red);">' + Math.round(pNao) + '‰ rejeitam</strong> · maioria necessária: ' + Math.round(totalPerm/2) + '‰';
     if (pSim > totalPerm/2) {
       await sb.from('exigencias').update({ estado:'validada', validada_em: new Date().toISOString(), saldo_confirmado: true }).eq('id', exig.id);
+
+      // UMA PROVA RESPONDE A TODA A GENTE. Se dois condóminos exigiram a
+      // prova do fundo na mesma altura, o extrato validado satisfaz os dois
+      // — deixar as outras exigências penduradas em 'pendente' era acusar o
+      // administrador de não ter feito o que fez.
+      try {
+        var outrasR = await sb.from('exigencias')
+          .select('id, fracao_id')
+          .eq('condominio_id', currentCondo.id)
+          .eq('tipo', exig.tipo || 'fundo')
+          .in('estado', ['pendente','doc_carregado','em_votacao'])
+          .neq('id', exig.id);
+        var outras = outrasR.data || [];
+        if (outras.length) {
+          await sb.from('exigencias').update({
+            estado: 'validada',
+            validada_em: new Date().toISOString(),
+            saldo_confirmado: true,
+            doc_url: exig.doc_url || null,
+            doc_hash: exig.doc_hash || null,
+            saldo_extrato: exig.saldo_extrato !== undefined ? exig.saldo_extrato : null,
+            ai_resultado: 'Respondida pela mesma prova, validada pelos condóminos.'
+          }).in('id', outras.map(function(o){ return o.id; }));
+
+          // e avisar quem tinha exigido, para não ficar à espera
+          var msgs = outras.filter(function(o){ return o.fracao_id; }).map(function(o){
+            return { condominio_id: currentCondo.id, fracao_id: o.fracao_id, autor:'sistema',
+                     lida_admin: true, lida_condomino: false,
+                     texto: 'A PROVA QUE PEDISTE JÁ FOI DADA\n\nOutro condómino tinha pedido a mesma prova do fundo. A administração carregou o extrato bancário, os condóminos validaram-no por maioria, e a tua exigência fica respondida com o mesmo documento.\n\nPodes consultá-lo na secção Quotas do portal.' };
+          });
+          if (msgs.length) { try { await sb.from('mensagens').insert(msgs); } catch(e) {} }
+          try { toast('Prova validada — respondeu também a ' + outras.length + ' exigência(s) em aberto', 'ok'); } catch(e) {}
+        }
+      } catch(e) { console.error('fechar exigencias irmas:', e); }
 
       // 💶 O VALOR PROVADO entra no sistema — é isto que faltava
       var saldoProv = (exig.saldo_extrato !== null && exig.saldo_extrato !== undefined) ? parseFloat(exig.saldo_extrato) : null;
