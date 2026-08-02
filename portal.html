@@ -1328,6 +1328,130 @@ function abrirAssembleia() {
 //  em agosto e exatamente o que nao queremos que exista.
 // =====================================================================
 
+// =====================================================================
+//  VIZINHO DE CONFIANCA
+// =====================================================================
+//  Sem isto, o modo de ausencia abre um buraco: silenciam-se os avisos
+//  e ninguem os le. Com um vizinho, os avisos sao redirecionados.
+//  Ninguem e vigia sem aceitar, e qualquer um dos dois pode terminar.
+// =====================================================================
+
+var _vig = { meu: null, sou: [], vizinhos: null };
+
+async function carregarVigia() {
+  try {
+    var r = await sb.rpc('portal_vigia_estado', { p_token: token });
+    if (r.error) { console.error('portal_vigia_estado:', r.error); return; }
+    _vig.meu = null; _vig.sou = [];
+    (r.data || []).forEach(function (x) {
+      if (x.papel === 'meu_vigia') _vig.meu = x;
+      else _vig.sou.push(x);
+    });
+    pintarCartaoAusencia();
+  } catch (e) {}
+}
+
+function _primeiroNome(x) { return (x && x.outro_nome) ? x.outro_nome : 'vizinho'; }
+
+// bloco do vizinho, desenhado dentro do painel "Vou estar fora"
+function _htmlVigia() {
+  var h = '<div style="font-size:11px;font-weight:700;color:var(--t3);letter-spacing:.08em;margin:24px 0 8px">UM VIZINHO QUE FICA POR MIM</div>';
+  h += '<div style="font-size:12px;color:var(--t2);line-height:1.6;margin-bottom:11px">Se silenciares os avisos e ninguém os ler, um problema no prédio passa-te ao lado. Com um vizinho de confiança os avisos não desaparecem — <strong style="color:var(--t1)">passam a chegar também a ele</strong>. E podes fazer o mesmo por ele.</div>';
+
+  // pedidos à minha espera
+  var pendentes = _vig.sou.filter(function (x) { return x.estado === 'pedido'; });
+  pendentes.forEach(function (p) {
+    h += '<div style="background:rgba(0,212,255,.06);border:1px solid rgba(0,212,255,.28);border-radius:10px;padding:12px 14px;margin-bottom:10px">';
+    h += '<div style="font-size:13px;color:var(--t1);line-height:1.5"><strong>' + _primeiroNome(p) + '</strong> (fração ' + (p.outra_fracao || '?') + ') pediu para ficares por ele.</div>';
+    h += '<div style="font-size:11px;color:var(--t3);margin-top:5px;line-height:1.5">Passas a receber os avisos que lhe digam respeito enquanto estiver fora. Não és obrigado, e podes terminar quando quiseres.</div>';
+    h += '<div style="display:flex;gap:8px;margin-top:11px">';
+    h += '<button class="btn-primary" style="flex:1;font-size:12px;padding:9px" onclick="responderVigia(\'' + p.pedido_id + '\',true)">Aceito</button>';
+    h += '<button class="btn-ghost" style="flex:1;font-size:12px;padding:9px" onclick="responderVigia(\'' + p.pedido_id + '\',false)">Agora não</button>';
+    h += '</div></div>';
+  });
+
+  // quem fica por mim
+  if (_vig.meu) {
+    var m = _vig.meu, aceite = m.estado === 'aceite';
+    h += '<div style="background:' + (aceite ? 'rgba(0,230,118,.06)' : 'rgba(255,179,0,.06)') + ';border:1px solid ' + (aceite ? 'rgba(0,230,118,.28)' : 'rgba(255,179,0,.28)') + ';border-radius:10px;padding:12px 14px;margin-bottom:10px">';
+    if (aceite) {
+      h += '<div style="font-size:13px;color:var(--t1)"><strong>' + _primeiroNome(m) + '</strong> (fração ' + (m.outra_fracao || '?') + ') fica por ti.</div>';
+      if (m.contacto) h += '<div style="font-size:11.5px;color:var(--t2);margin-top:5px">Contacto: ' + String(m.contacto).replace(/[<>]/g, '') + '</div>';
+    } else {
+      h += '<div style="font-size:13px;color:var(--t1)">Pedido enviado a <strong>' + _primeiroNome(m) + '</strong> (fração ' + (m.outra_fracao || '?') + ').</div>';
+      h += '<div style="font-size:11px;color:var(--t3);margin-top:4px">À espera da resposta dele.</div>';
+    }
+    h += '<button class="btn-ghost" style="width:100%;margin-top:10px;font-size:11.5px;padding:8px" onclick="terminarVigia(\'' + m.pedido_id + '\')">' + (aceite ? 'Terminar' : 'Cancelar pedido') + '</button>';
+    h += '</div>';
+  } else {
+    h += '<select id="vig-sel" style="width:100%;background:var(--c2);border:1px solid var(--b);border-radius:9px;padding:11px;color:var(--t1);font-family:inherit;font-size:14px"><option value="">A carregar vizinhos…</option></select>';
+    h += '<button class="btn-ghost" style="width:100%;margin-top:8px" onclick="pedirVigia()">Pedir a este vizinho</button>';
+    h += '<div style="font-size:10.5px;color:var(--t3);margin-top:7px;line-height:1.5">Ele recebe o pedido no portal dele e decide. Se não aceitar, escolhes outro — e ninguém fica a saber quem recusou.</div>';
+  }
+
+  // por quem eu fico
+  var aceites = _vig.sou.filter(function (x) { return x.estado === 'aceite'; });
+  if (aceites.length) {
+    h += '<div style="font-size:11px;font-weight:700;color:var(--t3);letter-spacing:.08em;margin:18px 0 8px">FICO POR</div>';
+    aceites.forEach(function (a) {
+      h += '<div style="display:flex;align-items:center;gap:10px;background:var(--c2);border:1px solid var(--b);border-radius:9px;padding:11px 13px;margin-bottom:7px">';
+      h += '<div style="flex:1;font-size:13px;color:var(--t1)"><strong>' + _primeiroNome(a) + '</strong> · fração ' + (a.outra_fracao || '?') + (a.contacto ? ('<div style="font-size:11px;color:var(--t3);margin-top:2px">' + String(a.contacto).replace(/[<>]/g, '') + '</div>') : '') + '</div>';
+      h += '<button class="btn-ghost" style="font-size:11px;padding:6px 10px" onclick="terminarVigia(\'' + a.pedido_id + '\')">Terminar</button>';
+      h += '</div>';
+    });
+  }
+  return h;
+}
+
+async function carregarVizinhosCombo() {
+  var sel = document.getElementById('vig-sel');
+  if (!sel) return;
+  try {
+    var r = await sb.rpc('portal_vizinhos', { p_token: token });
+    if (r.error || !r.data) { sel.innerHTML = '<option value="">Não consegui ler a lista</option>'; return; }
+    var h = '<option value="">Escolhe um vizinho…</option>';
+    r.data.forEach(function (v) {
+      if (v.ja_pedido) return;
+      h += '<option value="' + v.fracao_id + '">' + (v.codigo || '?') + (v.nome ? (' — ' + v.nome) : '') + '</option>';
+    });
+    sel.innerHTML = h;
+  } catch (e) { sel.innerHTML = '<option value="">Não consegui ler a lista</option>'; }
+}
+
+async function pedirVigia() {
+  var sel = document.getElementById('vig-sel');
+  if (!sel || !sel.value) { toast('Escolhe um vizinho primeiro', 'warn'); return; }
+  try {
+    var r = await sb.rpc('portal_vigia_pedir', { p_token: token, p_fracao: sel.value });
+    if (r.error) { toast('Não consegui enviar: ' + r.error.message, 'err'); return; }
+    if (r.data !== 'ok') { toast(String(r.data), 'err'); return; }
+    toast('Pedido enviado. Ele recebe no portal dele.', 'ok');
+    await carregarVigia();
+    abrirAusencia();
+  } catch (e) { toast('Não consegui enviar', 'err'); }
+}
+
+async function responderVigia(id, aceita) {
+  try {
+    var r = await sb.rpc('portal_vigia_responder', { p_token: token, p_pedido: id, p_aceita: !!aceita });
+    if (r.error) { toast('Não consegui responder', 'err'); return; }
+    toast(aceita ? 'Aceitaste ficar por ele' : 'Respondido', 'ok');
+    await carregarVigia();
+    abrirAusencia();
+  } catch (e) { toast('Não consegui responder', 'err'); }
+}
+
+async function terminarVigia(id) {
+  if (!confirm('Queres terminar? A outra pessoa deixa de estar ligada a ti.')) return;
+  try {
+    var r = await sb.rpc('portal_vigia_terminar', { p_token: token, p_pedido: id });
+    if (r.error) { toast('Não consegui terminar', 'err'); return; }
+    toast('Terminado', 'ok');
+    await carregarVigia();
+    abrirAusencia();
+  } catch (e) { toast('Não consegui terminar', 'err'); }
+}
+
 var _aus = null;
 
 // modal proprio — nao mexemos no modal-ass que ja existe e funciona
@@ -1370,17 +1494,60 @@ function _dataPT(d) {
 function pintarCartaoAusencia() {
   var el = document.getElementById('ausencia-card');
   if (!el || !_aus) return;
-  var ativo = _aus.notificacoes_ate && new Date(_aus.notificacoes_ate) >= new Date(new Date().toDateString());
-  var sub = ativo
-    ? ('Notificações reduzidas até ' + _dataPT(_aus.notificacoes_ate))
-    : 'Silenciar avisos, deixar um contacto de urgência e ver o que fechar antes de sair';
-  el.innerHTML =
-    '<div style="font-size:23px;line-height:1">' + (ativo ? '&#9788;' : '&#9992;') + '</div>' +
-    '<div style="flex:1">' +
-      '<div style="font-size:14px;font-weight:650;color:var(--t1)">Vou estar fora</div>' +
-      '<div style="font-size:11.5px;color:' + (ativo ? 'var(--cyan)' : 'var(--t3)') + ';margin-top:2px;line-height:1.45">' + sub + '</div>' +
-    '</div>' +
-    '<div style="color:var(--t3);font-size:17px">&rsaquo;</div>';
+  var hoje = new Date(new Date().toDateString());
+  var ativo = _aus.notificacoes_ate && new Date(_aus.notificacoes_ate) >= hoje;
+
+  if (!ativo) {
+    el.style.cssText = 'display:flex;align-items:center;gap:13px;cursor:pointer';
+    el.className = 'painel-sec';
+    el.innerHTML =
+      '<div style="font-size:23px;line-height:1">&#9992;</div>' +
+      '<div style="flex:1">' +
+        '<div style="font-size:14px;font-weight:650;color:var(--t1)">Vou estar fora</div>' +
+        '<div style="font-size:11.5px;color:var(--t3);margin-top:2px;line-height:1.45">Silenciar avisos, escolher um vizinho de confiança e ver o que fechar antes de sair</div>' +
+      '</div>' +
+      '<div style="color:var(--t3);font-size:17px">&rsaquo;</div>';
+    return;
+  }
+
+  // ATIVO — sol baixo no horizonte. Não é uma ilustração de praia: é a
+  // mesma paleta escura com uma luz quente a nascer de baixo, para o
+  // cartão mudar de temperatura sem sair do produto.
+  var dias = Math.ceil((new Date(_aus.notificacoes_ate) - hoje) / 86400000);
+  var vig = (_vig && _vig.meu && _vig.meu.estado === 'aceite') ? _vig.meu : null;
+
+  el.className = '';
+  el.style.cssText = 'display:block;cursor:pointer;position:relative;overflow:hidden;border-radius:14px;margin-bottom:14px;' +
+    'background:radial-gradient(120% 130% at 50% 112%, rgba(255,179,0,.30) 0%, rgba(255,120,40,.13) 34%, rgba(124,58,237,.10) 62%, rgba(8,13,20,0) 84%), var(--s1);' +
+    'border:1px solid rgba(255,179,0,.26)';
+
+  var h = '';
+  // horizonte: uma linha e um semicírculo, feitos só com CSS
+  h += '<div style="position:absolute;left:0;right:0;bottom:0;height:1px;background:linear-gradient(90deg,transparent,rgba(255,179,0,.55),transparent)"></div>';
+  h += '<div style="position:absolute;left:50%;bottom:-30px;width:96px;height:96px;margin-left:-48px;border-radius:50%;' +
+       'background:radial-gradient(circle at 50% 42%, rgba(255,214,120,.85), rgba(255,150,40,.35) 55%, transparent 72%);filter:blur(1px)"></div>';
+
+  h += '<div style="position:relative;padding:17px 16px 20px">';
+  h += '<div style="display:flex;align-items:center;gap:13px">';
+  h += '<div style="font-size:23px;line-height:1">&#9788;</div>';
+  h += '<div style="flex:1">';
+  h += '<div style="font-size:14px;font-weight:650;color:var(--t1)">Estás fora</div>';
+  h += '<div style="font-size:11.5px;color:var(--amber);margin-top:2px;line-height:1.45">' +
+       (dias <= 1 ? 'Último dia de sossego' : ('Faltam ' + dias + ' dias · avisos reduzidos até ' + _dataPT(_aus.notificacoes_ate))) +
+       '</div>';
+  h += '</div>';
+  h += '<div style="color:var(--t3);font-size:17px">&rsaquo;</div>';
+  h += '</div>';
+
+  if (vig) {
+    h += '<div style="margin-top:12px;padding-top:11px;border-top:1px solid rgba(255,179,0,.18);font-size:11.5px;color:var(--t2);line-height:1.5">' +
+         '<strong style="color:var(--t1)">' + _primeiroNome(vig) + '</strong> (fração ' + (vig.outra_fracao || '?') + ') está a receber os avisos por ti.</div>';
+  } else {
+    h += '<div style="margin-top:12px;padding-top:11px;border-top:1px solid rgba(255,179,0,.18);font-size:11.5px;color:var(--t3);line-height:1.5">' +
+         'Ninguém está a receber os avisos por ti. Escolhe um vizinho de confiança.</div>';
+  }
+  h += '</div>';
+  el.innerHTML = h;
 }
 
 // Se a administracao estiver ausente, isso e do interesse de todos
@@ -1430,6 +1597,9 @@ function abrirAusencia() {
 
   h += '<button class="btn-primary" style="width:100%;margin-top:14px" onclick="guardarAusencia()">Guardar</button>';
 
+  // --- vizinho de confianca ---
+  h += _htmlVigia();
+
   // --- lista de saida ---
   h += '<div style="font-size:11px;font-weight:700;color:var(--t3);letter-spacing:.08em;margin:24px 0 8px">ANTES DE SAIR</div>';
   h += '<div style="background:rgba(0,212,255,.05);border:1px solid rgba(0,212,255,.22);border-radius:10px;padding:12px 14px;font-size:12px;color:var(--t2);line-height:1.6;margin-bottom:11px">A maior parte das inundações em prédios começa num apartamento vazio: rebenta um tubo e ninguém dá por isso durante duas semanas. <strong style="color:var(--t1)">Fechar a torneira de segurança é o que evita mais estragos</strong> — e muitas apólices reduzem a cobertura em ausências longas sem corte de água.</div>';
@@ -1453,6 +1623,7 @@ function abrirAusencia() {
 
   h += '</div>';
   _ausModal('Vou estar fora', h);
+  setTimeout(carregarVizinhosCombo, 30);
 }
 
 async function guardarAusencia() {
@@ -3861,6 +4032,7 @@ cIniciarPolling();
 carregarPermilagem();
 carregarFundo();
 carregarAusencia();
+carregarVigia();
 carregarExigencias();
 carregarDinheiro();
 _ppAtualizaConta();
