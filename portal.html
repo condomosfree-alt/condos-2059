@@ -1546,8 +1546,22 @@ function pintarCartaoAusencia() {
     h += '<div style="margin-top:12px;padding-top:11px;border-top:1px solid rgba(255,179,0,.18);font-size:11.5px;color:var(--t3);line-height:1.5">' +
          'Ninguém está a receber os avisos por ti. Escolhe um vizinho de confiança.</div>';
   }
+  h += '<button onclick="event.stopPropagation();voltei()" style="width:100%;margin-top:13px;background:rgba(255,255,255,.06);color:var(--t1);border:1px solid rgba(255,179,0,.35);border-radius:9px;padding:11px;font-size:13px;font-weight:600;font-family:inherit;cursor:pointer">Já voltei</button>';
   h += '</div>';
   el.innerHTML = h;
+}
+
+// Planos mudam: trabalho, doença, uma discussão. Voltar cedo tem de ser
+// um toque — e o vizinho que ficou por ti merece saber que pode desligar.
+async function voltei() {
+  if (!confirm('Já voltaste? Os avisos voltam ao normal e o vizinho que ficou por ti é informado.')) return;
+  try {
+    var r = await sb.rpc('portal_ausencia_voltei', { p_token: token });
+    if (r.error) { toast('Não consegui: ' + r.error.message, 'err'); return; }
+    toast('Bem-vindo de volta', 'ok');
+    await carregarAusencia();
+    await carregarVigia();
+  } catch (e) { toast('Não consegui', 'err'); }
 }
 
 // Se a administracao estiver ausente, isso e do interesse de todos
@@ -1589,6 +1603,14 @@ function abrirAusencia() {
   h += '<label style="flex:1;background:var(--c2);border:1px solid var(--b);border-radius:9px;padding:10px 12px;font-size:12px;color:var(--t2);cursor:pointer;line-height:1.4"><input type="radio" name="ausn" value="minimo"' + (nivel === 'minimo' ? ' checked' : '') + '> Só o que toca à minha fração</label>';
   h += '</div>';
   h += '<div style="font-size:10.5px;color:var(--t3);margin-top:7px;line-height:1.5">Uma emergência no prédio chega-te sempre, escolhas o que escolheres.</div>';
+
+  // Quem sabe. Predefinido: ninguém além do sistema.
+  h += '<div style="background:var(--c2);border:1px solid var(--b);border-radius:10px;padding:12px 14px;margin-top:12px">';
+  h += '<label style="display:flex;gap:11px;align-items:flex-start;cursor:pointer;font-size:12.5px;color:var(--t1);line-height:1.5">';
+  h += '<input type="checkbox" id="aus-mostrar" style="margin-top:2px"' + (a.mostrar_admin ? ' checked' : '') + '>';
+  h += '<span>Deixar a administração saber que vou estar fora</span></label>';
+  h += '<div style="font-size:11px;color:var(--t3);margin-top:7px;line-height:1.55">Se não marcares, <strong style="color:var(--t2)">ninguém no prédio fica a saber</strong> — nem a administração. O sistema guarda a preferência para calar os avisos, e mais nada. Marcar só ajuda se quiseres que ela conte contigo para marcar assembleias ou saiba que não estás para receber o canalizador.</div>';
+  h += '</div>';
 
   // --- contacto ---
   h += '<div style="font-size:11px;font-weight:700;color:var(--t3);letter-spacing:.08em;margin:20px 0 8px">QUEM CONTACTAR NUMA URGÊNCIA</div>';
@@ -1632,8 +1654,9 @@ async function guardarAusencia() {
   var radio = document.querySelector('input[name="ausn"]:checked');
   var nivel = radio ? radio.value : 'urgente';
   try {
+    var mostrar = !!(document.getElementById('aus-mostrar') || {}).checked;
     var r = await sb.rpc('portal_ausencia_definir', {
-      p_token: token, p_ate: ate || null, p_nivel: nivel, p_contacto: cont || null
+      p_token: token, p_ate: ate || null, p_nivel: nivel, p_contacto: cont || null, p_mostrar: mostrar
     });
     if (r.error) { toast('Não consegui guardar: ' + r.error.message, 'err'); return; }
     if (r.data && r.data !== 'ok') { toast(r.data === 'prazo demasiado longo' ? 'O prazo máximo é de 180 dias' : String(r.data), 'err'); return; }
