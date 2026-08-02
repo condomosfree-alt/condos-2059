@@ -870,7 +870,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.08.01-1420</div>
+      <div class="sb-tag">2059 Pro · build v2026.08.02-1030</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -18061,7 +18061,12 @@ async function atualizarFundoCartao() {
     // 🔧 porta para repor reforços — só existe se houver mesmo falta
     try {
       var zRep = document.getElementById('fundo-repor');
-      if (!zRep && pm && pm.parentNode) { zRep = document.createElement('div'); zRep.id = 'fundo-repor'; pm.parentNode.insertBefore(zRep, pm); }
+      var notaEl = document.getElementById('fundo-nota');
+      if (!zRep && notaEl && notaEl.parentNode) {
+        zRep = document.createElement('div');
+        zRep.id = 'fundo-repor';
+        notaEl.parentNode.insertBefore(zRep, notaEl.nextSibling);
+      }
       if (zRep) {
         var faltaReg = Math.round((teorico - comprovado) * 100) / 100;
         zRep.innerHTML = faltaReg > 1
