@@ -870,7 +870,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.08.02-1610</div>
+      <div class="sb-tag">2059 Pro · build v2026.08.02-1735</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -1554,6 +1554,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
             </div>
             <div style="height:9px;background:rgba(255,255,255,.06);border-radius:6px;overflow:hidden;margin-bottom:10px;"><div id="fundo-barra" style="height:100%;width:0%;background:#b48cff;border-radius:6px;transition:width .5s;"></div></div>
             <div id="fundo-nota" style="font-size:10.5px;color:var(--t3);line-height:1.5;"></div>
+            <div id="fundo-repor"></div>
             <div id="fundo-provado"></div>
             <div id="fundo-suficiencia"></div>
             <div id="exig-admin-zona"></div>
@@ -18054,13 +18055,9 @@ async function atualizarFundoCartao() {
     if (pm) pm.textContent = 'DL 268/94, Art. 4.º — mínimo legal 10% · em vigor neste prédio: ' + pct + '%';
     // 🔧 porta para repor reforços — só existe se houver mesmo falta
     try {
+      // O espaço já existe no HTML do cartão. Antes eu criava-o por JS e
+      // bastava um erro acima para nunca aparecer — foi o que aconteceu.
       var zRep = document.getElementById('fundo-repor');
-      var notaEl = document.getElementById('fundo-nota');
-      if (!zRep && notaEl && notaEl.parentNode) {
-        zRep = document.createElement('div');
-        zRep.id = 'fundo-repor';
-        notaEl.parentNode.insertBefore(zRep, notaEl.nextSibling);
-      }
       if (zRep) {
         var faltaReg = Math.round((teorico - comprovado) * 100) / 100;
         zRep.innerHTML = faltaReg > 1

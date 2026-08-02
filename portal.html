@@ -1384,6 +1384,7 @@ function _htmlVigia() {
     h += '<button class="btn-ghost" style="width:100%;margin-top:10px;font-size:11.5px;padding:8px" onclick="terminarVigia(\'' + m.pedido_id + '\')">' + (aceite ? 'Terminar' : 'Cancelar pedido') + '</button>';
     h += '</div>';
   } else {
+    h += '<div id="vig-aviso"></div>';
     h += '<select id="vig-sel" style="width:100%;background:var(--c2);border:1px solid var(--b);border-radius:9px;padding:11px;color:var(--t1);font-family:inherit;font-size:14px"><option value="">A carregar vizinhos…</option></select>';
     h += '<button class="btn-ghost" style="width:100%;margin-top:8px" onclick="pedirVigia()">Pedir a este vizinho</button>';
     h += '<div style="font-size:10.5px;color:var(--t3);margin-top:7px;line-height:1.5">Ele recebe o pedido no portal dele e decide. Se não aceitar, escolhes outro — e ninguém fica a saber quem recusou.</div>';
@@ -1408,14 +1409,25 @@ async function carregarVizinhosCombo() {
   if (!sel) return;
   try {
     var r = await sb.rpc('portal_vizinhos', { p_token: token });
-    if (r.error || !r.data) { sel.innerHTML = '<option value="">Não consegui ler a lista</option>'; return; }
+    if (r.error) {
+      console.error('portal_vizinhos:', r.error);
+      var msg = String(r.error.message || '');
+      // 42883 = função não existe · PGRST202 = o PostgREST não a conhece
+      var semFuncao = /does not exist|Could not find the function|PGRST202/i.test(msg) || r.error.code === '42883';
+      sel.innerHTML = '<option value="">' + (semFuncao ? 'Funcionalidade ainda não instalada' : ('Erro: ' + msg.substring(0, 60))) + '</option>';
+      var av = document.getElementById('vig-aviso');
+      if (av) av.innerHTML = '<div style="background:rgba(255,84,112,.07);border:1px solid rgba(255,84,112,.3);border-radius:9px;padding:10px 12px;font-size:11.5px;color:var(--t2);line-height:1.55;margin-bottom:10px">' +
+        (semFuncao ? 'Esta parte ainda não está instalada na base de dados do prédio.' : ('A base de dados respondeu: <strong>' + msg.substring(0, 90) + '</strong>')) + '</div>';
+      return;
+    }
+    if (!r.data || !r.data.length) { sel.innerHTML = '<option value="">Não há outras frações neste prédio</option>'; return; }
     var h = '<option value="">Escolhe um vizinho…</option>';
     r.data.forEach(function (v) {
       if (v.ja_pedido) return;
-      h += '<option value="' + v.fracao_id + '">' + (v.codigo || '?') + (v.nome ? (' — ' + v.nome) : '') + '</option>';
+      h += '<option value="' + v.fracao_id + '">' + (v.codigo || '?') + (v.nome ? (' \u2014 ' + v.nome) : '') + '</option>';
     });
     sel.innerHTML = h;
-  } catch (e) { sel.innerHTML = '<option value="">Não consegui ler a lista</option>'; }
+  } catch (e) { console.error('portal_vizinhos:', e); sel.innerHTML = '<option value="">Não consegui ler a lista</option>'; }
 }
 
 async function pedirVigia() {
