@@ -870,7 +870,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.08.02-2310</div>
+      <div class="sb-tag">2059 Pro · build v2026.08.03-0910</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -18119,6 +18119,115 @@ async function carregarScoreAdmin() {
 }
 
 // 🛡️ FUNDO DE VERDADE — teórico (devia existir) vs comprovado (com prova)
+// =====================================================================
+//  FUNDO ABAIXO DO MINIMO LEGAL — o que fazer
+// =====================================================================
+//  Este aviso esta CERTO: se o banco prova 400 e a lei exige 565,
+//  faltam mesmo 165. Nao e um bug e nao deve calar-se sozinho.
+//
+//  O que faltava era SAIDA. Um aviso que aponta um problema legal e nao
+//  diz o que fazer transforma-se em ruido, e ruido acaba ignorado —
+//  precisamente o oposto do que se queria.
+//
+//  Tres caminhos, todos legitimos:
+//    1. o extrato esta errado ou desatualizado  -> nova prova
+//    2. o dinheiro falta mesmo                  -> reforcar
+//    3. ha uma explicacao                       -> levar a assembleia
+// =====================================================================
+
+function resolverFundoAbaixo(falta, teorico, provado) {
+  var eur = function (n) { return (parseFloat(n) || 0).toFixed(2).replace('.', ',') + '\u20AC'; };
+
+  var h = '<div style="padding:2px">';
+  h += '<div style="background:rgba(255,68,68,.07);border:1px solid rgba(255,68,68,.3);border-radius:10px;padding:12px 14px;font-size:11.5px;color:var(--t2);line-height:1.6">';
+  h += 'O extrato validado pelos condóminos mostra <strong style="color:var(--t1)">' + eur(provado) + '</strong> e o mínimo legal para este prédio é <strong style="color:var(--t1)">' + eur(teorico) + '</strong>.';
+  h += ' Faltam <strong style="color:var(--red)">' + eur(falta) + '</strong>.';
+  h += '<br><br>Isto não é uma acusação — pode ter várias explicações. Mas tem de ficar resolvido ou registado, e é por isso que o aviso não desaparece sozinho.';
+  h += '</div>';
+
+  h += '<div style="font-size:11px;font-weight:700;color:var(--t2);margin:16px 0 9px">QUAL DESTAS É A TUA SITUAÇÃO?</div>';
+
+  h += '<button class="btn-ghost" style="width:100%;text-align:left;padding:13px 15px;margin-bottom:9px" onclick="fundoAbaixoNovaProva()">';
+  h += '<strong style="color:var(--text)">O extrato está desatualizado ou errado</strong>';
+  h += '<div style="font-size:10.5px;font-weight:400;color:var(--t3);margin-top:4px;line-height:1.5">Entretanto entrou mais dinheiro, ou o documento validado não era o mais recente. Carrega um extrato novo e o ciclo recomeça.</div></button>';
+
+  h += '<button class="btn-ghost" style="width:100%;text-align:left;padding:13px 15px;margin-bottom:9px" onclick="fundoAbaixoReforcar(' + (parseFloat(falta) || 0) + ')">';
+  h += '<strong style="color:var(--text)">O dinheiro falta mesmo</strong>';
+  h += '<div style="font-size:10.5px;font-weight:400;color:var(--t3);margin-top:4px;line-height:1.5">Transfere ' + eur(falta) + ' da conta corrente para a conta do fundo e regista aqui o movimento. É a única forma de repor.</div></button>';
+
+  h += '<button class="btn-ghost" style="width:100%;text-align:left;padding:13px 15px" onclick="fundoAbaixoAssembleia(' + (parseFloat(falta) || 0) + ')">';
+  h += '<strong style="color:var(--text)">Há uma explicação e vai à assembleia</strong>';
+  h += '<div style="font-size:10.5px;font-weight:400;color:var(--t3);margin-top:4px;line-height:1.5">Houve uma obra urgente paga pelo fundo, ou o prédio começou o ano com menos. Fica registado como ponto para a próxima assembleia e o aviso deixa de gritar até lá.</div></button>';
+
+  h += '<div style="font-size:10px;color:var(--t3);margin-top:14px;line-height:1.5;text-align:center">O DL 268/94 obriga ao fundo, mas não pune quem o repõe. Punir é o silêncio.</div>';
+  h += '</div>';
+  abrirModalGenerico('Faltam ' + eur(falta) + ' ao fundo', h);
+}
+
+function fundoAbaixoNovaProva() {
+  fecharModalGenerico();
+  try { nav('financeiro'); } catch (e) {}
+  toast('Carrega o extrato mais recente no cartão do fundo', 'ok');
+}
+
+async function fundoAbaixoReforcar(falta) {
+  var v = prompt('Quanto vais transferir da conta corrente para a conta do fundo?\n\nEm falta: ' + (parseFloat(falta) || 0).toFixed(2) + '\u20AC', (parseFloat(falta) || 0).toFixed(2));
+  if (v === null) return;
+  var val = parseFloat(String(v).replace(',', '.'));
+  if (isNaN(val) || val <= 0) { toast('Valor inválido', 'err'); return; }
+
+  var r;
+  try {
+    r = await sb.from('movimentos').insert({
+      condominio_id: currentCondo.id, tipo: 'receita', categoria: 'Fundo de Reserva',
+      descricao: '\u{1F6E1} Reforço extraordinário para repor o mínimo legal',
+      valor: val, data_movimento: new Date().toISOString().split('T')[0], conta: 'reserva'
+    });
+  } catch (e) { r = { error: e }; }
+  if (r && r.error) { toast('Não consegui registar: ' + (r.error.message || ''), 'err'); return; }
+
+  fecharModalGenerico();
+  toast('Reforço de ' + val.toFixed(2) + '\u20AC registado. Faz a transferência no banco, se ainda não fizeste.', 'ok');
+  try { await atualizarFundoCartao(); } catch (e) {}
+  try { await carregarBalanco(); } catch (e) {}
+}
+
+async function fundoAbaixoAssembleia(falta) {
+  var motivo = prompt('O que explica a diferença?\n\nFica no histórico e entra como ponto na próxima assembleia.');
+  if (motivo === null) return;
+  motivo = String(motivo).trim();
+  if (motivo.length < 5) { toast('Escreve a explicação, ainda que curta', 'warn'); return; }
+
+  var r;
+  try {
+    r = await sb.from('condominios').update({
+      fundo_justificacao: motivo,
+      fundo_justificado_em: new Date().toISOString()
+    }).eq('id', currentCondo.id);
+  } catch (e) { r = { error: e }; }
+  if (r && r.error) { toast('Não consegui gravar (falta correr o sql_fundo_justificacao.sql?)', 'err'); return; }
+
+  currentCondo.fundo_justificacao = motivo;
+  currentCondo.fundo_justificado_em = new Date().toISOString();
+
+  // os condóminos têm direito a saber, e é isso que protege o administrador
+  try {
+    await sb.from('mensagens').insert((fracoes || []).map(function (f) {
+      return {
+        condominio_id: currentCondo.id, fracao_id: f.id, autor: 'admin',
+        lida_admin: true, lida_condomino: false,
+        texto: 'FUNDO DE RESERVA ABAIXO DO MINIMO LEGAL\n\nO extrato validado mostra que faltam ' +
+               (parseFloat(falta) || 0).toFixed(2) + ' EUR face ao minimo do DL 268/94.\n\nExplicacao da administracao:\n' + motivo +
+               '\n\nO assunto sera levado a proxima assembleia para deliberacao.'
+      };
+    }));
+  } catch (e) {}
+
+  fecharModalGenerico();
+  toast('Registado e comunicado aos condóminos', 'ok');
+  try { await atualizarFundoCartao(); } catch (e) {}
+}
+
 async function atualizarFundoCartao() {
   var cartao = document.getElementById('fundo-cartao');
   if (!cartao || !currentCondo) return;
@@ -18173,7 +18282,13 @@ async function atualizarFundoCartao() {
           hP += '</div>';
         }
         if (difTeo < -1) {
+          var _just = currentCondo.fundo_justificacao;
+          var _justEm = currentCondo.fundo_justificado_em;
           hP += '<div style="background:rgba(255,68,68,.08);border:1px solid rgba(255,68,68,.3);border-radius:8px;padding:9px 11px;margin-top:8px;font-size:10.5px;color:var(--t2);line-height:1.5;">🚨 O saldo provado está <strong>' + Math.abs(difTeo).toFixed(2) + '€ abaixo</strong> do mínimo legal (' + teorico.toFixed(2) + '€). Isto tem de ser explicado e regularizado em assembleia.</div>';
+          if (_just) {
+            hP += '<div style="background:rgba(124,58,237,.07);border:1px solid rgba(124,58,237,.3);border-radius:8px;padding:9px 11px;margin-top:7px;font-size:10.5px;color:var(--t2);line-height:1.5;">\u{1F4DD} <strong>Explicação registada</strong>' + (_justEm ? ' em ' + new Date(_justEm).toLocaleDateString('pt-PT') : '') + ': ' + String(_just).replace(/[<>]/g,'').substring(0,200) + '<br><span style="color:var(--t3);font-size:9.5px;">Ponto para a próxima assembleia.</span></div>';
+          }
+          hP += '<div style="margin-top:9px;"><button class="btn-ghost" style="font-size:11px;padding:7px 12px;" onclick="resolverFundoAbaixo(' + Math.abs(difTeo).toFixed(2) + ',' + teorico.toFixed(2) + ',' + sp + ')">' + (_just ? 'Rever' : 'O que fazer?') + '</button></div>';
         }
         if (dias !== null && dias > 365) {
           hP += '<div style="font-size:10px;color:var(--amber);margin-top:8px;">📅 A prova tem ' + Math.floor(dias/30) + ' meses. Convém apresentar um extrato mais recente.</div>';
