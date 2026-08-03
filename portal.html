@@ -92,16 +92,37 @@
   .btn:disabled { opacity:.5; }
 /* btn-primary e btn-ghost eram usadas sem nunca terem sido definidas:
    os botões saíam sem estilo, cinzentos e sem resposta ao toque. */
-.btn-primary{ width:100%; background:linear-gradient(135deg,var(--cyan),var(--cyan2)); border:none;
-  border-radius:11px; padding:14px 18px; color:#04121f; font-weight:800; font-size:14px;
-  font-family:inherit; cursor:pointer; box-shadow:0 4px 14px rgba(0,212,255,.22);
-  transition:transform .14s ease, box-shadow .14s ease; }
-.btn-primary:active{ transform:translateY(1px); box-shadow:0 2px 8px rgba(0,212,255,.18); }
-.btn-primary:disabled{ opacity:.5; cursor:default; box-shadow:none; }
-.btn-ghost{ width:100%; background:transparent; border:1px solid var(--b);
-  border-radius:11px; padding:12px 16px; color:var(--t2); font-weight:600; font-size:13.5px;
-  font-family:inherit; cursor:pointer; transition:background .14s ease, border-color .14s ease; }
-.btn-ghost:active{ background:var(--s2); border-color:var(--t3); }
+.pf-btn{ display:flex; align-items:center; justify-content:center; gap:8px;
+  width:100%; box-sizing:border-box; border-radius:12px; padding:15px 18px;
+  font-family:inherit; font-size:14px; font-weight:700; cursor:pointer;
+  border:1px solid transparent; transition:transform .12s ease, box-shadow .12s ease, background .12s ease, opacity .12s ease; }
+.pf-btn:active{ transform:translateY(1px); }
+.pf-btn:disabled{ opacity:.55; cursor:default; transform:none; }
+/* accao principal — verde, cheia: e o botao que MUDA alguma coisa */
+.pf-btn.go{ background:linear-gradient(135deg,#00e676,#00b85a); color:#04140a;
+  box-shadow:0 4px 16px rgba(0,230,118,.28); }
+/* guardar/confirmar — ciano */
+.pf-btn.pri{ background:linear-gradient(135deg,var(--cyan),var(--cyan2)); color:#04121f;
+  box-shadow:0 4px 14px rgba(0,212,255,.22); }
+/* secundaria — tem corpo, nao e fantasma: fundo suave + borda visivel */
+.pf-btn.sec{ background:var(--s2); color:var(--text); border-color:var(--b1); font-weight:600; }
+.pf-btn.sec:active{ background:var(--card2); }
+/* perigo leve — cancelar/terminar */
+.pf-btn.warn{ background:rgba(255,84,112,.10); color:#ff8095; border-color:rgba(255,84,112,.32); font-weight:600; }
+
+/* aliases antigos, para nada partir noutras zonas do portal */
+.btn-primary{ display:flex; align-items:center; justify-content:center; width:100%;
+  box-sizing:border-box; background:linear-gradient(135deg,var(--cyan),var(--cyan2));
+  border:none; border-radius:12px; padding:15px 18px; color:#04121f; font-weight:800;
+  font-size:14px; font-family:inherit; cursor:pointer; box-shadow:0 4px 14px rgba(0,212,255,.22);
+  transition:transform .12s ease; }
+.btn-primary:active{ transform:translateY(1px); }
+.btn-primary:disabled{ opacity:.55; cursor:default; }
+.btn-ghost{ display:flex; align-items:center; justify-content:center; width:100%;
+  box-sizing:border-box; background:var(--s2); border:1px solid var(--b1);
+  border-radius:12px; padding:13px 16px; color:var(--text); font-weight:600; font-size:13.5px;
+  font-family:inherit; cursor:pointer; transition:background .12s ease; }
+.btn-ghost:active{ background:var(--card2); }
 
   .btn-sec { display:flex; gap:8px; }
   .btn-sec button { flex:1; border-radius:11px; padding:13px 6px; font-size:12px; font-weight:700; cursor:pointer; border:1px solid; background:transparent; }
@@ -1379,8 +1400,8 @@ function _htmlVigia() {
     h += '<div style="font-size:13px;color:var(--t1);line-height:1.5"><strong>' + _primeiroNome(p) + '</strong> (fração ' + (p.outra_fracao || '?') + ') pediu para ficares por ele.</div>';
     h += '<div style="font-size:11px;color:var(--t3);margin-top:5px;line-height:1.5">Passas a receber os avisos que lhe digam respeito enquanto estiver fora. Não és obrigado, e podes terminar quando quiseres.</div>';
     h += '<div style="display:flex;gap:8px;margin-top:11px">';
-    h += '<button class="btn-primary" style="flex:1;font-size:12px;padding:9px" onclick="responderVigia(\'' + p.pedido_id + '\',true)">Aceito</button>';
-    h += '<button class="btn-ghost" style="flex:1;font-size:12px;padding:9px" onclick="responderVigia(\'' + p.pedido_id + '\',false)">Agora não</button>';
+    h += '<button class="pf-btn pri" style="flex:1;font-size:13px;padding:11px" onclick="responderVigia(\'' + p.pedido_id + '\',true)">Aceito</button>';
+    h += '<button class="pf-btn sec" style="flex:1;font-size:13px;padding:11px" onclick="responderVigia(\'' + p.pedido_id + '\',false)">Agora não</button>';
     h += '</div></div>';
   });
 
@@ -1395,12 +1416,12 @@ function _htmlVigia() {
       h += '<div style="font-size:13px;color:var(--t1)">Pedido enviado a <strong>' + _primeiroNome(m) + '</strong> (fração ' + (m.outra_fracao || '?') + ').</div>';
       h += '<div style="font-size:11px;color:var(--t3);margin-top:4px">À espera da resposta dele.</div>';
     }
-    h += '<button class="btn-ghost" style="width:100%;margin-top:10px;font-size:11.5px;padding:8px" onclick="terminarVigia(\'' + m.pedido_id + '\')">' + (aceite ? 'Terminar' : 'Cancelar pedido') + '</button>';
+    h += '<button class="pf-btn warn" style="margin-top:11px;font-size:13px" onclick="terminarVigia(\'' + m.pedido_id + '\')">' + (aceite ? 'Terminar' : 'Cancelar pedido') + '</button>';
     h += '</div>';
   } else {
     h += '<div id="vig-aviso"></div>';
     h += '<select id="vig-sel" style="width:100%;background:var(--c2);border:1px solid var(--b);border-radius:9px;padding:11px;color:var(--t1);font-family:inherit;font-size:14px"><option value="">A carregar vizinhos…</option></select>';
-    h += '<button class="btn-ghost" style="width:100%;margin-top:8px" onclick="pedirVigia()">Pedir a este vizinho</button>';
+    h += '<button class="pf-btn pri" style="margin-top:9px;font-size:13px" onclick="pedirVigia()">Pedir a este vizinho</button>';
     h += '<div style="font-size:10.5px;color:var(--t3);margin-top:7px;line-height:1.5">Ele recebe o pedido no portal dele e decide. Se não aceitar, escolhes outro — e ninguém fica a saber quem recusou.</div>';
   }
 
@@ -1411,7 +1432,7 @@ function _htmlVigia() {
     aceites.forEach(function (a) {
       h += '<div style="display:flex;align-items:center;gap:10px;background:var(--c2);border:1px solid var(--b);border-radius:9px;padding:11px 13px;margin-bottom:7px">';
       h += '<div style="flex:1;font-size:13px;color:var(--t1)"><strong>' + _primeiroNome(a) + '</strong> · fração ' + (a.outra_fracao || '?') + (a.contacto ? ('<div style="font-size:11px;color:var(--t3);margin-top:2px">' + String(a.contacto).replace(/[<>]/g, '') + '</div>') : '') + '</div>';
-      h += '<button class="btn-ghost" style="font-size:11px;padding:6px 10px" onclick="terminarVigia(\'' + a.pedido_id + '\')">Terminar</button>';
+      h += '<button class="pf-btn warn" style="width:auto;font-size:12px;padding:8px 12px" onclick="terminarVigia(\'' + a.pedido_id + '\')">Terminar</button>';
       h += '</div>';
     });
   }
@@ -1468,14 +1489,13 @@ async function responderVigia(id, aceita) {
 }
 
 async function terminarVigia(id) {
-  if (!confirm('Queres terminar? A outra pessoa deixa de estar ligada a ti.')) return;
   try {
     var r = await sb.rpc('portal_vigia_terminar', { p_token: token, p_pedido: id });
     if (r.error) { _ausMostraErro(r.error.message, 'vig-aviso'); return; }
-    toast('Terminado', 'ok');
+    toast('Feito', 'ok');
     await carregarVigia();
     abrirAusencia();
-  } catch (e) { toast('Não consegui terminar', 'err'); }
+  } catch (e) { _ausMostraErro(e && e.message, 'vig-aviso'); }
 }
 
 // =====================================================================
@@ -1671,7 +1691,6 @@ function pintarCartaoAusencia() {
 // Planos mudam: trabalho, doença, uma discussão. Voltar cedo tem de ser
 // um toque — e o vizinho que ficou por ti merece saber que pode desligar.
 async function voltei() {
-  if (!confirm('Já voltaste? Os avisos voltam ao normal e o vizinho que ficou por ti é informado.')) return;
   try {
     var r = await sb.rpc('portal_ausencia_voltei', { p_token: token });
     if (r.error) { toast('Não consegui: ' + r.error.message, 'err'); return; }
@@ -1706,83 +1725,94 @@ function abrirAusencia() {
   var nivel = a.notificacoes_nivel || 'urgente';
   var cont = a.contacto_urgencia || '';
   var feita = a.saida_verificada_em;
+  var ativo = a.notificacoes_ate && new Date(a.notificacoes_ate) >= new Date(new Date().toDateString());
 
   var h = '<div style="padding:2px"><div id="aus-erro"></div>';
-  if (window._ausErro) h += '<div style="background:rgba(255,84,112,.07);border:1px solid rgba(255,84,112,.3);border-radius:9px;padding:10px 12px;font-size:11.5px;color:var(--t2);line-height:1.55;margin-bottom:12px">Não consegui ler as tuas definições: <strong>' + window._ausErro + '</strong>. O que guardares aqui pode não ficar gravado.</div>';
+  if (window._ausErro) h += '<div style="background:rgba(255,84,112,.08);border:1px solid rgba(255,84,112,.35);border-radius:9px;padding:10px 12px;font-size:11.5px;color:var(--t2);line-height:1.55;margin-bottom:12px">Não consegui ler as tuas definições: <strong>' + window._ausErro + '</strong>.</div>';
 
-  // --- silencio ---
-  h += '<div style="font-size:11px;font-weight:700;color:var(--t3);letter-spacing:.08em;margin-bottom:8px">SOSSEGO</div>';
-  h += '<div style="font-size:12px;color:var(--t2);line-height:1.6;margin-bottom:11px">Até quando não queres ser incomodado com avisos do prédio. Isto <strong style="color:var(--t1)">não diz a ninguém que estás fora</strong> — é só uma preferência de notificações.</div>';
-  h += '<label style="font-size:11.5px;color:var(--t3);display:block;margin-bottom:5px">Até</label>';
-  h += '<input type="date" id="aus-ate" value="' + ate + '" style="width:100%;background:var(--c2);border:1px solid var(--b);border-radius:9px;padding:11px;color:var(--t1);font-family:inherit;font-size:14px">';
+  // ---------------- SOSSEGO ----------------
+  h += '<div style="font-size:11px;font-weight:700;color:var(--t3);letter-spacing:.08em;margin-bottom:8px">ATÉ QUANDO VOU ESTAR FORA</div>';
+  h += '<div style="font-size:12px;color:var(--t2);line-height:1.6;margin-bottom:11px">Enquanto estiveres fora, o prédio deixa de te mandar avisos que não sejam importantes. <strong style="color:var(--t1)">Isto não diz a ninguém que a casa está vazia</strong>.</div>';
+  h += '<input type="date" id="aus-ate" value="' + ate + '" style="width:100%;box-sizing:border-box;background:var(--c2);border:1px solid var(--b);border-radius:10px;padding:12px;color:var(--t1);font-family:inherit;font-size:15px">';
   h += '<div style="display:flex;gap:8px;margin-top:9px">';
-  h += '<label style="flex:1;background:var(--c2);border:1px solid var(--b);border-radius:9px;padding:10px 12px;font-size:12px;color:var(--t2);cursor:pointer;line-height:1.4"><input type="radio" name="ausn" value="urgente"' + (nivel !== 'minimo' ? ' checked' : '') + '> Só o que for urgente</label>';
-  h += '<label style="flex:1;background:var(--c2);border:1px solid var(--b);border-radius:9px;padding:10px 12px;font-size:12px;color:var(--t2);cursor:pointer;line-height:1.4"><input type="radio" name="ausn" value="minimo"' + (nivel === 'minimo' ? ' checked' : '') + '> Só o que toca à minha fração</label>';
-  h += '</div>';
-  h += '<div style="font-size:10.5px;color:var(--t3);margin-top:7px;line-height:1.5">Uma emergência no prédio chega-te sempre, escolhas o que escolheres.</div>';
-
-  // Quem sabe. Predefinido: ninguém além do sistema.
-  h += '<div style="background:var(--c2);border:1px solid var(--b);border-radius:10px;padding:12px 14px;margin-top:12px">';
-  h += '<label style="display:flex;gap:11px;align-items:flex-start;cursor:pointer;font-size:12.5px;color:var(--t1);line-height:1.5">';
-  h += '<input type="checkbox" id="aus-mostrar" style="margin-top:2px"' + (a.mostrar_admin ? ' checked' : '') + '>';
-  h += '<span>Deixar a administração saber que vou estar fora</span></label>';
-  h += '<div style="font-size:11px;color:var(--t3);margin-top:7px;line-height:1.55">Se não marcares, <strong style="color:var(--t2)">ninguém no prédio fica a saber</strong> — nem a administração. O sistema guarda a preferência para calar os avisos, e mais nada. Marcar só ajuda se quiseres que ela conte contigo para marcar assembleias ou saiba que não estás para receber o canalizador.</div>';
+  h += '<label style="flex:1;background:var(--c2);border:1px solid var(--b);border-radius:9px;padding:10px 12px;font-size:12px;color:var(--t2);cursor:pointer;line-height:1.4"><input type="radio" name="ausn" value="urgente"' + (nivel !== 'minimo' ? ' checked' : '') + '> Só o urgente</label>';
+  h += '<label style="flex:1;background:var(--c2);border:1px solid var(--b);border-radius:9px;padding:10px 12px;font-size:12px;color:var(--t2);cursor:pointer;line-height:1.4"><input type="radio" name="ausn" value="minimo"' + (nivel === 'minimo' ? ' checked' : '') + '> Só a minha fração</label>';
   h += '</div>';
 
-  // --- contacto ---
-  h += '<div style="font-size:11px;font-weight:700;color:var(--t3);letter-spacing:.08em;margin:20px 0 8px">QUEM CONTACTAR NUMA URGÊNCIA</div>';
-  h += '<div style="font-size:12px;color:var(--t2);line-height:1.6;margin-bottom:9px">Se rebentar um cano às três da manhã, é a esta pessoa que se liga. Vale o ano inteiro, não só quando estás fora.</div>';
-  h += '<input type="text" id="aus-cont" value="' + String(cont).replace(/"/g, '&quot;') + '" placeholder="Nome e telefone" style="width:100%;background:var(--c2);border:1px solid var(--b);border-radius:9px;padding:11px;color:var(--t1);font-family:inherit;font-size:14px">';
+  // quem sabe
+  h += '<label style="display:flex;gap:10px;align-items:flex-start;margin-top:11px;padding:11px 13px;background:var(--c2);border:1px solid var(--b);border-radius:9px;cursor:pointer;font-size:12px;color:var(--t2);line-height:1.5"><input type="checkbox" id="aus-mostrar" style="margin-top:2px"' + (a.mostrar_admin ? ' checked' : '') + '><span>Deixar a administração saber que vou estar fora <span style="color:var(--t3)">(por omissão, ninguém sabe)</span></span></label>';
 
-  h += '<button class="btn-primary" style="width:100%;margin-top:14px" onclick="guardarAusencia()">Guardar</button>';
+  // ---------------- CONTACTO ----------------
+  h += '<div style="font-size:11px;font-weight:700;color:var(--t3);letter-spacing:.08em;margin:22px 0 8px">QUEM CONTACTAR NUMA URGÊNCIA</div>';
+  h += '<div style="font-size:12px;color:var(--t2);line-height:1.6;margin-bottom:9px">Se rebentar um cano, é a esta pessoa que se liga. Vale o ano inteiro.</div>';
+  h += '<input type="text" id="aus-cont" value="' + String(cont).replace(/"/g, '&quot;') + '" placeholder="Nome e telefone" style="width:100%;box-sizing:border-box;background:var(--c2);border:1px solid var(--b);border-radius:10px;padding:12px;color:var(--t1);font-family:inherit;font-size:15px">';
 
-  // --- vizinho de confianca ---
+  // ---------------- VIZINHO ----------------
   h += _htmlVigia();
 
-  // --- lista de saida ---
+  // ---------------- LISTA ANTES DE SAIR ----------------
   h += '<div style="font-size:11px;font-weight:700;color:var(--t3);letter-spacing:.08em;margin:24px 0 8px">ANTES DE SAIR</div>';
-  h += '<div style="background:rgba(0,212,255,.05);border:1px solid rgba(0,212,255,.22);border-radius:10px;padding:12px 14px;font-size:12px;color:var(--t2);line-height:1.6;margin-bottom:11px">A maior parte das inundações em prédios começa num apartamento vazio: rebenta um tubo e ninguém dá por isso durante duas semanas. <strong style="color:var(--t1)">Fechar a torneira de segurança é o que evita mais estragos</strong> — e muitas apólices reduzem a cobertura em ausências longas sem corte de água.</div>';
-  var itens = [
-    'Fechar a torneira de segurança da água',
-    'Desligar o esquentador ou a caldeira',
-    'Tirar da tomada o que não precisa de ficar ligado',
-    'Fechar bem janelas, estores e portas de varanda',
-    'Pedir a alguém para recolher o correio',
-    'Deixar aqui em cima um contacto de urgência'
-  ];
+  h += '<div style="background:rgba(0,212,255,.05);border:1px solid rgba(0,212,255,.22);border-radius:10px;padding:12px 14px;font-size:12px;color:var(--t2);line-height:1.6;margin-bottom:11px">A maior parte das inundações num prédio começa num apartamento vazio. <strong style="color:var(--t1)">Fechar a torneira da água é o que evita mais estragos</strong>.</div>';
+  var itens = ['Fechar a torneira de segurança da água','Desligar o esquentador ou a caldeira','Tirar da tomada o que não precisa de ficar ligado','Fechar janelas, estores e portas de varanda','Pedir a alguém para recolher o correio'];
   h += '<div id="aus-lista">';
-  itens.forEach(function (t, i) {
-    h += '<label style="display:flex;gap:11px;align-items:flex-start;padding:11px 13px;background:var(--c2);border:1px solid var(--b);border-radius:9px;margin-bottom:7px;font-size:13px;color:var(--t2);cursor:pointer;line-height:1.45">' +
-         '<input type="checkbox" class="aus-ck" style="margin-top:2px">' + (i === 0 ? '<strong style="color:var(--t1)">' + t + '</strong>' : t) + '</label>';
+  itens.forEach(function (t, k) {
+    h += '<label style="display:flex;gap:11px;align-items:flex-start;padding:12px 13px;background:var(--c2);border:1px solid var(--b);border-radius:9px;margin-bottom:7px;font-size:13px;color:var(--t2);cursor:pointer;line-height:1.45"><input type="checkbox" class="aus-ck" style="margin-top:2px">' + (k === 0 ? '<strong style="color:var(--t1)">' + t + '</strong>' : t) + '</label>';
   });
   h += '</div>';
-  h += '<button class="btn-ghost" style="width:100%;margin-top:6px" onclick="marcarSaidaVerificada()">Está tudo feito</button>';
-  if (feita) h += '<div style="font-size:11px;color:var(--ok);margin-top:8px;text-align:center">Última verificação: ' + new Date(feita).toLocaleDateString('pt-PT') + '</div>';
-  h += '<div style="font-size:10.5px;color:var(--t3);margin-top:8px;line-height:1.5;text-align:center">Fica registada a data. Num sinistro, isso é prova de que tomaste as precauções.</div>';
+  if (feita) h += '<div style="font-size:11px;color:var(--ok);margin-top:4px;text-align:center">Última verificação: ' + new Date(feita).toLocaleDateString('pt-PT') + '</div>';
+
+  // ---------------- ACÇÃO PRINCIPAL ----------------
+  // UM botao que faz a coisa toda: grava e entra em modo de ferias.
+  h += '<div style="margin-top:22px;position:sticky;bottom:0;background:linear-gradient(to top, var(--c1) 62%, transparent);padding:14px 0 4px">';
+  h += '<button class="pf-btn go" id="aus-ativar" onclick="ativarFerias()">' + (ativo ? '&#9788;&nbsp; Atualizar a minha ausência' : '&#9788;&nbsp; Ativar o modo de férias') + '</button>';
+  if (ativo) h += '<button class="pf-btn warn" style="margin-top:9px" onclick="voltei()">Afinal fico &mdash; cancelar a ausência</button>';
+  h += '<div style="font-size:10.5px;color:var(--t3);margin-top:9px;line-height:1.5;text-align:center">Guarda o contacto e a lista, e mostra-te o ecrã de férias. Uma emergência no prédio chega-te sempre.</div>';
+  h += '</div>';
 
   h += '</div>';
   _ausModal('Vou estar fora', h);
   setTimeout(carregarVizinhosCombo, 30);
 }
 
-// Um toast some-se em 3 segundos e pode nem ser visto. Um erro de base de
-// dados tem de ficar no ecra ate ser lido — e tem de dizer O QUE fazer.
-function _ausMostraErro(msg, onde) {
-  var m = String(msg || 'erro desconhecido');
-  var faltaFuncao = /Could not find the function|does not exist|PGRST202|schema cache/i.test(m);
-  var txt = faltaFuncao
-    ? '<strong>Esta parte ainda nao esta instalada na base de dados.</strong><br>Corre o ficheiro <code style="color:var(--cyan)">sql_ferias_TUDO.sql</code> e recarrega a pagina.'
-    : '<strong>A base de dados recusou.</strong><br>' + m.substring(0, 160);
-  var el = document.getElementById(onde || 'aus-erro');
-  if (el) {
-    el.innerHTML = '<div style="background:rgba(255,84,112,.08);border:1px solid rgba(255,84,112,.35);border-radius:9px;padding:11px 13px;font-size:11.5px;color:var(--t2);line-height:1.55;margin-bottom:12px">' + txt + '</div>';
-    try { el.scrollIntoView({ block:'nearest' }); } catch(e) {}
+// UM passo: valida a data, grava tudo, marca a lista se estiver toda feita,
+// e entra no ecra de ferias. E o "ir de ferias" que faltava.
+async function ativarFerias() {
+  var btn = document.getElementById('aus-ativar');
+  var ate = (document.getElementById('aus-ate') || {}).value || null;
+  if (!ate) { _ausMostraErro('Escolhe até quando vais estar fora (a data no topo).'); return; }
+
+  if (btn) { btn.disabled = true; btn.dataset.t = btn.innerHTML; btn.innerHTML = 'A guardar…'; }
+  try {
+    var cont = ((document.getElementById('aus-cont') || {}).value || '').trim();
+    var radio = document.querySelector('input[name="ausn"]:checked');
+    var nivel = radio ? radio.value : 'urgente';
+    var mostrar = !!(document.getElementById('aus-mostrar') || {}).checked;
+
+    var r = await sb.rpc('portal_ausencia_definir', { p_token: token, p_ate: ate, p_nivel: nivel, p_contacto: cont || null, p_mostrar: mostrar });
+    if (r.error) { _ausMostraErro(r.error.message); return; }
+    if (r.data && r.data !== 'ok') { _ausMostraErro(r.data === 'prazo demasiado longo' ? 'O prazo máximo é de 180 dias.' : String(r.data)); return; }
+
+    // se a lista de saida estiver toda marcada, regista tambem
+    try {
+      var cks = document.querySelectorAll('.aus-ck');
+      var todos = cks.length > 0;
+      cks.forEach(function (c) { if (!c.checked) todos = false; });
+      if (todos) await sb.rpc('portal_saida_verificada', { p_token: token });
+    } catch (e) {}
+
+    _ausFechar();
+    window._ferSaltado = false;
+    await carregarAusencia();
+    try { await carregarVigia(); } catch (e) {}
+    try { mostrarEcraFerias(); } catch (e) {}
+    toast('Bloqueio de férias ativado até ' + _dataPT(ate), 'ok');
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = btn.dataset.t || 'Ativar'; }
   }
-  try { toast(faltaFuncao ? 'Falta correr o SQL' : 'Nao consegui gravar', 'err'); } catch(e) {}
-  console.error('modo de ferias:', m);
 }
 
 async function guardarAusencia() {
+
   var _btn = document.querySelector('#modal-aus button.btn-primary');
   if (_btn) { _btn.disabled = true; _btn.dataset.txt = _btn.textContent; _btn.textContent = 'A guardar…'; }
   try { await _guardarAusencia(); }
@@ -1809,22 +1839,6 @@ async function _guardarAusencia() {
     try { await carregarVigia(); } catch (e) {}
     if (ate) { try { mostrarEcraFerias(); } catch (e) {} }
   } catch (e) { _ausMostraErro(e && e.message); }
-}
-
-async function marcarSaidaVerificada() {
-  var cks = document.querySelectorAll('.aus-ck');
-  var feitos = 0;
-  cks.forEach(function (c) { if (c.checked) feitos++; });
-  if (feitos < cks.length) {
-    if (!confirm('Ainda tens ' + (cks.length - feitos) + ' por marcar. Queres registar na mesma?')) return;
-  }
-  try {
-    var r = await sb.rpc('portal_saida_verificada', { p_token: token });
-    if (r.error) { _ausMostraErro(r.error.message); return; }
-    toast('Registado com a data de hoje', 'ok');
-    _ausFechar();
-    await carregarAusencia();
-  } catch (e) { toast('Não consegui registar', 'err'); }
 }
 
 function fecharModal() { document.getElementById('modal-ass').style.display = 'none'; }
