@@ -1492,7 +1492,8 @@ async function terminarVigia(id) {
   try {
     var r = await sb.rpc('portal_vigia_terminar', { p_token: token, p_pedido: id });
     if (r.error) { _ausMostraErro(r.error.message, 'vig-aviso'); return; }
-    toast('Feito', 'ok');
+    if (r.data === 'nada para terminar') { toast('Já não havia nada para terminar', 'warn'); }
+    else { toast('Pronto — o vizinho foi avisado', 'ok'); }
     await carregarVigia();
     abrirAusencia();
   } catch (e) { _ausMostraErro(e && e.message, 'vig-aviso'); }
