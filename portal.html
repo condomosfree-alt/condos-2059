@@ -1694,11 +1694,16 @@ function pintarCartaoAusencia() {
 async function voltei() {
   try {
     var r = await sb.rpc('portal_ausencia_voltei', { p_token: token });
-    if (r.error) { toast('Não consegui: ' + r.error.message, 'err'); return; }
+    if (r.error) { _ausMostraErro('Não consegui: ' + r.error.message); return; }
     toast('Bem-vindo de volta', 'ok');
+    // fechar o ecra de ferias inteiro, se estiver aberto
+    var ef = document.getElementById('ecra-ferias');
+    if (ef) ef.style.display = 'none';
+    window._ferSaltado = true;
+    _aus = null;              // forcar releitura limpa do estado
     await carregarAusencia();
     await carregarVigia();
-  } catch (e) { toast('Não consegui', 'err'); }
+  } catch (e) { _ausMostraErro('Não consegui'); }
 }
 
 // Se a administracao estiver ausente, isso e do interesse de todos
@@ -1718,6 +1723,25 @@ function avisoAdminAusente() {
     (_aus.admin_substituto ? ('<br>Para urgências: <strong style="color:var(--t1)">' + String(_aus.admin_substituto).replace(/[<>]/g, '') + '</strong>') : '') +
     '<br><span style="color:var(--t3);font-size:11px">Emergências com risco para pessoas ou para o edifício: 112.</span>';
   alvo.parentNode.insertBefore(d, alvo);
+}
+
+// Mostra erros de RPC DENTRO do painel, em vez de os deixar morrer num toast
+// de 3 segundos. Distingue "esta parte ainda nao esta instalada" (falta o SQL)
+// de um erro real da base de dados.
+function _ausMostraErro(msg, onde) {
+  var m = String(msg || 'erro desconhecido');
+  var faltaFuncao = /Could not find the function|does not exist|PGRST202|schema cache|404/i.test(m);
+  var txt = faltaFuncao
+    ? 'Esta parte ainda nao esta instalada na base de dados. Corre o sql_ferias_TUDO.sql e recarrega.'
+    : m.substring(0, 180);
+  var alvo = document.getElementById(onde || 'aus-erro');
+  if (alvo) {
+    alvo.innerHTML = '<div style="background:rgba(255,84,112,.08);border:1px solid rgba(255,84,112,.35);border-radius:9px;padding:11px 13px;font-size:11.5px;color:var(--t2);line-height:1.55;margin-bottom:12px">' + txt + '</div>';
+    try { alvo.scrollIntoView({ block: 'nearest' }); } catch (e) {}
+  } else {
+    try { toast(faltaFuncao ? 'Falta correr o SQL do modo de ferias' : txt, 'err'); } catch (e) {}
+  }
+  console.error('modo de ferias:', m);
 }
 
 function abrirAusencia() {

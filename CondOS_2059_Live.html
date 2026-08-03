@@ -17069,7 +17069,11 @@ async function carregarExigenciasAdmin() {
       var rej = exigs.find(function(e){ return e.estado === 'rejeitada_ai'; });
       if (rej) h += '<div style="background:rgba(255,84,112,.06);border:1px solid rgba(255,84,112,.3);border-radius:10px;padding:10px 13px;margin-top:12px;font-size:11px;color:var(--t2);">⚠️ A última prova foi <strong style="color:var(--red);">rejeitada na verificação</strong> (' + (rej.ai_resultado||'documento inválido') + ') e todos os condóminos foram informados. Aguarda nova exigência ou carrega diretamente um documento válido quando ela chegar.</div>';
       var demo = exigs.find(function(e){ return /DEMONSTRA/i.test(e.ai_resultado||'') && ['validada','apresentada_assembleia','em_votacao'].indexOf(e.estado) > -1; });
-      if (demo) h += '<div style="background:rgba(255,179,0,.09);border:1px solid rgba(255,179,0,.45);border-radius:10px;padding:10px 13px;margin-top:12px;font-size:11px;color:var(--t2);line-height:1.5;">🧪 <strong style="color:var(--amber);">Existe uma prova processada em modo demonstração.</strong> Não conta para a nota de saúde do prédio nem serve como prova — carrega o extrato real quando quiseres substituí-la.</div>';
+      if (demo) {
+        h += '<div style="background:rgba(255,179,0,.09);border:1px solid rgba(255,179,0,.45);border-radius:10px;padding:10px 13px;margin-top:12px;font-size:11px;color:var(--t2);line-height:1.5;">🧪 <strong style="color:var(--amber);">Existe uma prova processada em modo demonstração.</strong> Não conta para a nota de saúde do prédio nem serve como prova — carrega o extrato real quando quiseres substituí-la.';
+        h += '<div style="margin-top:8px;"><button class="btn-ghost" style="display:inline-flex;width:auto;font-size:11px;padding:6px 12px;" onclick="apagarProvaDemo(\'' + demo.id + '\')">Apagar a prova de teste</button></div>';
+        h += '</div>';
+      }
       var val = exigs.find(function(e){ return e.estado === 'validada' && !/DEMONSTRA/i.test(e.ai_resultado||''); });
       if (val) h += '<div style="background:rgba(34,229,132,.06);border:1px solid rgba(34,229,132,.3);border-radius:10px;padding:10px 13px;margin-top:12px;font-size:11px;color:var(--t2);">✅ Prova <strong style="color:var(--green);">validada pela maioria</strong> em ' + (val.validada_em?new Date(val.validada_em).toLocaleDateString('pt-PT'):'') + '. Apresenta o extrato físico na próxima assembleia — o sistema vai anexá-lo à ata com a impressão digital.</div>';
     }
@@ -18354,6 +18358,17 @@ async function fundoAbaixoAssembleia(falta) {
   fecharModalGenerico();
   toast('Registado e comunicado aos condóminos', 'ok');
   try { await atualizarFundoCartao(); } catch (e) {}
+}
+
+// A prova de demonstracao e util para testar o circuito, mas depois fica no
+// cartao a chamar a atencao para uma coisa que nao vale nada. Isto limpa-a.
+async function apagarProvaDemo(id) {
+  try {
+    var r = await sb.from('exigencias').delete().eq('id', id);
+    if (r && r.error) { toast('Nao consegui apagar: ' + (r.error.message||''), 'err'); return; }
+    toast('Prova de teste apagada', 'ok');
+    try { await atualizarFundoCartao(); } catch(e) {}
+  } catch(e) { toast('Nao consegui apagar', 'err'); }
 }
 
 async function atualizarFundoCartao() {
