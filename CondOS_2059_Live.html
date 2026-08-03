@@ -870,7 +870,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.08.03-0910</div>
+      <div class="sb-tag">2059 Pro · build v2026.08.03-1450</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -7511,7 +7511,7 @@ async function confirmarAssociacaoTransacao() {
   // Marcar a quota como paga se existir
   if (_mesSel && _mesSel.mes) {
     var mes = _mesSel.mes; var ano = _mesSel.ano;
-    var { data: qExist } = await sb.from('quotas').select('id,valor_emitido')
+    var { data: qExist } = await sb.from('quotas').select('id,valor_emitido,tipo')
       .eq('condominio_id', currentCondo.id)
       .eq('fracao_id', fracaoId)
       .eq('mes', mes).eq('ano', ano)
@@ -17522,8 +17522,34 @@ async function apurarExigencia(exig) {
         }
       } catch(e) { console.error('fechar exigencias irmas:', e); }
 
-      // 💶 O VALOR PROVADO entra no sistema — é isto que faltava
+      // 💶 O VALOR PROVADO entra no sistema
       var saldoProv = (exig.saldo_extrato !== null && exig.saldo_extrato !== undefined) ? parseFloat(exig.saldo_extrato) : null;
+
+      // SEM VALOR, A PROVA FICA A MEIO. A votação valida o papel, mas se a
+      // verificação automática não conseguiu ler o saldo, o número nunca
+      // entra e o portal continua a dizer "aguarda prova" — sem ninguém
+      // perceber porquê. Em vez de falhar em silêncio, pedimos o valor.
+      if (saldoProv === null || isNaN(saldoProv)) {
+        try {
+          var _p = prompt(
+            'Os condóminos validaram o documento, mas a verificação automática não conseguiu ler o saldo.\n\n' +
+            'Abre o extrato e escreve aqui o saldo do fundo que ele mostra.\n' +
+            'Sem este número a prova fica a meio: o documento vale, o valor não entra.',
+            '');
+          if (_p !== null && String(_p).trim() !== '') {
+            var _v = parseFloat(String(_p).replace(/\s/g, '').replace('.', '').replace(',', '.'));
+            if (!isNaN(_v) && _v >= 0) {
+              saldoProv = _v;
+              try { await sb.from('exigencias').update({ saldo_extrato: _v }).eq('id', exig.id); } catch(e) {}
+            } else {
+              toast('Valor inválido — a prova fica sem saldo. Podes corrigir mais tarde no cartão do fundo.', 'warn');
+            }
+          } else {
+            toast('Prova validada sem saldo. O cartão do fundo continua a pedir o valor.', 'warn');
+          }
+        } catch(e) {}
+      }
+
       if (saldoProv !== null && !isNaN(saldoProv)) {
         try {
           await sb.from('condominios').update({
@@ -18135,6 +18161,41 @@ async function carregarScoreAdmin() {
 //    3. ha uma explicacao                       -> levar a assembleia
 // =====================================================================
 
+// A prova ficou validada sem valor: o documento existe e foi aceite, mas o
+// numero nunca entrou. Isto resolve-o sem repetir a votacao — o que os
+// condominos aprovaram foi o documento, e o documento nao mudou.
+async function escreverSaldoProvado() {
+  var exR;
+  try {
+    exR = await sb.from('exigencias').select('id, doc_hash, validada_em')
+      .eq('condominio_id', currentCondo.id).eq('tipo','fundo')
+      .in('estado', ['validada','apresentada_assembleia'])
+      .order('validada_em', { ascending: false }).limit(1);
+  } catch(e) { exR = { error: e }; }
+  if (!exR || exR.error || !exR.data || !exR.data.length) { toast('Não encontrei nenhuma prova validada', 'err'); return; }
+  var ex = exR.data[0];
+
+  var p = prompt('Abre o extrato que foi validado e escreve aqui o saldo do fundo que ele mostra.\n\nNão é preciso repetir a votação: o que os condóminos aprovaram foi o documento, e o documento não mudou.', '');
+  if (p === null) return;
+  var v = parseFloat(String(p).replace(/\s/g, '').replace('.', '').replace(',', '.'));
+  if (isNaN(v) || v < 0) { toast('Valor inválido', 'err'); return; }
+
+  try {
+    await sb.from('exigencias').update({ saldo_extrato: v, saldo_confirmado: true }).eq('id', ex.id);
+    await sb.from('condominios').update({
+      fundo_saldo_provado: v,
+      fundo_provado_em: ex.validada_em || new Date().toISOString(),
+      fundo_provado_hash: ex.doc_hash || null
+    }).eq('id', currentCondo.id);
+  } catch(e) { toast('Não consegui gravar: ' + (e.message||''), 'err'); return; }
+
+  currentCondo.fundo_saldo_provado = v;
+  currentCondo.fundo_provado_em = ex.validada_em || new Date().toISOString();
+  currentCondo.fundo_provado_hash = ex.doc_hash || null;
+  toast('Saldo provado registado: ' + v.toFixed(2) + '€', 'ok');
+  try { await atualizarFundoCartao(); } catch(e) {}
+}
+
 function resolverFundoAbaixo(falta, teorico, provado) {
   var eur = function (n) { return (parseFloat(n) || 0).toFixed(2).replace('.', ',') + '\u20AC'; };
 
@@ -18296,6 +18357,20 @@ async function atualizarFundoCartao() {
         hP += '</div>';
         zonaProv.innerHTML = hP;
       } else {
+        // Distinguir "nunca houve prova" de "houve prova mas sem valor" —
+        // o segundo caso tem solução em dois cliques e ninguém sabia disso.
+        var _provaSemValor = false;
+        try {
+          _provaSemValor = (exTodas || []).some(function(e){
+            return e.tipo === 'fundo' && (e.estado === 'validada' || e.estado === 'apresentada_assembleia')
+                   && (e.saldo_extrato === null || e.saldo_extrato === undefined);
+          });
+        } catch(e) {}
+        if (_provaSemValor) {
+          zonaProv.innerHTML = '<div style="background:rgba(255,179,0,.07);border:1px solid rgba(255,179,0,.32);border-radius:9px;padding:10px 12px;margin-top:10px;font-size:11px;color:var(--t2);line-height:1.55;">'
+            + '⚠️ <strong style="color:var(--amber);">A prova está a meio.</strong> Os condóminos validaram o documento, mas o saldo nunca foi lido — por isso o portal continua a dizer que o fundo aguarda prova.<br>'
+            + '<div style="margin-top:8px;"><button class="btn-ghost" style="font-size:11px;" onclick="escreverSaldoProvado()">Escrever o saldo do extrato</button></div></div>';
+        } else
         zonaProv.innerHTML = '<div style="font-size:10.5px;color:var(--t3);margin-top:10px;line-height:1.5;">💶 <strong>Saldo provado em banco:</strong> ainda nenhum. Os números acima vêm do que está registado no programa — só um extrato validado pelos condóminos prova o dinheiro que existe mesmo.</div>';
       }
     }
