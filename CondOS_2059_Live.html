@@ -945,6 +945,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
       <div class="page active" id="page-dashboard">
         <div id="predio-novo"></div>
         <div id="ciclo-quotas"></div>
+        <div id="manut-aviso"></div>
         <div id="avisos-gerais-dash"></div>
         <div class="panel" id="score-admin" style="display:none;border:1px solid rgba(255,179,0,.3);margin-bottom:16px;">
           <div class="ph"><span class="pt">🏆 Saúde do Prédio — o que os condóminos veem</span><span class="pm">calculado automaticamente; não é editável</span></div>
@@ -1557,6 +1558,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
             <div style="height:9px;background:rgba(255,255,255,.06);border-radius:6px;overflow:hidden;margin-bottom:10px;"><div id="fundo-barra" style="height:100%;width:0%;background:#b48cff;border-radius:6px;transition:width .5s;"></div></div>
             <div id="fundo-nota" style="font-size:10.5px;color:var(--t3);line-height:1.5;"></div>
             <div id="fundo-repor"></div>
+            <div id="fundo-mensal"></div>
             <div id="fundo-provado"></div>
             <div id="fundo-suficiencia"></div>
             <div id="exig-admin-zona"></div>
@@ -4062,6 +4064,75 @@ function pintarPredioNovo() {
 //  o sistema nao faz por ele, mas nao o deixa esquecer.
 // =====================================================================
 
+// =====================================================================
+//  MANUTENCOES E OBRIGACOES LEGAIS — lembrar e alimentar o orcamento
+// =====================================================================
+
+var _manut = [];
+
+async function carregarManutencoes() {
+  if (!currentCondo) return;
+  try {
+    var r = await sb.from('manutencoes')
+      .select('*')
+      .eq('condominio_id', currentCondo.id)
+      .eq('ativo', true)
+      .order('proxima_data', { nullsFirst: false });
+    _manut = r.data || [];
+  } catch (e) { _manut = []; }
+}
+
+function _mesesAte(data) {
+  if (!data) return null;
+  var d = new Date(data), h = new Date();
+  return (d.getFullYear() - h.getFullYear()) * 12 + (d.getMonth() - h.getMonth());
+}
+
+// aviso no topo do dashboard: o que esta vencido ou a menos de 60 dias
+function pintarAvisoManutencoes() {
+  var zona = document.getElementById('manut-aviso');
+  if (!zona) return;
+  var hoje = new Date(new Date().toDateString());
+  var urgentes = _manut.filter(function (m) {
+    if (!m.proxima_data) return false;
+    var dias = Math.round((new Date(m.proxima_data) - hoje) / 86400000);
+    return dias <= 60;   // vencidas ou a menos de 2 meses
+  });
+  if (!urgentes.length) { zona.innerHTML = ''; return; }
+
+  urgentes.sort(function (a, b) { return new Date(a.proxima_data) - new Date(b.proxima_data); });
+
+  var h = '<div style="background:rgba(255,179,0,.06);border:1px solid rgba(255,179,0,.3);border-radius:12px;padding:14px 16px;margin-bottom:14px">';
+  h += '<div style="font-size:12.5px;font-weight:700;color:var(--amber);margin-bottom:10px">Manutenções e prazos a chegar</div>';
+  urgentes.slice(0, 6).forEach(function (m) {
+    var dias = Math.round((new Date(m.proxima_data) - hoje) / 86400000);
+    var vencido = dias < 0;
+    var cor = vencido ? '255,84,112' : '255,179,0';
+    var quando = vencido ? ('vencido há ' + Math.abs(dias) + ' dias') : ('faltam ' + dias + ' dias');
+    h += '<div style="border-left:2px solid rgba(' + cor + ',.6);padding:2px 0 2px 11px;margin-bottom:9px">';
+    h += '<div style="font-size:12px;font-weight:650;color:var(--text)">' + m.nome + (m.obrigatorio ? ' <span style="font-size:9px;color:var(--amber);border:1px solid rgba(255,179,0,.4);border-radius:4px;padding:1px 5px;margin-left:4px">LEGAL</span>' : '') + '</div>';
+    h += '<div style="font-size:11px;color:rgb(' + cor + ');margin-top:2px">' + quando + ' · ' + new Date(m.proxima_data).toLocaleDateString('pt-PT') + '</div>';
+    h += '</div>';
+  });
+  h += '<button class="btn-ghost" style="width:auto;display:inline-flex;font-size:11px;padding:6px 12px;margin-top:2px" onclick="nav(\'manutencoes\')">Ver todas</button>';
+  h += '</div>';
+  zona.innerHTML = h;
+}
+
+// as manutencoes obrigatorias e as com custo entram como sugestao no orcamento
+function manutencoesParaOrcamento() {
+  return _manut
+    .filter(function (m) { return m.obrigatorio || m.custo_estimado; })
+    .map(function (m) {
+      return {
+        nome: m.nome,
+        valor: parseFloat(m.custo_estimado || 0),
+        origem: 'manutencao',
+        legal: m.obrigatorio
+      };
+    });
+}
+
 async function verificarCicloQuotas() {
   var zona = document.getElementById('ciclo-quotas');
   if (!zona || !currentCondo) return;
@@ -4117,6 +4188,7 @@ async function verificarCicloQuotas() {
 async function verificarAvisosGerais() {
   try { pintarPredioNovo(); } catch(e) {}
   try { verificarCicloQuotas(); } catch(e) {}
+  try { carregarManutencoes().then(function(){ pintarAvisoManutencoes(); }); } catch(e) {}
   if (!currentCondo) return;
   var avisos = [];
   var agora = new Date();
@@ -18371,7 +18443,73 @@ async function apagarProvaDemo(id) {
   } catch(e) { toast('Nao consegui apagar', 'err'); }
 }
 
+// =====================================================================
+//  RELACAO MENSAL DO FUNDO — o suposto vs o que entrou vs o que falta provar
+// =====================================================================
+//  Tres numeros que ele pediu, lado a lado, para o mes corrente:
+//    ESPERADO  = soma das quotas ordinarias emitidas x taxa do fundo
+//    ENTROU    = a fatia do fundo das quotas ordinarias JA PAGAS
+//    POR PROVAR = o que ainda nao esta coberto por extrato do banco
+//
+//  Isto responde a pergunta "estou a cumprir mes a mes?" sem obrigar
+//  o administrador a fazer contas.
+// =====================================================================
+
+async function pintarRelacaoMensalFundo() {
+  var zona = document.getElementById('fundo-mensal');
+  if (!zona || !currentCondo) return;
+  try {
+    var hoje = new Date();
+    var mes = hoje.getMonth() + 1;
+    var ano = hoje.getFullYear();
+    var pct = parseFloat(currentCondo.fundo_percentagem);
+    if (isNaN(pct)) pct = 10;
+
+    // quotas ordinarias do mes corrente
+    var qR = await sb.from('quotas')
+      .select('valor_emitido, valor_pago, tipo')
+      .eq('condominio_id', currentCondo.id)
+      .eq('mes', mes).eq('ano', ano);
+    var quotas = (qR.data || []).filter(function (q) { return q.tipo !== 'extraordinaria'; });
+
+    if (!quotas.length) { zona.innerHTML = ''; return; }  // mes ainda nao emitido
+
+    var emitido = quotas.reduce(function (s, q) { return s + parseFloat(q.valor_emitido || 0); }, 0);
+    var pago = quotas.reduce(function (s, q) { return s + parseFloat(q.valor_pago || 0); }, 0);
+
+    var esperado = Math.round(emitido * pct / 100 * 100) / 100;  // o suposto entrar este mes
+    var entrou = Math.round(pago * pct / 100 * 100) / 100;        // o que entrou de facto
+    var falta = Math.round((esperado - entrou) * 100) / 100;      // ainda por cobrar este mes
+
+    var eur = function (n) { return (n || 0).toFixed(2).replace('.', ',') + '€'; };
+    var meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+    var pctEntrou = esperado > 0 ? Math.round(entrou / esperado * 100) : 100;
+
+    var h = '<div style="background:var(--s1);border:1px solid var(--b1);border-radius:12px;padding:14px 16px;margin-top:12px">';
+    h += '<div style="font-size:11px;font-weight:700;color:var(--t2);letter-spacing:.06em;margin-bottom:11px">FUNDO ESTE MÊS · ' + meses[mes - 1] + ' ' + ano + '</div>';
+
+    h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:11px">';
+    h += '<div><div style="font-size:9.5px;color:var(--t3);letter-spacing:.5px;margin-bottom:4px">SUPOSTO</div><div style="font-family:var(--mono);font-size:16px;font-weight:700;color:var(--t1)">' + eur(esperado) + '</div><div style="font-size:9px;color:var(--t3);margin-top:2px">' + pct + '% das quotas</div></div>';
+    h += '<div><div style="font-size:9.5px;color:var(--t3);letter-spacing:.5px;margin-bottom:4px">ENTROU</div><div style="font-family:var(--mono);font-size:16px;font-weight:700;color:var(--green)">' + eur(entrou) + '</div><div style="font-size:9px;color:var(--t3);margin-top:2px">de quem já pagou</div></div>';
+    h += '<div><div style="font-size:9.5px;color:var(--t3);letter-spacing:.5px;margin-bottom:4px">FALTA</div><div style="font-family:var(--mono);font-size:16px;font-weight:700;color:' + (falta > 0.005 ? 'var(--amber)' : 'var(--green)') + '">' + eur(falta) + '</div><div style="font-size:9px;color:var(--t3);margin-top:2px">quotas por pagar</div></div>';
+    h += '</div>';
+
+    // barra
+    h += '<div style="height:6px;background:var(--s2);border-radius:3px;overflow:hidden"><div style="height:100%;width:' + Math.min(100, pctEntrou) + '%;background:linear-gradient(90deg,var(--green),var(--cyan));border-radius:3px"></div></div>';
+    h += '<div style="font-size:10px;color:var(--t3);margin-top:7px;line-height:1.5">';
+    if (falta > 0.005) {
+      h += 'Falta entrar ' + eur(falta) + ' no fundo este mês — está preso nas quotas ainda por pagar. Entra sozinho quando os condóminos regularizarem.';
+    } else {
+      h += 'A parte do fundo deste mês entrou toda. Assim que o extrato do banco for validado, fica também provada.';
+    }
+    h += '</div>';
+    h += '</div>';
+    zona.innerHTML = h;
+  } catch (e) { console.error('relacao mensal fundo:', e); }
+}
+
 async function atualizarFundoCartao() {
+  try { pintarRelacaoMensalFundo(); } catch(e) {}
   var cartao = document.getElementById('fundo-cartao');
   if (!cartao || !currentCondo) return;
   try {
@@ -19642,6 +19780,21 @@ function renderOrcamento() {
   }
 }
 
+async function guardarTaxaFundoOrcamento() {
+  var v = parseFloat((document.getElementById('orc-fcr-taxa')||{}).value);
+  if (isNaN(v) || v < 10) { toast('O minimo legal e 10%', 'warn'); return; }
+  var r;
+  try {
+    r = await sb.from('condominios').update({ fcr_pct: v, fundo_percentagem: v }).eq('id', currentCondo.id);
+  } catch(e) { r = { error: e }; }
+  if (r && r.error) { toast('Nao consegui guardar: ' + (r.error.message||''), 'err'); return; }
+  currentCondo.fcr_pct = v;
+  currentCondo.fundo_percentagem = v;
+  toast('Taxa do fundo definida em ' + v + '% para este ano', 'ok');
+  try { renderOrcamento(); } catch(e) {}
+  try { atualizarFundoCartao(); } catch(e) {}
+}
+
 function renderResumoOrcamento(totalComum, totalBloco, totalBase, totalFCR, totalGeral) {
   const resumoEl = document.getElementById('orc-resumo');
   const contentEl = document.getElementById('orc-resumo-content');
@@ -19672,7 +19825,7 @@ function renderResumoOrcamento(totalComum, totalBloco, totalBase, totalFCR, tota
       '<div>' +
         '<div style="font-size:10px;color:var(--amber);letter-spacing:1px;margin-bottom:4px;">TOTAL + FCR ' + fcr + '%</div>' +
         '<div style="font-family:var(--mono);font-size:22px;font-weight:700;color:var(--amber)">' + totalGeral.toFixed(2) + '€</div>' +
-        '<div style="font-size:10px;color:var(--t3);margin-top:2px;">Base: ' + totalBase.toFixed(2) + '€ + FCR: ' + totalFCR.toFixed(2) + '€ (Lei 8/2022 — mín. 10%)</div>' +
+        '<div style="font-size:10px;color:var(--t3);margin-top:2px;">Base: ' + totalBase.toFixed(2) + '€ + FCR: ' + totalFCR.toFixed(2) + '€ (Lei 8/2022 — mín. 10%)</div>' +'<div style="margin-top:9px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' +'<span style="font-size:10px;color:var(--t2);">Taxa do fundo para este ano:</span>' +'<input type="number" id="orc-fcr-taxa" value="' + fcr + '" min="10" step="0.5" style="width:64px;background:var(--s2);border:1px solid var(--b1);border-radius:6px;padding:5px 8px;color:var(--text);font-family:var(--mono);font-size:13px;">' +'<span style="font-size:11px;color:var(--t2);">%</span>' +'<button class="btn-ghost" style="width:auto;display:inline-flex;font-size:10px;padding:5px 11px;" onclick="guardarTaxaFundoOrcamento()">Guardar</button>' +'<span style="font-size:9.5px;color:var(--t3);flex-basis:100%;line-height:1.4;">É esta a percentagem que a assembleia aprova. A partir daqui, cada quota ordinária paga lança automaticamente esta fatia no fundo.</span>' +'</div>' +
       '</div>' +
       (diffDoc !== null ?
         '<div style="text-align:right;">' +
