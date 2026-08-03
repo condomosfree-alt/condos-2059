@@ -1449,7 +1449,7 @@ async function pedirVigia() {
   if (!sel || !sel.value) { toast('Escolhe um vizinho primeiro', 'warn'); return; }
   try {
     var r = await sb.rpc('portal_vigia_pedir', { p_token: token, p_fracao: sel.value });
-    if (r.error) { toast('Não consegui enviar: ' + r.error.message, 'err'); return; }
+    if (r.error) { _ausMostraErro(r.error.message, 'vig-aviso'); return; }
     if (r.data !== 'ok') { toast(String(r.data), 'err'); return; }
     toast('Pedido enviado. Ele recebe no portal dele.', 'ok');
     await carregarVigia();
@@ -1460,7 +1460,7 @@ async function pedirVigia() {
 async function responderVigia(id, aceita) {
   try {
     var r = await sb.rpc('portal_vigia_responder', { p_token: token, p_pedido: id, p_aceita: !!aceita });
-    if (r.error) { toast('Não consegui responder', 'err'); return; }
+    if (r.error) { _ausMostraErro(r.error.message, 'vig-aviso'); return; }
     toast(aceita ? 'Aceitaste ficar por ele' : 'Respondido', 'ok');
     await carregarVigia();
     abrirAusencia();
@@ -1471,7 +1471,7 @@ async function terminarVigia(id) {
   if (!confirm('Queres terminar? A outra pessoa deixa de estar ligada a ti.')) return;
   try {
     var r = await sb.rpc('portal_vigia_terminar', { p_token: token, p_pedido: id });
-    if (r.error) { toast('Não consegui terminar', 'err'); return; }
+    if (r.error) { _ausMostraErro(r.error.message, 'vig-aviso'); return; }
     toast('Terminado', 'ok');
     await carregarVigia();
     abrirAusencia();
@@ -1707,7 +1707,7 @@ function abrirAusencia() {
   var cont = a.contacto_urgencia || '';
   var feita = a.saida_verificada_em;
 
-  var h = '<div style="padding:2px">';
+  var h = '<div style="padding:2px"><div id="aus-erro"></div>';
   if (window._ausErro) h += '<div style="background:rgba(255,84,112,.07);border:1px solid rgba(255,84,112,.3);border-radius:9px;padding:10px 12px;font-size:11.5px;color:var(--t2);line-height:1.55;margin-bottom:12px">Não consegui ler as tuas definições: <strong>' + window._ausErro + '</strong>. O que guardares aqui pode não ficar gravado.</div>';
 
   // --- silencio ---
@@ -1765,7 +1765,31 @@ function abrirAusencia() {
   setTimeout(carregarVizinhosCombo, 30);
 }
 
+// Um toast some-se em 3 segundos e pode nem ser visto. Um erro de base de
+// dados tem de ficar no ecra ate ser lido — e tem de dizer O QUE fazer.
+function _ausMostraErro(msg, onde) {
+  var m = String(msg || 'erro desconhecido');
+  var faltaFuncao = /Could not find the function|does not exist|PGRST202|schema cache/i.test(m);
+  var txt = faltaFuncao
+    ? '<strong>Esta parte ainda nao esta instalada na base de dados.</strong><br>Corre o ficheiro <code style="color:var(--cyan)">sql_ferias_TUDO.sql</code> e recarrega a pagina.'
+    : '<strong>A base de dados recusou.</strong><br>' + m.substring(0, 160);
+  var el = document.getElementById(onde || 'aus-erro');
+  if (el) {
+    el.innerHTML = '<div style="background:rgba(255,84,112,.08);border:1px solid rgba(255,84,112,.35);border-radius:9px;padding:11px 13px;font-size:11.5px;color:var(--t2);line-height:1.55;margin-bottom:12px">' + txt + '</div>';
+    try { el.scrollIntoView({ block:'nearest' }); } catch(e) {}
+  }
+  try { toast(faltaFuncao ? 'Falta correr o SQL' : 'Nao consegui gravar', 'err'); } catch(e) {}
+  console.error('modo de ferias:', m);
+}
+
 async function guardarAusencia() {
+  var _btn = document.querySelector('#modal-aus button.btn-primary');
+  if (_btn) { _btn.disabled = true; _btn.dataset.txt = _btn.textContent; _btn.textContent = 'A guardar…'; }
+  try { await _guardarAusencia(); }
+  finally { if (_btn) { _btn.disabled = false; _btn.textContent = _btn.dataset.txt || 'Guardar'; } }
+}
+
+async function _guardarAusencia() {
   var ate = (document.getElementById('aus-ate') || {}).value || null;
   var cont = ((document.getElementById('aus-cont') || {}).value || '').trim();
   var radio = document.querySelector('input[name="ausn"]:checked');
@@ -1775,12 +1799,16 @@ async function guardarAusencia() {
     var r = await sb.rpc('portal_ausencia_definir', {
       p_token: token, p_ate: ate || null, p_nivel: nivel, p_contacto: cont || null, p_mostrar: mostrar
     });
-    if (r.error) { toast('Não consegui guardar: ' + r.error.message, 'err'); return; }
+    if (r.error) { _ausMostraErro(r.error.message); return; }
     if (r.data && r.data !== 'ok') { toast(r.data === 'prazo demasiado longo' ? 'O prazo máximo é de 180 dias' : String(r.data), 'err'); return; }
     toast(ate ? ('Avisos reduzidos até ' + _dataPT(ate)) : 'Avisos normais outra vez', 'ok');
     _ausFechar();
+    // guardou com data? entra JA no ecra de ferias — e o que ele espera ver
+    window._ferSaltado = false;
     await carregarAusencia();
-  } catch (e) { toast('Não consegui guardar', 'err'); }
+    try { await carregarVigia(); } catch (e) {}
+    if (ate) { try { mostrarEcraFerias(); } catch (e) {} }
+  } catch (e) { _ausMostraErro(e && e.message); }
 }
 
 async function marcarSaidaVerificada() {
@@ -1792,7 +1820,7 @@ async function marcarSaidaVerificada() {
   }
   try {
     var r = await sb.rpc('portal_saida_verificada', { p_token: token });
-    if (r.error) { toast('Não consegui registar', 'err'); return; }
+    if (r.error) { _ausMostraErro(r.error.message); return; }
     toast('Registado com a data de hoje', 'ok');
     _ausFechar();
     await carregarAusencia();
