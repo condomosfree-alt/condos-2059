@@ -870,7 +870,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.08.03-2015</div>
+      <div class="sb-tag">2059 Pro · build v2026.08.03-2340</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -20308,6 +20308,9 @@ Para cada deliberação relevante indica:
 - votos_favor: número se mencionado
 - votos_contra: número se mencionado
 - valida_legalmente: true se parece legal, false se pode violar lei imperativa
+- valor_percentagem: se tipo="fcr", a percentagem aprovada para o fundo (ex: 12)
+- valor_quota_mensal: se o orçamento implica novo valor de quota, o valor mensal por fração (ex: 110.50)
+- valor_orcamento_total: se aprovado um orçamento, o valor total anual (ex: 26000)
 
 Devolve APENAS JSON válido:
 {"data_ata":"2026-01-15","deliberacoes":[{"tipo":"metodo_divisao","rubrica":"Elevador","decisao":"Aprovado por unanimidade dividir o custo do elevador em partes iguais por todos os condóminos","metodo_novo":"partes_iguais","isenta_rc":false,"nivel_hierarquico":"deliberacao_assembleia","votos_favor":12,"votos_contra":0,"valida_legalmente":true}]}`;
@@ -20411,6 +20414,48 @@ async function aplicarDeliberacoesAta() {
       }
     }
 
+    // ---- TAXA DO FUNDO (fcr) ----
+    if (d.tipo === 'fcr' && d.valor_percentagem) {
+      var novaTaxa = parseFloat(d.valor_percentagem);
+      if (!isNaN(novaTaxa) && novaTaxa >= 10) {
+        await sb.from('condominios').update({
+          fcr_pct: novaTaxa,
+          fundo_percentagem: novaTaxa
+        }).eq('id', currentCondo.id);
+        currentCondo.fcr_pct = novaTaxa;
+        currentCondo.fundo_percentagem = novaTaxa;
+        aplicadas++;
+        try { atualizarFundoCartao(); } catch(e) {}
+      }
+    }
+
+    // ---- QUOTAS (novo valor mensal, a partir do orçamento aprovado) ----
+    if (d.valor_quota_mensal) {
+      var novaQuota = parseFloat(d.valor_quota_mensal);
+      if (!isNaN(novaQuota) && novaQuota > 0) {
+        // Atualizar a quota_mensal de cada fração PROPORCIONALMENTE
+        // (a IA dá o valor-base; cada fração paga segundo a sua permilagem)
+        var totalPermil = (fracoes || []).reduce(function(s,f){ return s + parseFloat(f.permilagem || 0); }, 0);
+        if (totalPermil > 0 && d.valor_orcamento_total) {
+          var orcTotal = parseFloat(d.valor_orcamento_total);
+          for (var fi = 0; fi < fracoes.length; fi++) {
+            var fr = fracoes[fi];
+            var permil = parseFloat(fr.permilagem || 0);
+            var quotaFracao = Math.round(orcTotal * permil / 1000 / 12 * 100) / 100;
+            await sb.from('fracoes').update({ quota_mensal: quotaFracao }).eq('id', fr.id);
+            fr.quota_mensal = quotaFracao;
+          }
+        } else {
+          // sem permilagens ou sem orçamento total, usa o valor direto
+          for (var fi2 = 0; fi2 < fracoes.length; fi2++) {
+            await sb.from('fracoes').update({ quota_mensal: novaQuota }).eq('id', fracoes[fi2].id);
+            fracoes[fi2].quota_mensal = novaQuota;
+          }
+        }
+        aplicadas++;
+      }
+    }
+
     // Guardar deliberação no registo
     await sb.from('assembleias').insert({
       condominio_id: currentCondo.id,
@@ -20425,7 +20470,7 @@ async function aplicarDeliberacoesAta() {
   closeModal('mo-import-ata');
   ataFotoBase64 = null;
   ataDeliberacoesDetectadas = [];
-  toast(aplicadas+' rubrica(s) actualizada(s) conforme deliberações da ata!','ok');
+  toast(aplicadas+' deliberação(ões) aplicada(s) — rubricas, fundo e/ou quotas actualizadas conforme a ata!','ok');
   await loadOrcamento();
   await loadAssembleias();
   await loadDeliberacoes();
