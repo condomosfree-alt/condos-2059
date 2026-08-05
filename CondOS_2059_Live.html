@@ -870,7 +870,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.08.04-0120</div>
+      <div class="sb-tag">2059 Pro · build v2026.08.04-0200</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -8341,6 +8341,22 @@ async function importarExtratoBancario(input) {
           var dp = despPend.data[0];
           await sb.from('despesas').update({ estado: 'paga' }).eq('id', dp.id);
           despesasMarcadasPagas.push({ desc: dp.descricao, valor: vsd });
+          // Auto-update manutenção se a despesa paga corresponde
+          try {
+            if (_manut && _manut.length) {
+              var descL = (dp.descricao || '').toLowerCase();
+              var mm = _manut.find(function(m) {
+                var nM = (m.nome || '').toLowerCase();
+                var pals = nM.replace(/[^\w\sà-ú]/g, '').split(/\s+/).filter(function(p){ return p.length > 3; });
+                return pals.length >= 2 && pals.filter(function(p){ return descL.includes(p); }).length >= 2;
+              });
+              if (mm) {
+                var px = null;
+                if (mm.periodicidade_meses) { var dd = new Date(); dd.setMonth(dd.getMonth() + mm.periodicidade_meses); px = dd.toISOString().split('T')[0]; }
+                await sb.from('manutencoes').update({ ultima_data: new Date().toISOString().split('T')[0], proxima_data: px, custo_estimado: vsd || mm.custo_estimado }).eq('id', mm.id);
+              }
+            }
+          } catch(e) {}
         }
       }
     }
@@ -12681,6 +12697,38 @@ async function ocConcluir() {
     var _n = await ocAvisarCondominos(_txtC);
     if (_n) console.log('desfecho comunicado a ' + _n + ' frações');
   } catch(e) { console.error('aviso conclusão:', e); }
+
+  
+  // MANUTENÇÕES: se esta ocorrência corresponde a uma manutenção periódica,
+  // marcá-la como feita e calcular a próxima data automaticamente.
+  // A ligação é por CATEGORIA da ocorrência vs NOME da manutenção.
+  try {
+    var catOc = (_ocAtual.categoria || '').toLowerCase();
+    if (catOc && _manut && _manut.length) {
+      var manutMatch = _manut.find(function(m) {
+        var nomeM = (m.nome || '').toLowerCase();
+        // correspondência: a categoria da ocorrência contém palavras-chave da manutenção
+        var palavras = nomeM.replace(/[^\w\sà-ú]/g, '').split(/\s+/).filter(function(p) { return p.length > 3; });
+        return palavras.length >= 2 && palavras.filter(function(p) { return catOc.includes(p); }).length >= 2;
+      });
+      if (manutMatch) {
+        var proxData = null;
+        if (manutMatch.periodicidade_meses) {
+          var d = new Date();
+          d.setMonth(d.getMonth() + manutMatch.periodicidade_meses);
+          proxData = d.toISOString().split('T')[0];
+        }
+        await sb.from('manutencoes').update({
+          ultima_data: new Date().toISOString().split('T')[0],
+          proxima_data: proxData,
+          fornecedor: _ocAtual.parceiro_nome || manutMatch.fornecedor || null,
+          custo_estimado: valor > 0 ? valor : manutMatch.custo_estimado
+        }).eq('id', manutMatch.id);
+        toast('🔧 Manutenção "' + manutMatch.nome + '" actualizada — próxima: ' + (proxData ? new Date(proxData).toLocaleDateString('pt-PT') : 'sem periodicidade'), 'ok');
+        try { await carregarManutencoes(); } catch(e) {}
+      }
+    }
+  } catch(e) { console.error('manut auto-update:', e); }
 
   toast('✅ Resolvida! Custo de '+valor.toFixed(2)+'€ lançado' + (jaPago ? ' e pago' : ' nas Despesas (por pagar)') + '. Condóminos avisados.','ok');
   fecharModalGenerico();
@@ -19642,7 +19690,8 @@ async function sugerirOrcamentoIA() {
           nome: m.nome,
           nota: prox ? ('próxima em ' + prox + (prox < ano ? ' — JÁ VENCIDA' : '')) : 'sem data registada',
           custo: parseFloat(m.custo_estimado || 0) || null,
-          obrigatoria: m.obrigatorio
+          obrigatoria: m.obrigatorio,
+          fornecedor: m.fornecedor || null
         });
         if (!prox && m.obrigatorio) {
           avisosManut.push('Sem data da última ' + m.nome.toLowerCase() + '. É obrigatória — incluída por segurança.');
@@ -19744,7 +19793,7 @@ async function sugerirOrcamentoIA() {
     custos_conhecidos: dados.rubricas.map(function(r){ return r.nome+': '+eur(r.valor)+'€/ano'; }),
     rubricas_ano_anterior: rubricasAnterior.map(function(r){ return r.nome+': '+eur(r.valor_total)+'€'; }),
 
-    manutencoes_periodicas_a_incluir: manutPeriodicas.map(function(m){ return m.nome + ' — ' + m.nota + (m.custo?' (~'+eur(m.custo)+'€)':'') + (m.obrigatoria?' [OBRIGATÓRIA]':''); }),
+    manutencoes_periodicas_a_incluir: manutPeriodicas.map(function(m){ return m.nome + ' — ' + m.nota + (m.custo?' (~'+eur(m.custo)+'€)':'') + (m.fornecedor ? ' [fornecedor: '+m.fornecedor+']' : '') + (m.obrigatoria?' [OBRIGATÓRIA]':''); }),
     despesas_passadas: todasDespesas.map(function(d){ return d.descricao+': '+eur(d.valor_total)+'€ ('+(d.data_despesa||'?')+')'; }),
     parceiros_registados: parceirosIA
   };
