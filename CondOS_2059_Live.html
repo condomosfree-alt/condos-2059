@@ -870,7 +870,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.08.03-2340</div>
+      <div class="sb-tag">2059 Pro · build v2026.08.04-0015</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -946,6 +946,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
         <div id="predio-novo"></div>
         <div id="ciclo-quotas"></div>
         <div id="manut-aviso"></div>
+        <div id="resumo-mensal"></div>
         <div id="avisos-gerais-dash"></div>
         <div class="panel" id="score-admin" style="display:none;border:1px solid rgba(255,179,0,.3);margin-bottom:16px;">
           <div class="ph"><span class="pt">🏆 Saúde do Prédio — o que os condóminos veem</span><span class="pm">calculado automaticamente; não é editável</span></div>
@@ -1594,6 +1595,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
           <div style="display:flex;gap:8px;align-items:center;">
             <button class="btn-primary" style="font-size:11px;padding:7px 14px;" onclick="gerarFechoContasPDF()" title="Gerar o documento de prestação de contas do ano, para aprovar em assembleia">📄 Fecho de Contas (PDF)</button>
             <button class="btn-ghost" onclick="mudarAnoContas(-1)" style="padding:6px 10px;">‹</button>
+            <div id="prestacao-contas-auto" style="margin-bottom:16px"></div>
             <span id="contas-ano" style="font-weight:700;font-size:15px;color:var(--cyan);min-width:54px;text-align:center;">—</span>
             <button class="btn-ghost" onclick="mudarAnoContas(1)" style="padding:6px 10px;">›</button>
           </div>
@@ -4185,10 +4187,316 @@ async function verificarCicloQuotas() {
   } catch (e) { console.error('ciclo quotas:', e); }
 }
 
+// =====================================================================
+//  CICLO ANUAL — a cola que liga todas as peças
+// =====================================================================
+//  O ano de um condomínio é conduzido pelas ATAS. Tudo o que o
+//  sistema faz durante o ano tem origem numa deliberação votada
+//  e registada. Se não está na ata, legalmente não foi decidido.
+//
+//  Este módulo tem 3 partes:
+//    1) Prestação de contas anual (prepara o relatório para a assembleia)
+//    2) Resumo mensal ao administrador
+//    3) Alerta de pontos não votados na ata
+// =====================================================================
+
+
+// =================================================================
+//  1) PRESTACAO DE CONTAS ANUAL
+// =================================================================
+//  Prepara automaticamente o mapa de contas do ano anterior:
+//  receitas, despesas, fundo, devedores, manutenções feitas/por
+//  fazer. O administrador leva isto à assembleia de aprovação.
+
+async function prepararPrestacaoContas(anoRef) {
+  if (!currentCondo) { toast('Seleciona um condomínio', 'err'); return null; }
+  var ano = anoRef || (new Date().getFullYear() - 1);
+  var c = currentCondo;
+
+  // receitas do ano
+  var recR = await sb.from('movimentos').select('valor,categoria')
+    .eq('condominio_id', c.id).eq('tipo', 'receita')
+    .gte('data_movimento', ano + '-01-01').lte('data_movimento', ano + '-12-31');
+  var receitas = (recR.data || []);
+  var totalReceitas = receitas.reduce(function(s, m) { return s + parseFloat(m.valor || 0); }, 0);
+
+  // despesas do ano
+  var despR = await sb.from('movimentos').select('valor,categoria')
+    .eq('condominio_id', c.id).eq('tipo', 'despesa')
+    .gte('data_movimento', ano + '-01-01').lte('data_movimento', ano + '-12-31');
+  var despesas = (despR.data || []);
+  var totalDespesas = despesas.reduce(function(s, m) { return s + parseFloat(m.valor || 0); }, 0);
+
+  // agrupar despesas por categoria
+  var catDespesas = {};
+  despesas.forEach(function(m) {
+    var cat = m.categoria || 'Outro';
+    catDespesas[cat] = (catDespesas[cat] || 0) + parseFloat(m.valor || 0);
+  });
+
+  // quotas: emitido vs cobrado
+  var qR = await sb.from('quotas').select('valor_emitido, valor_pago, estado, tipo')
+    .eq('condominio_id', c.id)
+    .gte('ano', ano).lte('ano', ano);
+  var quotas = (qR.data || []);
+  var emitido = quotas.reduce(function(s, q) { return s + parseFloat(q.valor_emitido || 0); }, 0);
+  var cobrado = quotas.reduce(function(s, q) { return s + parseFloat(q.valor_pago || 0); }, 0);
+  var taxaCobranca = emitido > 0 ? Math.round(cobrado / emitido * 100) : 100;
+  var divida = emitido - cobrado;
+
+  // fundo de reserva
+  var pct = parseFloat(c.fundo_percentagem) || 10;
+  var fundoTeorico = Math.round(quotas
+    .filter(function(q) { return q.tipo !== 'extraordinaria'; })
+    .reduce(function(s, q) { return s + parseFloat(q.valor_pago || 0); }, 0)
+    * pct / 100 * 100) / 100;
+
+  // manutenções feitas e por fazer
+  var manutFeitas = [], manutPendentes = [];
+  try {
+    var mR = await sb.from('manutencoes').select('nome,obrigatorio,proxima_data,ultima_data')
+      .eq('condominio_id', c.id).eq('ativo', true);
+    (mR.data || []).forEach(function(m) {
+      if (m.ultima_data && new Date(m.ultima_data).getFullYear() === ano) {
+        manutFeitas.push(m.nome);
+      }
+      if (m.proxima_data && new Date(m.proxima_data) <= new Date(ano + '-12-31') && (!m.ultima_data || new Date(m.ultima_data).getFullYear() < ano)) {
+        manutPendentes.push({ nome: m.nome, legal: m.obrigatorio });
+      }
+    });
+  } catch (e) {}
+
+  // assembleias do ano
+  var assR = await sb.from('assembleias').select('data_assembleia, tipo, ata_texto')
+    .eq('condominio_id', c.id)
+    .gte('data_assembleia', ano + '-01-01').lte('data_assembleia', ano + '-12-31');
+  var assembleias = (assR.data || []);
+
+  return {
+    ano: ano,
+    predio: c.nome,
+    totalReceitas: totalReceitas,
+    totalDespesas: totalDespesas,
+    saldoAnual: totalReceitas - totalDespesas,
+    catDespesas: catDespesas,
+    quotasEmitido: emitido,
+    quotasCobrado: cobrado,
+    quotasDivida: divida,
+    taxaCobranca: taxaCobranca,
+    fundoTeorico: fundoTeorico,
+    fundoPercentagem: pct,
+    manutFeitas: manutFeitas,
+    manutPendentes: manutPendentes,
+    assembleias: assembleias.length,
+    teveAta: assembleias.some(function(a) { return a.ata_texto && a.ata_texto.length > 50; })
+  };
+}
+
+function renderPrestacaoContas(dados) {
+  var eur = function(v) { return (parseFloat(v) || 0).toFixed(2).replace('.', ',') + '€'; };
+  var h = '<div style="max-width:720px;margin:0 auto;">';
+
+  h += '<div style="font-size:12px;font-weight:700;color:var(--t2);letter-spacing:.08em;margin-bottom:14px">PRESTAÇÃO DE CONTAS · ' + dados.ano + '</div>';
+
+  // KPIs
+  h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;margin-bottom:18px">';
+  var kpis = [
+    { v: eur(dados.totalReceitas), l: 'Receitas', c: 'var(--green)' },
+    { v: eur(dados.totalDespesas), l: 'Despesas', c: 'var(--red)' },
+    { v: eur(dados.saldoAnual), l: 'Saldo', c: dados.saldoAnual >= 0 ? 'var(--green)' : 'var(--red)' },
+    { v: dados.taxaCobranca + '%', l: 'Cobrança', c: dados.taxaCobranca >= 90 ? 'var(--green)' : 'var(--amber)' }
+  ];
+  kpis.forEach(function(k) {
+    h += '<div style="background:var(--s1);border:1px solid var(--b1);border-radius:10px;padding:12px;text-align:center">';
+    h += '<div style="font-size:9.5px;color:var(--t3);letter-spacing:.5px;margin-bottom:4px">' + k.l.toUpperCase() + '</div>';
+    h += '<div style="font-family:var(--mono);font-size:18px;font-weight:700;color:' + k.c + '">' + k.v + '</div>';
+    h += '</div>';
+  });
+  h += '</div>';
+
+  // despesas por categoria
+  h += '<div style="font-size:11px;font-weight:700;color:var(--t2);margin-bottom:8px">DESPESAS POR CATEGORIA</div>';
+  var cats = Object.keys(dados.catDespesas).sort(function(a, b) { return dados.catDespesas[b] - dados.catDespesas[a]; });
+  cats.forEach(function(cat) {
+    var v = dados.catDespesas[cat];
+    var pctCat = dados.totalDespesas > 0 ? Math.round(v / dados.totalDespesas * 100) : 0;
+    h += '<div style="display:flex;align-items:center;gap:10px;padding:5px 0;font-size:12px;color:var(--t2)">';
+    h += '<span style="flex:1">' + cat + '</span>';
+    h += '<span style="font-family:var(--mono);font-weight:600;color:var(--text)">' + eur(v) + '</span>';
+    h += '<span style="color:var(--t3);min-width:40px;text-align:right">' + pctCat + '%</span>';
+    h += '</div>';
+  });
+
+  // fundo
+  h += '<div style="border-top:1px solid var(--b1);margin:16px 0;padding-top:14px">';
+  h += '<div style="font-size:11px;font-weight:700;color:var(--t2);margin-bottom:6px">FUNDO DE RESERVA</div>';
+  h += '<div style="font-size:12px;color:var(--t2);line-height:1.6">Taxa aplicada: <strong style="color:var(--text)">' + dados.fundoPercentagem + '%</strong>. Total acumulado no ano: <strong style="color:var(--text)">' + eur(dados.fundoTeorico) + '</strong>.</div>';
+  h += '</div>';
+
+  // dívida
+  if (dados.quotasDivida > 0.01) {
+    h += '<div style="background:rgba(255,84,112,.06);border:1px solid rgba(255,84,112,.3);border-radius:10px;padding:12px 14px;margin-top:12px;font-size:12px;color:var(--t2);line-height:1.55">';
+    h += '<strong style="color:var(--red)">Quotas em dívida: ' + eur(dados.quotasDivida) + '</strong> (' + (100 - dados.taxaCobranca) + '% por cobrar).';
+    h += '</div>';
+  }
+
+  // manutenções
+  if (dados.manutFeitas.length || dados.manutPendentes.length) {
+    h += '<div style="border-top:1px solid var(--b1);margin:16px 0;padding-top:14px">';
+    h += '<div style="font-size:11px;font-weight:700;color:var(--t2);margin-bottom:6px">MANUTENÇÕES</div>';
+    if (dados.manutFeitas.length) {
+      h += '<div style="font-size:12px;color:var(--green);margin-bottom:4px">' + dados.manutFeitas.length + ' realizadas: ' + dados.manutFeitas.join(', ') + '</div>';
+    }
+    if (dados.manutPendentes.length) {
+      h += '<div style="font-size:12px;color:var(--amber)">' + dados.manutPendentes.length + ' por fazer: ';
+      h += dados.manutPendentes.map(function(m) { return m.nome + (m.legal ? ' (LEGAL)' : ''); }).join(', ');
+      h += '</div>';
+    }
+    h += '</div>';
+  }
+
+  h += '</div>';
+  return h;
+}
+
+
+// =================================================================
+//  2) RESUMO MENSAL
+// =================================================================
+//  Um quadro que aparece no dashboard no início de cada mês com
+//  o que entrou, o que saiu, quem está em atraso, o fundo, e o
+//  que vem aí em manutenções. Não é enviado — fica no ecrã.
+
+async function pintarResumoMensal() {
+  var zona = document.getElementById('resumo-mensal');
+  if (!zona || !currentCondo) return;
+  try {
+    var hoje = new Date();
+    var mesAnterior = hoje.getMonth();   // 0-indexed = mês anterior
+    var anoRef = mesAnterior === 0 ? hoje.getFullYear() - 1 : hoje.getFullYear();
+    if (mesAnterior === 0) mesAnterior = 12;
+    var meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+    var nomeMes = meses[mesAnterior - 1] + ' ' + anoRef;
+
+    var inicio = anoRef + '-' + String(mesAnterior).padStart(2, '0') + '-01';
+    var fim = mesAnterior === 12 ? (anoRef + 1) + '-01-01' : anoRef + '-' + String(mesAnterior + 1).padStart(2, '0') + '-01';
+
+    // receitas e despesas do mês anterior
+    var recR = await sb.from('movimentos').select('valor')
+      .eq('condominio_id', currentCondo.id).eq('tipo', 'receita')
+      .gte('data_movimento', inicio).lt('data_movimento', fim);
+    var totalRec = (recR.data || []).reduce(function(s, m) { return s + parseFloat(m.valor || 0); }, 0);
+
+    var despR = await sb.from('movimentos').select('valor')
+      .eq('condominio_id', currentCondo.id).eq('tipo', 'despesa')
+      .gte('data_movimento', inicio).lt('data_movimento', fim);
+    var totalDesp = (despR.data || []).reduce(function(s, m) { return s + parseFloat(m.valor || 0); }, 0);
+
+    // devedores do mês anterior
+    var devR = await sb.from('quotas').select('fracao_id')
+      .eq('condominio_id', currentCondo.id).eq('mes', mesAnterior).eq('ano', anoRef)
+      .neq('estado', 'pago');
+    var nDev = new Set((devR.data || []).map(function(q) { return q.fracao_id; })).size;
+
+    var saldo = totalRec - totalDesp;
+
+    if (totalRec === 0 && totalDesp === 0) { zona.innerHTML = ''; return; }
+
+    var eur = function(v) { return (parseFloat(v) || 0).toFixed(2).replace('.', ',') + '€'; };
+
+    var h = '<div style="background:var(--s1);border:1px solid var(--b1);border-radius:12px;padding:14px 16px;margin-bottom:14px">';
+    h += '<div style="font-size:11px;font-weight:700;color:var(--t2);letter-spacing:.06em;margin-bottom:11px">RESUMO · ' + nomeMes + '</div>';
+
+    h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:8px">';
+    h += '<div><div style="font-size:9.5px;color:var(--t3);letter-spacing:.5px;margin-bottom:3px">RECEITAS</div><div style="font-family:var(--mono);font-size:16px;font-weight:700;color:var(--green)">' + eur(totalRec) + '</div></div>';
+    h += '<div><div style="font-size:9.5px;color:var(--t3);letter-spacing:.5px;margin-bottom:3px">DESPESAS</div><div style="font-family:var(--mono);font-size:16px;font-weight:700;color:var(--red)">' + eur(totalDesp) + '</div></div>';
+    h += '<div><div style="font-size:9.5px;color:var(--t3);letter-spacing:.5px;margin-bottom:3px">SALDO</div><div style="font-family:var(--mono);font-size:16px;font-weight:700;color:' + (saldo >= 0 ? 'var(--green)' : 'var(--red)') + '">' + eur(saldo) + '</div></div>';
+    h += '</div>';
+
+    if (nDev > 0) {
+      h += '<div style="font-size:11.5px;color:var(--amber);line-height:1.5">' + nDev + ' fração(ões) com quotas de ' + nomeMes + ' por pagar.</div>';
+    }
+    h += '</div>';
+    zona.innerHTML = h;
+  } catch (e) { console.error('resumo mensal:', e); }
+}
+
+
+// =================================================================
+//  3) ALERTA DE PONTOS NAO VOTADOS NA ATA
+// =================================================================
+//  Depois de a IA analisar uma ata, verifica se há pontos cruciais
+//  que NÃO aparecem como votados. Se o fundo não foi deliberado,
+//  o sistema usa os valores do ano passado — e o admin tem de saber.
+
+function verificarPontosNaoVotados(deliberacoes) {
+  var tipos = (deliberacoes || []).map(function(d) { return d.tipo; });
+  var alertas = [];
+
+  if (tipos.indexOf('fcr') === -1) {
+    alertas.push({
+      ponto: 'Taxa do fundo de reserva',
+      consequencia: 'O sistema mantém a taxa do ano anterior (' + (parseFloat(currentCondo.fundo_percentagem) || 10) + '%). Se a assembleia quis mudá-la e não ficou na ata, a decisão não tem valor legal.'
+    });
+  }
+
+  var temOrcamento = tipos.indexOf('orcamento') > -1 || deliberacoes.some(function(d) { return d.valor_orcamento_total; });
+  if (!temOrcamento) {
+    alertas.push({
+      ponto: 'Orçamento anual',
+      consequencia: 'Sem orçamento aprovado em ata, as quotas mantêm-se iguais ao ano anterior. A lei obriga à aprovação anual (Art. 1431.º CC).'
+    });
+  }
+
+  if (tipos.indexOf('obra_extraordinaria') === -1 && tipos.indexOf('isencao') === -1 && tipos.indexOf('metodo_divisao') === -1 && !temOrcamento && tipos.indexOf('fcr') === -1) {
+    alertas.push({
+      ponto: 'Nenhuma deliberação financeira encontrada',
+      consequencia: 'A IA não encontrou decisões que afetem cálculos. Pode ser uma ata só com assuntos gerais, ou pode haver decisões em texto que a IA não conseguiu interpretar.'
+    });
+  }
+
+  return alertas;
+}
+
+function renderAlertaPontosNaoVotados(alertas) {
+  if (!alertas || !alertas.length) return '';
+  var h = '<div style="background:rgba(255,179,0,.06);border:1px solid rgba(255,179,0,.3);border-radius:10px;padding:14px 16px;margin-top:14px">';
+  h += '<div style="font-size:12px;font-weight:700;color:var(--amber);margin-bottom:10px">Pontos que não aparecem como votados</div>';
+  h += '<div style="font-size:11px;color:var(--t3);line-height:1.5;margin-bottom:12px">A IA não os encontrou na ata. Pode ser porque não foram votados (e o sistema mantém os valores anteriores), ou porque o texto não foi claro o suficiente para a IA os identificar.</div>';
+  alertas.forEach(function(a) {
+    h += '<div style="border-left:2px solid rgba(255,179,0,.6);padding:2px 0 2px 11px;margin-bottom:10px">';
+    h += '<div style="font-size:12px;font-weight:650;color:var(--text)">' + a.ponto + '</div>';
+    h += '<div style="font-size:11px;color:var(--t2);line-height:1.5;margin-top:3px">' + a.consequencia + '</div>';
+    h += '</div>';
+  });
+  h += '</div>';
+  return h;
+}
+
+async function pintarPrestacaoContasAuto() {
+  var zona = document.getElementById('prestacao-contas-auto');
+  if (!zona || !currentCondo) return;
+  var anoRef = new Date().getFullYear() - 1;
+  zona.innerHTML = '<div style="background:var(--s1);border:1px solid var(--b1);border-radius:12px;padding:14px 16px">' +
+    '<div style="font-size:12.5px;font-weight:700;color:var(--t2);margin-bottom:6px">Prestação de Contas Automática</div>' +
+    '<div style="font-size:11.5px;color:var(--t3);line-height:1.55;margin-bottom:11px">O sistema prepara o relatório de ' + anoRef + ' com receitas, despesas, fundo, devedores e manutenções. Levas à assembleia de aprovação.</div>' +
+    '<button class="btn-ghost" style="width:auto;display:inline-flex;font-size:12px;padding:8px 14px" onclick="gerarPrestacaoContasEcra(' + anoRef + ')">Gerar prestação de contas de ' + anoRef + '</button></div>';
+}
+
+async function gerarPrestacaoContasEcra(ano) {
+  toast('A preparar...', 'ok');
+  var dados = await prepararPrestacaoContas(ano);
+  if (!dados) return;
+  var zona = document.getElementById('prestacao-contas-auto');
+  if (zona) zona.innerHTML = renderPrestacaoContas(dados);
+}
+
 async function verificarAvisosGerais() {
   try { pintarPredioNovo(); } catch(e) {}
   try { verificarCicloQuotas(); } catch(e) {}
   try { carregarManutencoes().then(function(){ pintarAvisoManutencoes(); }); } catch(e) {}
+  try { pintarResumoMensal(); } catch(e) {}
+  try { pintarPrestacaoContasAuto(); } catch(e) {}
   if (!currentCondo) return;
   var avisos = [];
   var agora = new Date();
@@ -19100,6 +19408,29 @@ async function sugerirOrcamentoIA() {
   var manutPeriodicas = [];
   var avisosManut = [];
 
+  // ===== MANUTENÇÕES DA TABELA (substitui progressivamente as hardcoded) =====
+  // A tabela 'manutencoes' é a fonte de verdade a partir de agora.
+  // Cada entrada com proxima_data no ano do orçamento entra como sugestão.
+  try {
+    var manutDB = await sb.from('manutencoes').select('nome,categoria,obrigatorio,periodicidade_meses,proxima_data,custo_estimado')
+      .eq('condominio_id', c.id).eq('ativo', true);
+    (manutDB.data || []).forEach(function(m) {
+      var prox = m.proxima_data ? new Date(m.proxima_data).getFullYear() : null;
+      var incluir = !prox || prox <= ano;  // sem data = incluir por segurança
+      if (incluir) {
+        manutPeriodicas.push({
+          nome: m.nome,
+          nota: prox ? ('próxima em ' + prox + (prox < ano ? ' — JÁ VENCIDA' : '')) : 'sem data registada',
+          custo: parseFloat(m.custo_estimado || 0) || null,
+          obrigatoria: m.obrigatorio
+        });
+        if (!prox && m.obrigatorio) {
+          avisosManut.push('Sem data da última ' + m.nome.toLowerCase() + '. É obrigatória — incluída por segurança.');
+        }
+      }
+    });
+  } catch(e) { console.error('manutencoes p/ orçamento:', e); }
+
   // Helper: dado um "ano da última intervenção" e a periodicidade, vê se vence no ano alvo
   function verificaCiclo(nomeManut, anoUltima, periodicidade, custoEstimado, obrigatoria) {
     if (!anoUltima) {
@@ -20375,6 +20706,19 @@ Devolve APENAS JSON válido:
     document.getElementById('ata-deliberacoes-lista').innerHTML = html;
     document.getElementById('ata-resultado').style.display = 'block';
     toast(json.deliberacoes.length+' deliberação(ões) detectada(s)!','ok');
+
+    // Alertar sobre pontos cruciais que NÃO foram votados
+    try {
+      var pontosEmFalta = verificarPontosNaoVotados(json.deliberacoes);
+      var zonaAlerta = document.getElementById('ata-alertas-nao-votados');
+      if (!zonaAlerta) {
+        zonaAlerta = document.createElement('div');
+        zonaAlerta.id = 'ata-alertas-nao-votados';
+        var ataRes = document.getElementById('ata-resultado');
+        if (ataRes) ataRes.appendChild(zonaAlerta);
+      }
+      zonaAlerta.innerHTML = renderAlertaPontosNaoVotados(pontosEmFalta);
+    } catch(e) { console.error('alertas não votados:', e); }
 
   } catch(e) {
     document.getElementById('ata-loading').style.display = 'none';
