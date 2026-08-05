@@ -18,6 +18,7 @@
 <meta property="og:locale" content="pt_PT">
 <style>
   :root {
+  --brass: #e9b80b; --brass-d: #c49a08;
     --bg:#080d14; --card:#0d1520; --card2:#111b2a; --b:#1e2d3d; --b2:#2a3d52;
     --s1:#0d1520; --s2:#111b2a; --b1:#1e2d3d;
     --text:#e8f0f8; --t2:#8899aa; --t3:#445566;
@@ -1233,6 +1234,22 @@ async function iniciar() {
 async function carregarFeed() {
   const box = document.getElementById('h-feed');
   const itens = [];
+
+  // Quotas pendentes — destaque se há quotas por pagar
+  try {
+    var qPend = await sb.rpc('portal_quotas', { p_token: token });
+    var pendentes = (qPend.data || []).filter(function(q) { return q.estado !== 'pago'; });
+    if (pendentes.length) {
+      var totalDev = pendentes.reduce(function(s,q) { return s + parseFloat(q.valor_emitido||0) - parseFloat(q.valor_pago||0); }, 0);
+      itens.push({
+        pri: 1,
+        html: '<div onclick="irPara(\'quotas\')" style="background:rgba(255,84,112,.06);border:1px solid rgba(255,84,112,.3);border-radius:12px;padding:14px 16px;cursor:pointer">' +
+          '<div style="font-size:13px;font-weight:700;color:var(--red)">' + pendentes.length + ' quota(s) por pagar</div>' +
+          '<div style="font-size:11.5px;color:var(--t2);margin-top:4px;line-height:1.5">Tens ' + totalDev.toFixed(2).replace(".",",") + '€ por regularizar. Toca para ver.</div>' +
+          '</div>'
+      });
+    }
+  } catch(e) {}
 
   // Próxima assembleia → notificação + guardar para o botão de presença
   const ra = await sb.rpc('portal_proxima_assembleia', { p_token: token });

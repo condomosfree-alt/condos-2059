@@ -870,7 +870,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.08.04-0045</div>
+      <div class="sb-tag">2059 Pro · build v2026.08.04-0120</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -19610,7 +19610,20 @@ async function sugerirOrcamentoIA() {
   var rubricasAnterior = rubricasPorAno[ano-1] || [];
   var rubricasAtual = rubricasPorAno[ano] || [];
 
-  // ===== ANÁLISE DE MANUTENÇÕES PERIÓDICAS (cruza perfil + ciclos) =====
+  
+  // PARCEIROS: alimentar a sugestão com fornecedores registados
+  var parceirosIA = [];
+  try {
+    var prcR = await sb.from('parceiros').select('nome,especialidade,preco_hora,avaliacao_media')
+      .eq('condominio_id', c.id);
+    parceirosIA = (prcR.data || []).map(function(p) {
+      return p.nome + (p.especialidade ? ' (' + p.especialidade + ')' : '') +
+        (p.preco_hora ? ' — ' + eur(p.preco_hora) + '€/h' : '') +
+        (p.avaliacao_media ? ' · ' + p.avaliacao_media + '★' : '');
+    });
+  } catch(e) {}
+
+// ===== ANÁLISE DE MANUTENÇÕES PERIÓDICAS (cruza perfil + ciclos) =====
   // Periodicidades típicas (anos): cada tipo de manutenção tem o seu ciclo
   var manutPeriodicas = [];
   var avisosManut = [];
@@ -19730,8 +19743,10 @@ async function sugerirOrcamentoIA() {
     }),
     custos_conhecidos: dados.rubricas.map(function(r){ return r.nome+': '+eur(r.valor)+'€/ano'; }),
     rubricas_ano_anterior: rubricasAnterior.map(function(r){ return r.nome+': '+eur(r.valor_total)+'€'; }),
+
     manutencoes_periodicas_a_incluir: manutPeriodicas.map(function(m){ return m.nome + ' — ' + m.nota + (m.custo?' (~'+eur(m.custo)+'€)':'') + (m.obrigatoria?' [OBRIGATÓRIA]':''); }),
-    despesas_passadas: todasDespesas.map(function(d){ return d.descricao+': '+eur(d.valor_total)+'€ ('+(d.data_despesa||'?')+')'; })
+    despesas_passadas: todasDespesas.map(function(d){ return d.descricao+': '+eur(d.valor_total)+'€ ('+(d.data_despesa||'?')+')'; }),
+    parceiros_registados: parceirosIA
   };
 
   var prompt = 'És um perito em gestão de condomínios em Portugal, RIGOROSO e CONSERVADOR nos valores. Com base nos dados do edifício abaixo, cria um ORÇAMENTO ANUAL REALISTA para o ano ' + ano + '. ' +
