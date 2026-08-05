@@ -870,7 +870,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.08.04-0015</div>
+      <div class="sb-tag">2059 Pro · build v2026.08.04-0045</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -897,6 +897,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
       <div class="ni" onclick="nav('mensagens')"><span class="mic"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-8 8H7l-4 3 1.2-4.4A8 8 0 1 1 21 12z"/><path d="M8.5 11h7M8.5 14.5h4"/></svg></span><span>Mensagens</span><span class="nb" id="nb-msg" style="background:#f87171;"></span></div>
       <div class="ni" onclick="nav('parceiros')"><span class="mic"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11 17l-2.2 2.2a2 2 0 0 1-2.8-2.8l5.6-5.6a2 2 0 0 1 2.8 0l1.4 1.4"/><path d="M13 7l2.2-2.2a2 2 0 0 1 2.8 2.8L15 10.6"/><path d="M3 12l3-3M18 15l3-3"/></svg></span><span>Parceiros</span></div>
       <div class="nav-section">Documentos &amp; Reuniões</div>
+      <div class="ni" onclick="nav('manutencoes')"><span class="mic">🔧</span><span>Manutenções</span></div>
       <div class="ni" onclick="nav('documentos')"><span class="mic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3H7a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V8z"/><path d="M13 3v5h5"/><path d="M9.5 13h5M9.5 16.5h5"/></svg></span><span>Documentos</span></div>
       <div class="ni" onclick="nav('assembleias')"><span class="mic">🗳️</span><span>Assembleias</span><span id="badge-assembleias" style="display:none;margin-left:auto;background:#f87171;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;line-height:16px;text-align:center;border-radius:8px;padding:0 4px;"></span></div>
       <div class="nav-section">IA</div>
@@ -2000,7 +2001,17 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
       </div>
 
       <!-- ASSISTENTE IA -->
-      <div class="page" id="page-assistente">
+      <div 
+      <div class="page" id="page-manutencoes">
+        <div class="sec-hdr">
+          <span class="sec-t">Manutenções e Obrigações Legais</span>
+          <div style="display:flex;gap:8px;">
+            <button class="btn-primary" style="font-size:12px;padding:8px 14px" onclick="novaManutencao()">+ Nova</button>
+          </div>
+        </div>
+        <div id="manut-lista" style="padding:0 16px 16px"></div>
+      </div>
+      class="page" id="page-assistente">
         <div class="sec-hdr"><span class="sec-t">Assistente IA</span></div>
         <div class="panel" style="height:calc(100vh - 160px);display:flex;flex-direction:column;">
           <div class="ph"><span class="pt">Chat com IA</span><span class="pm" style="color:var(--violet);">Gemini 2.0 Flash</span></div>
@@ -3739,7 +3750,10 @@ async function wizCriarCondominio() {
   }
 
   populateCondSel(); showScreen('s-app'); loadCondData();
-  toast('🎉 Condomínio criado com sucesso!','ok');
+  // Instalar o catálogo de manutenções legais no prédio novo
+    try { await sb.rpc('instalar_manutencoes', { p_condominio: data.id }); } catch(e) { console.error('instalar manutencoes:', e); }
+
+    toast('🎉 Condomínio criado com sucesso!','ok');
 }
 
 // ===== AUTH =====
@@ -4072,6 +4086,175 @@ function pintarPredioNovo() {
 
 var _manut = [];
 
+// =====================================================================
+//  PAGINA DE GESTAO DE MANUTENCOES
+// =====================================================================
+
+async function pintarPaginaManutencoes() {
+  var zona = document.getElementById('manut-lista');
+  if (!zona || !currentCondo) return;
+  await carregarManutencoes();
+  if (!_manut.length) {
+    zona.innerHTML = '<div style="text-align:center;padding:40px;color:var(--t3);font-size:13px;line-height:1.6">' +
+      'Sem manutenções registadas.<br>Corre o <code style="color:var(--cyan)">sql_manutencoes.sql</code> para carregar o catálogo legal,' +
+      '<br>ou carrega em <strong>+ Nova</strong> para adicionar uma manualmente.</div>';
+    return;
+  }
+
+  var hoje = new Date(new Date().toDateString());
+  var h = '';
+
+  // separar em vencidas, a chegar (<90 dias), e futuras/sem data
+  var vencidas = [], proximas = [], restantes = [];
+  _manut.forEach(function(m) {
+    if (!m.proxima_data) { restantes.push(m); return; }
+    var dias = Math.round((new Date(m.proxima_data) - hoje) / 86400000);
+    if (dias < 0) vencidas.push(m);
+    else if (dias <= 90) proximas.push(m);
+    else restantes.push(m);
+  });
+
+  function renderGrupo(titulo, itens, cor) {
+    if (!itens.length) return '';
+    var g = '<div style="margin-bottom:20px">';
+    g += '<div style="font-size:11px;font-weight:700;color:rgb(' + cor + ');letter-spacing:.06em;margin-bottom:10px">' + titulo + '</div>';
+    itens.forEach(function(m) {
+      var dias = m.proxima_data ? Math.round((new Date(m.proxima_data) - hoje) / 86400000) : null;
+      var quando = dias === null ? 'sem data' : (dias < 0 ? 'vencido há ' + Math.abs(dias) + ' dias' : 'faltam ' + dias + ' dias');
+      g += '<div style="background:var(--s1);border:1px solid var(--b1);border-radius:10px;padding:13px 15px;margin-bottom:9px;display:flex;align-items:flex-start;gap:12px">';
+      g += '<div style="flex:1">';
+      g += '<div style="font-size:13px;font-weight:650;color:var(--text)">' + m.nome;
+      if (m.obrigatorio) g += ' <span style="font-size:9px;color:var(--amber);border:1px solid rgba(255,179,0,.4);border-radius:4px;padding:1px 5px;margin-left:4px">LEGAL</span>';
+      g += '</div>';
+      g += '<div style="font-size:11px;color:var(--t3);margin-top:3px;line-height:1.5">';
+      if (m.proxima_data) g += '<span style="color:rgb(' + cor + ')">' + quando + '</span> · próxima: ' + new Date(m.proxima_data).toLocaleDateString('pt-PT');
+      if (m.ultima_data) g += ' · última: ' + new Date(m.ultima_data).toLocaleDateString('pt-PT');
+      if (m.periodicidade_meses) g += ' · a cada ' + m.periodicidade_meses + ' meses';
+      if (m.custo_estimado) g += ' · ~' + parseFloat(m.custo_estimado).toFixed(0) + '€';
+      if (m.fornecedor) g += ' · ' + m.fornecedor;
+      g += '</div>';
+      if (m.nota) g += '<div style="font-size:10.5px;color:var(--t3);margin-top:4px;line-height:1.5">' + m.nota + '</div>';
+      g += '</div>';
+      g += '<div style="display:flex;flex-direction:column;gap:5px;min-width:90px">';
+      g += '<button class="btn-ghost" style="width:auto;font-size:10px;padding:5px 10px" onclick="marcarManutencaoFeita(\'' + m.id + '\')">✓ Feita</button>';
+      g += '<button class="btn-ghost" style="width:auto;font-size:10px;padding:5px 10px" onclick="editarManutencao(\'' + m.id + '\')">Editar</button>';
+      g += '</div>';
+      g += '</div>';
+    });
+    g += '</div>';
+    return g;
+  }
+
+  h += renderGrupo('VENCIDAS', vencidas, '255,84,112');
+  h += renderGrupo('NOS PRÓXIMOS 90 DIAS', proximas, '255,179,0');
+  h += renderGrupo('FUTURAS E SEM DATA', restantes, '130,140,155');
+
+  zona.innerHTML = h;
+}
+
+async function marcarManutencaoFeita(id) {
+  var hoje = new Date().toISOString().split('T')[0];
+  // buscar a manutenção para calcular a próxima data
+  var m = _manut.find(function(x) { return x.id === id; });
+  if (!m) return;
+
+  var proxima = null;
+  if (m.periodicidade_meses) {
+    var d = new Date();
+    d.setMonth(d.getMonth() + m.periodicidade_meses);
+    proxima = d.toISOString().split('T')[0];
+  }
+
+  var r = await sb.from('manutencoes').update({
+    ultima_data: hoje,
+    proxima_data: proxima
+  }).eq('id', id);
+
+  if (r && r.error) { toast('Não consegui gravar: ' + (r.error.message || ''), 'err'); return; }
+  toast(m.nome + ' — feita! ' + (proxima ? 'Próxima: ' + new Date(proxima).toLocaleDateString('pt-PT') : ''), 'ok');
+  await pintarPaginaManutencoes();
+}
+
+async function editarManutencao(id) {
+  var m = _manut.find(function(x) { return x.id === id; });
+  if (!m) return;
+
+  var h = '<div style="padding:4px">';
+  h += '<label style="font-size:11px;color:var(--t2);display:block;margin-bottom:12px">Nome<br><input type="text" id="me-nome" value="' + (m.nome || '').replace(/"/g, '&quot;') + '" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--c2);border:1px solid var(--b);border-radius:8px;padding:10px;color:var(--t1);font-family:inherit;font-size:14px"></label>';
+  h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">';
+  h += '<label style="font-size:11px;color:var(--t2)">Última vez<br><input type="date" id="me-ultima" value="' + (m.ultima_data || '').substring(0, 10) + '" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--c2);border:1px solid var(--b);border-radius:8px;padding:10px;color:var(--t1);font-family:inherit"></label>';
+  h += '<label style="font-size:11px;color:var(--t2)">Próxima<br><input type="date" id="me-proxima" value="' + (m.proxima_data || '').substring(0, 10) + '" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--c2);border:1px solid var(--b);border-radius:8px;padding:10px;color:var(--t1);font-family:inherit"></label>';
+  h += '</div>';
+  h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">';
+  h += '<label style="font-size:11px;color:var(--t2)">Custo estimado (€)<br><input type="number" id="me-custo" value="' + (m.custo_estimado || '') + '" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--c2);border:1px solid var(--b);border-radius:8px;padding:10px;color:var(--t1);font-family:inherit"></label>';
+  h += '<label style="font-size:11px;color:var(--t2)">Fornecedor<br><input type="text" id="me-forn" value="' + (m.fornecedor || '').replace(/"/g, '&quot;') + '" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--c2);border:1px solid var(--b);border-radius:8px;padding:10px;color:var(--t1);font-family:inherit"></label>';
+  h += '</div>';
+  h += '<label style="font-size:11px;color:var(--t2)">Notas<br><textarea id="me-nota" rows="2" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--c2);border:1px solid var(--b);border-radius:8px;padding:10px;color:var(--t1);font-family:inherit;resize:vertical">' + (m.nota || '') + '</textarea></label>';
+  h += '<div style="display:flex;gap:8px;margin-top:16px">';
+  h += '<button class="btn-primary" style="flex:1;font-size:13px;padding:12px" onclick="guardarManutencaoEdit(\'' + id + '\')">Guardar</button>';
+  h += '<button class="btn-ghost" style="flex:1;font-size:13px;padding:12px;color:var(--red)" onclick="desativarManutencao(\'' + id + '\')">Desativar</button>';
+  h += '</div>';
+  h += '</div>';
+  abrirModalGenerico(m.nome, h);
+}
+
+async function guardarManutencaoEdit(id) {
+  var r = await sb.from('manutencoes').update({
+    nome: (document.getElementById('me-nome') || {}).value || 'Sem nome',
+    ultima_data: (document.getElementById('me-ultima') || {}).value || null,
+    proxima_data: (document.getElementById('me-proxima') || {}).value || null,
+    custo_estimado: parseFloat((document.getElementById('me-custo') || {}).value) || null,
+    fornecedor: ((document.getElementById('me-forn') || {}).value || '').trim() || null,
+    nota: ((document.getElementById('me-nota') || {}).value || '').trim() || null
+  }).eq('id', id);
+  if (r && r.error) { toast('Não consegui guardar: ' + (r.error.message || ''), 'err'); return; }
+  fecharModalGenerico();
+  toast('Manutenção atualizada', 'ok');
+  await pintarPaginaManutencoes();
+}
+
+async function desativarManutencao(id) {
+  var r = await sb.from('manutencoes').update({ ativo: false }).eq('id', id);
+  if (r && r.error) { toast('Não consegui desativar', 'err'); return; }
+  fecharModalGenerico();
+  toast('Manutenção desativada', 'ok');
+  await pintarPaginaManutencoes();
+}
+
+async function novaManutencao() {
+  var h = '<div style="padding:4px">';
+  h += '<label style="font-size:11px;color:var(--t2);display:block;margin-bottom:12px">Nome<br><input type="text" id="mn-nome" placeholder="Ex: Inspeção do elevador" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--c2);border:1px solid var(--b);border-radius:8px;padding:10px;color:var(--t1);font-family:inherit;font-size:14px"></label>';
+  h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">';
+  h += '<label style="font-size:11px;color:var(--t2)">A cada quantos meses?<br><input type="number" id="mn-periodo" placeholder="12" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--c2);border:1px solid var(--b);border-radius:8px;padding:10px;color:var(--t1);font-family:inherit"></label>';
+  h += '<label style="font-size:11px;color:var(--t2)">Custo estimado (€)<br><input type="number" id="mn-custo" placeholder="150" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--c2);border:1px solid var(--b);border-radius:8px;padding:10px;color:var(--t1);font-family:inherit"></label>';
+  h += '</div>';
+  h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">';
+  h += '<label style="font-size:11px;color:var(--t2)">Obrigatória por lei?<br><select id="mn-legal" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--c2);border:1px solid var(--b);border-radius:8px;padding:10px;color:var(--t1);font-family:inherit"><option value="false">Não</option><option value="true">Sim</option></select></label>';
+  h += '<label style="font-size:11px;color:var(--t2)">Próxima data<br><input type="date" id="mn-proxima" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--c2);border:1px solid var(--b);border-radius:8px;padding:10px;color:var(--t1);font-family:inherit"></label>';
+  h += '</div>';
+  h += '<button class="btn-primary" style="width:100%;font-size:13px;padding:12px;margin-top:8px" onclick="criarManutencao()">Criar</button>';
+  h += '</div>';
+  abrirModalGenerico('Nova manutenção', h);
+}
+
+async function criarManutencao() {
+  var nome = ((document.getElementById('mn-nome') || {}).value || '').trim();
+  if (!nome) { toast('Escreve o nome', 'warn'); return; }
+  var r = await sb.from('manutencoes').insert({
+    condominio_id: currentCondo.id,
+    nome: nome,
+    categoria: (document.getElementById('mn-legal') || {}).value === 'true' ? 'legal' : 'geral',
+    obrigatorio: (document.getElementById('mn-legal') || {}).value === 'true',
+    periodicidade_meses: parseInt((document.getElementById('mn-periodo') || {}).value) || null,
+    custo_estimado: parseFloat((document.getElementById('mn-custo') || {}).value) || null,
+    proxima_data: (document.getElementById('mn-proxima') || {}).value || null
+  });
+  if (r && r.error) { toast('Não consegui criar: ' + (r.error.message || ''), 'err'); return; }
+  fecharModalGenerico();
+  toast('Manutenção criada', 'ok');
+  await pintarPaginaManutencoes();
+}
+
 async function carregarManutencoes() {
   if (!currentCondo) return;
   try {
@@ -4162,7 +4345,23 @@ async function verificarCicloQuotas() {
     });
     var nDevedores = Object.keys(devedores).length;
 
-    if (!semRecibo && !nDevedores) { zona.innerHTML = ''; return; }
+    // DIA 1-7: lembrete para carregar o extrato do banco
+    var diaDoMes = new Date().getDate();
+    var extratoEsteMes = false;
+    if (diaDoMes >= 1 && diaDoMes <= 7) {
+      // verificar se já houve importação de extrato este mês
+      var mesAtual = new Date().getMonth() + 1;
+      var anoAtual = new Date().getFullYear();
+      var impR = await sb.from('movimentos').select('id')
+        .eq('condominio_id', currentCondo.id)
+        .gte('criado_em', anoAtual + '-' + String(mesAtual).padStart(2,'0') + '-01')
+        .ilike('descricao', '%extrato%')
+        .limit(1);
+      extratoEsteMes = (impR.data || []).length > 0;
+    }
+    var mostrarExtrato = diaDoMes >= 1 && diaDoMes <= 7 && !extratoEsteMes;
+
+    if (!semRecibo && !nDevedores && !mostrarExtrato) { zona.innerHTML = ''; return; }
 
     var h = '<div style="background:rgba(255,179,0,.06);border:1px solid rgba(255,179,0,.3);border-radius:12px;padding:14px 16px;margin-bottom:14px">';
     h += '<div style="font-size:12.5px;font-weight:700;color:var(--amber);margin-bottom:3px">Há passos das quotas por concluir</div>';
@@ -4180,6 +4379,13 @@ async function verificarCicloQuotas() {
       h += '<div style="font-size:12px;font-weight:650;color:var(--text)">' + nDevedores + ' fração(ões) em atraso por avisar</div>';
       h += '<div style="font-size:11px;color:var(--t2);line-height:1.5;margin-top:3px">Quotas vencidas e ainda não pagas. Convém avisar — mas confirma antes se não há algum acordo de pagamento em curso.</div>';
       h += '<button class="btn-ghost" style="width:auto;display:inline-flex;font-size:11px;padding:6px 12px;margin-top:7px" onclick="nav(\'quotas\')">Ver devedores</button>';
+      h += '</div>';
+    }
+    if (mostrarExtrato) {
+      h += '<div style="border-left:2px solid rgba(0,212,255,.55);padding:2px 0 2px 11px;margin-top:' + (semRecibo || nDevedores ? '11px' : '0') + '">';
+      h += '<div style="font-size:12px;font-weight:650;color:var(--text)">Altura de conferir os pagamentos</div>';
+      h += '<div style="font-size:11px;color:var(--t2);line-height:1.5;margin-top:3px">É início do mês — carrega o extrato do banco para ver quem pagou as quotas, validar pagamentos e emitir recibos.</div>';
+      h += '<button class="btn-ghost" style="width:auto;display:inline-flex;font-size:11px;padding:6px 12px;margin-top:7px" onclick="nav(\'financeiro\')">Carregar extrato</button>';
       h += '</div>';
     }
     h += '</div>';
@@ -4497,6 +4703,7 @@ async function verificarAvisosGerais() {
   try { carregarManutencoes().then(function(){ pintarAvisoManutencoes(); }); } catch(e) {}
   try { pintarResumoMensal(); } catch(e) {}
   try { pintarPrestacaoContasAuto(); } catch(e) {}
+  try { pintarPaginaManutencoes(); } catch(e) {}
   if (!currentCondo) return;
   var avisos = [];
   var agora = new Date();
