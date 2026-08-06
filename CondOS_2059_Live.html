@@ -870,7 +870,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.08.04-0200</div>
+      <div class="sb-tag">2059 Pro · build v2026.08.04-0245</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -7496,64 +7496,109 @@ async function cartoesContactosPDF() {
   }
 
   function frente(f, x, y) {
-    moldura(x, y);
-    doc.setFillColor(8,13,20);
-    doc.roundedRect(x, y, CW, 13, 2.5, 2.5, 'F');
-    doc.rect(x, y + 9, CW, 4, 'F');
-    doc.setTextColor(0,212,255); doc.setFont('courier','bold'); doc.setFontSize(9);
-    doc.text('COND.OS', x + 5, y + 8.5);
-    doc.setTextColor(150,160,170); doc.setFont('helvetica','normal'); doc.setFontSize(6.2);
-    doc.text(condoNome.substring(0, 34), x + CW - 5, y + 8.5, {align:'right'});
+    // fundo do cartão: dark card com borda subtil
+    doc.setFillColor(11,17,26);
+    doc.roundedRect(x, y, CW, CH, 3, 3, 'F');
+    doc.setDrawColor(0,180,220); doc.setLineWidth(0.4);
+    doc.roundedRect(x, y, CW, CH, 3, 3, 'S');
 
-    doc.setTextColor(25,30,35); doc.setFont('helvetica','bold'); doc.setFontSize(11);
-    doc.text(String(f.proprietario_nome || 'Condomino').substring(0, 30), x + 5, y + 24);
-    doc.setTextColor(0,110,160); doc.setFont('helvetica','bold'); doc.setFontSize(15);
-    doc.text('Fracao ' + (f.codigo || '-') + (f.bloco ? ' · ' + f.bloco : ''), x + 5, y + 34);
+    // faixa topo: barra cyan fina
+    doc.setFillColor(0,212,255);
+    doc.roundedRect(x, y, CW, 11, 3, 3, 'F');
+    doc.rect(x, y + 7, CW, 4, 'F');  // preencher os cantos de baixo da barra
 
-    if (qrPortal[f.id]) {
-      doc.addImage(qrPortal[f.id], 'PNG', x + CW - 26, y + 18, 21, 21);
-      doc.setTextColor(120,130,140); doc.setFont('helvetica','normal'); doc.setFontSize(5.4);
-      doc.text('O meu portal', x + CW - 15.5, y + 42, {align:'center'});
+    // COND.OS no topo esquerdo
+    doc.setTextColor(11,17,26); doc.setFont('courier','bold'); doc.setFontSize(8.5);
+    doc.text('COND.OS', x + 4, y + 7.5);
+
+    // nome do prédio no topo direito (cortar se comprido)
+    doc.setFont('helvetica','normal'); doc.setFontSize(5.5);
+    doc.text(condoNome.substring(0, 32), x + CW - 4, y + 7.5, {align:'right'});
+
+    // NOME DO CONDÓMINO — grande, branco
+    doc.setTextColor(230,235,242); doc.setFont('helvetica','bold'); doc.setFontSize(10);
+    var nomeStr = String(f.proprietario_nome || 'Condómino').substring(0, 28);
+    doc.text(nomeStr, x + 5, y + 20);
+
+    // FRAÇÃO — ciano, corpo, MAS limitada para não chocar com o QR
+    // o QR ocupa 22mm no canto direito; a fração tem CW - 5 - 25 = ~55mm
+    doc.setTextColor(0,190,235); doc.setFont('helvetica','bold');
+    var fracStr = 'Fr. ' + (f.codigo || '-');
+    // ajustar o tamanho da font conforme o comprimento
+    var fracFontSize = fracStr.length > 16 ? 10 : (fracStr.length > 12 ? 12 : 14);
+    doc.setFontSize(fracFontSize);
+    var maxFracWidth = CW - 32;  // margem para o QR
+    var fracTrunc = fracStr;
+    while (doc.getTextWidth(fracTrunc) > maxFracWidth && fracTrunc.length > 5) {
+      fracTrunc = fracTrunc.substring(0, fracTrunc.length - 1);
     }
-    doc.setTextColor(130,140,150); doc.setFont('helvetica','normal'); doc.setFontSize(6);
-    doc.text('Quotas, ocorrencias e documentos do predio', x + 5, y + 43);
-    doc.setDrawColor(0,212,255); doc.setLineWidth(0.6);
-    doc.line(x + 5, y + 47, x + 22, y + 47);
-    doc.setTextColor(160,168,176); doc.setFontSize(5.6);
-    doc.text('Guarde este cartao', x + 5, y + 50.5);
+    doc.text(fracTrunc, x + 5, y + 30);
+
+    // QR no canto inferior direito — 20×20mm
+    if (qrPortal[f.id]) {
+      doc.setFillColor(255,255,255);
+      doc.roundedRect(x + CW - 24.5, y + 17.5, 21.5, 21.5, 1.5, 1.5, 'F');
+      doc.addImage(qrPortal[f.id], 'PNG', x + CW - 24, y + 18, 21, 21);
+    }
+
+    // "O meu portal" debaixo do QR
+    doc.setTextColor(100,120,140); doc.setFont('helvetica','normal'); doc.setFontSize(4.8);
+    doc.text('O meu portal', x + CW - 13, y + 42, {align:'center'});
+
+    // linha de separação subtil
+    doc.setDrawColor(0,180,220); doc.setLineWidth(0.3);
+    doc.line(x + 5, y + 44.5, x + 20, y + 44.5);
+
+    // rodapé: texto pequeno
+    doc.setTextColor(120,135,150); doc.setFont('helvetica','normal'); doc.setFontSize(5.2);
+    doc.text('Quotas, ocorrências e documentos', x + 5, y + 48.5);
+    doc.setTextColor(80,95,110); doc.setFontSize(4.5);
+    doc.text('Guarde este cartão', x + 5, y + 51.5);
   }
 
   function verso(x, y) {
     moldura(x, y);
-    doc.setTextColor(30,35,40); doc.setFont('helvetica','bold'); doc.setFontSize(8);
-    doc.text('Contactos uteis', x + 5, y + 7);
+    doc.setFillColor(252,253,254);
+    doc.roundedRect(x + 0.3, y + 0.3, CW - 0.6, CH - 0.6, 2.5, 2.5, 'F');
 
-    doc.setTextColor(200,40,40); doc.setFont('courier','bold'); doc.setFontSize(17);
-    doc.text('112', x + 5, y + 16.5);
-    doc.setTextColor(60,66,72); doc.setFont('helvetica','normal'); doc.setFontSize(6);
-    doc.text('Emergencia', x + 22, y + 15.5);
-    doc.setDrawColor(225,230,235); doc.setLineWidth(0.25); doc.line(x + 5, y + 19, x + CW - 5, y + 19);
+    doc.setTextColor(30,35,40); doc.setFont('helvetica','bold'); doc.setFontSize(7.5);
+    doc.text('Contactos uteis', x + 4, y + 6.5);
 
-    var ly = y + 24;
-    var curtos = dados.nacionais.filter(function(v){ return v.n !== '112'; }).slice(0, 6);
-    if (dados.locais && dados.locais.length) curtos = curtos.slice(0, 4).concat(dados.locais.slice(0, 2));
-    curtos.forEach(function(v){
-      doc.setTextColor(35,40,45); doc.setFont('courier','bold'); doc.setFontSize(7);
-      doc.text(v.n, x + 5, ly);
-      doc.setTextColor(95,105,115); doc.setFont('helvetica','normal'); doc.setFontSize(6);
-      doc.text(String(v.t).substring(0, 30), x + 27, ly);
-      ly += 4.6;
-    });
+    doc.addImage(qrCont, 'PNG', x + CW - 17, y + 2.5, 13, 13);
+    doc.setTextColor(140,150,160); doc.setFont('helvetica','normal'); doc.setFontSize(4);
+    doc.text('Todos os contactos', x + CW - 10.5, y + 17, {align:'center'});
 
-    doc.addImage(qrCont, 'PNG', x + CW - 21, y + CH - 21, 16, 16);
-    doc.setTextColor(140,150,160); doc.setFont('helvetica','normal'); doc.setFontSize(5);
-    doc.text('Todos os contactos', x + CW - 13, y + CH - 3.5, {align:'center'});
-    doc.setTextColor(110,120,130); doc.setFontSize(5.4);
-    doc.text('Sem telemovel? Na farmacia', x + 5, y + CH - 8);
-    doc.text('ou junta de freguesia ligam por si.', x + 5, y + CH - 4.6);
+    doc.setTextColor(200,40,40); doc.setFont('courier','bold'); doc.setFontSize(14);
+    doc.text('112', x + 4, y + 14);
+    doc.setTextColor(60,66,72); doc.setFont('helvetica','normal'); doc.setFontSize(5.5);
+    doc.text('Emergencia', x + 18, y + 13.5);
+
+    doc.setDrawColor(225,230,235); doc.setLineWidth(0.2);
+    doc.line(x + 4, y + 16.5, x + CW - 19, y + 16.5);
+
+    var ly = y + 21;
+    var curtos = dados.nacionais.filter(function(v){ return v.n !== '112'; }).slice(0, 8);
+    if (dados.locais && dados.locais.length) curtos = curtos.slice(0, 5).concat(dados.locais.slice(0, 3));
+    var col1 = curtos.slice(0, 4);
+    var col2 = curtos.slice(4, 8);
+    function pintaCol(items, cx, cy) {
+      items.forEach(function(v) {
+        doc.setTextColor(35,40,45); doc.setFont('courier','bold'); doc.setFontSize(5.8);
+        doc.text(v.n, cx, cy);
+        doc.setTextColor(95,105,115); doc.setFont('helvetica','normal'); doc.setFontSize(4.8);
+        doc.text(String(v.t).substring(0, 18), cx + 17, cy);
+        cy += 4;
+      });
+    }
+    pintaCol(col1, x + 4, ly);
+    pintaCol(col2, x + CW/2, ly);
+
+    doc.setTextColor(130,140,150); doc.setFont('helvetica','normal'); doc.setFontSize(4.3);
+    doc.text('Sem telemovel? Na farmacia', x + 4, y + CH - 5);
+    doc.text('ou junta de freguesia ligam por si.', x + 4, y + CH - 2);
   }
 
-  for (var p = 0; p < Math.ceil(lista.length / PORPAG); p++) {
+    for (var p = 0; p < Math.ceil(lista.length / PORPAG); p++) {
     var bloco = lista.slice(p * PORPAG, (p + 1) * PORPAG);
 
     if (p > 0) doc.addPage();
