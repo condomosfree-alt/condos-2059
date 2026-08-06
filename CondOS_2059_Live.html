@@ -870,7 +870,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.08.04-0245</div>
+      <div class="sb-tag">2059 Pro · build v2026.08.04-0330</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -18841,7 +18841,7 @@ async function carregarScoreAdmin() {
     var cid = currentCondo.id;
     var desde = new Date(Date.now() - 365*24*3600*1000).toISOString();
     var [qR, mR, oR, aR, dR, eR] = await Promise.all([
-      sb.from('quotas').select('fracao_id,valor_emitido,valor_pago').eq('condominio_id', cid),
+      sb.from('quotas').select('fracao_id,valor_emitido,valor_pago,tipo').eq('condominio_id', cid),
       sb.from('movimentos').select('tipo,valor,categoria,conta').eq('condominio_id', cid).or(SEL_FUNDO),
       sb.from('ocorrencias').select('estado,criado_em').eq('condominio_id', cid).gte('criado_em', desde),
       sb.from('assembleias').select('data_assembleia,ata_texto').eq('condominio_id', cid).gte('data_assembleia', desde),
@@ -18853,7 +18853,7 @@ async function carregarScoreAdmin() {
     (qR.data||[]).forEach(function(q){
       if (parseFloat(q.valor_emitido||0) - parseFloat(q.valor_pago||0) > 0.005) divPorFr[q.fracao_id] = true;
     });
-    var pagas = (qR.data||[]).reduce(function(s,q){ return s + parseFloat(q.valor_pago||0); }, 0);
+    var pagas = (qR.data||[]).filter(function(q){ return q.tipo !== 'extraordinaria'; }).reduce(function(s,q){ return s + parseFloat(q.valor_pago||0); }, 0);
     var teorico = pagas * pctFundo / 100;
     var comprovado = (mR.data||[]).reduce(function(s,m){ return s + movFundoValor(m); }, 0);
     var ocs = oR.data||[];
@@ -19252,7 +19252,7 @@ async function construirContextoIA() {
   try {
     var cid = currentCondo.id;
     var [qR, oR, dR, aR, pR, mR] = await Promise.all([
-      sb.from('quotas').select('valor_emitido,valor_pago,fracao_id,mes,ano').eq('condominio_id', cid),
+      sb.from('quotas').select('valor_emitido,valor_pago,fracao_id,mes,ano,tipo').eq('condominio_id', cid),
       sb.from('ocorrencias').select('descricao,categoria,estado,tipo_legal,orcamento_valor').eq('condominio_id', cid).neq('estado','resolvida').neq('estado','fechada').order('criado_em',{ascending:false}).limit(8),
       sb.from('despesas').select('descricao,valor_total,estado,quota_gerada,dispensa_cobranca').eq('condominio_id', cid).order('criado_em',{ascending:false}).limit(8),
       sb.from('assembleias').select('tipo,data_assembleia,numero_ata,estado_sessao,ata_texto,ordem_trabalhos').eq('condominio_id', cid).order('data_assembleia',{ascending:false}).limit(2),
@@ -19298,7 +19298,34 @@ async function construirContextoIA() {
     // Parceiros
     if ((pR.data||[]).length) linhas.push('Parceiros: ' + pR.data.map(function(p){ return p.nome + ' (' + (p.categoria||'') + (p.rating?', '+parseFloat(p.rating).toFixed(1)+'★':'') + ')'; }).join(', '));
 
-    return 'DADOS REAIS DO CONDOMÍNIO (usa-os para responder com precisão; se a pergunta for genérica de legislação, ignora-os):\n' + linhas.join('\n') + '\n\n---\nPERGUNTA DO ADMINISTRADOR: ';
+    // Dados POR FRAÇÃO — para a IA responder a perguntas individuais
+    // ("quanto pagou a fração D?", "quem tem mais dívida?", "quanto está no fundo da fração A?")
+    var pctF = parseFloat(currentCondo.fundo_percentagem) || 10;
+    var fracResumo = (fracoes||[]).map(function(f) {
+      var quotasFr = (qR.data||[]).filter(function(q) { return q.fracao_id === f.id; });
+      var emitido = quotasFr.reduce(function(s,q){ return s + parseFloat(q.valor_emitido||0); }, 0);
+      var pago = quotasFr.reduce(function(s,q){ return s + parseFloat(q.valor_pago||0); }, 0);
+      var divida = emitido - pago;
+      var fundoContrib = quotasFr.filter(function(q){ return q.tipo !== 'extraordinaria'; })
+        .reduce(function(s,q){ return s + parseFloat(q.valor_pago||0); }, 0) * pctF / 100;
+      return f.codigo + ' (' + (f.proprietario_nome||'?') + '): pago ' + pago.toFixed(2) + '€, dívida ' + divida.toFixed(2) + '€, contribuição p/ fundo ' + fundoContrib.toFixed(2) + '€, permilagem ' + (f.permilagem||'?') + '‰, quota mensal ' + (f.quota_mensal||'?') + '€';
+    });
+    if (fracResumo.length) linhas.push('DETALHE POR FRAÇÃO: ' + fracResumo.join(' | '));
+
+    // Fundo de reserva resumo
+    linhas.push('Fundo de reserva: taxa ' + pctF + '%, saldo provado em banco: ' + (parseFloat(currentCondo.fundo_saldo_provado)||0).toFixed(2) + '€');
+
+    // Manutenções registadas
+    try {
+      if (_manut && _manut.length) {
+        var manutCtx = _manut.slice(0, 10).map(function(m) {
+          return m.nome + (m.obrigatorio ? ' [LEGAL]' : '') + (m.proxima_data ? ' próxima: ' + m.proxima_data : ' sem data') + (m.ultima_data ? ' última: ' + m.ultima_data : '');
+        });
+        linhas.push('Manutenções: ' + manutCtx.join(' | '));
+      }
+    } catch(e) {}
+
+    return 'DADOS REAIS DO CONDOMÍNIO (usa-os para responder com precisão; se a pergunta for genérica de legislação, ignora-os).\nQuando te perguntam sobre uma fração específica ou um condómino, RESPONDE com os dados que tens — não digas que precisam de perguntar ao gestor.\n' + linhas.join('\n') + '\n\n---\nPERGUNTA DO ADMINISTRADOR: ';
   } catch(e) { console.error('contextoIA:', e); return ''; }
 }
 
