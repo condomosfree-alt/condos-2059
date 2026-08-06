@@ -870,7 +870,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.08.04-0430</div>
+      <div class="sb-tag">2059 Pro · build v2026.08.04-0500</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -4319,6 +4319,67 @@ function manutencoesParaOrcamento() {
     });
 }
 
+
+// Enviar avisos de atraso a TODOS os devedores de uma vez, gravando nas mensagens
+// como prova de comunicação. Cada mensagem diz por que via foi enviada (email, WhatsApp,
+// ou só registo no portal se não tiver contacto).
+async function enviarAvisosDevedoresAuto() {
+  if (!currentCondo) return;
+  var hoje = new Date().toISOString().split('T')[0];
+  var devR = await sb.from('quotas').select('*, fracoes(id,codigo,proprietario_nome,proprietario_email,proprietario_tel)')
+    .eq('condominio_id', currentCondo.id).neq('estado', 'pago').lt('data_vencimento', hoje);
+  var quotas = (devR.data || []).filter(function(q) {
+    return (parseFloat(q.valor_emitido||0) - parseFloat(q.valor_pago||0)) > 0.005;
+  });
+  if (!quotas.length) { toast('Sem devedores — tudo em dia! ✅', 'ok'); return; }
+
+  var enviados = 0;
+  var meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+  for (var i = 0; i < quotas.length; i++) {
+    var q = quotas[i];
+    var f = q.fracoes;
+    if (!f) continue;
+    var saldo = parseFloat(q.valor_emitido||0) - parseFloat(q.valor_pago||0);
+    var mesNome = meses[(q.mes||1)-1] + '/' + (q.ano||'');
+    var via = 'registo no portal';
+
+    // tentar enviar email se disponível
+    if (f.proprietario_email && _gmailToken) {
+      try {
+        var assunto = 'Quota em atraso — ' + mesNome + ' — ' + (currentCondo.nome||'');
+        var corpo = notificacaoEmailHTML({
+          titulo: '⚠️ Quota em atraso',
+          texto: 'Informamos que a quota de ' + mesNome + ' no valor de ' + saldo.toFixed(2).replace('.',',') + '€ se encontra por pagar. Agradecemos a regularização à maior brevidade.',
+          rodape: 'Este aviso fica registado no portal como prova de comunicação.'
+        });
+        await enviarEmailGmail(f.proprietario_email, assunto, corpo);
+        via = 'email para ' + f.proprietario_email;
+      } catch(e) { via = 'email falhou (' + (e.message||'') + ') — ficou só no portal'; }
+    }
+
+    // gravar SEMPRE na mensagem, mesmo que o email falhe
+    try {
+      await sb.from('mensagens').insert({
+        condominio_id: currentCondo.id, fracao_id: f.id, autor: 'admin',
+        lida_admin: true, lida_condomino: false,
+        texto: '⚠️ AVISO DE QUOTA EM ATRASO\n\n' +
+               'Fração: ' + (f.codigo||'') + '\n' +
+               'Condómino: ' + (f.proprietario_nome||'') + '\n' +
+               'Referente a: ' + mesNome + '\n' +
+               'Valor em dívida: ' + saldo.toFixed(2).replace('.',',') + '€\n\n' +
+               'Enviado por: ' + via + '\n' +
+               'Data: ' + new Date().toLocaleDateString('pt-PT') + ' às ' + new Date().toLocaleTimeString('pt-PT') + '\n\n' +
+               '[Registo automático — serve como prova de que o condómino foi informado da dívida. Art. 1424.º CC]'
+      });
+    } catch(e) {}
+    enviados++;
+  }
+
+  toast(enviados + ' aviso(s) enviados e registados nas mensagens', 'ok');
+  try { await verificarCicloQuotas(); } catch(e) {}
+}
+
 async function verificarCicloQuotas() {
   var zona = document.getElementById('ciclo-quotas');
   if (!zona || !currentCondo) return;
@@ -4378,8 +4439,12 @@ async function verificarCicloQuotas() {
     if (nDevedores) {
       h += '<div style="border-left:2px solid rgba(255,84,112,.55);padding:2px 0 2px 11px">';
       h += '<div style="font-size:12px;font-weight:650;color:var(--text)">' + nDevedores + ' fração(ões) em atraso por avisar</div>';
-      h += '<div style="font-size:11px;color:var(--t2);line-height:1.5;margin-top:3px">Quotas vencidas e ainda não pagas. Convém avisar — mas confirma antes se não há algum acordo de pagamento em curso.</div>';
-      h += '<button class="btn-ghost" style="width:auto;display:inline-flex;font-size:11px;padding:6px 12px;margin-top:7px" onclick="nav(\'quotas\')">Ver devedores</button>';
+      h += '<div style="font-size:11px;color:var(--t2);line-height:1.5;margin-top:3px">Quotas vencidas e ainda não pagas. O aviso fica registado nas mensagens de cada condómino como prova de comunicação.</div>';
+      h += '<div style="display:flex;gap:8px;margin-top:7px;flex-wrap:wrap">';
+      h += '<button class="btn-ghost" style="width:auto;display:inline-flex;font-size:11px;padding:6px 12px" onclick="nav(\'quotas\')">Ver devedores</button>';
+      h += '<button class="btn-ghost" style="width:auto;display:inline-flex;font-size:11px;padding:6px 12px;color:var(--red);border-color:rgba(255,84,112,.35)" onclick="enviarAvisosDevedoresAuto()">Enviar avisos a todos</button>';
+      h += '</div>';
+
       h += '</div>';
     }
     if (mostrarExtrato) {
@@ -8786,6 +8851,8 @@ async function notificarDevedores() {
                'Fração: ' + (f.codigo||'') + '\n' +
                'Referente a: ' + mesesNomes[mes-1] + ' de ' + ano + '\n' +
                'Valor em dívida: ' + saldo.toFixed(2).replace('.',',') + '€\n' +
+               'Enviado por: ' + viaTxt + '\n' +
+               '[Registo automático — serve como prova de comunicação ao condómino]\n' +
                'Vencimento: dia ' + (currentCondo.dia_vencimento||8) + ' de cada mês\n\n' +
                'Solicita-se a regularização o mais breve possível.\n' +
                'IBAN: ' + (currentCondo.iban_operacional||'consulte a administração') + '\n\n' +
@@ -8850,6 +8917,22 @@ async function processarRecibo(q, f) {
   // Registar como foi entregue
   try {
     await sb.from('quotas').update({ recibo_via: via, recibo_data: new Date().toISOString() }).eq('id', q.id);
+
+    // Registar nas mensagens — o recibo é prova de que o condómino foi informado do pagamento
+    try {
+      var mesesR = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+      var mAnoR = mesesR[(q.mes||1)-1] + '/' + (q.ano||'');
+      await sb.from('mensagens').insert({
+        condominio_id: currentCondo.id, fracao_id: q.fracao_id, autor: 'admin',
+        lida_admin: true, lida_condomino: false,
+        texto: '✅ RECIBO ENVIADO\n\n' +
+               'Quota de ' + mAnoR + '\n' +
+               'Valor: ' + parseFloat(q.valor_pago||q.valor_emitido||0).toFixed(2).replace('.',',') + '€\n' +
+               'Enviado por: ' + via + '\n' +
+               'Data: ' + new Date().toLocaleDateString('pt-PT') + '\n\n' +
+               '[Registo automático — prova de comunicação do recibo ao condómino]'
+      });
+    } catch(e) {}
   } catch(e) { console.error('recibo tracking:', e); }
   return via;
 }
