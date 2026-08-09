@@ -1238,6 +1238,20 @@ async function carregarFeed() {
   const box = document.getElementById('h-feed');
   const itens = [];
 
+  // Espaços comuns — mostrar se existem
+  try {
+    var espR2 = await sb.rpc('portal_espacos', { p_token: token });
+    if (espR2.data && espR2.data.length) {
+      itens.push({
+        pri: 5,
+        html: '<div onclick="irParaEspacos()" style="background:var(--c1);border:1px solid var(--b);border-radius:12px;padding:14px 16px;cursor:pointer">' +
+          '<div style="font-size:13px;font-weight:700;color:var(--text)">📍 Espaços comuns</div>' +
+          '<div style="font-size:11.5px;color:var(--t2);margin-top:4px">' + espR2.data.length + ' espaço(s) disponíveis para reservar</div>' +
+          '</div>'
+      });
+    }
+  } catch(e) {}
+
   // Quotas pendentes — destaque se há quotas por pagar
   try {
     var qPend = await sb.rpc('portal_quotas', { p_token: token });
@@ -2126,6 +2140,110 @@ function mudarAnoContas(d) {
 // MANUTENÇÕES NO PORTAL — o condómino vê o que foi feito e o que falta
 
 // PRESTAÇÃO DE CONTAS — resumo do ano anterior visível ao condómino
+
+// ESPAÇOS COMUNS NO PORTAL — ver e reservar
+async function carregarEspacosPortal() {
+  var zona = document.getElementById('p-espacos');
+  if (!zona) return;
+  try {
+    var [espR, resR] = await Promise.all([
+      sb.rpc('portal_espacos', { p_token: token }),
+      sb.rpc('portal_minhas_reservas', { p_token: token })
+    ]);
+    var espacos = espR.data || [];
+    var reservas = resR.data || [];
+    if (!espacos.length) { zona.innerHTML = '<div class="empty">Este prédio não tem espaços comuns para reservar.</div>'; return; }
+
+    var h = '';
+
+    // as minhas reservas
+    var ativas = reservas.filter(function(r) { return r.estado === 'pendente' || r.estado === 'aprovada'; });
+    if (ativas.length) {
+      h += '<div style="margin-bottom:18px">';
+      h += '<div style="font-size:11px;font-weight:700;color:var(--t2);letter-spacing:.06em;margin-bottom:8px">AS MINHAS RESERVAS</div>';
+      ativas.forEach(function(r) {
+        var cor = r.estado === 'aprovada' ? 'var(--green)' : 'var(--amber)';
+        h += '<div style="background:var(--c1);border:1px solid var(--b);border-radius:10px;padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;gap:10px">';
+        h += '<div style="width:8px;height:8px;border-radius:50%;background:' + cor + '"></div>';
+        h += '<div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--text)">' + r.espaco_nome + '</div>';
+        h += '<div style="font-size:11px;color:var(--t3)">' + new Date(r.data_reserva).toLocaleDateString('pt-PT') + ' · ' + r.hora_inicio + '–' + r.hora_fim + ' · ' + r.estado + '</div></div>';
+        if (r.estado === 'pendente') h += '<button onclick="cancelarReservaPortal(\'' + r.id + '\')" style="background:none;border:1px solid rgba(255,84,112,.3);border-radius:8px;padding:5px 10px;color:#ff8095;font-size:11px;font-family:inherit;cursor:pointer">Cancelar</button>';
+        h += '</div>';
+      });
+      h += '</div>';
+    }
+
+    // espaços disponíveis
+    h += '<div style="font-size:11px;font-weight:700;color:var(--t2);letter-spacing:.06em;margin-bottom:8px">ESPAÇOS DISPONÍVEIS</div>';
+    espacos.forEach(function(esp) {
+      var tipoIcon = {'sala':'🏠','piscina':'🏊','churrasqueira':'🔥','terraço':'🌇','ginásio':'💪','jardim':'🌳'}[esp.tipo] || '📍';
+      h += '<div style="background:var(--c1);border:1px solid var(--b);border-radius:12px;padding:14px 16px;margin-bottom:10px;cursor:pointer" onclick="abrirReservaPortal(\'' + esp.id + '\',\'' + (esp.nome||'').replace(/'/g,'') + '\')">';
+      h += '<div style="display:flex;align-items:center;gap:10px">';
+      h += '<span style="font-size:24px">' + tipoIcon + '</span>';
+      h += '<div style="flex:1"><div style="font-size:14px;font-weight:700;color:var(--text)">' + esp.nome + '</div>';
+      h += '<div style="font-size:11px;color:var(--t3)">';
+      if (esp.capacidade) h += esp.capacidade + ' pessoas · ';
+      h += esp.hora_inicio + '–' + esp.hora_fim;
+      if (esp.taxa > 0) h += ' · ' + parseFloat(esp.taxa).toFixed(0) + '€';
+      h += '</div></div>';
+      h += '<span style="color:var(--cyan);font-size:20px">›</span>';
+      h += '</div></div>';
+    });
+
+    zona.innerHTML = h;
+  } catch(e) { zona.innerHTML = '<div class="empty">Erro: ' + (e.message||'') + '</div>'; }
+}
+
+function abrirReservaPortal(espacoId, nomeEsp) {
+  var h = '<div style="padding:4px">';
+  h += '<div style="font-size:13px;color:var(--t2);margin-bottom:12px;line-height:1.6">Escolhe a data e o horário. A administração aprova o pedido.</div>';
+  h += '<label style="font-size:11px;color:var(--t2);display:block;margin-bottom:10px">Data<br><input type="date" id="re-data" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--c2);border:1px solid var(--b);border-radius:8px;padding:10px;color:var(--t1);font-family:inherit;font-size:14px"></label>';
+  h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">';
+  h += '<label style="font-size:11px;color:var(--t2)">Das<br><input type="time" id="re-hi" value="18:00" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--c2);border:1px solid var(--b);border-radius:8px;padding:10px;color:var(--t1);font-family:inherit"></label>';
+  h += '<label style="font-size:11px;color:var(--t2)">Às<br><input type="time" id="re-hf" value="22:00" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--c2);border:1px solid var(--b);border-radius:8px;padding:10px;color:var(--t1);font-family:inherit"></label>';
+  h += '</div>';
+  h += '<label style="font-size:11px;color:var(--t2)">Notas (opcional)<br><input type="text" id="re-notas" placeholder="Ex: festa de aniversário, ~20 pessoas" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--c2);border:1px solid var(--b);border-radius:8px;padding:10px;color:var(--t1);font-family:inherit"></label>';
+  h += '<button class="pf-btn go" style="margin-top:14px" onclick="enviarReservaPortal(\'' + espacoId + '\')">Pedir reserva</button>';
+  h += '<div id="re-erro" style="margin-top:10px"></div>';
+  h += '</div>';
+  _ausModal('Reservar ' + nomeEsp, h);
+}
+
+async function enviarReservaPortal(espacoId) {
+  var data = (document.getElementById('re-data')||{}).value;
+  var hi = (document.getElementById('re-hi')||{}).value;
+  var hf = (document.getElementById('re-hf')||{}).value;
+  var notas = ((document.getElementById('re-notas')||{}).value||'').trim();
+  if (!data) { toast('Escolhe uma data', 'warn'); return; }
+  if (!hi || !hf) { toast('Escolhe o horário', 'warn'); return; }
+
+  try {
+    var r = await sb.rpc('portal_reservar_espaco', {
+      p_token: token, p_espaco: espacoId, p_data: data, p_hora_ini: hi, p_hora_fim: hf, p_notas: notas || null
+    });
+    if (r.error) {
+      document.getElementById('re-erro').innerHTML = '<div style="background:rgba(255,84,112,.08);border:1px solid rgba(255,84,112,.35);border-radius:9px;padding:10px;font-size:11px;color:var(--t2)">' + r.error.message + '</div>';
+      return;
+    }
+    if (r.data && r.data !== 'ok') {
+      document.getElementById('re-erro').innerHTML = '<div style="background:rgba(255,179,0,.08);border:1px solid rgba(255,179,0,.35);border-radius:9px;padding:10px;font-size:11px;color:var(--t2)">' + r.data + '</div>';
+      return;
+    }
+    _ausFechar();
+    toast('Pedido de reserva enviado! Aguarda aprovação.', 'ok');
+    await carregarEspacosPortal();
+  } catch(e) { toast('Erro: ' + (e.message||''), 'err'); }
+}
+
+async function cancelarReservaPortal(id) {
+  try {
+    var r = await sb.rpc('portal_cancelar_reserva', { p_token: token, p_reserva: id });
+    if (r.error) { toast('Erro: ' + r.error.message, 'err'); return; }
+    toast('Reserva cancelada', 'ok');
+    await carregarEspacosPortal();
+  } catch(e) { toast('Erro', 'err'); }
+}
+
 async function carregarPrestacaoPortal() {
   var zona = document.getElementById('c-prestacao-portal');
   if (!zona) {
@@ -4403,6 +4521,12 @@ window.addEventListener('hashchange', aplicarDestinoNotificacao);
 //  CHAT IA DO CONDOMINO — pergunta ao prédio, direto do portal
 // =====================================================================
 
+function irParaEspacos() {
+  document.querySelectorAll('.page, .sec').forEach(function(el) { el.style.display = 'none'; });
+  var zona = document.getElementById('p-espacos');
+  if (zona) { zona.style.display = 'block'; carregarEspacosPortal(); }
+}
+
 function abrirChatIA() {
   document.getElementById('ia-chat-panel').style.display = 'flex';
   document.getElementById('ia-fab').style.display = 'none';
@@ -4498,6 +4622,8 @@ async function _ctxIAPortal() {
 </script>
 
 <!-- Chat IA do condómino -->
+<div id="p-espacos" style="display:none;padding:16px"></div>
+
 <div id="ia-fab" onclick="abrirChatIA()" style="position:fixed;bottom:80px;right:16px;width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,var(--cyan),#0088cc);box-shadow:0 4px 16px rgba(0,212,255,.35);display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:200;transition:transform .15s ease;">
   <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#04121f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-8 8H7l-4 3 1.2-4.4A8 8 0 1 1 21 12z"/><path d="M8 10h.01M12 10h.01M16 10h.01"/></svg>
 </div>

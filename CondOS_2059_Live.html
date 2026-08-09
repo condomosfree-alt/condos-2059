@@ -870,13 +870,14 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.08.04-0500</div>
+      <div class="sb-tag">2059 Pro · build v2026.08.04-0615</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
       <div class="cond-row">
         <select class="cond-sel" id="cond-sel" onchange="switchCondo(this.value)"></select>
         <button class="cond-add-btn" onclick="abrirWizardNovoCondo()" title="Adicionar novo condomínio"><i class="ti ti-plus"></i> Novo</button>
+        <button class="btn-ghost" onclick="ativarModoDemo()" style="font-size:11px;padding:6px 12px;margin-left:6px" title="Criar prédio com dados fictícios para demonstração">Demo</button>
       </div>
     </div>
     <nav class="sb-nav">
@@ -897,6 +898,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
       <div class="ni" onclick="nav('mensagens')"><span class="mic"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-8 8H7l-4 3 1.2-4.4A8 8 0 1 1 21 12z"/><path d="M8.5 11h7M8.5 14.5h4"/></svg></span><span>Mensagens</span><span class="nb" id="nb-msg" style="background:#f87171;"></span></div>
       <div class="ni" onclick="nav('parceiros')"><span class="mic"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11 17l-2.2 2.2a2 2 0 0 1-2.8-2.8l5.6-5.6a2 2 0 0 1 2.8 0l1.4 1.4"/><path d="M13 7l2.2-2.2a2 2 0 0 1 2.8 2.8L15 10.6"/><path d="M3 12l3-3M18 15l3-3"/></svg></span><span>Parceiros</span></div>
       <div class="nav-section">Documentos &amp; Reuniões</div>
+      <div class="ni" onclick="nav('espacos')"><span class="mic"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg></span><span>Espaços Comuns</span></div>
       <div class="ni" onclick="nav('manutencoes')"><span class="mic"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></span><span>Manutenções</span></div>
       <div class="ni" onclick="nav('documentos')"><span class="mic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3H7a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V8z"/><path d="M13 3v5h5"/><path d="M9.5 13h5M9.5 16.5h5"/></svg></span><span>Documentos</span></div>
       <div class="ni" onclick="nav('assembleias')"><span class="mic"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span><span>Assembleias</span><span id="badge-assembleias" style="display:none;margin-left:auto;background:#f87171;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;line-height:16px;text-align:center;border-radius:8px;padding:0 4px;"></span></div>
@@ -2003,6 +2005,15 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
 
       <!-- ASSISTENTE IA -->
       <div 
+      <div class="page" id="page-espacos">
+        <div class="sec-hdr">
+          <span class="sec-t">Espaços Comuns</span>
+          <div style="display:flex;gap:8px;">
+            <button class="btn-primary" style="font-size:12px;padding:8px 14px" onclick="novoEspaco()">+ Novo espaço</button>
+          </div>
+        </div>
+        <div id="espacos-lista" style="padding:0 16px 16px"></div>
+      </div>
       <div class="page" id="page-manutencoes">
         <div class="sec-hdr">
           <span class="sec-t">Manutenções e Obrigações Legais</span>
@@ -4177,6 +4188,13 @@ async function marcarManutencaoFeita(id) {
 }
 
 async function editarManutencao(id) {
+  // carregar nomes dos parceiros para a datalist do fornecedor
+  if (!window._parceirosNomes) {
+    try {
+      var prR = await sb.from('parceiros').select('nome').eq('condominio_id', currentCondo.id);
+      window._parceirosNomes = (prR.data || []).map(function(p){ return p.nome; });
+    } catch(e) { window._parceirosNomes = []; }
+  }
   var m = _manut.find(function(x) { return x.id === id; });
   if (!m) return;
 
@@ -4188,7 +4206,10 @@ async function editarManutencao(id) {
   h += '</div>';
   h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">';
   h += '<label style="font-size:11px;color:var(--t2)">Custo estimado (€)<br><input type="number" id="me-custo" value="' + (m.custo_estimado || '') + '" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--c2);border:1px solid var(--b);border-radius:8px;padding:10px;color:var(--t1);font-family:inherit"></label>';
-  h += '<label style="font-size:11px;color:var(--t2)">Fornecedor<br><input type="text" id="me-forn" value="' + (m.fornecedor || '').replace(/"/g, '&quot;') + '" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--c2);border:1px solid var(--b);border-radius:8px;padding:10px;color:var(--t1);font-family:inherit"></label>';
+  h += '<label style="font-size:11px;color:var(--t2)">Fornecedor<br>' +
+    '<input type="text" id="me-forn" list="me-forn-list" value="' + (m.fornecedor || '').replace(/"/g, '&quot;') + '" placeholder="Escreve ou escolhe da lista" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--c2);border:1px solid var(--b);border-radius:8px;padding:10px;color:var(--t1);font-family:inherit">' +
+    '<datalist id="me-forn-list">' + (_parceirosNomes || []).map(function(p){ return '<option value="' + p + '">'; }).join('') + '</datalist>' +
+    '</label>';
   h += '</div>';
   h += '<label style="font-size:11px;color:var(--t2)">Notas<br><textarea id="me-nota" rows="2" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--c2);border:1px solid var(--b);border-radius:8px;padding:10px;color:var(--t1);font-family:inherit;resize:vertical">' + (m.nota || '') + '</textarea></label>';
   h += '<div style="display:flex;gap:8px;margin-top:16px">';
@@ -4834,12 +4855,430 @@ async function pintarGraficoEvolucao() {
   } catch(e) { console.error('grafico evolucao:', e); }
 }
 
+// =====================================================================
+//  MODO DEMO — dados fake realistas para mostrar o produto
+// =====================================================================
+//  Cria um prédio completo com 8 frações, quotas pagas e em atraso,
+//  ocorrências resolvidas e abertas, fundo, despesas — tudo o que
+//  um potencial cliente precisa de ver para perceber o valor.
+//
+//  NÃO afeta dados reais — cria um condomínio chamado
+//  "EDIFÍCIO DEMONSTRAÇÃO" que pode ser apagado depois.
+// =====================================================================
+
+async function ativarModoDemo() {
+  if (!confirm('Isto cria um prédio de demonstração com dados fictícios.\n\nÉ só para mostrar o produto — pode ser apagado depois.\n\nContinuar?')) return;
+  toast('A criar o prédio de demonstração…', 'ok');
+
+  var nomes = [
+    {nome:'Ana Silva', email:'ana.demo@example.com'},
+    {nome:'Bruno Costa', email:'bruno.demo@example.com'},
+    {nome:'Carla Ferreira', email:'carla.demo@example.com'},
+    {nome:'Daniel Oliveira', email:'daniel.demo@example.com'},
+    {nome:'Eva Rodrigues', email:'eva.demo@example.com'},
+    {nome:'Filipe Santos', email:'filipe.demo@example.com'},
+    {nome:'Gabriela Lopes', email:'gabriela.demo@example.com'},
+    {nome:'Hugo Martins', email:'hugo.demo@example.com'}
+  ];
+  var fracCodigos = ['A - R/c Esq','B - R/c Dir','C - 1.º Esq','D - 1.º Dir','E - 2.º Esq','F - 2.º Dir','G - 3.º Esq','H - 3.º Dir'];
+  var permilagens = [110, 120, 130, 140, 125, 135, 115, 125];
+  var anoAtual = new Date().getFullYear();
+
+  try {
+    // 1) criar condomínio
+    var cR = await sb.from('condominios').insert({
+      admin_email: currentUser.email,
+      nome: 'EDIFÍCIO DEMONSTRAÇÃO',
+      morada: 'Rua da Demonstração, 42',
+      codigo_postal: '1000-100',
+      cidade: 'Lisboa',
+      num_fracoes: 8, num_pisos: 4, tem_garagem: true,
+      fundo_percentagem: 10, fcr_pct: 10,
+      dia_vencimento: 8,
+      quota_base: 95,
+      limite_admin: 500,
+      iban_reserva: 'PT50 0000 0000 0000 0000 0000 1',
+      dia_emissao_quotas: 20, quotas_auto: true
+    }).select().single();
+    if (cR.error) { toast('Erro: ' + cR.error.message, 'err'); return; }
+    var cid = cR.data.id;
+
+    // 2) criar frações
+    var fracIds = [];
+    for (var i = 0; i < 8; i++) {
+      var quotaMensal = Math.round(26000 * permilagens[i] / 1000 / 12 * 100) / 100;
+      var fR = await sb.from('fracoes').insert({
+        condominio_id: cid, codigo: fracCodigos[i], bloco: 'Único',
+        permilagem: permilagens[i], proprietario_nome: nomes[i].nome,
+        proprietario_email: nomes[i].email, quota_mensal: quotaMensal
+      }).select().single();
+      if (fR.data) fracIds.push(fR.data.id);
+    }
+
+    // 3) gerar quotas dos últimos 6 meses
+    var mesAtual = new Date().getMonth() + 1;
+    var quotasArr = [];
+    for (var m = 1; m <= mesAtual; m++) {
+      for (var fi = 0; fi < fracIds.length; fi++) {
+        var qm = Math.round(26000 * permilagens[fi] / 1000 / 12 * 100) / 100;
+        var pago = (m < mesAtual - 1) || (fi < 5);  // últimos 2 meses: 3 não pagaram
+        quotasArr.push({
+          condominio_id: cid, fracao_id: fracIds[fi], mes: m, ano: anoAtual,
+          valor_emitido: qm, valor_pago: pago ? qm : 0,
+          estado: pago ? 'pago' : 'pendente',
+          data_vencimento: anoAtual + '-' + String(m).padStart(2,'0') + '-08',
+          data_pagamento: pago ? (anoAtual + '-' + String(m).padStart(2,'0') + '-' + String(5 + Math.floor(Math.random()*8)).padStart(2,'0')) : null
+        });
+      }
+    }
+    await sb.from('quotas').insert(quotasArr);
+
+    // 4) movimentos (receitas das quotas + algumas despesas)
+    var movs = [];
+    // receitas
+    quotasArr.filter(function(q){ return q.estado === 'pago'; }).forEach(function(q) {
+      movs.push({
+        condominio_id: cid, tipo: 'receita', categoria: 'Quota',
+        descricao: 'Quota ' + q.mes + '/' + q.ano, valor: q.valor_emitido,
+        data_movimento: q.data_pagamento, fracao_id: q.fracao_id
+      });
+    });
+    // despesas típicas
+    var despesas = [
+      {cat:'Elevador', desc:'Manutenção mensal elevador', val:85, mes:1},
+      {cat:'Elevador', desc:'Manutenção mensal elevador', val:85, mes:2},
+      {cat:'Elevador', desc:'Manutenção mensal elevador', val:85, mes:3},
+      {cat:'Limpeza', desc:'Limpeza partes comuns', val:120, mes:1},
+      {cat:'Limpeza', desc:'Limpeza partes comuns', val:120, mes:2},
+      {cat:'Limpeza', desc:'Limpeza partes comuns', val:120, mes:3},
+      {cat:'Eletricidade', desc:'EDP partes comuns', val:65, mes:1},
+      {cat:'Eletricidade', desc:'EDP partes comuns', val:72, mes:2},
+      {cat:'Seguro', desc:'Seguro do edifício - prémio anual', val:380, mes:1},
+      {cat:'Reparação', desc:'Reparação intercomunicador', val:150, mes:2},
+      {cat:'Água', desc:'EPAL partes comuns', val:35, mes:1},
+      {cat:'Água', desc:'EPAL partes comuns', val:38, mes:3},
+    ];
+    despesas.forEach(function(d) {
+      movs.push({
+        condominio_id: cid, tipo: 'despesa', categoria: d.cat,
+        descricao: d.desc, valor: d.val,
+        data_movimento: anoAtual + '-' + String(d.mes).padStart(2,'0') + '-15'
+      });
+    });
+    // fundo de reserva
+    quotasArr.filter(function(q){ return q.estado === 'pago'; }).forEach(function(q) {
+      movs.push({
+        condominio_id: cid, tipo: 'despesa', categoria: 'fundo_reserva',
+        descricao: '10% fundo reserva — ' + q.mes + '/' + q.ano,
+        valor: Math.round(q.valor_emitido * 0.10 * 100) / 100,
+        data_movimento: q.data_pagamento, fracao_id: q.fracao_id, conta: 'reserva'
+      });
+    });
+    await sb.from('movimentos').insert(movs);
+
+    // 5) ocorrências
+    var ocs = [
+      {cat:'Canalização', desc:'Fuga de água na garagem', est:'resolvida', prio:'alta'},
+      {cat:'Elevador', desc:'Elevador faz barulho estranho', est:'em_analise', prio:'media'},
+      {cat:'Iluminação', desc:'Lâmpada fundida no 2.º andar', est:'resolvida', prio:'baixa'},
+      {cat:'Segurança', desc:'Fechadura da porta principal partida', est:'resolvida', prio:'alta'},
+      {cat:'Limpeza', desc:'Garagem precisa de lavagem', est:'aberta', prio:'baixa'},
+    ];
+    for (var oi = 0; oi < ocs.length; oi++) {
+      await sb.from('ocorrencias').insert({
+        condominio_id: cid, categoria: ocs[oi].cat, descricao: ocs[oi].desc,
+        estado: ocs[oi].est, prioridade: ocs[oi].prio,
+        fracao_id: fracIds[oi % fracIds.length]
+      });
+    }
+
+    // 6) instalar manutenções
+    try { await sb.rpc('instalar_manutencoes', { p_condominio: cid }); } catch(e) {}
+
+    toast('🎉 Prédio de demonstração criado! Troca para o "EDIFÍCIO DEMONSTRAÇÃO" no seletor.', 'ok');
+    await loadCondominios();
+
+  } catch(e) {
+    toast('Erro: ' + (e.message || ''), 'err');
+    console.error('modo demo:', e);
+  }
+}
+
+// =====================================================================
+//  ESPAÇOS COMUNS — gestão de espaços e reservas
+// =====================================================================
+
+var _espacos = [];
+var _reservas = [];
+
+async function carregarEspacos() {
+  if (!currentCondo) return;
+  try {
+    var r = await sb.from('espacos_comuns').select('*').eq('condominio_id', currentCondo.id).eq('ativo', true).order('nome');
+    _espacos = r.data || [];
+  } catch(e) { _espacos = []; }
+}
+
+async function carregarReservas(espacoId) {
+  if (!currentCondo) return;
+  try {
+    var q = sb.from('reservas_espacos').select('*, fracoes(codigo, proprietario_nome)').eq('condominio_id', currentCondo.id).order('data_reserva', {ascending: false});
+    if (espacoId) q = q.eq('espaco_id', espacoId);
+    var r = await q;
+    _reservas = r.data || [];
+  } catch(e) { _reservas = []; }
+}
+
+async function pintarPaginaEspacos() {
+  var zona = document.getElementById('espacos-lista');
+  if (!zona || !currentCondo) return;
+  await carregarEspacos();
+  await carregarReservas();
+
+  if (!_espacos.length) {
+    zona.innerHTML = '<div style="text-align:center;padding:40px;color:var(--t3);font-size:13px;line-height:1.6">' +
+      'Sem espaços comuns registados.<br>Carrega em <strong>+ Novo espaço</strong> para adicionar o primeiro.' +
+      '</div>';
+    return;
+  }
+
+  var hoje = new Date().toISOString().split('T')[0];
+  var h = '';
+
+  _espacos.forEach(function(esp) {
+    var reservasEsp = _reservas.filter(function(r) { return r.espaco_id === esp.id; });
+    var pendentes = reservasEsp.filter(function(r) { return r.estado === 'pendente'; });
+    var futuras = reservasEsp.filter(function(r) { return r.data_reserva >= hoje && r.estado === 'aprovada'; });
+
+    var tipoIcon = {'sala':'🏠','piscina':'🏊','churrasqueira':'🔥','terraço':'🌇','ginásio':'💪','jardim':'🌳'}[esp.tipo] || '📍';
+
+    h += '<div style="background:var(--s1);border:1px solid var(--b1);border-radius:12px;padding:14px 16px;margin-bottom:12px">';
+    h += '<div style="display:flex;align-items:flex-start;gap:12px">';
+    h += '<div style="font-size:28px;line-height:1">' + tipoIcon + '</div>';
+    h += '<div style="flex:1">';
+    h += '<div style="font-size:14px;font-weight:700;color:var(--text)">' + esp.nome + '</div>';
+    h += '<div style="font-size:11px;color:var(--t3);margin-top:3px">';
+    if (esp.capacidade) h += esp.capacidade + ' pessoas · ';
+    h += esp.hora_inicio + '–' + esp.hora_fim;
+    if (esp.taxa_reserva > 0) h += ' · ' + parseFloat(esp.taxa_reserva).toFixed(0) + '€/reserva';
+    if (esp.caucao > 0) h += ' · caução ' + parseFloat(esp.caucao).toFixed(0) + '€';
+    h += '</div>';
+    if (esp.descricao) h += '<div style="font-size:11px;color:var(--t2);margin-top:4px">' + esp.descricao + '</div>';
+    h += '</div>';
+    h += '<div style="display:flex;flex-direction:column;gap:5px;min-width:80px">';
+    if (pendentes.length) h += '<span style="font-size:11px;color:var(--amber);font-weight:600">' + pendentes.length + ' pendente(s)</span>';
+    if (futuras.length) h += '<span style="font-size:11px;color:var(--green)">' + futuras.length + ' futura(s)</span>';
+    h += '</div>';
+    h += '</div>';
+
+    // reservas pendentes de aprovação
+    if (pendentes.length) {
+      h += '<div style="margin-top:12px;border-top:1px solid var(--b1);padding-top:10px">';
+      h += '<div style="font-size:10px;font-weight:700;color:var(--amber);letter-spacing:.06em;margin-bottom:6px">POR APROVAR</div>';
+      pendentes.forEach(function(r) {
+        var f = r.fracoes || {};
+        h += '<div style="display:flex;align-items:center;gap:10px;padding:6px 0;font-size:12px;color:var(--t2)">';
+        h += '<span style="flex:1">' + (f.proprietario_nome || '?') + ' (' + (f.codigo || '?') + ') — ' + new Date(r.data_reserva).toLocaleDateString('pt-PT') + ' ' + r.hora_inicio + '–' + r.hora_fim + '</span>';
+        h += '<button class="btn-ghost" style="width:auto;font-size:10px;padding:4px 10px;color:var(--green)" onclick="aprovarReserva(\'' + r.id + '\')">Aprovar</button>';
+        h += '<button class="btn-ghost" style="width:auto;font-size:10px;padding:4px 10px;color:var(--red)" onclick="rejeitarReserva(\'' + r.id + '\')">Rejeitar</button>';
+        h += '</div>';
+      });
+      h += '</div>';
+    }
+
+    // botões
+    h += '<div style="display:flex;gap:6px;margin-top:10px">';
+    h += '<button class="btn-ghost" style="width:auto;font-size:10px;padding:5px 10px" onclick="editarEspaco(\'' + esp.id + '\')">Editar</button>';
+    h += '<button class="btn-ghost" style="width:auto;font-size:10px;padding:5px 10px" onclick="verCalendarioEspaco(\'' + esp.id + '\')">Calendário</button>';
+    h += '</div>';
+    h += '</div>';
+  });
+
+  zona.innerHTML = h;
+}
+
+async function aprovarReserva(id) {
+  var r = await sb.from('reservas_espacos').update({ estado: 'aprovada', atualizado_em: new Date().toISOString() }).eq('id', id).select('*, fracoes(id,codigo,proprietario_nome), espacos_comuns:espaco_id(nome)').single();
+  if (r.error) { toast('Erro: ' + r.error.message, 'err'); return; }
+  // avisar o condómino
+  var res = r.data;
+  try {
+    await sb.from('mensagens').insert({
+      condominio_id: res.condominio_id, fracao_id: res.fracao_id, autor: 'admin',
+      lida_admin: true, lida_condomino: false,
+      texto: '✅ RESERVA APROVADA\n\nO teu pedido de reserva foi aprovado.\n\nEspaço: ' + (res.espacos_comuns ? res.espacos_comuns.nome : '') + '\nData: ' + new Date(res.data_reserva).toLocaleDateString('pt-PT') + '\nHorário: ' + res.hora_inicio + ' — ' + res.hora_fim +
+        (res.taxa_paga === false && parseFloat(res.taxa_reserva||0) > 0 ? '\n\n⚠️ Taxa de reserva por pagar.' : '') +
+        '\n\nBom evento!'
+    });
+  } catch(e) {}
+  toast('Reserva aprovada — condómino avisado', 'ok');
+  // registar receita se houver taxa
+  try {
+    var esp = _espacos.find(function(e) { return e.id === res.espaco_id; });
+    if (esp && esp.taxa_reserva > 0) {
+      await sb.from('movimentos').insert({
+        condominio_id: res.condominio_id, tipo: 'receita', categoria: 'Espaços comuns',
+        descricao: 'Taxa de reserva — ' + esp.nome + ' — ' + new Date(res.data_reserva).toLocaleDateString('pt-PT'),
+        valor: esp.taxa_reserva, data_movimento: new Date().toISOString().split('T')[0],
+        fracao_id: res.fracao_id
+      });
+      await sb.from('reservas_espacos').update({ taxa_paga: true }).eq('id', id);
+    }
+  } catch(e) {}
+  await pintarPaginaEspacos();
+}
+
+async function rejeitarReserva(id) {
+  var motivo = prompt('Motivo da rejeição (opcional):');
+  var r = await sb.from('reservas_espacos').update({ estado: 'rejeitada', motivo_rejeicao: motivo || null, atualizado_em: new Date().toISOString() }).eq('id', id).select('*, fracoes(id)').single();
+  if (r.error) { toast('Erro: ' + r.error.message, 'err'); return; }
+  try {
+    await sb.from('mensagens').insert({
+      condominio_id: r.data.condominio_id, fracao_id: r.data.fracao_id, autor: 'admin',
+      lida_admin: true, lida_condomino: false,
+      texto: '❌ RESERVA NÃO APROVADA\n\nO pedido de reserva não foi aprovado.' + (motivo ? '\n\nMotivo: ' + motivo : '') + '\n\nPodes tentar outra data ou contactar a administração.'
+    });
+  } catch(e) {}
+  toast('Reserva rejeitada', 'ok');
+  await pintarPaginaEspacos();
+}
+
+function verCalendarioEspaco(espacoId) {
+  var esp = _espacos.find(function(e) { return e.id === espacoId; });
+  if (!esp) return;
+  var reservasEsp = _reservas.filter(function(r) { return r.espaco_id === espacoId && r.estado !== 'cancelada' && r.estado !== 'rejeitada'; });
+  var h = '<div style="padding:4px;max-height:60vh;overflow-y:auto">';
+  if (!reservasEsp.length) {
+    h += '<div style="text-align:center;color:var(--t3);padding:20px">Sem reservas.</div>';
+  } else {
+    reservasEsp.forEach(function(r) {
+      var f = r.fracoes || {};
+      var cor = r.estado === 'aprovada' ? 'var(--green)' : (r.estado === 'pendente' ? 'var(--amber)' : 'var(--t3)');
+      h += '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.04)">';
+      h += '<div style="width:8px;height:8px;border-radius:50%;background:' + cor + '"></div>';
+      h += '<div style="flex:1;font-size:12px;color:var(--text)">' + new Date(r.data_reserva).toLocaleDateString('pt-PT') + ' ' + r.hora_inicio + '–' + r.hora_fim + '</div>';
+      h += '<div style="font-size:11px;color:var(--t2)">' + (f.proprietario_nome || '?') + '</div>';
+      h += '<div style="font-size:10px;color:var(--t3)">' + r.estado + '</div>';
+      h += '</div>';
+    });
+  }
+  h += '</div>';
+  abrirModalGenerico(esp.nome + ' — Reservas', h);
+}
+
+async function novoEspaco() {
+  var h = '<div style="padding:4px">';
+  h += '<label style="font-size:11px;color:var(--t2);display:block;margin-bottom:10px">Nome<br><input type="text" id="ne-nome" placeholder="Ex: Salão de Festas" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--c2);border:1px solid var(--b);border-radius:8px;padding:10px;color:var(--t1);font-family:inherit;font-size:14px"></label>';
+  h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">';
+  h += '<label style="font-size:11px;color:var(--t2)">Tipo<br><select id="ne-tipo" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--c2);border:1px solid var(--b);border-radius:8px;padding:10px;color:var(--t1);font-family:inherit"><option value="sala">Sala / Salão</option><option value="piscina">Piscina</option><option value="churrasqueira">Churrasqueira</option><option value="terraço">Terraço</option><option value="ginásio">Ginásio</option><option value="jardim">Jardim</option><option value="outro">Outro</option></select></label>';
+  h += '<label style="font-size:11px;color:var(--t2)">Capacidade<br><input type="number" id="ne-cap" placeholder="30" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--c2);border:1px solid var(--b);border-radius:8px;padding:10px;color:var(--t1);font-family:inherit"></label>';
+  h += '</div>';
+  h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px">';
+  h += '<label style="font-size:11px;color:var(--t2)">Horário início<br><input type="time" id="ne-hi" value="09:00" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--c2);border:1px solid var(--b);border-radius:8px;padding:10px;color:var(--t1);font-family:inherit"></label>';
+  h += '<label style="font-size:11px;color:var(--t2)">Horário fim<br><input type="time" id="ne-hf" value="23:00" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--c2);border:1px solid var(--b);border-radius:8px;padding:10px;color:var(--t1);font-family:inherit"></label>';
+  h += '<label style="font-size:11px;color:var(--t2)">Máx horas<br><input type="number" id="ne-maxh" value="6" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--c2);border:1px solid var(--b);border-radius:8px;padding:10px;color:var(--t1);font-family:inherit"></label>';
+  h += '</div>';
+  h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">';
+  h += '<label style="font-size:11px;color:var(--t2)">Taxa de reserva (€)<br><input type="number" id="ne-taxa" value="0" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--c2);border:1px solid var(--b);border-radius:8px;padding:10px;color:var(--t1);font-family:inherit"></label>';
+  h += '<label style="font-size:11px;color:var(--t2)">Caução (€)<br><input type="number" id="ne-caucao" value="0" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--c2);border:1px solid var(--b);border-radius:8px;padding:10px;color:var(--t1);font-family:inherit"></label>';
+  h += '</div>';
+  h += '<label style="font-size:11px;color:var(--t2)">Descrição / Regras<br><textarea id="ne-desc" rows="3" placeholder="Ex: Inclui cozinha. Limpeza obrigatória após uso." style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--c2);border:1px solid var(--b);border-radius:8px;padding:10px;color:var(--t1);font-family:inherit;resize:vertical"></textarea></label>';
+  h += '<button class="btn-primary" style="width:100%;margin-top:14px;font-size:13px;padding:12px" onclick="criarEspaco()">Criar espaço</button>';
+  h += '</div>';
+  abrirModalGenerico('Novo espaço comum', h);
+}
+
+async function criarEspaco() {
+  var nome = ((document.getElementById('ne-nome')||{}).value||'').trim();
+  if (!nome) { toast('Escreve o nome do espaço', 'warn'); return; }
+  var r = await sb.from('espacos_comuns').insert({
+    condominio_id: currentCondo.id,
+    nome: nome,
+    tipo: (document.getElementById('ne-tipo')||{}).value || 'sala',
+    capacidade: parseInt((document.getElementById('ne-cap')||{}).value) || null,
+    hora_inicio: (document.getElementById('ne-hi')||{}).value || '09:00',
+    hora_fim: (document.getElementById('ne-hf')||{}).value || '23:00',
+    duracao_max_h: parseInt((document.getElementById('ne-maxh')||{}).value) || 6,
+    taxa_reserva: parseFloat((document.getElementById('ne-taxa')||{}).value) || 0,
+    caucao: parseFloat((document.getElementById('ne-caucao')||{}).value) || 0,
+    descricao: ((document.getElementById('ne-desc')||{}).value||'').trim() || null
+  });
+  if (r.error) { toast('Erro: ' + r.error.message, 'err'); return; }
+  fecharModalGenerico();
+  toast('Espaço criado!', 'ok');
+  await pintarPaginaEspacos();
+}
+
+async function editarEspaco(id) {
+  var esp = _espacos.find(function(e) { return e.id === id; });
+  if (!esp) return;
+  // reutilizar o modal de criação com dados preenchidos
+  await novoEspaco();
+  setTimeout(function() {
+    var campos = {
+      'ne-nome': esp.nome, 'ne-tipo': esp.tipo, 'ne-cap': esp.capacidade,
+      'ne-hi': esp.hora_inicio, 'ne-hf': esp.hora_fim, 'ne-maxh': esp.duracao_max_h,
+      'ne-taxa': esp.taxa_reserva, 'ne-caucao': esp.caucao, 'ne-desc': esp.descricao || ''
+    };
+    for (var k in campos) {
+      var el = document.getElementById(k);
+      if (el && campos[k] !== null && campos[k] !== undefined) el.value = campos[k];
+    }
+    // mudar o botão para "Guardar" em vez de "Criar"
+    var btn = document.querySelector('#modal-generico .btn-primary');
+    if (btn) { btn.textContent = 'Guardar'; btn.onclick = function() { guardarEspacoEdit(id); }; }
+  }, 50);
+}
+
+async function guardarEspacoEdit(id) {
+  var r = await sb.from('espacos_comuns').update({
+    nome: ((document.getElementById('ne-nome')||{}).value||'').trim(),
+    tipo: (document.getElementById('ne-tipo')||{}).value,
+    capacidade: parseInt((document.getElementById('ne-cap')||{}).value) || null,
+    hora_inicio: (document.getElementById('ne-hi')||{}).value,
+    hora_fim: (document.getElementById('ne-hf')||{}).value,
+    duracao_max_h: parseInt((document.getElementById('ne-maxh')||{}).value) || 6,
+    taxa_reserva: parseFloat((document.getElementById('ne-taxa')||{}).value) || 0,
+    caucao: parseFloat((document.getElementById('ne-caucao')||{}).value) || 0,
+    descricao: ((document.getElementById('ne-desc')||{}).value||'').trim() || null
+  }).eq('id', id);
+  if (r.error) { toast('Erro: ' + r.error.message, 'err'); return; }
+  fecharModalGenerico();
+  toast('Espaço atualizado', 'ok');
+  await pintarPaginaEspacos();
+}
+
 async function verificarAvisosGerais() {
   try { pintarPredioNovo(); } catch(e) {}
   try { verificarCicloQuotas(); } catch(e) {}
   try { carregarManutencoes().then(function(){ pintarAvisoManutencoes(); }); } catch(e) {}
   try { pintarResumoMensal(); } catch(e) {}
   try { pintarGraficoEvolucao(); } catch(e) {}
+  // CONVOCATÓRIA — lembrete quando há assembleia marcada sem convocatória enviada
+  try {
+    var assProxR = await sb.from('assembleias').select('id,data_assembleia,convocatoria_enviada')
+      .eq('condominio_id', currentCondo.id)
+      .gte('data_assembleia', new Date().toISOString().split('T')[0])
+      .order('data_assembleia', { ascending: true }).limit(1);
+    var assProx = (assProxR.data || [])[0];
+    var zonaConv = document.getElementById('dash-convocatoria');
+    if (!zonaConv) {
+      zonaConv = document.createElement('div'); zonaConv.id = 'dash-convocatoria';
+      var dashAss = document.getElementById('dash-assembleia-aviso');
+      if (dashAss && dashAss.parentNode) dashAss.parentNode.insertBefore(zonaConv, dashAss.nextSibling);
+    }
+    if (assProx && !assProx.convocatoria_enviada) {
+      var diasAte = Math.round((new Date(assProx.data_assembleia) - new Date()) / 86400000);
+      var urgente = diasAte <= 12;
+      var cor = urgente ? '255,84,112' : '255,179,0';
+      zonaConv.innerHTML = '<div style="background:rgba(' + cor + ',.06);border:1px solid rgba(' + cor + ',.3);border-radius:12px;padding:14px 16px;margin-bottom:14px">' +
+        '<div style="font-size:12.5px;font-weight:700;color:rgb(' + cor + ')">Convocatória por enviar' + (urgente ? ' — URGENTE' : '') + '</div>' +
+        '<div style="font-size:11px;color:var(--t2);line-height:1.55;margin-top:4px">Há uma assembleia marcada para ' + new Date(assProx.data_assembleia).toLocaleDateString('pt-PT') + ' (' + diasAte + ' dias). A convocatória deve ser enviada com pelo menos 10 dias de antecedência (Art. 1432.º CC).' + (urgente ? ' <strong style="color:rgb(' + cor + ')">O prazo legal está quase a expirar.</strong>' : '') + '</div>' +
+        '<button class="btn-ghost" style="width:auto;display:inline-flex;font-size:11px;padding:6px 12px;margin-top:8px" onclick="nav(\'assembleias\')">Enviar convocatória</button>' +
+        '</div>';
+    } else if (zonaConv) { zonaConv.innerHTML = ''; }
+  } catch(e) {}
+
   // ASSEMBLEIA ANUAL OBRIGATÓRIA — a lei obriga a pelo menos uma por ano
   try {
     var desde12m = new Date(Date.now() - 365*24*3600*1000).toISOString();
@@ -4864,6 +5303,7 @@ async function verificarAvisosGerais() {
 
   try { pintarPrestacaoContasAuto(); } catch(e) {}
   try { pintarPaginaManutencoes(); } catch(e) {}
+  try { pintarPaginaEspacos(); } catch(e) {}
   if (!currentCondo) return;
   var avisos = [];
   var agora = new Date();
