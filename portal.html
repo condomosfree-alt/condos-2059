@@ -2124,6 +2124,41 @@ function mudarAnoContas(d) {
 
 
 // MANUTENÇÕES NO PORTAL — o condómino vê o que foi feito e o que falta
+
+// PRESTAÇÃO DE CONTAS — resumo do ano anterior visível ao condómino
+async function carregarPrestacaoPortal() {
+  var zona = document.getElementById('c-prestacao-portal');
+  if (!zona) {
+    var pai = document.getElementById('c-conteudo');
+    if (!pai) return;
+    var d = document.createElement('div'); d.id = 'c-prestacao-portal'; d.style.marginBottom = '16px';
+    pai.appendChild(d);
+    zona = d;
+  }
+  try {
+    var anoRef = new Date().getFullYear() - 1;
+    var qR = await sb.rpc('portal_quotas', { p_token: token });
+    var quotas = (qR.data || []).filter(function(q) { return q.ano === anoRef; });
+    if (!quotas.length) { zona.innerHTML = ''; return; }
+
+    var emitido = quotas.reduce(function(s,q){ return s + parseFloat(q.valor_emitido||0); }, 0);
+    var pago = quotas.reduce(function(s,q){ return s + parseFloat(q.valor_pago||0); }, 0);
+    var devida = emitido - pago;
+    var eur = function(v) { return (v||0).toFixed(2).replace('.',',') + '€'; };
+
+    var h = '<div style="background:var(--c1);border:1px solid var(--b);border-radius:14px;padding:14px 16px">';
+    h += '<div style="font-size:11px;font-weight:700;color:var(--t2);letter-spacing:.06em;margin-bottom:10px">AS MINHAS CONTAS · ' + anoRef + '</div>';
+    h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">';
+    h += '<div><div style="font-size:9.5px;color:var(--t3)">EMITIDO</div><div style="font-family:var(--mono,monospace);font-size:16px;font-weight:700;color:var(--text)">' + eur(emitido) + '</div></div>';
+    h += '<div><div style="font-size:9.5px;color:var(--t3)">PAGO</div><div style="font-family:var(--mono,monospace);font-size:16px;font-weight:700;color:var(--green)">' + eur(pago) + '</div></div>';
+    h += '<div><div style="font-size:9.5px;color:var(--t3)">EM DÍVIDA</div><div style="font-family:var(--mono,monospace);font-size:16px;font-weight:700;color:' + (devida > 0.01 ? 'var(--red)' : 'var(--green)') + '">' + eur(devida) + '</div></div>';
+    h += '</div>';
+    if (devida <= 0.01) h += '<div style="font-size:10.5px;color:var(--green);margin-top:8px">✓ Está tudo em dia em ' + anoRef + '.</div>';
+    h += '</div>';
+    zona.innerHTML = h;
+  } catch(e) { zona.innerHTML = ''; }
+}
+
 async function carregarManutPortal() {
   var zona = document.getElementById('c-manut-portal');
   if (!zona) {
@@ -2240,7 +2275,7 @@ async function carregarContas() {
   carregarFundoPortal();
 
   // manutenções e orçamento visíveis ao condómino (depois de o HTML estar montado)
-  try { await carregarManutPortal(); await carregarOrcPortal(); } catch(e) { console.error("portal extras:", e); }
+  try { await carregarPrestacaoPortal(); await carregarManutPortal(); await carregarOrcPortal(); } catch(e) { console.error("portal extras:", e); }
 }
 
 // 🏦 Fundo de Reserva no portal — a poupança de todos, visível a todos
