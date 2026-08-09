@@ -870,7 +870,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.08.04-0615</div>
+      <div class="sb-tag">2059 Pro · build v2026.08.04-0700</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -898,6 +898,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
       <div class="ni" onclick="nav('mensagens')"><span class="mic"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-8 8H7l-4 3 1.2-4.4A8 8 0 1 1 21 12z"/><path d="M8.5 11h7M8.5 14.5h4"/></svg></span><span>Mensagens</span><span class="nb" id="nb-msg" style="background:#f87171;"></span></div>
       <div class="ni" onclick="nav('parceiros')"><span class="mic"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11 17l-2.2 2.2a2 2 0 0 1-2.8-2.8l5.6-5.6a2 2 0 0 1 2.8 0l1.4 1.4"/><path d="M13 7l2.2-2.2a2 2 0 0 1 2.8 2.8L15 10.6"/><path d="M3 12l3-3M18 15l3-3"/></svg></span><span>Parceiros</span></div>
       <div class="nav-section">Documentos &amp; Reuniões</div>
+      <div class="ni" onclick="nav('regulamento')"><span class="mic"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></span><span>Regulamento</span></div>
       <div class="ni" onclick="nav('espacos')"><span class="mic"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg></span><span>Espaços Comuns</span></div>
       <div class="ni" onclick="nav('manutencoes')"><span class="mic"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></span><span>Manutenções</span></div>
       <div class="ni" onclick="nav('documentos')"><span class="mic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3H7a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V8z"/><path d="M13 3v5h5"/><path d="M9.5 13h5M9.5 16.5h5"/></svg></span><span>Documentos</span></div>
@@ -2005,6 +2006,15 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
 
       <!-- ASSISTENTE IA -->
       <div 
+      <div class="page" id="page-regulamento">
+        <div class="sec-hdr">
+          <span class="sec-t">Regulamento do Condomínio</span>
+          <div style="display:flex;gap:8px;">
+            <button class="btn-ghost" style="font-size:12px;padding:8px 14px" onclick="sugerirRegulamentoIA()">Sugestão IA</button>
+          </div>
+        </div>
+        <div id="regulamento-lista" style="padding:0 16px 16px"></div>
+      </div>
       <div class="page" id="page-espacos">
         <div class="sec-hdr">
           <span class="sec-t">Espaços Comuns</span>
@@ -5248,6 +5258,323 @@ async function guardarEspacoEdit(id) {
   await pintarPaginaEspacos();
 }
 
+// =====================================================================
+//  REGULAMENTO DO CONDOMÍNIO — a memória que nunca esquece
+// =====================================================================
+//
+//  Em 2059, quando alguém perguntar "quem decidiu que não se pode
+//  por estendais na varanda?", o sistema responde:
+//  "Ata de 15/01/2027, ponto 4, aprovado por 8 votos contra 2."
+//
+//  Duas peças:
+//  1) O regulamento em si (artigos editáveis, sugeridos pela IA)
+//  2) O histórico de deliberações (cada ata alimenta esta base)
+// =====================================================================
+
+
+// =================================================================
+//  AVISO — regulamento obrigatório em prédios com >4 frações
+// =================================================================
+
+function verificarRegulamentoObrigatorio() {
+  var zona = document.getElementById('predio-novo');
+  if (!zona || !currentCondo) return;
+  var nFrac = (fracoes || []).length;
+  var obrigatorio = nFrac > 4;  // Art. 1429.º-A CC
+  var temReg = currentCondo.regulamento_aprovado;
+
+  if (obrigatorio && !temReg) {
+    // acrescentar ao painel de prédio novo
+    var existente = zona.innerHTML;
+    if (existente.indexOf('regulamento') > -1) return;  // já está
+
+    var aviso = '<div style="background:rgba(255,84,112,.06);border:1px solid rgba(255,84,112,.3);border-radius:12px;padding:14px 16px;margin-bottom:14px">';
+    aviso += '<div style="font-size:12.5px;font-weight:700;color:var(--red)">Regulamento do condomínio em falta</div>';
+    aviso += '<div style="font-size:11px;color:var(--t2);line-height:1.55;margin-top:4px">O Art. 1429.º-A do Código Civil obriga prédios com mais de 4 frações a ter um regulamento aprovado em assembleia. Este prédio tem ' + nFrac + ' frações e não tem regulamento registado. Sem ele, as regras de convivência não têm valor legal.</div>';
+    aviso += '<div style="display:flex;gap:8px;margin-top:8px">';
+    aviso += '<button class="btn-ghost" style="width:auto;display:inline-flex;font-size:11px;padding:6px 12px" onclick="nav(\'regulamento\')">Criar regulamento</button>';
+    aviso += '<button class="btn-ghost" style="width:auto;display:inline-flex;font-size:11px;padding:6px 12px" onclick="sugerirRegulamentoIA()">Sugestão da IA</button>';
+    aviso += '</div></div>';
+    zona.innerHTML = aviso + existente;
+  }
+}
+
+
+// =================================================================
+//  SUGESTÃO DA IA — regulamento profissional
+// =================================================================
+
+async function sugerirRegulamentoIA() {
+  if (!currentCondo) return;
+  toast('A gerar sugestão de regulamento…', 'ok');
+
+  var nFrac = (fracoes || []).length;
+  var temElevador = (currentCondo.num_elevadores || 0) > 0;
+  var temGaragem = currentCondo.tem_garagem;
+  var temPiscina = _espacos && _espacos.some(function(e) { return e.tipo === 'piscina'; });
+
+  var prompt = 'Gera um regulamento COMPLETO para um condomínio em Portugal com as seguintes características:\n' +
+    '- ' + nFrac + ' frações\n' +
+    '- ' + (temElevador ? 'tem elevador' : 'sem elevador') + '\n' +
+    '- ' + (temGaragem ? 'tem garagem' : 'sem garagem') + '\n' +
+    '- ' + (temPiscina ? 'tem piscina' : 'sem piscina') + '\n\n' +
+    'O regulamento deve ser PROFISSIONAL, em português de Portugal, com artigos numerados, e cobrir:\n' +
+    '1. Utilização das partes comuns\n' +
+    '2. Horários de silêncio (lei do ruído)\n' +
+    '3. Animais de estimação\n' +
+    '4. Obras nas frações\n' +
+    '5. Garagem (se aplicável)\n' +
+    '6. Elevador (se aplicável)\n' +
+    '7. Piscina e espaços comuns (se aplicável)\n' +
+    '8. Segurança e acessos\n' +
+    '9. Limpeza e resíduos\n' +
+    '10. Penalizações\n' +
+    '11. Disposições finais\n\n' +
+    'Responde APENAS com JSON válido, um array de objetos com: numero (int), titulo (string), texto (string), categoria (string: uso_espacos|ruido|animais|obras|garagem|seguranca|limpeza|geral).\n' +
+    'Não incluas markdown, não incluas explicação, APENAS o JSON.';
+
+  try {
+    var text = await callIA(prompt, 'regulamento');
+    var artigos = JSON.parse(text.replace(/```json|```/g, '').trim());
+
+    if (!Array.isArray(artigos) || !artigos.length) {
+      toast('A IA não devolveu um regulamento válido', 'err'); return;
+    }
+
+    // mostrar para o admin confirmar
+    var h = '<div style="max-height:65vh;overflow-y:auto;padding:4px">';
+    h += '<div style="font-size:11px;color:var(--t2);line-height:1.6;margin-bottom:14px">A IA sugeriu ' + artigos.length + ' artigos. Revê cada um, altera o que quiseres, e aprova. Depois de aprovado, fica disponível no portal de cada condómino e tem valor legal se for levado a assembleia.</div>';
+
+    artigos.forEach(function(a, i) {
+      h += '<div style="background:var(--s1);border:1px solid var(--b1);border-radius:10px;padding:12px 14px;margin-bottom:8px">';
+      h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">';
+      h += '<input type="checkbox" class="reg-chk" data-idx="' + i + '" checked>';
+      h += '<span style="font-size:13px;font-weight:700;color:var(--text)">Art. ' + (a.numero || i+1) + '.º — ' + a.titulo + '</span>';
+      h += '<span style="font-size:9px;color:var(--t3);border:1px solid var(--b1);border-radius:4px;padding:1px 5px">' + a.categoria + '</span>';
+      h += '</div>';
+      h += '<div style="font-size:11.5px;color:var(--t2);line-height:1.6;white-space:pre-wrap">' + a.texto + '</div>';
+      h += '</div>';
+    });
+
+    h += '<button class="btn-primary" style="width:100%;margin-top:14px;font-size:13px;padding:12px" onclick="guardarRegulamentoIA()">Aprovar e guardar regulamento</button>';
+    h += '</div>';
+
+    window._regSugerido = artigos;
+    abrirModalGenerico('Regulamento sugerido pela IA', h);
+  } catch(e) {
+    toast('Erro: ' + (e.message || ''), 'err');
+  }
+}
+
+async function guardarRegulamentoIA() {
+  if (!window._regSugerido || !currentCondo) return;
+  var artigos = _regSugerido;
+  var checkboxes = document.querySelectorAll('.reg-chk');
+
+  var aprovados = [];
+  checkboxes.forEach(function(chk) {
+    if (chk.checked) {
+      var idx = parseInt(chk.dataset.idx);
+      if (artigos[idx]) aprovados.push(artigos[idx]);
+    }
+  });
+
+  if (!aprovados.length) { toast('Seleciona pelo menos um artigo', 'warn'); return; }
+
+  // desativar artigos antigos
+  await sb.from('regulamento').update({ ativo: false }).eq('condominio_id', currentCondo.id);
+
+  // gravar os novos
+  var inserts = aprovados.map(function(a, i) {
+    return {
+      condominio_id: currentCondo.id,
+      numero: a.numero || i + 1,
+      titulo: a.titulo,
+      texto: a.texto,
+      categoria: a.categoria || 'geral',
+      data_aprovacao: new Date().toISOString().split('T')[0]
+    };
+  });
+  var r = await sb.from('regulamento').insert(inserts);
+  if (r.error) { toast('Erro: ' + r.error.message, 'err'); return; }
+
+  // marcar como aprovado
+  await sb.from('condominios').update({
+    regulamento_aprovado: true,
+    regulamento_data: new Date().toISOString().split('T')[0]
+  }).eq('id', currentCondo.id);
+  currentCondo.regulamento_aprovado = true;
+
+  fecharModalGenerico();
+  toast('Regulamento aprovado com ' + aprovados.length + ' artigos! Já está visível no portal.', 'ok');
+  window._regSugerido = null;
+}
+
+
+// =================================================================
+//  DELIBERAÇÕES — extrair e guardar de cada ata
+// =================================================================
+
+// Chamada depois de analisarAta: grava cada deliberação no histórico
+async function gravarDeliberacoesHistorico(assembleiaId, deliberacoes) {
+  if (!currentCondo || !deliberacoes || !deliberacoes.length) return;
+
+  var inserts = deliberacoes.map(function(d) {
+    // extrair tags do texto
+    var tags = [];
+    var texto = ((d.descricao || '') + ' ' + (d.valor_texto || '')).toLowerCase();
+    var palavras = ['ruido','horario','animais','obras','garagem','elevador','piscina','fundo','orcamento','quota','seguro','limpeza','multa','regulamento'];
+    palavras.forEach(function(p) { if (texto.indexOf(p) > -1) tags.push(p); });
+
+    return {
+      condominio_id: currentCondo.id,
+      assembleia_id: assembleiaId,
+      tipo: d.tipo || 'outro',
+      resumo: d.descricao || d.valor_texto || 'Deliberação sem descrição',
+      detalhe: d.valor_texto || d.descricao || null,
+      valor: d.valor_percentagem || d.valor_orcamento_total || d.valor_quota_mensal || null,
+      resultado: d.valida_legalmente === false ? 'rejeitada' : 'aprovada',
+      data_deliberacao: new Date().toISOString().split('T')[0],
+      tags: tags.length ? tags : null
+    };
+  });
+
+  try {
+    await sb.from('deliberacoes').insert(inserts);
+  } catch(e) { console.error('gravar deliberacoes:', e); }
+}
+
+
+// =================================================================
+//  CONTEXTO IA — a IA sabe tudo o que foi decidido
+// =================================================================
+
+async function carregarContextoDeliberacoes() {
+  if (!currentCondo) return '';
+  try {
+    var r = await sb.from('deliberacoes').select('resumo,tipo,resultado,data_deliberacao,valor,tags')
+      .eq('condominio_id', currentCondo.id)
+      .order('data_deliberacao', { ascending: false }).limit(50);
+    if (!r.data || !r.data.length) return '';
+    var ctx = r.data.map(function(d) {
+      return '[' + (d.data_deliberacao || '?') + '] ' + d.resumo +
+        (d.valor ? ' (' + d.valor + ')' : '') +
+        ' [' + d.resultado + ']' +
+        (d.tags ? ' #' + d.tags.join(' #') : '');
+    });
+    return 'HISTÓRICO DE DELIBERAÇÕES (usa para responder a perguntas sobre decisões passadas):\n' + ctx.join('\n');
+  } catch(e) { return ''; }
+}
+
+// carregar regulamento para o contexto da IA
+async function carregarContextoRegulamento() {
+  if (!currentCondo) return '';
+  try {
+    var r = await sb.from('regulamento').select('numero,titulo,texto,categoria')
+      .eq('condominio_id', currentCondo.id).eq('ativo', true).order('numero');
+    if (!r.data || !r.data.length) return '';
+    var ctx = r.data.map(function(a) {
+      return 'Art. ' + a.numero + '.º — ' + a.titulo + ': ' + a.texto.substring(0, 200);
+    });
+    return 'REGULAMENTO DO CONDOMÍNIO (usa para alertar quando algo viola uma regra):\n' + ctx.join('\n');
+  } catch(e) { return ''; }
+}
+
+
+// =================================================================
+//  PÁGINA DE GESTÃO DO REGULAMENTO
+// =================================================================
+
+async function pintarPaginaRegulamento() {
+  var zona = document.getElementById('regulamento-lista');
+  if (!zona || !currentCondo) return;
+
+  var r = await sb.from('regulamento').select('*').eq('condominio_id', currentCondo.id).eq('ativo', true).order('numero');
+  var artigos = r.data || [];
+
+  if (!artigos.length) {
+    zona.innerHTML = '<div style="text-align:center;padding:40px;color:var(--t3);font-size:13px;line-height:1.6">' +
+      'Sem regulamento registado.' +
+      (((fracoes||[]).length > 4) ? '<br><strong style="color:var(--red)">O Art. 1429.º-A do CC obriga prédios com mais de 4 frações a ter regulamento.</strong>' : '') +
+      '<br><br><button class="btn-primary" style="font-size:13px;padding:10px 20px" onclick="sugerirRegulamentoIA()">Gerar regulamento com IA</button></div>';
+    return;
+  }
+
+  var cats = {};
+  artigos.forEach(function(a) { var c = a.categoria || 'geral'; if (!cats[c]) cats[c] = []; cats[c].push(a); });
+
+  var h = '';
+  var catNomes = { uso_espacos:'Utilização das partes comuns', ruido:'Horários e ruído', animais:'Animais', obras:'Obras', garagem:'Garagem', seguranca:'Segurança', limpeza:'Limpeza e resíduos', geral:'Disposições gerais' };
+
+  Object.keys(cats).forEach(function(cat) {
+    h += '<div style="margin-bottom:18px">';
+    h += '<div style="font-size:11px;font-weight:700;color:var(--cyan);letter-spacing:.06em;margin-bottom:8px">' + (catNomes[cat] || cat).toUpperCase() + '</div>';
+    cats[cat].forEach(function(a) {
+      h += '<div style="background:var(--s1);border:1px solid var(--b1);border-radius:10px;padding:12px 14px;margin-bottom:8px">';
+      h += '<div style="display:flex;align-items:flex-start;gap:10px">';
+      h += '<div style="flex:1">';
+      h += '<div style="font-size:13px;font-weight:700;color:var(--text)">Art. ' + (a.numero || '?') + '.º — ' + a.titulo + '</div>';
+      h += '<div style="font-size:11.5px;color:var(--t2);line-height:1.6;margin-top:4px;white-space:pre-wrap">' + a.texto + '</div>';
+      if (a.data_aprovacao) h += '<div style="font-size:10px;color:var(--t3);margin-top:4px">Aprovado em ' + new Date(a.data_aprovacao).toLocaleDateString('pt-PT') + '</div>';
+      h += '</div>';
+      h += '<button class="btn-ghost" style="width:auto;font-size:10px;padding:4px 10px" onclick="editarArtigo(\'' + a.id + '\')">Editar</button>';
+      h += '</div></div>';
+    });
+    h += '</div>';
+  });
+
+  // deliberações recentes
+  try {
+    var dR = await sb.from('deliberacoes').select('resumo,resultado,data_deliberacao')
+      .eq('condominio_id', currentCondo.id).order('data_deliberacao', {ascending:false}).limit(10);
+    if (dR.data && dR.data.length) {
+      h += '<div style="margin-top:24px;border-top:1px solid var(--b1);padding-top:14px">';
+      h += '<div style="font-size:11px;font-weight:700;color:var(--t2);letter-spacing:.06em;margin-bottom:8px">ÚLTIMAS DELIBERAÇÕES</div>';
+      dR.data.forEach(function(d) {
+        var cor = d.resultado === 'aprovada' ? 'var(--green)' : (d.resultado === 'rejeitada' ? 'var(--red)' : 'var(--t3)');
+        h += '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:12px;color:var(--t2)">';
+        h += '<div style="width:6px;height:6px;border-radius:50%;background:' + cor + '"></div>';
+        h += '<span style="flex:1">' + d.resumo + '</span>';
+        h += '<span style="font-size:10px;color:var(--t3)">' + (d.data_deliberacao ? new Date(d.data_deliberacao).toLocaleDateString('pt-PT') : '') + '</span>';
+        h += '</div>';
+      });
+      h += '</div>';
+    }
+  } catch(e) {}
+
+  zona.innerHTML = h;
+}
+
+async function editarArtigo(id) {
+  var r = await sb.from('regulamento').select('*').eq('id', id).single();
+  if (r.error || !r.data) return;
+  var a = r.data;
+  var h = '<div style="padding:4px">';
+  h += '<label style="font-size:11px;color:var(--t2);display:block;margin-bottom:10px">Título<br><input type="text" id="ra-tit" value="' + (a.titulo||'').replace(/"/g,'&quot;') + '" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--c2);border:1px solid var(--b);border-radius:8px;padding:10px;color:var(--t1);font-family:inherit;font-size:14px"></label>';
+  h += '<label style="font-size:11px;color:var(--t2);display:block;margin-bottom:10px">Texto<br><textarea id="ra-txt" rows="6" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--c2);border:1px solid var(--b);border-radius:8px;padding:10px;color:var(--t1);font-family:inherit;resize:vertical">' + (a.texto||'') + '</textarea></label>';
+  h += '<div style="display:flex;gap:8px;margin-top:12px">';
+  h += '<button class="btn-primary" style="flex:1;font-size:13px;padding:12px" onclick="guardarArtigo(\'' + id + '\')">Guardar</button>';
+  h += '<button class="btn-ghost" style="flex:1;font-size:13px;padding:12px;color:var(--red)" onclick="revogarArtigo(\'' + id + '\')">Revogar</button>';
+  h += '</div></div>';
+  abrirModalGenerico('Art. ' + (a.numero||'?') + '.º — ' + a.titulo, h);
+}
+
+async function guardarArtigo(id) {
+  await sb.from('regulamento').update({
+    titulo: (document.getElementById('ra-tit')||{}).value,
+    texto: (document.getElementById('ra-txt')||{}).value,
+    atualizado_em: new Date().toISOString()
+  }).eq('id', id);
+  fecharModalGenerico(); toast('Artigo atualizado', 'ok');
+  await pintarPaginaRegulamento();
+}
+
+async function revogarArtigo(id) {
+  await sb.from('regulamento').update({ ativo: false, atualizado_em: new Date().toISOString() }).eq('id', id);
+  fecharModalGenerico(); toast('Artigo revogado', 'ok');
+  await pintarPaginaRegulamento();
+}
+
 async function verificarAvisosGerais() {
   try { pintarPredioNovo(); } catch(e) {}
   try { verificarCicloQuotas(); } catch(e) {}
@@ -5304,6 +5631,8 @@ async function verificarAvisosGerais() {
   try { pintarPrestacaoContasAuto(); } catch(e) {}
   try { pintarPaginaManutencoes(); } catch(e) {}
   try { pintarPaginaEspacos(); } catch(e) {}
+  try { pintarPaginaRegulamento(); } catch(e) {}
+  try { verificarRegulamentoObrigatorio(); } catch(e) {}
   if (!currentCondo) return;
   var avisos = [];
   var agora = new Date();
@@ -19943,6 +20272,14 @@ async function construirContextoIA() {
       }
     } catch(e) {}
 
+    // Deliberações históricas e regulamento para a IA
+    try {
+      var ctxDelib = await carregarContextoDeliberacoes();
+      if (ctxDelib) linhas.push(ctxDelib);
+      var ctxReg = await carregarContextoRegulamento();
+      if (ctxReg) linhas.push(ctxReg);
+    } catch(e) {}
+
     return 'DADOS REAIS DO CONDOMÍNIO (usa-os para responder com precisão; se a pergunta for genérica de legislação, ignora-os).\nQuando te perguntam sobre uma fração específica ou um condómino, RESPONDE com os dados que tens — não digas que precisam de perguntar ao gestor.\n' + linhas.join('\n') + '\n\n---\nPERGUNTA DO ADMINISTRADOR: ';
   } catch(e) { console.error('contextoIA:', e); return ''; }
 }
@@ -21775,7 +22112,10 @@ async function aplicarDeliberacoesAta() {
   closeModal('mo-import-ata');
   ataFotoBase64 = null;
   ataDeliberacoesDetectadas = [];
-  toast(aplicadas+' deliberação(ões) aplicada(s) — rubricas, fundo e/ou quotas actualizadas conforme a ata!','ok');
+  // gravar no histórico de deliberações (a memória que nunca esquece)
+    try { await gravarDeliberacoesHistorico(_assembleiaAtual, _ataDeliberacoes); } catch(e) {}
+
+    toast(aplicadas+' deliberação(ões) aplicada(s) — rubricas, fundo e/ou quotas actualizadas conforme a ata!','ok');
   await loadOrcamento();
   await loadAssembleias();
   await loadDeliberacoes();

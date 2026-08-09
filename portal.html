@@ -1238,6 +1238,19 @@ async function carregarFeed() {
   const box = document.getElementById('h-feed');
   const itens = [];
 
+  // Regulamento — se existe
+  try {
+    var regR2 = await sb.rpc('portal_regulamento', { p_token: token });
+    if (regR2.data && regR2.data.length) {
+      itens.push({
+        pri: 6,
+        html: '<div onclick="irParaRegulamento()" style="background:var(--c1);border:1px solid var(--b);border-radius:12px;padding:14px 16px;cursor:pointer">' +
+          '<div style="font-size:13px;font-weight:700;color:var(--text)">📜 Regulamento do condomínio</div>' +
+          '<div style="font-size:11.5px;color:var(--t2);margin-top:4px">' + regR2.data.length + ' artigo(s) — toca para consultar</div></div>'
+      });
+    }
+  } catch(e) {}
+
   // Espaços comuns — mostrar se existem
   try {
     var espR2 = await sb.rpc('portal_espacos', { p_token: token });
@@ -2142,6 +2155,45 @@ function mudarAnoContas(d) {
 // PRESTAÇÃO DE CONTAS — resumo do ano anterior visível ao condómino
 
 // ESPAÇOS COMUNS NO PORTAL — ver e reservar
+
+// REGULAMENTO E DELIBERAÇÕES NO PORTAL
+async function carregarRegulamentoPortal() {
+  var zona = document.getElementById('p-regulamento');
+  if (!zona) return;
+  try {
+    var [regR, delR] = await Promise.all([
+      sb.rpc('portal_regulamento', { p_token: token }),
+      sb.rpc('portal_deliberacoes', { p_token: token })
+    ]);
+    var reg = regR.data || [];
+    var delib = delR.data || [];
+    if (!reg.length && !delib.length) { zona.innerHTML = '<div class="empty">Sem regulamento nem deliberações registadas.</div>'; return; }
+
+    var h = '';
+    if (reg.length) {
+      h += '<div style="font-size:11px;font-weight:700;color:var(--t2);letter-spacing:.06em;margin-bottom:10px">REGULAMENTO DO CONDOMÍNIO</div>';
+      reg.forEach(function(a) {
+        h += '<div style="background:var(--c1);border:1px solid var(--b);border-radius:10px;padding:12px 14px;margin-bottom:8px">';
+        h += '<div style="font-size:13px;font-weight:700;color:var(--text)">Art. ' + (a.numero||'?') + '.º — ' + a.titulo + '</div>';
+        h += '<div style="font-size:11.5px;color:var(--t2);line-height:1.6;margin-top:4px;white-space:pre-wrap">' + a.texto + '</div>';
+        h += '</div>';
+      });
+    }
+    if (delib.length) {
+      h += '<div style="font-size:11px;font-weight:700;color:var(--t2);letter-spacing:.06em;margin:18px 0 10px">ÚLTIMAS DELIBERAÇÕES</div>';
+      delib.forEach(function(d) {
+        var cor = d.resultado === 'aprovada' ? 'var(--green)' : 'var(--amber)';
+        h += '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.04)">';
+        h += '<div style="width:6px;height:6px;border-radius:50%;background:' + cor + '"></div>';
+        h += '<span style="flex:1;font-size:12px;color:var(--text)">' + d.resumo + '</span>';
+        h += '<span style="font-size:10px;color:var(--t3)">' + (d.data_deliberacao ? new Date(d.data_deliberacao).toLocaleDateString('pt-PT') : '') + '</span>';
+        h += '</div>';
+      });
+    }
+    zona.innerHTML = h;
+  } catch(e) { zona.innerHTML = ''; }
+}
+
 async function carregarEspacosPortal() {
   var zona = document.getElementById('p-espacos');
   if (!zona) return;
@@ -4521,6 +4573,12 @@ window.addEventListener('hashchange', aplicarDestinoNotificacao);
 //  CHAT IA DO CONDOMINO — pergunta ao prédio, direto do portal
 // =====================================================================
 
+function irParaRegulamento() {
+  document.querySelectorAll('.page, .sec').forEach(function(el) { el.style.display = 'none'; });
+  var zona = document.getElementById('p-regulamento');
+  if (zona) { zona.style.display = 'block'; carregarRegulamentoPortal(); }
+}
+
 function irParaEspacos() {
   document.querySelectorAll('.page, .sec').forEach(function(el) { el.style.display = 'none'; });
   var zona = document.getElementById('p-espacos');
@@ -4622,6 +4680,7 @@ async function _ctxIAPortal() {
 </script>
 
 <!-- Chat IA do condómino -->
+<div id="p-regulamento" style="display:none;padding:16px"></div>
 <div id="p-espacos" style="display:none;padding:16px"></div>
 
 <div id="ia-fab" onclick="abrirChatIA()" style="position:fixed;bottom:80px;right:16px;width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,var(--cyan),#0088cc);box-shadow:0 4px 16px rgba(0,212,255,.35);display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:200;transition:transform .15s ease;">
