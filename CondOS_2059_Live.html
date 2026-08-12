@@ -870,7 +870,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.08.04-0700</div>
+      <div class="sb-tag">2059 Pro · build v2026.08.04-0730</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -898,6 +898,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
       <div class="ni" onclick="nav('mensagens')"><span class="mic"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-8 8H7l-4 3 1.2-4.4A8 8 0 1 1 21 12z"/><path d="M8.5 11h7M8.5 14.5h4"/></svg></span><span>Mensagens</span><span class="nb" id="nb-msg" style="background:#f87171;"></span></div>
       <div class="ni" onclick="nav('parceiros')"><span class="mic"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11 17l-2.2 2.2a2 2 0 0 1-2.8-2.8l5.6-5.6a2 2 0 0 1 2.8 0l1.4 1.4"/><path d="M13 7l2.2-2.2a2 2 0 0 1 2.8 2.8L15 10.6"/><path d="M3 12l3-3M18 15l3-3"/></svg></span><span>Parceiros</span></div>
       <div class="nav-section">Documentos &amp; Reuniões</div>
+      <div class="ni" onclick="nav('seguros')"><span class="mic"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span><span>Seguros</span></div>
       <div class="ni" onclick="nav('regulamento')"><span class="mic"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></span><span>Regulamento</span></div>
       <div class="ni" onclick="nav('espacos')"><span class="mic"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg></span><span>Espaços Comuns</span></div>
       <div class="ni" onclick="nav('manutencoes')"><span class="mic"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></span><span>Manutenções</span></div>
@@ -950,6 +951,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
         <div id="predio-novo"></div>
         <div id="ciclo-quotas"></div>
         <div id="manut-aviso"></div>
+        <div id="seguros-aviso"></div>
         <div id="resumo-mensal"></div>
         <div id="dash-grafico"></div>
         <div id="avisos-gerais-dash"></div>
@@ -2006,6 +2008,15 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
 
       <!-- ASSISTENTE IA -->
       <div 
+      <div class="page" id="page-seguros">
+        <div class="sec-hdr">
+          <span class="sec-t">Seguros e Apólices</span>
+          <div style="display:flex;gap:8px;">
+            <button class="btn-primary" style="font-size:12px;padding:8px 14px" onclick="novoSeguro()">+ Novo seguro</button>
+          </div>
+        </div>
+        <div id="seguros-lista" style="padding:0 16px 16px"></div>
+      </div>
       <div class="page" id="page-regulamento">
         <div class="sec-hdr">
           <span class="sec-t">Regulamento do Condomínio</span>
@@ -5575,10 +5586,212 @@ async function revogarArtigo(id) {
   await pintarPaginaRegulamento();
 }
 
+// =====================================================================
+//  SEGUROS — gestão de apólices
+// =====================================================================
+//  O Art. 1429.º CC obriga ao seguro contra risco de incêndio.
+//  A maioria dos prédios tem multirriscos. A renovação é anual e
+//  se falhar o prédio fica descoberto — e o administrador responsável.
+// =====================================================================
+
+var _seguros = [];
+
+async function carregarSeguros() {
+  if (!currentCondo) return;
+  try {
+    var r = await sb.from('seguros').select('*').eq('condominio_id', currentCondo.id).eq('ativo', true).order('fim_vigencia');
+    _seguros = r.data || [];
+  } catch(e) { _seguros = []; }
+}
+
+function pintarAvisoSeguros() {
+  var zona = document.getElementById('seguros-aviso');
+  if (!zona) return;
+  var hoje = new Date(new Date().toDateString());
+  var vencer = _seguros.filter(function(s) {
+    if (!s.fim_vigencia) return false;
+    var dias = Math.round((new Date(s.fim_vigencia) - hoje) / 86400000);
+    return dias <= 60;
+  });
+
+  // verificar se tem seguro obrigatório
+  var temIncendio = _seguros.some(function(s) { return s.tipo === 'incendio' || s.tipo === 'multirriscos'; });
+
+  if (!vencer.length && temIncendio) { zona.innerHTML = ''; return; }
+
+  var h = '<div style="background:rgba(255,84,112,.06);border:1px solid rgba(255,84,112,.3);border-radius:12px;padding:14px 16px;margin-bottom:14px">';
+  if (!temIncendio) {
+    h += '<div style="font-size:12.5px;font-weight:700;color:var(--red)">Seguro obrigatório em falta</div>';
+    h += '<div style="font-size:11px;color:var(--t2);line-height:1.55;margin-top:4px">O Art. 1429.º do Código Civil obriga ao seguro contra risco de incêndio nas partes comuns. Não há nenhum seguro de incêndio ou multirriscos registado.</div>';
+  }
+  if (vencer.length) {
+    vencer.forEach(function(s) {
+      var dias = Math.round((new Date(s.fim_vigencia) - hoje) / 86400000);
+      var vencido = dias < 0;
+      h += '<div style="border-left:2px solid rgba(' + (vencido ? '255,84,112' : '255,179,0') + ',.6);padding:2px 0 2px 11px;margin-top:8px">';
+      h += '<div style="font-size:12px;font-weight:650;color:var(--text)">' + (s.seguradora || s.tipo) + '</div>';
+      h += '<div style="font-size:11px;color:' + (vencido ? 'var(--red)' : 'var(--amber)') + ';margin-top:2px">' + (vencido ? 'Expirado há ' + Math.abs(dias) + ' dias!' : 'Expira em ' + dias + ' dias') + ' · ' + new Date(s.fim_vigencia).toLocaleDateString('pt-PT') + '</div>';
+      h += '</div>';
+    });
+  }
+  h += '<button class="btn-ghost" style="width:auto;display:inline-flex;font-size:11px;padding:6px 12px;margin-top:10px" onclick="nav(\'seguros\')">Gerir seguros</button>';
+  h += '</div>';
+  zona.innerHTML = h;
+}
+
+async function pintarPaginaSeguros() {
+  var zona = document.getElementById('seguros-lista');
+  if (!zona || !currentCondo) return;
+  await carregarSeguros();
+
+  if (!_seguros.length) {
+    zona.innerHTML = '<div style="text-align:center;padding:40px;color:var(--t3);font-size:13px;line-height:1.6">' +
+      'Sem seguros registados.' +
+      '<br><strong style="color:var(--red)">O Art. 1429.º CC obriga ao seguro contra incêndio.</strong>' +
+      '<br><br><button class="btn-primary" style="font-size:13px;padding:10px 20px" onclick="novoSeguro()">Registar seguro</button></div>';
+    return;
+  }
+
+  var hoje = new Date(new Date().toDateString());
+  var h = '';
+  _seguros.forEach(function(s) {
+    var dias = s.fim_vigencia ? Math.round((new Date(s.fim_vigencia) - hoje) / 86400000) : null;
+    var estado = dias === null ? '⬜ sem data' : (dias < 0 ? '🔴 expirado' : (dias <= 60 ? '🟡 a vencer' : '🟢 ativo'));
+    var tipoNome = {multirriscos:'Multirriscos',incendio:'Incêndio',responsabilidade_civil:'Responsabilidade Civil',outro:'Outro'}[s.tipo] || s.tipo;
+
+    h += '<div style="background:var(--s1);border:1px solid var(--b1);border-radius:12px;padding:14px 16px;margin-bottom:10px">';
+    h += '<div style="display:flex;align-items:flex-start;gap:12px">';
+    h += '<div style="font-size:24px">🛡️</div>';
+    h += '<div style="flex:1">';
+    h += '<div style="font-size:14px;font-weight:700;color:var(--text)">' + tipoNome + '</div>';
+    h += '<div style="font-size:11px;color:var(--t3);margin-top:3px">';
+    if (s.seguradora) h += s.seguradora + ' · ';
+    if (s.num_apolice) h += 'Apólice ' + s.num_apolice + ' · ';
+    h += estado;
+    h += '</div>';
+    if (s.valor_cobertura) h += '<div style="font-size:12px;color:var(--t2);margin-top:4px">Cobertura: ' + parseFloat(s.valor_cobertura).toFixed(0) + '€' + (s.premio_anual ? ' · Prémio: ' + parseFloat(s.premio_anual).toFixed(0) + '€/ano' : '') + '</div>';
+    if (s.fim_vigencia) h += '<div style="font-size:11px;color:var(--t3);margin-top:2px">Vigência até ' + new Date(s.fim_vigencia).toLocaleDateString('pt-PT') + (s.renovacao_auto ? ' (renovação automática)' : '') + '</div>';
+    h += '</div>';
+    h += '<button class="btn-ghost" style="width:auto;font-size:10px;padding:5px 10px" onclick="editarSeguro(\'' + s.id + '\')">Editar</button>';
+    h += '</div></div>';
+  });
+  zona.innerHTML = h;
+}
+
+async function novoSeguro() {
+  var h = '<div style="padding:4px">';
+  h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">';
+  h += '<label style="font-size:11px;color:var(--t2)">Tipo<br><select id="ns-tipo" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--c2);border:1px solid var(--b);border-radius:8px;padding:10px;color:var(--t1);font-family:inherit"><option value="multirriscos">Multirriscos</option><option value="incendio">Incêndio</option><option value="responsabilidade_civil">Responsabilidade Civil</option><option value="outro">Outro</option></select></label>';
+  h += '<label style="font-size:11px;color:var(--t2)">Seguradora<br><input type="text" id="ns-seg" placeholder="Ex: Fidelidade" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--c2);border:1px solid var(--b);border-radius:8px;padding:10px;color:var(--t1);font-family:inherit"></label>';
+  h += '</div>';
+  h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">';
+  h += '<label style="font-size:11px;color:var(--t2)">Nº Apólice<br><input type="text" id="ns-ap" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--c2);border:1px solid var(--b);border-radius:8px;padding:10px;color:var(--t1);font-family:inherit"></label>';
+  h += '<label style="font-size:11px;color:var(--t2)">Cobertura (€)<br><input type="number" id="ns-cob" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--c2);border:1px solid var(--b);border-radius:8px;padding:10px;color:var(--t1);font-family:inherit"></label>';
+  h += '</div>';
+  h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px">';
+  h += '<label style="font-size:11px;color:var(--t2)">Prémio anual (€)<br><input type="number" id="ns-prem" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--c2);border:1px solid var(--b);border-radius:8px;padding:10px;color:var(--t1);font-family:inherit"></label>';
+  h += '<label style="font-size:11px;color:var(--t2)">Início<br><input type="date" id="ns-ini" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--c2);border:1px solid var(--b);border-radius:8px;padding:10px;color:var(--t1);font-family:inherit"></label>';
+  h += '<label style="font-size:11px;color:var(--t2)">Fim<br><input type="date" id="ns-fim" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--c2);border:1px solid var(--b);border-radius:8px;padding:10px;color:var(--t1);font-family:inherit"></label>';
+  h += '</div>';
+  h += '<button class="btn-primary" style="width:100%;margin-top:10px;font-size:13px;padding:12px" onclick="criarSeguro()">Registar</button>';
+  h += '</div>';
+  abrirModalGenerico('Novo seguro', h);
+}
+
+async function criarSeguro() {
+  var r = await sb.from('seguros').insert({
+    condominio_id: currentCondo.id,
+    tipo: (document.getElementById('ns-tipo')||{}).value || 'multirriscos',
+    seguradora: ((document.getElementById('ns-seg')||{}).value||'').trim() || null,
+    num_apolice: ((document.getElementById('ns-ap')||{}).value||'').trim() || null,
+    valor_cobertura: parseFloat((document.getElementById('ns-cob')||{}).value) || null,
+    premio_anual: parseFloat((document.getElementById('ns-prem')||{}).value) || null,
+    inicio_vigencia: (document.getElementById('ns-ini')||{}).value || null,
+    fim_vigencia: (document.getElementById('ns-fim')||{}).value || null
+  });
+  if (r.error) { toast('Erro: ' + r.error.message, 'err'); return; }
+  fecharModalGenerico(); toast('Seguro registado!', 'ok');
+  await pintarPaginaSeguros();
+}
+
+async function editarSeguro(id) {
+  var seg = _seguros.find(function(s) { return s.id === id; });
+  if (!seg) return;
+  await novoSeguro();
+  setTimeout(function() {
+    var map = {'ns-tipo':seg.tipo,'ns-seg':seg.seguradora,'ns-ap':seg.num_apolice,
+      'ns-cob':seg.valor_cobertura,'ns-prem':seg.premio_anual,
+      'ns-ini':seg.inicio_vigencia?String(seg.inicio_vigencia).substring(0,10):'',
+      'ns-fim':seg.fim_vigencia?String(seg.fim_vigencia).substring(0,10):''};
+    for (var k in map) { var el = document.getElementById(k); if (el && map[k]) el.value = map[k]; }
+    var btn = document.querySelector('#modal-generico .btn-primary');
+    if (btn) { btn.textContent = 'Guardar'; btn.onclick = function() { guardarSeguroEdit(id); }; }
+  }, 50);
+}
+
+async function guardarSeguroEdit(id) {
+  var r = await sb.from('seguros').update({
+    tipo: (document.getElementById('ns-tipo')||{}).value,
+    seguradora: ((document.getElementById('ns-seg')||{}).value||'').trim() || null,
+    num_apolice: ((document.getElementById('ns-ap')||{}).value||'').trim() || null,
+    valor_cobertura: parseFloat((document.getElementById('ns-cob')||{}).value) || null,
+    premio_anual: parseFloat((document.getElementById('ns-prem')||{}).value) || null,
+    inicio_vigencia: (document.getElementById('ns-ini')||{}).value || null,
+    fim_vigencia: (document.getElementById('ns-fim')||{}).value || null
+  }).eq('id', id);
+  if (r.error) { toast('Erro: ' + r.error.message, 'err'); return; }
+  fecharModalGenerico(); toast('Seguro atualizado', 'ok');
+  await pintarPaginaSeguros();
+}
+
+
+// =====================================================================
+//  AUDIT LOG — registar quem mudou o quê
+// =====================================================================
+
+async function registarAudit(acao, entidade, entidadeId, descricao, dadosAntes, dadosDepois) {
+  if (!currentCondo) return;
+  try {
+    await sb.from('audit_log').insert({
+      condominio_id: currentCondo.id,
+      utilizador: currentUser ? currentUser.email : 'desconhecido',
+      acao: acao,
+      entidade: entidade,
+      entidade_id: entidadeId || null,
+      descricao: descricao,
+      dados_antes: dadosAntes || null,
+      dados_depois: dadosDepois || null
+    });
+  } catch(e) { console.error('audit:', e); }
+}
+
+async function pintarPaginaAudit() {
+  var zona = document.getElementById('audit-lista');
+  if (!zona || !currentCondo) return;
+  try {
+    var r = await sb.from('audit_log').select('*').eq('condominio_id', currentCondo.id)
+      .order('criado_em', { ascending: false }).limit(50);
+    var logs = r.data || [];
+    if (!logs.length) { zona.innerHTML = '<div style="text-align:center;padding:40px;color:var(--t3)">Sem registos de auditoria.</div>'; return; }
+
+    var h = '';
+    var acaoIcon = {criar:'🟢',editar:'🟡',apagar:'🔴',aprovar:'✅',enviar:'📨'};
+    logs.forEach(function(l) {
+      h += '<div style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.04)">';
+      h += '<span style="font-size:14px">' + (acaoIcon[l.acao] || '⬜') + '</span>';
+      h += '<div style="flex:1"><div style="font-size:12px;color:var(--text)">' + (l.descricao || l.acao + ' ' + l.entidade) + '</div>';
+      h += '<div style="font-size:10px;color:var(--t3);margin-top:2px">' + new Date(l.criado_em).toLocaleString('pt-PT') + ' · ' + (l.utilizador || '?') + '</div></div>';
+      h += '</div>';
+    });
+    zona.innerHTML = h;
+  } catch(e) { zona.innerHTML = '<div style="color:var(--t3)">Erro ao carregar.</div>'; }
+}
+
 async function verificarAvisosGerais() {
   try { pintarPredioNovo(); } catch(e) {}
   try { verificarCicloQuotas(); } catch(e) {}
   try { carregarManutencoes().then(function(){ pintarAvisoManutencoes(); }); } catch(e) {}
+  try { carregarSeguros().then(function(){ pintarAvisoSeguros(); }); } catch(e) {}
   try { pintarResumoMensal(); } catch(e) {}
   try { pintarGraficoEvolucao(); } catch(e) {}
   // CONVOCATÓRIA — lembrete quando há assembleia marcada sem convocatória enviada
@@ -5632,6 +5845,7 @@ async function verificarAvisosGerais() {
   try { pintarPaginaManutencoes(); } catch(e) {}
   try { pintarPaginaEspacos(); } catch(e) {}
   try { pintarPaginaRegulamento(); } catch(e) {}
+  try { pintarPaginaSeguros(); } catch(e) {}
   try { verificarRegulamentoObrigatorio(); } catch(e) {}
   if (!currentCondo) return;
   var avisos = [];
@@ -20269,6 +20483,18 @@ async function construirContextoIA() {
           return m.nome + (m.obrigatorio ? ' [LEGAL]' : '') + (m.proxima_data ? ' próxima: ' + m.proxima_data : ' sem data') + (m.ultima_data ? ' última: ' + m.ultima_data : '');
         });
         linhas.push('Manutenções: ' + manutCtx.join(' | '));
+      }
+    } catch(e) {}
+
+    // Seguros para a IA
+    try {
+      if (_seguros && _seguros.length) {
+        var segCtx = _seguros.map(function(s) {
+          return s.tipo + (s.seguradora ? ' (' + s.seguradora + ')' : '') +
+            (s.fim_vigencia ? ' até ' + s.fim_vigencia : ' sem data') +
+            (s.valor_cobertura ? ' cobertura ' + s.valor_cobertura + 'EUR' : '');
+        });
+        linhas.push('Seguros: ' + segCtx.join(' | '));
       }
     } catch(e) {}
 
