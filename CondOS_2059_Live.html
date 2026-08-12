@@ -870,7 +870,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.08.04-0730</div>
+      <div class="sb-tag">2059 Pro · build v2026.08.04-0800</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -2021,7 +2021,9 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
         <div class="sec-hdr">
           <span class="sec-t">Regulamento do Condomínio</span>
           <div style="display:flex;gap:8px;">
-            <button class="btn-ghost" style="font-size:12px;padding:8px 14px" onclick="sugerirRegulamentoIA()">Sugestão IA</button>
+            <button class="btn-ghost" style="font-size:12px;padding:8px 14px" onclick="gerarRegulamentoPDF()">📄 PDF</button>
+            <button class="btn-ghost" style="font-size:12px;padding:8px 14px" onclick="novoArtigoRegulamento()">+ Artigo</button>
+            <button class="btn-primary" style="font-size:12px;padding:8px 14px" onclick="sugerirRegulamentoIA()">Sugestão IA</button>
           </div>
         </div>
         <div id="regulamento-lista" style="padding:0 16px 16px"></div>
@@ -5495,6 +5497,123 @@ async function carregarContextoRegulamento() {
 // =================================================================
 //  PÁGINA DE GESTÃO DO REGULAMENTO
 // =================================================================
+
+
+// REGULAMENTO — gerar PDF profissional
+async function gerarRegulamentoPDF() {
+  if (!currentCondo) return;
+  var r = await sb.from('regulamento').select('*').eq('condominio_id', currentCondo.id).eq('ativo', true).order('numero');
+  var artigos = r.data || [];
+  if (!artigos.length) { toast('Sem artigos para gerar', 'warn'); return; }
+
+  var { jsPDF } = window.jspdf;
+  var doc = new jsPDF();
+  var M = 20, y = 25, W = 170;
+
+  // cabeçalho
+  doc.setFillColor(11, 17, 26);
+  doc.rect(0, 0, 210, 40, 'F');
+  doc.setTextColor(0, 212, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(18);
+  doc.text('REGULAMENTO DO CONDOMÍNIO', M, 20);
+  doc.setTextColor(200, 210, 220); doc.setFont('helvetica', 'normal'); doc.setFontSize(11);
+  doc.text(currentCondo.nome || '', M, 30);
+  doc.setFontSize(9);
+  doc.text('Aprovado em ' + (currentCondo.regulamento_data ? new Date(currentCondo.regulamento_data).toLocaleDateString('pt-PT') : 'data a definir'), M, 36);
+
+  y = 50;
+  doc.setTextColor(60, 66, 72);
+
+  var catNomes = { uso_espacos:'UTILIZAÇÃO DAS PARTES COMUNS', ruido:'HORÁRIOS E RUÍDO', animais:'ANIMAIS', obras:'OBRAS', garagem:'GARAGEM', seguranca:'SEGURANÇA', limpeza:'LIMPEZA E RESÍDUOS', geral:'DISPOSIÇÕES GERAIS' };
+  var catAtual = '';
+
+  artigos.forEach(function(a) {
+    var cat = a.categoria || 'geral';
+    if (cat !== catAtual) {
+      catAtual = cat;
+      if (y > 260) { doc.addPage(); y = 25; }
+      y += 6;
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
+      doc.setTextColor(0, 150, 200);
+      doc.text(catNomes[cat] || cat.toUpperCase(), M, y); y += 8;
+    }
+
+    if (y > 260) { doc.addPage(); y = 25; }
+
+    // título do artigo
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(10);
+    doc.setTextColor(30, 35, 40);
+    doc.text('Artigo ' + (a.numero || '?') + '.º — ' + a.titulo, M, y); y += 5;
+
+    // texto do artigo (com word wrap)
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+    doc.setTextColor(60, 66, 72);
+    var linhas = doc.splitTextToSize(a.texto || '', W);
+    linhas.forEach(function(l) {
+      if (y > 275) { doc.addPage(); y = 25; }
+      doc.text(l, M, y); y += 4.2;
+    });
+    y += 4;
+  });
+
+  // rodapé
+  var totalPages = doc.internal.getNumberOfPages();
+  for (var p = 1; p <= totalPages; p++) {
+    doc.setPage(p);
+    doc.setFontSize(8); doc.setTextColor(150);
+    doc.text(currentCondo.nome + ' — Regulamento', M, 290);
+    doc.text('Página ' + p + '/' + totalPages, 190, 290, { align: 'right' });
+  }
+
+  doc.save('Regulamento_' + (currentCondo.nome || 'condominio').replace(/[^a-zA-Z0-9]/g, '_') + '.pdf');
+  toast('PDF gerado!', 'ok');
+
+  // guardar nos documentos do sistema
+  try {
+    await sb.from('documentos').insert({
+      condominio_id: currentCondo.id,
+      nome: 'Regulamento do Condomínio',
+      tipo: 'regulamento',
+      descricao: 'Regulamento com ' + artigos.length + ' artigos, gerado em ' + new Date().toLocaleDateString('pt-PT'),
+      criado_em: new Date().toISOString()
+    });
+  } catch(e) {}
+}
+
+// ACRESCENTAR artigo novo manualmente
+async function novoArtigoRegulamento() {
+  var r = await sb.from('regulamento').select('numero').eq('condominio_id', currentCondo.id).eq('ativo', true).order('numero', {ascending: false}).limit(1);
+  var proxNum = ((r.data || [])[0] || {}).numero || 0;
+  proxNum++;
+
+  var h = '<div style="padding:4px">';
+  h += '<div style="display:grid;grid-template-columns:60px 1fr;gap:10px;margin-bottom:10px">';
+  h += '<label style="font-size:11px;color:var(--t2)">Art. nº<br><input type="number" id="na-num" value="' + proxNum + '" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--c2);border:1px solid var(--b);border-radius:8px;padding:10px;color:var(--t1);font-family:inherit"></label>';
+  h += '<label style="font-size:11px;color:var(--t2)">Título<br><input type="text" id="na-tit" placeholder="Ex: Utilização da piscina" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--c2);border:1px solid var(--b);border-radius:8px;padding:10px;color:var(--t1);font-family:inherit;font-size:14px"></label>';
+  h += '</div>';
+  h += '<label style="font-size:11px;color:var(--t2)">Categoria<br><select id="na-cat" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--c2);border:1px solid var(--b);border-radius:8px;padding:10px;color:var(--t1);font-family:inherit"><option value="uso_espacos">Utilização de espaços</option><option value="ruido">Horários e ruído</option><option value="animais">Animais</option><option value="obras">Obras</option><option value="garagem">Garagem</option><option value="seguranca">Segurança</option><option value="limpeza">Limpeza</option><option value="geral">Geral</option></select></label>';
+  h += '<label style="font-size:11px;color:var(--t2);display:block;margin-top:10px">Texto<br><textarea id="na-txt" rows="5" placeholder="O conteúdo do artigo…" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--c2);border:1px solid var(--b);border-radius:8px;padding:10px;color:var(--t1);font-family:inherit;resize:vertical"></textarea></label>';
+  h += '<button class="btn-primary" style="width:100%;margin-top:14px;font-size:13px;padding:12px" onclick="criarArtigoRegulamento()">Acrescentar artigo</button>';
+  h += '</div>';
+  abrirModalGenerico('Novo artigo do regulamento', h);
+}
+
+async function criarArtigoRegulamento() {
+  var tit = ((document.getElementById('na-tit') || {}).value || '').trim();
+  var txt = ((document.getElementById('na-txt') || {}).value || '').trim();
+  if (!tit || !txt) { toast('Preenche o título e o texto', 'warn'); return; }
+  var r = await sb.from('regulamento').insert({
+    condominio_id: currentCondo.id,
+    numero: parseInt((document.getElementById('na-num') || {}).value) || 1,
+    titulo: tit,
+    texto: txt,
+    categoria: (document.getElementById('na-cat') || {}).value || 'geral',
+    data_aprovacao: new Date().toISOString().split('T')[0]
+  });
+  if (r.error) { toast('Erro: ' + r.error.message, 'err'); return; }
+  fecharModalGenerico();
+  toast('Artigo acrescentado', 'ok');
+  await pintarPaginaRegulamento();
+}
 
 async function pintarPaginaRegulamento() {
   var zona = document.getElementById('regulamento-lista');
