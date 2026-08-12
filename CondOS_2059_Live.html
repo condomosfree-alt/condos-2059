@@ -870,7 +870,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.08.04-0800</div>
+      <div class="sb-tag">2059 Pro · build v2026.08.04-1035</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -897,11 +897,12 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
       <div class="ni" onclick="nav('ocorrencias')"><span class="mic"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span><span>Ocorrências</span><span class="nb" id="nb-oc"></span></div>
       <div class="ni" onclick="nav('mensagens')"><span class="mic"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-8 8H7l-4 3 1.2-4.4A8 8 0 1 1 21 12z"/><path d="M8.5 11h7M8.5 14.5h4"/></svg></span><span>Mensagens</span><span class="nb" id="nb-msg" style="background:#f87171;"></span></div>
       <div class="ni" onclick="nav('parceiros')"><span class="mic"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11 17l-2.2 2.2a2 2 0 0 1-2.8-2.8l5.6-5.6a2 2 0 0 1 2.8 0l1.4 1.4"/><path d="M13 7l2.2-2.2a2 2 0 0 1 2.8 2.8L15 10.6"/><path d="M3 12l3-3M18 15l3-3"/></svg></span><span>Parceiros</span></div>
-      <div class="nav-section">Documentos &amp; Reuniões</div>
+            <div class="nav-section">Gestão</div>
       <div class="ni" onclick="nav('seguros')"><span class="mic"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span><span>Seguros</span></div>
       <div class="ni" onclick="nav('regulamento')"><span class="mic"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></span><span>Regulamento</span></div>
-      <div class="ni" onclick="nav('espacos')"><span class="mic"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg></span><span>Espaços Comuns</span></div>
-      <div class="ni" onclick="nav('manutencoes')"><span class="mic"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></span><span>Manutenções</span></div>
+      <div class="ni" onclick="nav('espacos')"><span class="mic"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg></span><span>Espaços Comuns</span><span id="badge-espacos" style="display:none;margin-left:auto;background:#f87171;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;border-radius:8px;align-items:center;justify-content:center;padding:0 4px;"></span></div>
+      <div class="ni" onclick="nav('manutencoes')"><span class="mic"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></span><span>Manutenções</span><span id="badge-manutencoes" style="display:none;margin-left:auto;background:#f87171;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;border-radius:8px;align-items:center;justify-content:center;padding:0 4px;"></span></div>
+                        <div class="nav-section">Documentos & Reuniões</div>
       <div class="ni" onclick="nav('documentos')"><span class="mic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3H7a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V8z"/><path d="M13 3v5h5"/><path d="M9.5 13h5M9.5 16.5h5"/></svg></span><span>Documentos</span></div>
       <div class="ni" onclick="nav('assembleias')"><span class="mic"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span><span>Assembleias</span><span id="badge-assembleias" style="display:none;margin-left:auto;background:#f87171;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;line-height:16px;text-align:center;border-radius:8px;padding:0 4px;"></span></div>
       <div class="nav-section">IA</div>
@@ -1680,7 +1681,8 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
         <div class="sec-hdr">
           <span class="sec-t">Raio-X das Contas</span>
           <span style="font-size:11px;color:var(--t3);">Auditoria & passagem de gestão</span>
-        </div>
+        
+        <div id="audit-lista" style="padding:0 16px 16px;margin-top:16px;border-top:1px solid var(--b1)"><div style="font-size:11px;font-weight:700;color:var(--t2);letter-spacing:.06em;margin-bottom:8px;padding-top:12px">REGISTO DE ALTERAÇÕES</div></div></div>
 
         <!-- Abas -->
         <div style="display:flex;gap:6px;margin-bottom:16px;border-bottom:1px solid var(--b1);">
@@ -1964,6 +1966,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
       <div class="page" id="page-assembleias">
         <div class="sec-hdr">
           <span class="sec-t">Assembleias</span>
+          <div style="display:flex;gap:8px;"><button class="btn-ghost" style="font-size:11px;padding:6px 12px" onclick="gerarMapaPresencas()">📊 Mapa de presenças</button>
           <div style="display:flex;gap:8px;">
             <button class="btn-ghost" onclick="openModal('mo-import-ata')"><i class="ti ti-file-upload"></i>Importar Ata IA</button>
             <button class="btn-primary" onclick="abrirConvocatoria()"><i class="ti ti-plus"></i>Convocar</button>
@@ -2020,11 +2023,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
       <div class="page" id="page-regulamento">
         <div class="sec-hdr">
           <span class="sec-t">Regulamento do Condomínio</span>
-          <div style="display:flex;gap:8px;">
-            <button class="btn-ghost" style="font-size:12px;padding:8px 14px" onclick="gerarRegulamentoPDF()">📄 PDF</button>
-            <button class="btn-ghost" style="font-size:12px;padding:8px 14px" onclick="novoArtigoRegulamento()">+ Artigo</button>
-            <button class="btn-primary" style="font-size:12px;padding:8px 14px" onclick="sugerirRegulamentoIA()">Sugestão IA</button>
-          </div>
+          <div id="reg-header-btns" style="display:flex;gap:8px;"></div>
         </div>
         <div id="regulamento-lista" style="padding:0 16px 16px"></div>
       </div>
@@ -4482,7 +4481,20 @@ async function verificarCicloQuotas() {
     }
     if (nDevedores) {
       h += '<div style="border-left:2px solid rgba(255,84,112,.55);padding:2px 0 2px 11px">';
-      h += '<div style="font-size:12px;font-weight:650;color:var(--text)">' + nDevedores + ' fração(ões) em atraso por avisar</div>';
+      h += '<div style="font-size:12px;font-weight:650;color:var(--text)">' + nDevedores + ' fração(ões) em atraso</div>';
+      // contar dias de atraso do mais antigo
+      var maxAtraso = 0;
+      devedoresArr.forEach(function(q) {
+        if (q.data_vencimento) {
+          var dias = Math.round((new Date() - new Date(q.data_vencimento)) / 86400000);
+          if (dias > maxAtraso) maxAtraso = dias;
+        }
+      });
+      if (maxAtraso > 30) {
+        h += '<div style="font-size:11px;color:var(--red);font-weight:600;margin-top:3px">⚠️ Dívida com mais de 30 dias — considerar pré-contencioso</div>';
+      } else if (maxAtraso > 15) {
+        h += '<div style="font-size:11px;color:var(--amber);margin-top:3px">Quota(s) com mais de 15 dias de atraso — aviso formal recomendado</div>';
+      }
       h += '<div style="font-size:11px;color:var(--t2);line-height:1.5;margin-top:3px">Quotas vencidas e ainda não pagas. O aviso fica registado nas mensagens de cada condómino como prova de comunicação.</div>';
       h += '<div style="display:flex;gap:8px;margin-top:7px;flex-wrap:wrap">';
       h += '<button class="btn-ghost" style="width:auto;display:inline-flex;font-size:11px;padding:6px 12px" onclick="nav(\'quotas\')">Ver devedores</button>';
@@ -4890,7 +4902,7 @@ async function pintarGraficoEvolucao() {
 // =====================================================================
 
 async function ativarModoDemo() {
-  if (!confirm('Isto cria um prédio de demonstração com dados fictícios.\n\nÉ só para mostrar o produto — pode ser apagado depois.\n\nContinuar?')) return;
+  if (!await confirmar('Isto cria um prédio de demonstração com dados fictícios. É só para mostrar o produto — pode ser apagado depois.', {titulo:'Modo demonstração', okTexto:'Criar prédio demo'})) return;
   toast('A criar o prédio de demonstração…', 'ok');
 
   var nomes = [
@@ -5134,6 +5146,7 @@ async function aprovarReserva(id) {
         '\n\nBom evento!'
     });
   } catch(e) {}
+  try { registarAudit('aprovar', 'reserva', id, 'Aprovar de reserva de espaço comum'); } catch(e) {}
   toast('Reserva aprovada — condómino avisado', 'ok');
   // registar receita se houver taxa
   try {
@@ -5162,6 +5175,7 @@ async function rejeitarReserva(id) {
       texto: '❌ RESERVA NÃO APROVADA\n\nO pedido de reserva não foi aprovado.' + (motivo ? '\n\nMotivo: ' + motivo : '') + '\n\nPodes tentar outra data ou contactar a administração.'
     });
   } catch(e) {}
+  try { registarAudit('rejeitar', 'reserva', id, 'Rejeitar de reserva de espaço comum'); } catch(e) {}
   toast('Reserva rejeitada', 'ok');
   await pintarPaginaEspacos();
 }
@@ -5405,21 +5419,14 @@ async function guardarRegulamentoIA() {
       titulo: a.titulo,
       texto: a.texto,
       categoria: a.categoria || 'geral',
-      data_aprovacao: new Date().toISOString().split('T')[0]
+      estado: 'rascunho'
     };
   });
   var r = await sb.from('regulamento').insert(inserts);
   if (r.error) { toast('Erro: ' + r.error.message, 'err'); return; }
 
-  // marcar como aprovado
-  await sb.from('condominios').update({
-    regulamento_aprovado: true,
-    regulamento_data: new Date().toISOString().split('T')[0]
-  }).eq('id', currentCondo.id);
-  currentCondo.regulamento_aprovado = true;
-
   fecharModalGenerico();
-  toast('Regulamento aprovado com ' + aprovados.length + ' artigos! Já está visível no portal.', 'ok');
+  toast('Rascunho guardado com ' + aprovados.length + ' artigos! Podes editar cada um antes de o levar à assembleia.', 'ok');
   window._regSugerido = null;
 }
 
@@ -5607,7 +5614,7 @@ async function criarArtigoRegulamento() {
     titulo: tit,
     texto: txt,
     categoria: (document.getElementById('na-cat') || {}).value || 'geral',
-    data_aprovacao: new Date().toISOString().split('T')[0]
+    estado: 'rascunho'
   });
   if (r.error) { toast('Erro: ' + r.error.message, 'err'); return; }
   fecharModalGenerico();
@@ -5630,11 +5637,40 @@ async function pintarPaginaRegulamento() {
     return;
   }
 
-  var cats = {};
-  artigos.forEach(function(a) { var c = a.categoria || 'geral'; if (!cats[c]) cats[c] = []; cats[c].push(a); });
+  // determinar o estado geral
+  var rascunhos = artigos.filter(function(a) { return a.estado === 'rascunho' || !a.estado; });
+  var propostas = artigos.filter(function(a) { return a.estado === 'proposta'; });
+  var aprovados = artigos.filter(function(a) { return a.estado === 'aprovado'; });
+  var estadoGeral = aprovados.length > 0 ? 'aprovado' : (propostas.length > 0 ? 'proposta' : 'rascunho');
 
   var h = '';
-  var catNomes = { uso_espacos:'Utilização das partes comuns', ruido:'Horários e ruído', animais:'Animais', obras:'Obras', garagem:'Garagem', seguranca:'Segurança', limpeza:'Limpeza e resíduos', geral:'Disposições gerais' };
+
+  // barra de estado
+  var cores = { rascunho: 'var(--amber)', proposta: 'var(--cyan)', aprovado: 'var(--green)' };
+  var textos = {
+    rascunho: '📝 RASCUNHO — podes editar livremente. Quando estiver pronto, gera o PDF e leva à assembleia para votação.',
+    proposta: '📋 PROPOSTA — pronto para assembleia. Depois de votado e aprovado, carrega em "Aprovar em assembleia" para bloquear.',
+    aprovado: '✅ APROVADO EM ASSEMBLEIA — este regulamento tem valor legal. Para alterações, é preciso nova deliberação em assembleia.'
+  };
+  h += '<div style="background:rgba(0,212,255,.06);border:1px solid rgba(0,212,255,.2);border-radius:12px;padding:14px 16px;margin-bottom:16px">';
+  h += '<div style="font-size:12px;color:' + cores[estadoGeral] + ';font-weight:700">' + textos[estadoGeral] + '</div>';
+  if (estadoGeral === 'rascunho') {
+    h += '<div style="display:flex;gap:8px;margin-top:10px">';
+    h += '<button class="btn-primary" style="font-size:12px;padding:8px 14px" onclick="promoverRegulamento(\'proposta\')">Marcar como proposta para assembleia</button>';
+    h += '</div>';
+  }
+  if (estadoGeral === 'proposta') {
+    h += '<div style="display:flex;gap:8px;margin-top:10px">';
+    h += '<button class="btn-primary" style="font-size:12px;padding:8px 14px" onclick="promoverRegulamento(\'aprovado\')">✅ Aprovar em assembleia</button>';
+    h += '<button class="btn-ghost" style="font-size:12px;padding:8px 14px" onclick="promoverRegulamento(\'rascunho\')">← Voltar a rascunho</button>';
+    h += '</div>';
+  }
+  h += '</div>';
+
+  // artigos por categoria
+  var cats = {};
+  artigos.forEach(function(a) { var c = a.categoria || 'geral'; if (!cats[c]) cats[c] = []; cats[c].push(a); });
+  var catNomes = { uso_espacos:'UTILIZAÇÃO DAS PARTES COMUNS', ruido:'HORÁRIOS E RUÍDO', animais:'ANIMAIS', obras:'OBRAS', garagem:'GARAGEM', seguranca:'SEGURANÇA', limpeza:'LIMPEZA E RESÍDUOS', geral:'DISPOSIÇÕES GERAIS' };
 
   Object.keys(cats).forEach(function(cat) {
     h += '<div style="margin-bottom:18px">';
@@ -5647,7 +5683,13 @@ async function pintarPaginaRegulamento() {
       h += '<div style="font-size:11.5px;color:var(--t2);line-height:1.6;margin-top:4px;white-space:pre-wrap">' + a.texto + '</div>';
       if (a.data_aprovacao) h += '<div style="font-size:10px;color:var(--t3);margin-top:4px">Aprovado em ' + new Date(a.data_aprovacao).toLocaleDateString('pt-PT') + '</div>';
       h += '</div>';
-      h += '<button class="btn-ghost" style="width:auto;font-size:10px;padding:4px 10px" onclick="editarArtigo(\'' + a.id + '\')">Editar</button>';
+      // só editável se NÃO estiver aprovado
+      if (estadoGeral !== 'aprovado') {
+        h += '<div style="display:flex;flex-direction:column;gap:4px">';
+        h += '<button class="btn-ghost" style="width:auto;font-size:10px;padding:4px 10px" onclick="editarArtigo(\'' + a.id + '\')">Editar</button>';
+        h += '<button class="btn-ghost" style="width:auto;font-size:10px;padding:4px 10px;color:var(--red)" onclick="revogarArtigo(\'' + a.id + '\')">Remover</button>';
+        h += '</div>';
+      }
       h += '</div></div>';
     });
     h += '</div>';
@@ -5673,7 +5715,65 @@ async function pintarPaginaRegulamento() {
   } catch(e) {}
 
   zona.innerHTML = h;
+
+  // botões do header — contextuais
+  var hdrBtns = document.getElementById('reg-header-btns');
+  if (hdrBtns) {
+    var bh = '';
+    bh += '<button class="btn-ghost" style="font-size:12px;padding:8px 14px" onclick="gerarRegulamentoPDF()">📄 PDF</button>';
+    if (estadoGeral !== 'aprovado') {
+      bh += '<button class="btn-ghost" style="font-size:12px;padding:8px 14px" onclick="novoArtigoRegulamento()">+ Artigo</button>';
+      if (!artigos.length) bh += '<button class="btn-primary" style="font-size:12px;padding:8px 14px" onclick="sugerirRegulamentoIA()">Sugestão IA</button>';
+    }
+    hdrBtns.innerHTML = bh;
+  }
 }
+
+// Promover o regulamento de estado (rascunho → proposta → aprovado)
+async function promoverRegulamento(novoEstado) {
+  if (!currentCondo) return;
+  if (novoEstado === 'aprovado') {
+    if (!confirm('Confirmas que o regulamento foi votado e aprovado em assembleia?\n\nDepois de aprovado, os artigos ficam BLOQUEADOS — só podem ser alterados por nova deliberação em assembleia.')) return;
+  }
+
+  await sb.from('regulamento').update({
+    estado: novoEstado,
+    data_aprovacao: novoEstado === 'aprovado' ? new Date().toISOString().split('T')[0] : null
+  }).eq('condominio_id', currentCondo.id).eq('ativo', true);
+
+  if (novoEstado === 'aprovado') {
+    await sb.from('condominios').update({
+      regulamento_aprovado: true,
+      regulamento_data: new Date().toISOString().split('T')[0]
+    }).eq('id', currentCondo.id);
+    currentCondo.regulamento_aprovado = true;
+
+    // gerar PDF final e guardar nos documentos
+    try { await gerarRegulamentoPDF(); } catch(e) {}
+
+    // gravar como deliberação no histórico
+    try {
+      var nArt = (await sb.from('regulamento').select('id').eq('condominio_id', currentCondo.id).eq('ativo', true)).data;
+      await sb.from('deliberacoes').insert({
+        condominio_id: currentCondo.id,
+        tipo: 'regulamento',
+        resumo: 'Regulamento do condomínio aprovado com ' + (nArt ? nArt.length : '?') + ' artigos',
+        resultado: 'aprovada',
+        data_deliberacao: new Date().toISOString().split('T')[0],
+        tags: ['regulamento']
+      });
+    } catch(e) {}
+
+    toast('Regulamento aprovado em assembleia! PDF gerado e guardado nos documentos. Os artigos estão agora bloqueados.', 'ok');
+  } else if (novoEstado === 'proposta') {
+    toast('Regulamento marcado como proposta — gera o PDF e leva à assembleia.', 'ok');
+  } else {
+    toast('Regulamento voltou a rascunho — podes editar livremente.', 'ok');
+  }
+
+  await pintarPaginaRegulamento();
+}
+
 
 async function editarArtigo(id) {
   var r = await sb.from('regulamento').select('*').eq('id', id).single();
@@ -5906,13 +6006,151 @@ async function pintarPaginaAudit() {
   } catch(e) { zona.innerHTML = '<div style="color:var(--t3)">Erro ao carregar.</div>'; }
 }
 
+
+// Formatação monetária em PT
+function eur(v) { return (parseFloat(v) || 0).toFixed(2).replace('.', ',') + '€'; }
+
+
+// Utilitário: desabilitar botão durante operação async
+function btnLoading(btn, textoOriginal) {
+  if (!btn) return;
+  btn._textoOriginal = textoOriginal || btn.textContent;
+  btn.disabled = true;
+  btn.style.opacity = '0.6';
+  btn.textContent = 'A processar…';
+}
+function btnReset(btn) {
+  if (!btn) return;
+  btn.disabled = false;
+  btn.style.opacity = '1';
+  btn.textContent = btn._textoOriginal || 'OK';
+}
+
+
+// TENDÊNCIA — comparar gastos com o mesmo período do ano anterior
+async function pintarTendenciaGastos() {
+  var zona = document.getElementById('dash-tendencia');
+  if (!zona) {
+    zona = document.createElement('div'); zona.id = 'dash-tendencia';
+    var rm = document.getElementById('resumo-mensal');
+    if (rm && rm.parentNode) rm.parentNode.insertBefore(zona, rm.nextSibling);
+    else return;
+  }
+  if (!currentCondo) return;
+  try {
+    var anoAtual = new Date().getFullYear();
+    var mesAtual = new Date().getMonth() + 1;
+    // gastos acumulados até este mês, este ano vs ano passado
+    var [rAtual, rAnterior] = await Promise.all([
+      sb.from('movimentos').select('valor').eq('condominio_id', currentCondo.id).eq('tipo', 'despesa')
+        .gte('data_movimento', anoAtual + '-01-01').lte('data_movimento', anoAtual + '-' + String(mesAtual).padStart(2,'0') + '-31'),
+      sb.from('movimentos').select('valor').eq('condominio_id', currentCondo.id).eq('tipo', 'despesa')
+        .gte('data_movimento', (anoAtual-1) + '-01-01').lte('data_movimento', (anoAtual-1) + '-' + String(mesAtual).padStart(2,'0') + '-31')
+    ]);
+    var totalAtual = (rAtual.data || []).reduce(function(s,m) { return s + parseFloat(m.valor||0); }, 0);
+    var totalAnterior = (rAnterior.data || []).reduce(function(s,m) { return s + parseFloat(m.valor||0); }, 0);
+
+    if (totalAnterior === 0 && totalAtual === 0) { zona.innerHTML = ''; return; }
+
+    var diff = totalAnterior > 0 ? Math.round((totalAtual - totalAnterior) / totalAnterior * 100) : 0;
+    var subiu = diff > 5;
+    var desceu = diff < -5;
+
+    var seta = subiu ? '↑' : (desceu ? '↓' : '→');
+    var cor = subiu ? 'var(--red)' : (desceu ? 'var(--green)' : 'var(--t2)');
+    var texto = subiu ? ('Gastos subiram ' + Math.abs(diff) + '% face ao mesmo período de ' + (anoAtual-1))
+              : (desceu ? ('Gastos desceram ' + Math.abs(diff) + '% face ao mesmo período de ' + (anoAtual-1))
+              : 'Gastos estáveis face ao mesmo período de ' + (anoAtual-1));
+
+    zona.innerHTML = '<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--s1);border:1px solid var(--b1);border-radius:10px;margin-bottom:14px">' +
+      '<span style="font-size:22px;color:' + cor + '">' + seta + '</span>' +
+      '<div><div style="font-size:12px;font-weight:600;color:' + cor + '">' + texto + '</div>' +
+      '<div style="font-size:10px;color:var(--t3);margin-top:2px">Jan–' + new Date().toLocaleDateString('pt-PT', {month:'short'}).replace('.','') + ': ' + eur(totalAtual) + ' este ano vs ' + eur(totalAnterior) + ' em ' + (anoAtual-1) + '</div></div></div>';
+  } catch(e) { zona.innerHTML = ''; }
+}
+
+
+// MAPA DE PRESENÇAS — quem falta sempre (útil para quórum e contacto)
+async function gerarMapaPresencas() {
+  if (!currentCondo) return;
+  var assR = await sb.from('assembleias').select('id,data_assembleia')
+    .eq('condominio_id', currentCondo.id).order('data_assembleia', { ascending: false }).limit(10);
+  var assembleias = assR.data || [];
+  if (!assembleias.length) { toast('Sem assembleias registadas', 'warn'); return; }
+
+  var presencas = {};
+  for (var i = 0; i < assembleias.length; i++) {
+    var pR = await sb.from('assembleia_presencas').select('fracao_id,estado')
+      .eq('assembleia_id', assembleias[i].id);
+    (pR.data || []).forEach(function(p) {
+      if (!presencas[p.fracao_id]) presencas[p.fracao_id] = { total: 0, presente: 0, ausente: 0 };
+      presencas[p.fracao_id].total++;
+      if (p.estado === 'presente' || p.estado === 'representado') presencas[p.fracao_id].presente++;
+      else presencas[p.fracao_id].ausente++;
+    });
+  }
+
+  var h = '<div style="max-height:60vh;overflow-y:auto;padding:4px">';
+  h += '<div style="font-size:11px;color:var(--t3);margin-bottom:12px">Últimas ' + assembleias.length + ' assembleias. Quem falta sistematicamente pode precisar de contacto direto.</div>';
+
+  (fracoes || []).forEach(function(f) {
+    var d = presencas[f.id] || { total: 0, presente: 0, ausente: 0 };
+    var pct = d.total > 0 ? Math.round(d.presente / d.total * 100) : 0;
+    var cor = pct >= 70 ? 'var(--green)' : (pct >= 40 ? 'var(--amber)' : 'var(--red)');
+    h += '<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.04)">';
+    h += '<div style="width:40px;font-size:12px;font-weight:700;color:var(--text)">' + (f.codigo || '?') + '</div>';
+    h += '<div style="flex:1;font-size:12px;color:var(--t2)">' + (f.proprietario_nome || '?') + '</div>';
+    h += '<div style="width:70px;height:6px;background:var(--s2);border-radius:3px;overflow:hidden"><div style="height:100%;width:' + pct + '%;background:' + cor + ';border-radius:3px"></div></div>';
+    h += '<div style="width:30px;text-align:right;font-size:11px;color:' + cor + '">' + pct + '%</div>';
+    h += '</div>';
+  });
+  h += '</div>';
+  abrirModalGenerico('Mapa de presenças', h);
+}
+
+// HISTÓRICO DE PROPRIETÁRIOS — registar mudanças de dono
+// Antes de mudar o proprietário, guardar o antigo no histórico
+async function registarMudancaProprietario(fracaoId, novoNome, novoEmail) {
+  try {
+    var f = fracoes.find(function(x) { return x.id === fracaoId; });
+    if (!f) return;
+    var antigoNome = f.proprietario_nome || '';
+    var antigoEmail = f.proprietario_email || '';
+    if (antigoNome === novoNome && antigoEmail === novoEmail) return; // sem mudança
+    // gravar no audit log como mudança de proprietário
+    await registarAudit('editar', 'proprietario', fracaoId,
+      'Mudança de proprietário: ' + (f.codigo||'?') + ' — de ' + antigoNome + ' para ' + novoNome,
+      { nome: antigoNome, email: antigoEmail },
+      { nome: novoNome, email: novoEmail }
+    );
+  } catch(e) { console.error('hist proprietario:', e); }
+}
 async function verificarAvisosGerais() {
   try { pintarPredioNovo(); } catch(e) {}
   try { verificarCicloQuotas(); } catch(e) {}
   try { carregarManutencoes().then(function(){ pintarAvisoManutencoes(); }); } catch(e) {}
   try { carregarSeguros().then(function(){ pintarAvisoSeguros(); }); } catch(e) {}
   try { pintarResumoMensal(); } catch(e) {}
+  try { pintarTendenciaGastos(); } catch(e) {}
   try { pintarGraficoEvolucao(); } catch(e) {}
+
+  // FECHO ANUAL — em janeiro, lembrar de preparar contas do ano anterior
+  try {
+    if (new Date().getMonth() === 0) {  // janeiro
+      var zonaFecho = document.getElementById('dash-fecho-anual');
+      if (!zonaFecho) {
+        zonaFecho = document.createElement('div'); zonaFecho.id = 'dash-fecho-anual';
+        var dg = document.getElementById('dash-grafico');
+        if (dg && dg.parentNode) dg.parentNode.insertBefore(zonaFecho, dg);
+      }
+      var anoAnt = new Date().getFullYear() - 1;
+      zonaFecho.innerHTML = '<div style="background:rgba(0,212,255,.06);border:1px solid rgba(0,212,255,.2);border-radius:12px;padding:14px 16px;margin-bottom:14px">' +
+        '<div style="font-size:12.5px;font-weight:700;color:var(--cyan)">É altura de fechar as contas de ' + anoAnt + '</div>' +
+        '<div style="font-size:11px;color:var(--t2);line-height:1.55;margin-top:4px">O Art. 1436.º CC obriga o administrador a prestar contas anualmente. O sistema pode preparar o relatório automaticamente.</div>' +
+        '<button class="btn-ghost" style="width:auto;display:inline-flex;font-size:11px;padding:6px 12px;margin-top:8px" onclick="nav(\'contas\')">Preparar contas de ' + anoAnt + '</button>' +
+        '</div>';
+    }
+  } catch(e) {}
   // CONVOCATÓRIA — lembrete quando há assembleia marcada sem convocatória enviada
   try {
     var assProxR = await sb.from('assembleias').select('id,data_assembleia,convocatoria_enviada')
@@ -5965,6 +6203,7 @@ async function verificarAvisosGerais() {
   try { pintarPaginaEspacos(); } catch(e) {}
   try { pintarPaginaRegulamento(); } catch(e) {}
   try { pintarPaginaSeguros(); } catch(e) {}
+  try { pintarPaginaAudit(); } catch(e) {}
   try { verificarRegulamentoObrigatorio(); } catch(e) {}
   if (!currentCondo) return;
   var avisos = [];
@@ -10602,6 +10841,30 @@ async function markPago(qid, val) {
     });
     // 🏦 Fundo de reserva
     await transferirParaFundo(parseFloat(val), descQ, hoje, q.fracao_id, q.tipo);
+
+    // RECIBO AUTOMÁTICO — envia direto se tiver email configurado
+    try {
+      var frac = fracoes.find(function(f){ return f.id === q.fracao_id; });
+      if (frac && frac.proprietario_email && _gmailToken) {
+        var meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+        var mesRef = meses[(q.mes||1)-1] + '/' + (q.ano||'');
+        var via = 'email para ' + frac.proprietario_email;
+        var assunto = 'Recibo — quota de ' + mesRef + ' — ' + (currentCondo.nome || '');
+        var corpo = notificacaoEmailHTML({
+          titulo: '✅ Recibo de pagamento',
+          texto: 'Confirmamos o pagamento da quota de ' + mesRef + ' no valor de ' + parseFloat(val).toFixed(2).replace('.',',') + '€. Obrigado!',
+          rodape: 'Este recibo foi gerado automaticamente pelo Cond.OS.'
+        });
+        await enviarEmailGmail(frac.proprietario_email, assunto, corpo);
+        await sb.from('quotas').update({ recibo_via: 'email', recibo_data: new Date().toISOString() }).eq('id', qid);
+        // registar nas mensagens
+        await sb.from('mensagens').insert({
+          condominio_id: currentCondo.id, fracao_id: q.fracao_id, autor: 'admin',
+          lida_admin: true, lida_condomino: false,
+          texto: '✅ RECIBO ENVIADO AUTOMATICAMENTE\n\nQuota de ' + mesRef + '\nValor: ' + parseFloat(val).toFixed(2).replace('.',',') + '€\nEnviado por: ' + via + '\nData: ' + new Date().toLocaleDateString('pt-PT') + '\n\n[Registo automático]'
+        });
+      }
+    } catch(e) { console.error('recibo auto:', e); }
     // 🧾 Recibo automático (portal sempre; email se houver; carta se não)
     var viaR = await processarRecibo(q, q.fracoes || {});
     toast('Quota paga! Recibo ' + (viaR==='email'?'enviado por email':(viaR==='carta'?'pronto p/ carta':'no portal')) + '.','ok');
@@ -13546,7 +13809,7 @@ async function ocRecusar() {
     await ocAvisarCondominos(_txtR);
   } catch(e){}
 
-  if (!confirm('Recusar esta reparação? A ocorrência será encerrada como não aprovada.')) return;
+  if (!await confirmar('Recusar esta reparação? A ocorrência será encerrada como não aprovada.', {titulo:'Recusar reparação', tipo:'aviso', okTexto:'Sim, recusar'})) return;
   await sb.from('ocorrencias').update({ estado:'fechada', precisa_votacao:false }).eq('id',_ocAtual.id);
   await ocEvento('estado', 'Reparação RECUSADA. A ocorrência foi encerrada sem intervenção.');
   toast('Ocorrência encerrada (recusada).','ok');
@@ -14976,6 +15239,17 @@ async function encerrarSessao() {
   _salaAssembleia.estado_sessao = 'encerrada';
   await registarEvento('encerramento', 'Sessão encerrada.', null, null);
   toast('Sessão encerrada. Já podes gerar a ata.', 'ok');
+
+  // AUTOMÁTICO — enviar ata aos ausentes (se já foi gerada)
+  try {
+    if (_salaAssembleia.ata_texto && _salaAssembleia.ata_texto.length > 50) {
+      var ausentes = Object.keys(_salaPresencas).filter(function(fid) { return _salaPresencas[fid] === 'ausente'; });
+      if (ausentes.length) {
+        await enviarAtaAusentes(_salaAssembleia.id);
+        toast(ausentes.length + ' ausente(s) notificado(s) com a ata', 'ok');
+      }
+    }
+  } catch(e) { console.error('ata ausentes auto:', e); }
   renderSala();
   loadAssembleias();
 }
@@ -14997,6 +15271,9 @@ function renderSalaPontos() {
       html += '<div style="display:flex;gap:6px;flex-shrink:0;">';
       html += '<button class="btn-ghost" style="font-size:10px;padding:5px 10px;" onclick="abrirPontoDebate(' + p.num + ')">💬 Debate</button>';
       html += '<button class="btn-primary" style="font-size:10px;padding:5px 10px;" onclick="abrirVotacao(' + p.num + ')">🗳 ' + (votado?'Rever Votação':'Abrir Votação') + '</button>';
+      if (/regulamento/i.test(p.texto || '')) {
+        html += ' <button class="btn-ghost" style="font-size:10px;padding:5px 10px;color:var(--cyan);" onclick="puxarRegulamentoParaVotacao(' + p.num + ')">📜 Votar Regulamento artigo a artigo</button>';
+      }
       html += '</div>';
     }
     html += '</div>';
@@ -18796,6 +19073,22 @@ async function updateBadgesExtra() {
     var fSem = (fracoes||[]).filter(function(f){ return !f.token_acesso; }).length;
     pinta('nb-fracoes', fSem, '#8b95a8');
   } catch(e){}
+  // badges de contagem — espaços, manutenções, mensagens
+  try {
+    // reservas pendentes
+    var resP = await sb.from('reservas_espacos').select('id', { count: 'exact', head: true })
+      .eq('condominio_id', currentCondo.id).eq('estado', 'pendente');
+    var bEsp = document.getElementById('badge-espacos');
+    if (bEsp) { var nEsp = resP.count || 0; bEsp.style.display = nEsp > 0 ? 'inline-flex' : 'none'; bEsp.textContent = nEsp; }
+
+    // manutenções vencidas
+    var hoje = new Date().toISOString().split('T')[0];
+    var manV = await sb.from('manutencoes').select('id', { count: 'exact', head: true })
+      .eq('condominio_id', currentCondo.id).eq('ativo', true).lt('proxima_data', hoje);
+    var bMan = document.getElementById('badge-manutencoes');
+    if (bMan) { var nMan = manV.count || 0; bMan.style.display = nMan > 0 ? 'inline-flex' : 'none'; bMan.textContent = nMan; }
+  } catch(e) {}
+
 }
 
 async function updateBadges() {
