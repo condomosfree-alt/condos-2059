@@ -870,7 +870,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.08.04-1045</div>
+      <div class="sb-tag">2059 Pro · build v2026.08.04-1100</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -25388,6 +25388,11 @@ function nav(p) {
   if(p==='contas'){ _contasAno = new Date().getFullYear(); loadContas(); }
   if(p==='auditoria') auditoriaCarregarHistorico();
   if(p==='definicoes')loadDefForm();
+  if(p==='manutencoes'){ try { pintarPaginaManutencoes(); } catch(e){} }
+  if(p==='seguros'){ try { pintarPaginaSeguros(); } catch(e){} }
+  if(p==='espacos'){ try { pintarPaginaEspacos(); } catch(e){} }
+  if(p==='regulamento'){ try { pintarPaginaRegulamento(); } catch(e){} }
+  if(p==='assembleias'){ try { loadAssembleias(); } catch(e){} }
 }
 
 // ===== UTILS =====
