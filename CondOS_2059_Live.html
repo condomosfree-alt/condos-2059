@@ -870,7 +870,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.08.04-1130</div>
+      <div class="sb-tag">2059 Pro · build v2026.08.04-1200</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -4558,6 +4558,393 @@ async function enviarLembretesAtraso() {
   try { await verificarCicloQuotas(); } catch(e) {}
 }
 
+// =====================================================================
+//  MOTOR DE COBRANÇA AUTOMÁTICA
+// =====================================================================
+//  Corre ao abrir o sistema. Verifica 4 coisas:
+//    1) Quotas emitidas mas condóminos não avisados → avisa
+//    2) Quotas vencidas há 5+ dias → lembrete gentil
+//    3) Quotas vencidas há 15+ dias → aviso formal
+//    4) Quotas vencidas há 30+ dias → pré-contencioso + assembleia
+//
+//  Se o email não estiver ligado, avisa o ADMIN em vez de falhar em silêncio.
+//  Tudo fica nas mensagens como prova legal.
+//
+//  Usa as mensagens existentes para evitar duplicações: se já avisou
+//  desta quota neste nível, não repete.
+// =====================================================================
+
+// =====================================================================
+//  DÍVIDA ACUMULADA — quando ultrapassa um ano
+// =====================================================================
+//  Em Portugal, as quotas de condomínio prescrevem em 5 anos (Art. 310.º CC).
+//  Mas a cobrança judicial deve começar muito antes.
+//
+//  O ciclo de escalamento para dívida prolongada:
+//    3 meses: aviso de acumulação + assembleia
+//    6 meses: carta registada recomendada (Art. 1424.º CC)
+//    12 meses: propor injunção/ação judicial em assembleia
+//
+//  O sistema gera o dossier com toda a prova necessária.
+// =====================================================================
+
+async function verificarDividaAcumulada() {
+  if (!currentCondo || !fracoes) return;
+  var hoje = new Date();
+  var devedoresCronicos = [];
+
+  for (var i = 0; i < fracoes.length; i++) {
+    var f = fracoes[i];
+    var qR = await sb.from('quotas').select('mes,ano,valor_emitido,valor_pago,data_vencimento')
+      .eq('condominio_id', currentCondo.id)
+      .eq('fracao_id', f.id)
+      .neq('estado', 'pago')
+      .order('ano').order('mes');
+    var dividas = (qR.data || []).filter(function(q) {
+      return (parseFloat(q.valor_emitido||0) - parseFloat(q.valor_pago||0)) > 0.005;
+    });
+    if (!dividas.length) continue;
+
+    var totalDivida = dividas.reduce(function(s, q) {
+      return s + parseFloat(q.valor_emitido||0) - parseFloat(q.valor_pago||0);
+    }, 0);
+    var mesesDivida = dividas.length;
+    var maisAntiga = dividas[0];
+    var diasMaisAntiga = maisAntiga.data_vencimento 
+      ? Math.round((hoje - new Date(maisAntiga.data_vencimento)) / 86400000) 
+      : mesesDivida * 30;
+
+    if (mesesDivida >= 3) {
+      devedoresCronicos.push({
+        fracao: f,
+        totalDivida: totalDivida,
+        mesesDivida: mesesDivida,
+        diasMaisAntiga: diasMaisAntiga,
+        quotas: dividas
+      });
+    }
+  }
+
+  if (!devedoresCronicos.length) return;
+
+  // ordenar do mais grave para o menos grave
+  devedoresCronicos.sort(function(a, b) { return b.diasMaisAntiga - a.diasMaisAntiga; });
+
+  var zona = document.getElementById('divida-acumulada-aviso');
+  if (!zona) {
+    zona = document.createElement('div'); zona.id = 'divida-acumulada-aviso';
+    var mc = document.getElementById('motor-cobranca-aviso');
+    if (mc && mc.parentNode) mc.parentNode.insertBefore(zona, mc.nextSibling);
+    else {
+      var cq = document.getElementById('ciclo-quotas');
+      if (cq && cq.parentNode) cq.parentNode.insertBefore(zona, cq);
+    }
+  }
+
+  var h = '<div style="background:rgba(255,84,112,.06);border:1px solid rgba(255,84,112,.3);border-radius:12px;padding:14px 16px;margin-bottom:14px">';
+  h += '<div style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:8px">Dívida acumulada — ' + devedoresCronicos.length + ' fração(ões) com 3+ meses em atraso</div>';
+
+  devedoresCronicos.forEach(function(d) {
+    var nivel = d.diasMaisAntiga >= 365 ? 'judicial' : (d.diasMaisAntiga >= 180 ? 'carta_registada' : 'assembleia');
+    var nivelTxt = {
+      assembleia: '🟡 Deliberar em assembleia',
+      carta_registada: '🟠 Carta registada recomendada',
+      judicial: '🔴 Propor ação judicial / injunção'
+    }[nivel];
+    var nivelCor = {assembleia: 'var(--amber)', carta_registada: '#ff8c00', judicial: 'var(--red)'}[nivel];
+
+    h += '<div style="border-left:3px solid ' + nivelCor + ';padding:4px 0 4px 12px;margin-bottom:10px">';
+    h += '<div style="display:flex;align-items:center;gap:8px">';
+    h += '<div style="flex:1"><span style="font-size:13px;font-weight:700;color:var(--text)">' + (d.fracao.codigo||'?') + '</span> — ' + (d.fracao.proprietario_nome||'?') + '</div>';
+    h += '<span style="font-family:var(--mono);font-size:14px;font-weight:700;color:var(--red)">' + d.totalDivida.toFixed(2).replace('.',',') + '€</span>';
+    h += '</div>';
+    h += '<div style="font-size:11px;color:var(--t2);margin-top:3px">' + d.mesesDivida + ' meses em dívida · ' + d.diasMaisAntiga + ' dias desde a mais antiga · <strong style="color:' + nivelCor + '">' + nivelTxt + '</strong></div>';
+
+    if (nivel === 'judicial') {
+      h += '<div style="font-size:10.5px;color:var(--t3);margin-top:4px;line-height:1.5">Art. 310.º CC: as quotas prescrevem em 5 anos. Com mais de 12 meses de dívida, é recomendável deliberar em assembleia a cobrança judicial via injunção (Balcão Nacional de Injunções) ou ação declarativa.</div>';
+    }
+
+    h += '<div style="display:flex;gap:6px;margin-top:6px">';
+    h += '<button class="btn-ghost" style="width:auto;font-size:10px;padding:4px 10px" onclick="gerarDossierDevedor(\'' + d.fracao.id + '\')">📋 Dossier</button>';
+    if (nivel === 'carta_registada' || nivel === 'judicial') {
+      h += '<button class="btn-ghost" style="width:auto;font-size:10px;padding:4px 10px;color:var(--red)" onclick="gerarCartaRegistada(\'' + d.fracao.id + '\')">✉️ Carta registada</button>';
+    }
+    h += '</div>';
+    h += '</div>';
+  });
+
+  h += '<div style="font-size:10px;color:var(--t3);margin-top:6px;line-height:1.5">A dívida de condomínio pode ser cobrada por injunção (mais rápido e barato que tribunal). O dossier de cobrança inclui todas as provas de comunicação.</div>';
+  h += '</div>';
+  zona.innerHTML = h;
+}
+
+// Gerar dossier de dívida para uma fração
+async function gerarDossierDevedor(fracaoId) {
+  var f = fracoes.find(function(x) { return x.id === fracaoId; });
+  if (!f) return;
+  toast('A preparar dossier de ' + (f.codigo||'?') + '...', 'ok');
+
+  // quotas em dívida
+  var qR = await sb.from('quotas').select('mes,ano,valor_emitido,valor_pago,data_vencimento')
+    .eq('condominio_id', currentCondo.id).eq('fracao_id', fracaoId)
+    .neq('estado', 'pago').order('ano').order('mes');
+  var dividas = (qR.data || []).filter(function(q) {
+    return (parseFloat(q.valor_emitido||0) - parseFloat(q.valor_pago||0)) > 0.005;
+  });
+
+  // mensagens enviadas (provas de comunicação)
+  var msgR = await sb.from('mensagens').select('texto,criado_em')
+    .eq('condominio_id', currentCondo.id).eq('fracao_id', fracaoId)
+    .order('criado_em');
+  var msgs = (msgR.data || []).filter(function(m) {
+    return m.texto && (m.texto.indexOf('ATRASO') > -1 || m.texto.indexOf('LEMBRETE') > -1 || m.texto.indexOf('FORMAL') > -1 || m.texto.indexOf('CONTENCIOSO') > -1 || m.texto.indexOf('QUOTA DE') > -1);
+  });
+
+  var meses = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  var totalDiv = dividas.reduce(function(s,q){ return s + parseFloat(q.valor_emitido||0) - parseFloat(q.valor_pago||0); }, 0);
+
+  var h = '<div style="max-height:65vh;overflow-y:auto;padding:4px">';
+  h += '<div style="font-size:11px;color:var(--t3);margin-bottom:12px">Este dossier pode ser impresso ou exportado como PDF para instruir uma injunção ou ação judicial.</div>';
+
+  h += '<div style="background:var(--s1);border:1px solid var(--b1);border-radius:10px;padding:12px 14px;margin-bottom:12px">';
+  h += '<div style="font-size:12px;font-weight:700;color:var(--text)">Devedor: ' + (f.proprietario_nome||'?') + ' — Fração ' + (f.codigo||'?') + '</div>';
+  h += '<div style="font-size:20px;font-weight:700;color:var(--red);margin-top:4px">' + totalDiv.toFixed(2).replace('.',',') + '€</div>';
+  h += '<div style="font-size:11px;color:var(--t3);margin-top:2px">' + dividas.length + ' meses em dívida · Prédio: ' + (currentCondo.nome||'') + '</div>';
+  h += '</div>';
+
+  // lista de quotas
+  h += '<div style="font-size:11px;font-weight:700;color:var(--t2);margin-bottom:6px">QUOTAS EM DÍVIDA</div>';
+  dividas.forEach(function(q) {
+    var val = parseFloat(q.valor_emitido||0) - parseFloat(q.valor_pago||0);
+    h += '<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:12px;color:var(--t2)">';
+    h += '<span>' + meses[(q.mes||1)-1] + '/' + q.ano + '</span>';
+    h += '<span style="font-weight:600;color:var(--text)">' + val.toFixed(2).replace('.',',') + '€</span>';
+    h += '</div>';
+  });
+
+  // provas de comunicação
+  if (msgs.length) {
+    h += '<div style="font-size:11px;font-weight:700;color:var(--t2);margin:12px 0 6px">PROVAS DE COMUNICAÇÃO (' + msgs.length + ')</div>';
+    msgs.forEach(function(m) {
+      h += '<div style="font-size:10.5px;color:var(--t3);border-left:2px solid var(--b1);padding:4px 0 4px 10px;margin-bottom:6px">';
+      h += new Date(m.criado_em).toLocaleDateString('pt-PT') + ' — ' + (m.texto||'').substring(0, 80);
+      h += '</div>';
+    });
+  }
+
+  h += '<div style="display:flex;gap:8px;margin-top:14px">';
+  h += '<button class="btn-primary" style="flex:1;font-size:12px;padding:10px" onclick="window.print()">🖨️ Imprimir</button>';
+  h += '</div>';
+  h += '</div>';
+
+  abrirModalGenerico('Dossier de cobrança — ' + (f.codigo||'?'), h);
+}
+
+// Gerar carta registada modelo
+async function gerarCartaRegistada(fracaoId) {
+  var f = fracoes.find(function(x) { return x.id === fracaoId; });
+  if (!f) return;
+
+  var qR = await sb.from('quotas').select('mes,ano,valor_emitido,valor_pago')
+    .eq('condominio_id', currentCondo.id).eq('fracao_id', fracaoId)
+    .neq('estado', 'pago').order('ano').order('mes');
+  var dividas = (qR.data || []).filter(function(q) {
+    return (parseFloat(q.valor_emitido||0) - parseFloat(q.valor_pago||0)) > 0.005;
+  });
+  var total = dividas.reduce(function(s,q){ return s + parseFloat(q.valor_emitido||0) - parseFloat(q.valor_pago||0); }, 0);
+  var meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+  var h = '<div style="max-height:65vh;overflow-y:auto;padding:4px;font-size:12px;color:var(--t2);line-height:1.7">';
+  h += '<div style="text-align:right;margin-bottom:20px">' + (currentCondo.cidade || '') + ', ' + new Date().toLocaleDateString('pt-PT') + '</div>';
+  h += '<div style="margin-bottom:16px"><strong>Exmo(a) Sr(a) ' + (f.proprietario_nome||'') + '</strong><br>Fração ' + (f.codigo||'') + '<br>' + (currentCondo.morada||'') + '</div>';
+  h += '<div style="margin-bottom:16px"><strong>Assunto: Dívida de quotas de condomínio — Interpelação para pagamento</strong></div>';
+  h += '<div style="margin-bottom:12px">Na qualidade de administrador do condomínio ' + (currentCondo.nome||'') + ', vimos por este meio interpelar V. Exa. para o pagamento das seguintes quotas em dívida:</div>';
+
+  dividas.forEach(function(q) {
+    var val = parseFloat(q.valor_emitido||0) - parseFloat(q.valor_pago||0);
+    h += '<div style="padding:2px 0">— ' + meses[(q.mes||1)-1] + '/' + q.ano + ': ' + val.toFixed(2).replace('.',',') + '€</div>';
+  });
+
+  h += '<div style="margin:12px 0"><strong>Total em dívida: ' + total.toFixed(2).replace('.',',') + '€</strong></div>';
+  h += '<div style="margin-bottom:12px">Nos termos do Art. 1424.º do Código Civil, os encargos de conservação e fruição das partes comuns são obrigatórios para todos os condóminos.</div>';
+  h += '<div style="margin-bottom:12px">Caso o pagamento não seja regularizado no prazo de <strong>15 dias</strong> a contar da receção desta carta, a administração deliberará em assembleia as medidas adequadas para a cobrança, incluindo recurso à via judicial através de injunção (DL 269/98).</div>';
+  h += '<div style="margin-bottom:20px">Sem outro assunto,<br><br>A administração do condomínio</div>';
+  h += '<div style="font-size:10px;color:var(--t3);border-top:1px solid var(--b1);padding-top:8px">Esta carta deve ser enviada por correio registado com aviso de receção. O registo serve como prova de interpelação do devedor.</div>';
+
+  h += '<div style="display:flex;gap:8px;margin-top:14px">';
+  h += '<button class="btn-primary" style="flex:1;font-size:12px;padding:10px" onclick="window.print()">🖨️ Imprimir</button>';
+  h += '</div>';
+  h += '</div>';
+
+  abrirModalGenerico('Carta registada — ' + (f.codigo||'?'), h);
+
+  // registar nas mensagens que foi gerada carta registada
+  await sb.from('mensagens').insert({
+    condominio_id: currentCondo.id, fracao_id: fracaoId, autor: 'admin',
+    lida_admin: true, lida_condomino: false,
+    texto: '✉️ CARTA REGISTADA GERADA\n\nFoi gerada carta registada de interpelação para pagamento.\nValor total em dívida: ' + total.toFixed(2).replace('.',',') + '€\n' + dividas.length + ' meses em atraso.\n\nData: ' + new Date().toLocaleDateString('pt-PT') + '\n\n[Registo automático — a carta deve ser enviada por correio registado com AR]'
+  });
+}
+
+async function motorCobrancaAutomatico() {
+  if (!currentCondo || !fracoes || !fracoes.length) return;
+
+  var hoje = new Date();
+  var mesAtual = hoje.getMonth() + 1;
+  var anoAtual = hoje.getFullYear();
+  var meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  var emailLigado = !!_gmailToken;
+
+  // carregar TODAS as quotas não pagas
+  var qR = await sb.from('quotas').select('*, fracoes(id,codigo,proprietario_nome,proprietario_email)')
+    .eq('condominio_id', currentCondo.id)
+    .neq('estado', 'pago');
+  var todas = (qR.data || []).filter(function(q) {
+    return q.fracoes && (parseFloat(q.valor_emitido||0) - parseFloat(q.valor_pago||0)) > 0.005;
+  });
+
+  if (!todas.length) return;
+
+  // carregar mensagens recentes para evitar duplicações
+  var msgR = await sb.from('mensagens').select('fracao_id,texto')
+    .eq('condominio_id', currentCondo.id)
+    .gte('criado_em', new Date(Date.now() - 35*86400000).toISOString());
+  var msgsExist = msgR.data || [];
+
+  function jaAvisou(fracId, chave) {
+    return msgsExist.some(function(m) {
+      return m.fracao_id === fracId && m.texto && m.texto.indexOf(chave) > -1;
+    });
+  }
+
+  var stats = { novas: 0, lembretes: 0, formais: 0, contencioso: 0, semEmail: 0 };
+
+  for (var i = 0; i < todas.length; i++) {
+    var q = todas[i];
+    var f = q.fracoes;
+    var valor = parseFloat(q.valor_emitido||0) - parseFloat(q.valor_pago||0);
+    var mesNome = meses[(q.mes||1)-1] + '/' + (q.ano||'');
+    var vencimento = q.data_vencimento ? new Date(q.data_vencimento) : null;
+    var diasAtraso = vencimento ? Math.round((hoje - vencimento) / 86400000) : 0;
+
+    var nivel = null;
+    var chave = null;
+    var assunto = '';
+    var textoEmail = '';
+    var textoMsg = '';
+
+    if (diasAtraso <= 0) {
+      // quota emitida mas ainda não venceu — avisar que está disponível
+      chave = 'QUOTA DE ' + mesNome;
+      if (jaAvisou(f.id, chave)) continue;
+      nivel = 'nova';
+      assunto = 'Quota de ' + mesNome + ' — ' + valor.toFixed(2).replace('.',',') + 'EUR';
+      textoEmail = 'A quota de ' + mesNome + ' no valor de ' + valor.toFixed(2).replace('.',',') + 'EUR esta disponivel para pagamento. Data limite: dia ' + (currentCondo.dia_vencimento||8) + '.';
+      textoMsg = '📬 QUOTA DE ' + mesNome + '\n\nFração: ' + (f.codigo||'') + '\nValor: ' + valor.toFixed(2).replace('.',',') + '€\nData limite: dia ' + (currentCondo.dia_vencimento||8) + ' de ' + meses[(q.mes||1)-1];
+    } else if (diasAtraso >= 5 && diasAtraso < 15) {
+      chave = 'LEMBRETE ' + mesNome;
+      if (jaAvisou(f.id, chave)) continue;
+      nivel = 'lembrete';
+      assunto = 'Lembrete — quota de ' + mesNome + ' em atraso';
+      textoEmail = 'A quota de ' + mesNome + ' (' + valor.toFixed(2).replace('.',',') + 'EUR) venceu ha ' + diasAtraso + ' dias. Agradecemos a regularizacao.';
+      textoMsg = '🔔 LEMBRETE ' + mesNome + '\n\nFração: ' + (f.codigo||'') + '\nValor: ' + valor.toFixed(2).replace('.',',') + '€\nDias de atraso: ' + diasAtraso;
+    } else if (diasAtraso >= 15 && diasAtraso < 30) {
+      chave = 'AVISO FORMAL ' + mesNome;
+      if (jaAvisou(f.id, chave)) continue;
+      nivel = 'formal';
+      assunto = 'AVISO FORMAL — quota de ' + mesNome + ' em atraso';
+      textoEmail = 'AVISO FORMAL: A quota de ' + mesNome + ' (' + valor.toFixed(2).replace('.',',') + 'EUR) encontra-se por pagar ha ' + diasAtraso + ' dias. Solicitamos a regularizacao urgente.';
+      textoMsg = '⚠️ AVISO FORMAL ' + mesNome + '\n\nFração: ' + (f.codigo||'') + '\nValor: ' + valor.toFixed(2).replace('.',',') + '€\nDias de atraso: ' + diasAtraso + '\n\nEste é o segundo aviso. A administração solicita a regularização urgente.';
+    } else if (diasAtraso >= 30) {
+      chave = 'PRE-CONTENCIOSO ' + mesNome;
+      if (jaAvisou(f.id, chave)) continue;
+      nivel = 'contencioso';
+      assunto = 'URGENTE — quota de ' + mesNome + ' com ' + diasAtraso + ' dias de atraso';
+      textoEmail = 'AVISO PRE-CONTENCIOSO: A quota de ' + mesNome + ' (' + valor.toFixed(2).replace('.',',') + 'EUR) tem ' + diasAtraso + ' dias de atraso. A administracao podera recorrer a medidas legais (Art. 1424 CC).';
+      textoMsg = '🔴 PRÉ-CONTENCIOSO ' + mesNome + '\n\nFração: ' + (f.codigo||'') + '\nValor: ' + valor.toFixed(2).replace('.',',') + '€\nDias de atraso: ' + diasAtraso + '\n\nA administração poderá deliberar em assembleia medidas para a cobrança (Art. 1424.º CC).';
+    } else {
+      continue; // entre 1-4 dias — ainda cedo para lembrete
+    }
+
+    if (!nivel) continue;
+
+    var via = 'registo no portal';
+
+    // enviar email se possível
+    if (emailLigado && f.proprietario_email) {
+      try {
+        var corpo = notificacaoEmailHTML({
+          titulo: nivel === 'nova' ? '📬 Quota disponível' : (nivel === 'contencioso' ? '🔴 Aviso urgente' : '⚠️ Quota em atraso'),
+          texto: textoEmail,
+          rodape: 'Este aviso fica registado como prova de comunicação. ' + (currentCondo.nome||'')
+        });
+        await enviarEmailGmail(f.proprietario_email, assunto, corpo);
+        via = 'email para ' + f.proprietario_email;
+      } catch(e) { via = 'email falhou — ficou no portal'; }
+    } else if (!emailLigado) {
+      stats.semEmail++;
+    }
+
+    // SEMPRE nas mensagens
+    await sb.from('mensagens').insert({
+      condominio_id: currentCondo.id, fracao_id: f.id, autor: 'admin',
+      lida_admin: true, lida_condomino: false,
+      texto: textoMsg + '\n\nEnviado por: ' + via + '\nData: ' + hoje.toLocaleDateString('pt-PT') + '\n\n[Registo automático — Art. 1424.º CC]'
+    });
+
+    stats[nivel === 'nova' ? 'novas' : (nivel === 'lembrete' ? 'lembretes' : (nivel === 'formal' ? 'formais' : 'contencioso'))]++;
+  }
+
+  // TRIGGER ASSEMBLEIA: se há quotas com 30+ dias, sugerir ponto na assembleia
+  if (stats.contencioso > 0) {
+    try {
+      // verificar se já há ponto sobre devedores na próxima assembleia
+      var proxAss = await sb.from('assembleias').select('id,agenda')
+        .eq('condominio_id', currentCondo.id)
+        .gte('data_assembleia', hoje.toISOString().split('T')[0])
+        .order('data_assembleia').limit(1);
+      var ass = (proxAss.data || [])[0];
+      if (ass && ass.agenda && ass.agenda.indexOf('devedor') === -1) {
+        // acrescentar ponto sobre devedores à agenda
+        var novaAgenda = (ass.agenda || '') + '\n- Deliberar sobre condóminos devedores com mais de 30 dias de atraso (Art. 1424.º CC)';
+        await sb.from('assembleias').update({ agenda: novaAgenda }).eq('id', ass.id);
+      }
+    } catch(e) {}
+  }
+
+  // mostrar aviso ao admin no dashboard
+  var zonaMC = document.getElementById('motor-cobranca-aviso');
+  if (!zonaMC) {
+    zonaMC = document.createElement('div'); zonaMC.id = 'motor-cobranca-aviso';
+    var cq = document.getElementById('ciclo-quotas');
+    if (cq && cq.parentNode) cq.parentNode.insertBefore(zonaMC, cq);
+  }
+
+  var total = stats.novas + stats.lembretes + stats.formais + stats.contencioso;
+  if (total > 0 || stats.semEmail > 0) {
+    var h = '<div style="background:var(--s1);border:1px solid var(--b1);border-radius:12px;padding:14px 16px;margin-bottom:14px">';
+    h += '<div style="font-size:11px;font-weight:700;color:var(--cyan);letter-spacing:.06em;margin-bottom:8px">MOTOR DE COBRANÇA</div>';
+    if (total > 0) {
+      h += '<div style="font-size:12px;color:var(--t2);line-height:1.6">';
+      if (stats.novas) h += '📬 ' + stats.novas + ' aviso(s) de quota nova<br>';
+      if (stats.lembretes) h += '🔔 ' + stats.lembretes + ' lembrete(s) gentil(eis)<br>';
+      if (stats.formais) h += '⚠️ ' + stats.formais + ' aviso(s) formal(ais)<br>';
+      if (stats.contencioso) h += '🔴 ' + stats.contencioso + ' pré-contencioso(s)<br>';
+      h += '</div>';
+    }
+    if (stats.semEmail > 0 && !emailLigado) {
+      h += '<div style="background:rgba(255,179,0,.08);border:1px solid rgba(255,179,0,.3);border-radius:8px;padding:10px 12px;margin-top:8px;font-size:11px;color:var(--amber);line-height:1.5">';
+      h += '<strong>Email não ligado!</strong> Os avisos ficaram só nas mensagens do portal. Para enviar por email, liga o Gmail nas Definições. ' + stats.semEmail + ' condómino(s) não receberam email.';
+      h += '</div>';
+    }
+    h += '<div style="font-size:10px;color:var(--t3);margin-top:6px">Tudo registado nas mensagens de cada condómino como prova legal.</div>';
+    h += '</div>';
+    zonaMC.innerHTML = h;
+  } else {
+    zonaMC.innerHTML = '';
+  }
+}
+
 async function verificarCicloQuotas() {
   var zona = document.getElementById('ciclo-quotas');
   if (!zona || !currentCondo) return;
@@ -6271,6 +6658,8 @@ async function verificarAvisosGerais() {
   try { carregarManutencoes().then(function(){ pintarAvisoManutencoes(); }); } catch(e) {}
   try { carregarSeguros().then(function(){ pintarAvisoSeguros(); }); } catch(e) {}
   try { pintarResumoMensal(); } catch(e) {}
+  try { motorCobrancaAutomatico(); } catch(e) { console.error("motor cobranca:", e); }
+  try { verificarDividaAcumulada(); } catch(e) { console.error("divida acumulada:", e); }
   try { pintarTendenciaGastos(); } catch(e) {}
   try { pintarGraficoEvolucao(); } catch(e) {}
 
