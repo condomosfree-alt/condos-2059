@@ -870,7 +870,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.08.04-1100</div>
+      <div class="sb-tag">2059 Pro · build v2026.08.04-1110</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -20922,14 +20922,21 @@ async function construirContextoIA() {
 }
 
 async function callIA(prompt, tipo) {
-  const res = await fetch(PROXY_URL, {
-    method: 'POST',
-    headers: PROXY_HEADERS,
-    body: JSON.stringify({ prompt, tipo })
-  });
-  const data = await res.json();
-  if (data.error) throw new Error(data.error);
-  return data.text;
+  try {
+    const res = await fetch(PROXY_URL, {
+      method: 'POST',
+      headers: PROXY_HEADERS,
+      body: JSON.stringify({ prompt, tipo })
+    });
+    if (!res.ok) throw new Error('Servidor respondeu ' + res.status + ' — verifica se a Edge Function hyper-task está deployada no Supabase.');
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    if (!data.text) throw new Error('Resposta vazia da IA.');
+    return data.text;
+  } catch(e) {
+    if (e.message && e.message.indexOf('fetch') > -1) throw new Error('Não consegui contactar o servidor de IA. Verifica a ligação e se a Edge Function está ativa.');
+    throw e;
+  }
 }
 
 async function sendIA() {
@@ -20950,7 +20957,7 @@ async function sendIA() {
     if (currentCondo) await sb.from('ia_logs').insert({condominio_id:currentCondo.id,tipo:'legislacao',pergunta:msg,resposta:text});
   } catch(e) {
     const el = document.getElementById(tId); if(el) el.remove();
-    addIAMsg('Erro: '+e.message,'bot');
+    addIAMsg('⚠️ ' + (e.message || 'Erro desconhecido') + '\n\nSe o erro persistir, verifica nas Definições se a Edge Function do Supabase (hyper-task) está ativa.','bot');
   }
   btn.disabled=false;
 }

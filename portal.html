@@ -4719,10 +4719,14 @@ async function enviarIAPortal() {
     });
     var data = await res.json();
     typing.remove();
-    _iaMsg(data.text || data.error || 'Sem resposta', 'bot');
+    if (!res.ok) {
+      _iaMsg('⚠️ O servidor de IA não respondeu (erro ' + res.status + '). A funcionalidade de chat precisa que a administração tenha a Edge Function ativa.', 'bot');
+    } else {
+      _iaMsg(data.text || data.error || 'Sem resposta da IA.', 'bot');
+    }
   } catch(e) {
     typing.remove();
-    _iaMsg('Não consegui responder — ' + (e.message || ''), 'bot');
+    _iaMsg('⚠️ Não consegui responder.\n\n' + (e.message || 'Verifica a tua ligação à internet.') + '\n\nSe o erro persistir, contacta a administração.', 'bot');
   }
   inp.disabled = false;
   inp.focus();
