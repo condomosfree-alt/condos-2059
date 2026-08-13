@@ -870,7 +870,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.08.04-1200</div>
+      <div class="sb-tag">2059 Pro · build v2026.08.04-1245</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -4786,6 +4786,486 @@ async function gerarCartaRegistada(fracaoId) {
   });
 }
 
+// =====================================================================
+//  TRIGGERS INTELIGENTES — o sistema que pensa sozinho
+// =====================================================================
+
+// =====================================================================
+//  CARTAS PENDENTES — botão no dashboard que não desaparece
+// =====================================================================
+//  Quando há condóminos sem email que precisam de carta, o dashboard
+//  mostra um botão persistente até o admin imprimir + registar envio.
+//  Cada carta tem tracking dos CTT para prova.
+// =====================================================================
+
+async function verificarCartasPendentes() {
+  if (!currentCondo || !fracoes) return;
+
+  // frações sem email que tiveram comunicações recentes (ata, aviso, etc.)
+  // mas sem registo de envio de carta
+  var semEmail = fracoes.filter(function(f) { return !f.proprietario_email; });
+  if (!semEmail.length) return;
+
+  // verificar se há cartas por processar (mensagens recentes sem tracking)
+  var msgR = await sb.from('mensagens').select('fracao_id,texto,criado_em')
+    .eq('condominio_id', currentCondo.id)
+    .eq('autor', 'admin')
+    .gte('criado_em', new Date(Date.now() - 60*86400000).toISOString())
+    .order('criado_em', { ascending: false });
+  var msgs = msgR.data || [];
+
+  var cartasPendentes = [];
+  semEmail.forEach(function(f) {
+    // ver se tem mensagens sem registo de carta enviada
+    var msgsF = msgs.filter(function(m) { return m.fracao_id === f.id; });
+    var temMsgRecente = msgsF.length > 0;
+    var temCartaEnviada = msgsF.some(function(m) { return m.texto && m.texto.indexOf('CARTA REGISTADA ENVIADA') > -1; });
+    if (temMsgRecente && !temCartaEnviada) {
+      cartasPendentes.push({
+        fracao: f,
+        ultimaMsg: msgsF[0]
+      });
+    }
+  });
+
+  var zona = document.getElementById('cartas-pendentes-dash');
+  if (!zona) {
+    zona = document.createElement('div'); zona.id = 'cartas-pendentes-dash';
+    var ti = document.getElementById('triggers-inteligentes') || document.getElementById('ciclo-quotas');
+    if (ti && ti.parentNode) ti.parentNode.insertBefore(zona, ti);
+    else return;
+  }
+
+  if (!cartasPendentes.length) { zona.innerHTML = ''; return; }
+
+  var h = '<div style="background:rgba(255,179,0,.06);border:1px solid rgba(255,179,0,.3);border-radius:12px;padding:14px 16px;margin-bottom:14px">';
+  h += '<div style="font-size:12.5px;font-weight:700;color:var(--amber);margin-bottom:6px">✉️ ' + cartasPendentes.length + ' carta(s) por enviar</div>';
+  h += '<div style="font-size:11px;color:var(--t2);line-height:1.55;margin-bottom:10px">Estas frações não têm email — as comunicações ficaram só no portal. Para terem valor legal como prova de notificação, devem ser enviadas por correio registado.</div>';
+
+  cartasPendentes.forEach(function(c) {
+    h += '<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.04)">';
+    h += '<div style="flex:1;font-size:12px;color:var(--text)">' + (c.fracao.codigo||'?') + ' — ' + (c.fracao.proprietario_nome||'?') + '</div>';
+    h += '<button class="btn-ghost" style="width:auto;font-size:10px;padding:4px 10px" onclick="gerarCartaFracao(\'' + c.fracao.id + '\')">📄 Gerar carta</button>';
+    h += '<button class="btn-ghost" style="width:auto;font-size:10px;padding:4px 10px;color:var(--green)" onclick="registarEnvioCarta(\'' + c.fracao.id + '\')">✓ Já enviei</button>';
+    h += '</div>';
+  });
+
+  h += '<div style="display:flex;gap:8px;margin-top:10px">';
+  h += '<button class="btn-primary" style="font-size:12px;padding:8px 14px" onclick="gerarTodasCartas()">🖨️ Imprimir todas as cartas</button>';
+  h += '</div>';
+  h += '<div style="font-size:10px;color:var(--t3);margin-top:6px">O botão só desaparece quando todas as cartas tiverem tracking CTT registado.</div>';
+  h += '</div>';
+  zona.innerHTML = h;
+}
+
+// Gerar carta para UMA fração
+async function gerarCartaFracao(fracaoId) {
+  var f = fracoes.find(function(x) { return x.id === fracaoId; });
+  if (!f) return;
+
+  // buscar as mensagens recentes para incluir na carta
+  var msgR = await sb.from('mensagens').select('texto,criado_em')
+    .eq('condominio_id', currentCondo.id).eq('fracao_id', fracaoId)
+    .eq('autor', 'admin')
+    .order('criado_em', { ascending: false }).limit(5);
+  var msgs = msgR.data || [];
+
+  var h = '<div style="max-height:65vh;overflow-y:auto;padding:4px;font-size:12px;color:var(--t2);line-height:1.7">';
+  h += '<div style="text-align:right;margin-bottom:16px">' + (currentCondo.cidade||'') + ', ' + new Date().toLocaleDateString('pt-PT') + '</div>';
+  h += '<div style="margin-bottom:12px"><strong>Exmo(a) Sr(a) ' + (f.proprietario_nome||'') + '</strong><br>Fração ' + (f.codigo||'') + '<br>' + (currentCondo.morada||'') + '</div>';
+  h += '<div style="margin-bottom:12px"><strong>Assunto: Comunicações da administração do condomínio</strong></div>';
+  h += '<div style="margin-bottom:10px">Na qualidade de administrador do condomínio <strong>' + (currentCondo.nome||'') + '</strong>, enviamos por esta via as seguintes comunicações que ficaram registadas no portal:</div>';
+
+  msgs.forEach(function(m, i) {
+    var data = new Date(m.criado_em).toLocaleDateString('pt-PT');
+    var resumo = (m.texto||'').split('\n')[0].substring(0, 80);
+    h += '<div style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,.06)">' + (i+1) + '. ' + data + ' — ' + resumo + '</div>';
+  });
+
+  h += '<div style="margin:12px 0">Para consultar os detalhes completos, pode aceder ao portal do condómino com o QR Code que foi distribuído.</div>';
+  h += '<div style="margin-bottom:16px">Sem outro assunto,<br><br>A administração do condomínio</div>';
+  h += '<div style="font-size:10px;color:var(--t3);border-top:1px solid var(--b1);padding-top:8px">Enviar por correio registado com AR. Guardar o tracking CTT como prova.</div>';
+
+  h += '<button class="btn-primary" style="width:100%;margin-top:12px;font-size:12px;padding:10px" onclick="window.print()">🖨️ Imprimir</button>';
+  h += '</div>';
+  abrirModalGenerico('Carta — ' + (f.codigo||'?') + ' · ' + (f.proprietario_nome||''), h);
+}
+
+// Gerar TODAS as cartas para imprimir
+async function gerarTodasCartas() {
+  var semEmail = fracoes.filter(function(f) { return !f.proprietario_email; });
+  if (!semEmail.length) { toast('Todas as frações têm email.', 'ok'); return; }
+
+  toast('A preparar ' + semEmail.length + ' carta(s)...', 'ok');
+
+  // custo estimado
+  var custoCarta = 3.50;  // correio registado nacional
+  var custoTotal = semEmail.length * custoCarta;
+
+  var h = '<div style="max-height:70vh;overflow-y:auto;padding:4px">';
+  h += '<div style="background:var(--s1);border:1px solid var(--b1);border-radius:10px;padding:12px 14px;margin-bottom:14px">';
+  h += '<div style="font-size:12px;font-weight:700;color:var(--text)">Resumo de envio</div>';
+  h += '<div style="font-size:11px;color:var(--t2);margin-top:4px">' + semEmail.length + ' carta(s) registada(s) · Custo estimado: <strong style="color:var(--text)">' + custoTotal.toFixed(2).replace('.',',') + '€</strong> (' + custoCarta.toFixed(2).replace('.',',') + '€ por carta)</div>';
+  h += '</div>';
+
+  semEmail.forEach(function(f, i) {
+    h += '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.04)">';
+    h += '<span style="font-size:12px;color:var(--t3);min-width:20px">' + (i+1) + '.</span>';
+    h += '<div style="flex:1"><span style="font-size:12px;font-weight:600;color:var(--text)">' + (f.codigo||'?') + '</span> — ' + (f.proprietario_nome||'?') + '</div>';
+    h += '<button class="btn-ghost" style="width:auto;font-size:10px;padding:4px 10px" onclick="gerarCartaFracao(\'' + f.id + '\')">📄 Ver carta</button>';
+    h += '</div>';
+  });
+
+  h += '<div style="display:flex;gap:8px;margin-top:14px">';
+  h += '<button class="btn-primary" style="flex:1;font-size:12px;padding:10px" onclick="window.print()">🖨️ Imprimir todas</button>';
+  h += '<button class="btn-ghost" style="flex:1;font-size:12px;padding:10px" onclick="registarCustoCartas(' + semEmail.length + ',' + custoCarta + ')">💰 Registar custo</button>';
+  h += '</div>';
+  h += '</div>';
+  abrirModalGenerico('Cartas a enviar por correio', h);
+}
+
+// Registar custo das cartas como despesa
+async function registarCustoCartas(n, custoUnit) {
+  var total = n * custoUnit;
+  await sb.from('movimentos').insert({
+    condominio_id: currentCondo.id, tipo: 'despesa',
+    categoria: 'Correspondência',
+    descricao: 'Correio registado — ' + n + ' carta(s) a ' + custoUnit.toFixed(2) + '€',
+    valor: total,
+    data_movimento: new Date().toISOString().split('T')[0]
+  });
+  toast('Despesa de ' + total.toFixed(2).replace('.',',') + '€ registada', 'ok');
+  fecharModalGenerico();
+}
+
+// Registar envio com tracking CTT
+async function registarEnvioCarta(fracaoId) {
+  var f = fracoes.find(function(x) { return x.id === fracaoId; });
+  if (!f) return;
+
+  var h = '<div style="padding:4px">';
+  h += '<div style="font-size:12px;color:var(--t2);margin-bottom:12px;line-height:1.6">Regista o tracking dos CTT como prova de que a carta foi efectivamente enviada. Este número fica disponível no sistema e no portal — qualquer condómino pode verificar.</div>';
+  h += '<label style="font-size:11px;color:var(--t2);display:block;margin-bottom:10px">Número de tracking CTT<br><input type="text" id="ctt-tracking" placeholder="Ex: RR123456789PT" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--c2);border:1px solid var(--b);border-radius:8px;padding:12px;color:var(--t1);font-family:var(--mono);font-size:14px;letter-spacing:1px"></label>';
+  h += '<label style="font-size:11px;color:var(--t2);display:block;margin-bottom:10px">Data de envio<br><input type="date" id="ctt-data" value="' + new Date().toISOString().split('T')[0] + '" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--c2);border:1px solid var(--b);border-radius:8px;padding:12px;color:var(--t1);font-family:inherit"></label>';
+  h += '<button class="btn-primary" style="width:100%;font-size:13px;padding:12px;margin-top:8px" onclick="confirmarEnvioCarta(\'' + fracaoId + '\')">Confirmar envio</button>';
+  h += '</div>';
+  abrirModalGenerico('Tracking CTT — ' + (f.codigo||'') + ' · ' + (f.proprietario_nome||''), h);
+}
+
+async function confirmarEnvioCarta(fracaoId) {
+  var tracking = ((document.getElementById('ctt-tracking')||{}).value||'').trim();
+  var data = ((document.getElementById('ctt-data')||{}).value||'');
+  if (!tracking) { toast('Insere o número de tracking', 'warn'); return; }
+
+  var f = fracoes.find(function(x) { return x.id === fracaoId; });
+
+  // gravar nas mensagens como prova
+  await sb.from('mensagens').insert({
+    condominio_id: currentCondo.id, fracao_id: fracaoId, autor: 'admin',
+    lida_admin: true, lida_condomino: false,
+    texto: '✉️ CARTA REGISTADA ENVIADA\n\n' +
+           'Fração: ' + ((f||{}).codigo||'?') + '\n' +
+           'Destinatário: ' + ((f||{}).proprietario_nome||'?') + '\n' +
+           'Tracking CTT: ' + tracking + '\n' +
+           'Data de envio: ' + (data ? new Date(data).toLocaleDateString('pt-PT') : 'hoje') + '\n\n' +
+           'Verificar em: https://www.ctt.pt/feapl_2/app/open/cttexpresso/objectSearch/objectSearch.jspx\n\n' +
+           '[Prova de envio por correio registado — Art. 1424.º CC]'
+  });
+
+  // registar no audit
+  try {
+    await registarAudit('enviar', 'carta_registada', fracaoId,
+      'Carta registada enviada a ' + ((f||{}).codigo||'?') + ' — tracking: ' + tracking);
+  } catch(e) {}
+
+  fecharModalGenerico();
+  toast('Envio registado! Tracking: ' + tracking, 'ok');
+  await verificarCartasPendentes();
+}
+
+async function verificarTriggersInteligentes() {
+  if (!currentCondo || !fracoes) return;
+  var hoje = new Date();
+  var hojeTxt = hoje.toISOString().split('T')[0];
+  var triggers = [];
+
+  // ---- 1) ORÇAMENTO EXCEDIDO ----
+  try {
+    var orcR = await sb.from('orcamento_rubricas').select('valor_total')
+      .eq('condominio_id', currentCondo.id);
+    var orcTotal = (orcR.data || []).reduce(function(s,r){ return s + parseFloat(r.valor_total||0); }, 0);
+    if (orcTotal > 0) {
+      var despR = await sb.from('movimentos').select('valor')
+        .eq('condominio_id', currentCondo.id).eq('tipo', 'despesa')
+        .gte('data_movimento', hoje.getFullYear() + '-01-01');
+      var despTotal = (despR.data || []).reduce(function(s,m){ return s + parseFloat(m.valor||0); }, 0);
+      var pctGasto = Math.round(despTotal / orcTotal * 100);
+      if (pctGasto >= 90) {
+        triggers.push({
+          cor: pctGasto >= 100 ? 'var(--red)' : 'var(--amber)',
+          icon: '💰',
+          titulo: pctGasto >= 100 ? 'Orçamento excedido!' : 'Orçamento quase esgotado',
+          texto: 'Gastos a ' + pctGasto + '% do orçamento anual (' + eur(despTotal) + ' de ' + eur(orcTotal) + '). ' +
+            (pctGasto >= 100 ? 'Pode ser necessário aprovar orçamento suplementar em assembleia.' : 'Convém monitorizar as despesas restantes.')
+        });
+      }
+    }
+  } catch(e) {}
+
+  // ---- 2) TODOS PAGARAM ESTE MÊS (notícia positiva!) ----
+  try {
+    var mesAt = hoje.getMonth() + 1;
+    var qMes = await sb.from('quotas').select('estado')
+      .eq('condominio_id', currentCondo.id).eq('mes', mesAt).eq('ano', hoje.getFullYear());
+    var quotasMes = qMes.data || [];
+    if (quotasMes.length > 0 && quotasMes.every(function(q){ return q.estado === 'pago'; })) {
+      triggers.push({
+        cor: 'var(--green)', icon: '🎉',
+        titulo: 'Mês 100% cobrado!',
+        texto: 'Todas as ' + quotasMes.length + ' quotas deste mês foram pagas. Parabéns à comunidade!'
+      });
+    }
+  } catch(e) {}
+
+  // ---- 3) FUNDO ABAIXO DO MÍNIMO → assembleia extraordinária ----
+  try {
+    var pctF = parseFloat(currentCondo.fundo_percentagem) || 10;
+    var qFundo = await sb.from('quotas').select('valor_pago,tipo')
+      .eq('condominio_id', currentCondo.id).eq('estado', 'pago');
+    var pagas = (qFundo.data || []).filter(function(q){ return q.tipo !== 'extraordinaria'; });
+    var fundoTeorico = pagas.reduce(function(s,q){ return s + parseFloat(q.valor_pago||0); }, 0) * pctF / 100;
+    var saldoProvado = parseFloat(currentCondo.fundo_saldo_provado) || 0;
+    if (fundoTeorico > 0 && saldoProvado < fundoTeorico * 0.5 && saldoProvado > 0) {
+      triggers.push({
+        cor: 'var(--red)', icon: '🏦',
+        titulo: 'Fundo de reserva muito abaixo do mínimo',
+        texto: 'O saldo provado (' + eur(saldoProvado) + ') é menos de 50% do teórico (' + eur(fundoTeorico) + '). Considerar assembleia extraordinária para reforço (DL 268/94, Art. 4.º).'
+      });
+    }
+  } catch(e) {}
+
+  // ---- 4) SEGURO A EXPIRAR → criar ocorrência ----
+  try {
+    if (_seguros && _seguros.length) {
+      _seguros.forEach(function(seg) {
+        if (!seg.fim_vigencia) return;
+        var dias = Math.round((new Date(seg.fim_vigencia) - hoje) / 86400000);
+        if (dias > 0 && dias <= 30) {
+          triggers.push({
+            cor: 'var(--amber)', icon: '🛡️',
+            titulo: 'Seguro ' + (seg.seguradora||seg.tipo) + ' expira em ' + dias + ' dias',
+            texto: 'Apólice expira a ' + new Date(seg.fim_vigencia).toLocaleDateString('pt-PT') + '. ' +
+              (seg.renovacao_auto ? 'Renovação automática ativa — verificar se os termos se mantêm.' : 'RENOVAÇÃO MANUAL necessária — contactar a seguradora.'),
+            acao: !seg.renovacao_auto ? "nav('seguros')" : null,
+            btnTexto: 'Gerir seguros'
+          });
+        }
+      });
+    }
+  } catch(e) {}
+
+  // ---- 5) MANUTENÇÃO VENCIDA → alerta com link ----
+  try {
+    if (_manut && _manut.length) {
+      var vencidas = _manut.filter(function(m) {
+        return m.proxima_data && new Date(m.proxima_data) < hoje;
+      });
+      vencidas.forEach(function(m) {
+        var dias = Math.round((hoje - new Date(m.proxima_data)) / 86400000);
+        if (dias > 30) {
+          triggers.push({
+            cor: m.obrigatorio ? 'var(--red)' : 'var(--amber)',
+            icon: '🔧',
+            titulo: m.nome + ' — vencida há ' + dias + ' dias' + (m.obrigatorio ? ' (LEGAL)' : ''),
+            texto: m.obrigatorio ? 'Obrigação legal não cumprida. O administrador pode ser responsabilizado.' : 'Manutenção recomendada em atraso.',
+            acao: "nav('manutencoes')",
+            btnTexto: 'Resolver'
+          });
+        }
+      });
+    }
+  } catch(e) {}
+
+  // ---- 6) ASSEMBLEIA SEM ATA → lembrar ----
+  try {
+    var assR = await sb.from('assembleias').select('id,data_assembleia,ata_texto,estado')
+      .eq('condominio_id', currentCondo.id)
+      .eq('estado', 'realizada')
+      .order('data_assembleia', { ascending: false }).limit(1);
+    var ultAss = (assR.data || [])[0];
+    if (ultAss && (!ultAss.ata_texto || ultAss.ata_texto.length < 50)) {
+      var diasSem = Math.round((hoje - new Date(ultAss.data_assembleia)) / 86400000);
+      if (diasSem >= 7) {
+        triggers.push({
+          cor: 'var(--amber)', icon: '📝',
+          titulo: 'Assembleia de ' + new Date(ultAss.data_assembleia).toLocaleDateString('pt-PT') + ' sem ata',
+          texto: 'Já passaram ' + diasSem + ' dias. A ata é obrigatória e deve ser redigida o mais breve possível.',
+          acao: "nav('assembleias')",
+          btnTexto: 'Redigir ata'
+        });
+      }
+    }
+  } catch(e) {}
+
+  // ---- 7) NOVEMBRO → sugerir orçamento do ano seguinte ----
+  try {
+    if (hoje.getMonth() >= 10) { // novembro ou dezembro
+      var proxAno = hoje.getFullYear() + 1;
+      triggers.push({
+        cor: 'var(--cyan)', icon: '📊',
+        titulo: 'Altura de preparar o orçamento de ' + proxAno,
+        texto: 'O orçamento anual deve ser apresentado na assembleia de janeiro. Usa a sugestão da IA para ter uma base sólida.',
+        acao: "nav('orcamento')",
+        btnTexto: 'Orçamento'
+      });
+    }
+  } catch(e) {}
+
+  // ---- RENDERIZAR ----
+  var zona = document.getElementById('triggers-inteligentes');
+  if (!zona) {
+    zona = document.createElement('div'); zona.id = 'triggers-inteligentes';
+    var da = document.getElementById('divida-acumulada-aviso') || document.getElementById('motor-cobranca-aviso') || document.getElementById('ciclo-quotas');
+    if (da && da.parentNode) da.parentNode.insertBefore(zona, da.nextSibling);
+    else return;
+  }
+
+  if (!triggers.length) { zona.innerHTML = ''; return; }
+
+  var h = '<div style="background:var(--s1);border:1px solid var(--b1);border-radius:12px;padding:14px 16px;margin-bottom:14px">';
+  h += '<div style="font-size:11px;font-weight:700;color:var(--t2);letter-spacing:.06em;margin-bottom:10px">ALERTAS INTELIGENTES</div>';
+
+  triggers.forEach(function(t) {
+    h += '<div style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.04)">';
+    h += '<span style="font-size:18px;line-height:1">' + t.icon + '</span>';
+    h += '<div style="flex:1"><div style="font-size:12px;font-weight:650;color:' + t.cor + '">' + t.titulo + '</div>';
+    h += '<div style="font-size:11px;color:var(--t2);line-height:1.5;margin-top:2px">' + t.texto + '</div></div>';
+    if (t.acao) h += '<button class="btn-ghost" style="width:auto;font-size:10px;padding:4px 10px;white-space:nowrap" onclick="' + t.acao + '">' + (t.btnTexto||'Ver') + '</button>';
+    h += '</div>';
+  });
+
+  h += '</div>';
+  zona.innerHTML = h;
+}
+
+
+// =====================================================================
+//  ATA AUTOMÁTICA — gerar + enviar + cartas + portal
+// =====================================================================
+
+async function processarAtaAutomatica() {
+  if (!_salaAssembleia) return;
+
+  // 1) GERAR A ATA se ainda não existe
+  if (!_salaAssembleia.ata_texto || _salaAssembleia.ata_texto.length < 50) {
+    toast('A gerar a ata automaticamente...', 'ok');
+
+    var res = await sb.from('assembleia_eventos').select('*')
+      .eq('assembleia_id', _salaAssembleia.id)
+      .order('registado_em', { ascending: true });
+    var eventos = res.data || [];
+
+    if (eventos.length) {
+      var livroTexto = eventos.map(function(ev) {
+        var hora = new Date(ev.registado_em).toLocaleTimeString('pt-PT', {hour:'2-digit',minute:'2-digit'});
+        return hora + ' [' + ev.tipo + '] ' + (ev.texto || '');
+      }).join('\n');
+
+      var nomeCondo = currentCondo.nome || '';
+      var dataAss = _salaAssembleia.data_assembleia
+        ? new Date(_salaAssembleia.data_assembleia).toLocaleDateString('pt-PT')
+        : new Date().toLocaleDateString('pt-PT');
+
+      try {
+        var prompt = 'Redige uma ata de assembleia de condomínio em Portugal, formal e profissional, a partir deste livro de atos:\n\n' +
+          'Condomínio: ' + nomeCondo + '\n' +
+          'Data: ' + dataAss + '\n' +
+          'Tipo: ' + (_salaAssembleia.tipo || 'Ordinária') + '\n\n' +
+          'LIVRO DE ATOS:\n' + livroTexto + '\n\n' +
+          'A ata deve incluir: abertura com hora e local, lista de presenças, cada ponto discutido com votação, e encerramento. Não inventes — usa apenas o que está no livro.';
+
+        var ataTexto = await callIA(prompt, 'ata');
+        if (ataTexto && ataTexto.length > 100) {
+          await sb.from('assembleias').update({ ata_texto: ataTexto }).eq('id', _salaAssembleia.id);
+          _salaAssembleia.ata_texto = ataTexto;
+          toast('Ata gerada automaticamente!', 'ok');
+        }
+      } catch(e) {
+        toast('Não consegui gerar a ata automaticamente — gera manualmente na sala.', 'warn');
+        return;
+      }
+    }
+  }
+
+  if (!_salaAssembleia.ata_texto || _salaAssembleia.ata_texto.length < 50) return;
+
+  // 2) ENVIAR A TODOS — email + mensagem no portal
+  var meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  var dataAta = _salaAssembleia.data_assembleia
+    ? new Date(_salaAssembleia.data_assembleia).toLocaleDateString('pt-PT')
+    : new Date().toLocaleDateString('pt-PT');
+  var emailLigado = !!_gmailToken;
+  var enviados = 0;
+  var semEmail = [];
+
+  for (var i = 0; i < fracoes.length; i++) {
+    var f = fracoes[i];
+    var via = 'registo no portal';
+
+    // email
+    if (emailLigado && f.proprietario_email) {
+      try {
+        var assunto = 'Ata da assembleia de ' + dataAta + ' — ' + (currentCondo.nome || '');
+        var corpo = notificacaoEmailHTML({
+          titulo: '📋 Ata disponível',
+          texto: 'A ata da assembleia de ' + dataAta + ' (' + (_salaAssembleia.tipo || 'Ordinária') + ') já está disponível.\n\nPode consultá-la no portal do condómino.',
+          rodape: currentCondo.nome || ''
+        });
+        await enviarEmailGmail(f.proprietario_email, assunto, corpo);
+        via = 'email para ' + f.proprietario_email;
+      } catch(e) { via = 'email falhou'; }
+    } else if (!f.proprietario_email) {
+      semEmail.push(f.codigo || '?');
+    }
+
+    // mensagem SEMPRE
+    await sb.from('mensagens').insert({
+      condominio_id: currentCondo.id, fracao_id: f.id, autor: 'admin',
+      lida_admin: true, lida_condomino: false,
+      texto: '📋 ATA DA ASSEMBLEIA DE ' + dataAta + '\n\n' +
+             'Tipo: ' + (_salaAssembleia.tipo || 'Ordinária') + '\n' +
+             'Enviado por: ' + via + '\n\n' +
+             'A ata completa está disponível no portal. Se tiver observações, tem 30 dias para as apresentar.\n\n' +
+             '[Registo automático de comunicação]'
+    });
+    enviados++;
+  }
+
+  toast(enviados + ' condómino(s) notificados da ata', 'ok');
+
+  // 3) GUARDAR NOS DOCUMENTOS
+  try {
+    await sb.from('documentos').insert({
+      condominio_id: currentCondo.id,
+      nome: 'Ata — assembleia de ' + dataAta + ' (' + (_salaAssembleia.tipo || 'Ordinária') + ')',
+      tipo: 'ata',
+      descricao: 'Gerada automaticamente pelo sistema. Enviada a ' + enviados + ' condóminos.',
+      criado_em: new Date().toISOString()
+    });
+  } catch(e) {}
+
+  // 4) CARTAS — listar quem não tem email (precisa de carta física)
+  if (semEmail.length) {
+    toast('⚠️ ' + semEmail.length + ' fração(ões) sem email: ' + semEmail.join(', ') + ' — precisam de carta.', 'warn');
+
+    // registar no audit
+    try {
+      await registarAudit('enviar', 'ata', _salaAssembleia.id,
+        'Ata enviada a ' + enviados + '. Frações sem email (precisam carta): ' + semEmail.join(', '));
+    } catch(e) {}
+  }
+}
+
 async function motorCobrancaAutomatico() {
   if (!currentCondo || !fracoes || !fracoes.length) return;
 
@@ -6660,6 +7140,8 @@ async function verificarAvisosGerais() {
   try { pintarResumoMensal(); } catch(e) {}
   try { motorCobrancaAutomatico(); } catch(e) { console.error("motor cobranca:", e); }
   try { verificarDividaAcumulada(); } catch(e) { console.error("divida acumulada:", e); }
+  try { verificarCartasPendentes(); } catch(e) { console.error('cartas:', e); }
+  try { verificarTriggersInteligentes(); } catch(e) { console.error("triggers:", e); }
   try { pintarTendenciaGastos(); } catch(e) {}
   try { pintarGraficoEvolucao(); } catch(e) {}
 
@@ -15767,9 +16249,12 @@ async function encerrarSessao() {
   await sb.from('assembleias').update({ estado_sessao: 'encerrada', hora_encerramento: new Date().toISOString(), estado: 'realizada' }).eq('id', _salaAssembleia.id);
   _salaAssembleia.estado_sessao = 'encerrada';
   await registarEvento('encerramento', 'Sessão encerrada.', null, null);
-  toast('Sessão encerrada. Já podes gerar a ata.', 'ok');
+  toast('Sessão encerrada.', 'ok');
 
-  // AUTOMÁTICO — enviar ata aos ausentes (se já foi gerada)
+  // AUTOMÁTICO — gerar ata, enviar a todos, gerar cartas
+  try { await processarAtaAutomatica(); } catch(e) { console.error('ata auto:', e); }
+
+  // Enviar ata aos ausentes (fallback se o processamento automático não cobriu)
   try {
     if (_salaAssembleia.ata_texto && _salaAssembleia.ata_texto.length > 50) {
       var ausentes = Object.keys(_salaPresencas).filter(function(fid) { return _salaPresencas[fid] === 'ausente'; });
