@@ -870,7 +870,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.08.04-1110</div>
+      <div class="sb-tag">2059 Pro · build v2026.08.04-1115</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -1966,8 +1966,8 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
       <div class="page" id="page-assembleias">
         <div class="sec-hdr">
           <span class="sec-t">Assembleias</span>
-          <div style="display:flex;gap:8px;"><button class="btn-ghost" style="font-size:11px;padding:6px 12px" onclick="gerarMapaPresencas()">📊 Mapa de presenças</button>
-          <div style="display:flex;gap:8px;">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn-ghost" style="font-size:11px;padding:6px 12px" onclick="gerarMapaPresencas()">📊 Presenças</button>
             <button class="btn-ghost" onclick="openModal('mo-import-ata')"><i class="ti ti-file-upload"></i>Importar Ata IA</button>
             <button class="btn-primary" onclick="abrirConvocatoria()"><i class="ti ti-plus"></i>Convocar</button>
           </div>
@@ -2007,7 +2007,6 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
           <div class="ph"><span class="pt">Histórico de Assembleias</span></div>
           <div id="assembleias-list"><div class="skel-linha" style="height:46px;"></div><div class="skel-linha" style="height:46px;"></div><div class="skel-linha" style="height:46px;"></div></div>
         </div>
-      </div>
       </div>
 
       <div class="page" id="page-seguros">
