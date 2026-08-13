@@ -870,7 +870,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.08.04-1115</div>
+      <div class="sb-tag">2059 Pro · build v2026.08.04-1130</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -4421,6 +4421,143 @@ async function enviarAvisosDevedoresAuto() {
   try { await verificarCicloQuotas(); } catch(e) {}
 }
 
+
+// =====================================================================
+//  NOTIFICAÇÕES AO CONDÓMINO — o ciclo que faltava
+// =====================================================================
+
+// Avisar todos os condóminos de quotas pendentes (nova ou em atraso)
+async function notificarCondominosQuotas() {
+  if (!currentCondo) return;
+  var hoje = new Date();
+  var mesAtual = hoje.getMonth() + 1;
+  var anoAtual = hoje.getFullYear();
+  var meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+  // buscar quotas pendentes deste mês
+  var qR = await sb.from('quotas').select('*, fracoes(id,codigo,proprietario_nome,proprietario_email)')
+    .eq('condominio_id', currentCondo.id)
+    .eq('mes', mesAtual).eq('ano', anoAtual)
+    .neq('estado', 'pago');
+  var pendentes = (qR.data || []).filter(function(q) {
+    return (parseFloat(q.valor_emitido||0) - parseFloat(q.valor_pago||0)) > 0.005;
+  });
+
+  if (!pendentes.length) { toast('Todas as quotas deste mês estão pagas!', 'ok'); return; }
+
+  var enviados = 0;
+  for (var i = 0; i < pendentes.length; i++) {
+    var q = pendentes[i];
+    var f = q.fracoes;
+    if (!f) continue;
+    var valor = parseFloat(q.valor_emitido||0) - parseFloat(q.valor_pago||0);
+    var mesNome = meses[mesAtual-1] + '/' + anoAtual;
+    var via = 'registo no portal';
+
+    // verificar se já foi avisado neste mês (para não duplicar)
+    var jaMsgR = await sb.from('mensagens').select('id')
+      .eq('condominio_id', currentCondo.id).eq('fracao_id', f.id)
+      .ilike('texto', '%QUOTA DE ' + mesNome + '%')
+      .limit(1);
+    if ((jaMsgR.data || []).length > 0) continue;  // já avisado
+
+    // enviar email se possível
+    if (f.proprietario_email && _gmailToken) {
+      try {
+        var assunto = 'Quota de ' + mesNome + ' — ' + valor.toFixed(2).replace('.',',') + '€ — ' + (currentCondo.nome||'');
+        var corpo = notificacaoEmailHTML({
+          titulo: 'Quota de ' + mesNome,
+          texto: 'Informamos que a quota de ' + mesNome + ' no valor de ' + valor.toFixed(2).replace('.',',') + '€ está disponível para pagamento.' +
+            '\n\nPode consultar os detalhes no portal do condómino.',
+          rodape: currentCondo.nome + ' · Gestão de condomínio'
+        });
+        await enviarEmailGmail(f.proprietario_email, assunto, corpo);
+        via = 'email para ' + f.proprietario_email;
+      } catch(e) { via = 'email falhou — ficou no portal'; }
+    }
+
+    // SEMPRE gravar nas mensagens
+    await sb.from('mensagens').insert({
+      condominio_id: currentCondo.id, fracao_id: f.id, autor: 'admin',
+      lida_admin: true, lida_condomino: false,
+      texto: '📬 QUOTA DE ' + mesNome + '\n\n' +
+             'Fração: ' + (f.codigo||'') + '\n' +
+             'Valor: ' + valor.toFixed(2).replace('.',',') + '€\n' +
+             'Data limite: dia ' + (currentCondo.dia_vencimento || 8) + ' de ' + meses[mesAtual-1] + '\n\n' +
+             'Enviado por: ' + via + '\n' +
+             'Data: ' + hoje.toLocaleDateString('pt-PT') + '\n\n' +
+             'Pode consultar e pagar através do portal do condómino.'
+    });
+    enviados++;
+  }
+
+  toast(enviados + ' condómino(s) notificado(s) da quota de ' + meses[mesAtual-1], 'ok');
+  try { await verificarCicloQuotas(); } catch(e) {}
+}
+
+// Lembrete automático a quem não pagou (vencidas)
+async function enviarLembretesAtraso() {
+  if (!currentCondo) return;
+  var hoje = new Date();
+  var hojeTxt = hoje.toISOString().split('T')[0];
+  var meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+  var qR = await sb.from('quotas').select('*, fracoes(id,codigo,proprietario_nome,proprietario_email)')
+    .eq('condominio_id', currentCondo.id)
+    .neq('estado', 'pago')
+    .lt('data_vencimento', hojeTxt);
+  var vencidas = (qR.data || []).filter(function(q) {
+    return (parseFloat(q.valor_emitido||0) - parseFloat(q.valor_pago||0)) > 0.005;
+  });
+
+  if (!vencidas.length) { toast('Sem quotas vencidas — tudo em dia!', 'ok'); return; }
+
+  var enviados = 0;
+  for (var i = 0; i < vencidas.length; i++) {
+    var q = vencidas[i];
+    var f = q.fracoes;
+    if (!f) continue;
+    var valor = parseFloat(q.valor_emitido||0) - parseFloat(q.valor_pago||0);
+    var diasAtraso = Math.round((hoje - new Date(q.data_vencimento)) / 86400000);
+    var mesNome = meses[(q.mes||1)-1] + '/' + (q.ano||'');
+    var via = 'registo no portal';
+
+    // enviar email
+    if (f.proprietario_email && _gmailToken) {
+      try {
+        var nivel = diasAtraso > 30 ? 'URGENTE' : (diasAtraso > 15 ? 'FORMAL' : 'LEMBRETE');
+        var assunto = nivel + ' — Quota em atraso de ' + mesNome + ' — ' + (currentCondo.nome||'');
+        var corpo = notificacaoEmailHTML({
+          titulo: (diasAtraso > 30 ? '⚠️ AVISO URGENTE' : '⚠️ Quota em atraso'),
+          texto: 'A quota de ' + mesNome + ' no valor de ' + valor.toFixed(2).replace('.',',') + '€ encontra-se por pagar há ' + diasAtraso + ' dias.' +
+            (diasAtraso > 30 ? '\n\nA administração poderá ter de recorrer a medidas legais para a cobrança da dívida (Art. 1424.º CC).' : '\n\nAgradecemos a regularização à maior brevidade.'),
+          rodape: 'Este aviso fica registado como prova de comunicação.'
+        });
+        await enviarEmailGmail(f.proprietario_email, assunto, corpo);
+        via = 'email ' + nivel + ' para ' + f.proprietario_email;
+      } catch(e) { via = 'email falhou — ficou no portal'; }
+    }
+
+    // SEMPRE nas mensagens
+    await sb.from('mensagens').insert({
+      condominio_id: currentCondo.id, fracao_id: f.id, autor: 'admin',
+      lida_admin: true, lida_condomino: false,
+      texto: '⚠️ QUOTA EM ATRASO — ' + mesNome + '\n\n' +
+             'Fração: ' + (f.codigo||'') + '\n' +
+             'Valor em dívida: ' + valor.toFixed(2).replace('.',',') + '€\n' +
+             'Dias de atraso: ' + diasAtraso + '\n' +
+             (diasAtraso > 30 ? 'Nível: PRÉ-CONTENCIOSO\n' : (diasAtraso > 15 ? 'Nível: AVISO FORMAL\n' : 'Nível: LEMBRETE\n')) +
+             'Enviado por: ' + via + '\n' +
+             'Data: ' + hoje.toLocaleDateString('pt-PT') + '\n\n' +
+             '[Art. 1424.º CC — registo automático de comunicação ao condómino]'
+    });
+    enviados++;
+  }
+
+  toast(enviados + ' lembrete(s) de atraso enviado(s) e registado(s)', 'ok');
+  try { await verificarCicloQuotas(); } catch(e) {}
+}
+
 async function verificarCicloQuotas() {
   var zona = document.getElementById('ciclo-quotas');
   if (!zona || !currentCondo) return;
@@ -4497,6 +4634,7 @@ async function verificarCicloQuotas() {
       h += '<div style="display:flex;gap:8px;margin-top:7px;flex-wrap:wrap">';
       h += '<button class="btn-ghost" style="width:auto;display:inline-flex;font-size:11px;padding:6px 12px" onclick="nav(\'quotas\')">Ver devedores</button>';
       h += '<button class="btn-ghost" style="width:auto;display:inline-flex;font-size:11px;padding:6px 12px;color:var(--red);border-color:rgba(255,84,112,.35)" onclick="enviarAvisosDevedoresAuto()">Enviar avisos a todos</button>';
+      h += '<button class="btn-ghost" style="width:auto;display:inline-flex;font-size:11px;padding:6px 12px" onclick="enviarLembretesAtraso()">📩 Lembretes de atraso</button>';
       h += '</div>';
 
       h += '</div>';
@@ -4505,7 +4643,11 @@ async function verificarCicloQuotas() {
       h += '<div style="border-left:2px solid rgba(0,212,255,.55);padding:2px 0 2px 11px;margin-top:' + (semRecibo || nDevedores ? '11px' : '0') + '">';
       h += '<div style="font-size:12px;font-weight:650;color:var(--text)">Altura de conferir os pagamentos</div>';
       h += '<div style="font-size:11px;color:var(--t2);line-height:1.5;margin-top:3px">É início do mês — carrega o extrato do banco para ver quem pagou as quotas, validar pagamentos e emitir recibos.</div>';
-      h += '<button class="btn-ghost" style="width:auto;display:inline-flex;font-size:11px;padding:6px 12px;margin-top:7px" onclick="nav(\'financeiro\')">Carregar extrato</button>';
+      h += '<div style="display:flex;gap:6px;margin-top:7px;flex-wrap:wrap">';
+      h += '<button class="btn-ghost" style="width:auto;display:inline-flex;font-size:11px;padding:6px 12px" onclick="nav(\'financeiro\')">Carregar extrato</button>';
+      h += '<button class="btn-ghost" style="width:auto;display:inline-flex;font-size:11px;padding:6px 12px;color:var(--cyan);border-color:rgba(0,212,255,.35)" onclick="notificarCondominosQuotas()">📬 Avisar condóminos</button>';
+      h += '</div>';
+      
       h += '</div>';
     }
     h += '</div>';
