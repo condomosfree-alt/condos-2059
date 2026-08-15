@@ -1003,6 +1003,34 @@ function toastP(msg, tipo) {
   window._toastT = setTimeout(function(){ t.classList.remove('show'); }, 3200);
 }
 
+
+// CANDIDATURA DE PARCEIRO
+(function(){
+  var _tk = new URLSearchParams(window.location.search).get('candidatura');
+  if (!_tk) return;
+  document.body.innerHTML = '';
+  document.body.style.cssText = 'margin:0;background:#0b111a;color:#e0e8ef;font-family:-apple-system,BlinkMacSystemFont,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px;box-sizing:border-box';
+  var h = '<div style="background:#131b28;border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:28px;max-width:420px;width:100%">';
+  h += '<div style="text-align:center;margin-bottom:20px"><div style="font-size:20px;font-weight:700;color:#00d4ff">Candidatura a Parceiro</div><div style="font-size:12px;color:#8b95a8;margin-top:4px">Preencha os dados da sua empresa</div></div>';
+  [['cp-nome','Nome / Empresa','text'],['cp-cat','Especialidade','text'],['cp-tel','Telefone','tel'],['cp-email','Email','email'],['cp-zona','Zona','text'],['cp-preco','Preço/hora','number']].forEach(function(c){
+    h += '<label style="font-size:11px;color:#8b95a8;display:block;margin-bottom:10px">'+c[1]+'<br><input id="'+c[0]+'" type="'+c[2]+'" style="width:100%;box-sizing:border-box;margin-top:4px;background:#1a2435;border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:10px;color:#e0e8ef;font-family:inherit"></label>';
+  });
+  h += '<button id="cp-btn" style="width:100%;padding:14px;background:linear-gradient(135deg,#00d4ff,#0088cc);border:none;border-radius:10px;color:#04121f;font-weight:700;font-family:inherit;font-size:14px;cursor:pointer;margin-top:8px">Enviar candidatura</button>';
+  h += '<div id="cp-res" style="margin-top:12px;text-align:center"></div></div>';
+  document.body.innerHTML = h;
+  document.getElementById('cp-btn').onclick = async function(){
+    var n=(document.getElementById('cp-nome')||{}).value||'';
+    if(!n.trim()){document.getElementById('cp-res').innerHTML='<div style="color:#ff5470">Preencha o nome.</div>';return;}
+    try{var cR=await sb.from('condominios').select('id').eq('parceiro_convite_token',_tk).single();
+    if(cR.error||!cR.data){document.getElementById('cp-res').innerHTML='<div style="color:#ff5470">Convite inválido.</div>';return;}
+    await sb.from('parceiros').insert({condominio_id:cR.data.id,nome:n.trim(),categoria:(document.getElementById('cp-cat')||{}).value||null,telefone:(document.getElementById('cp-tel')||{}).value||null,email:(document.getElementById('cp-email')||{}).value||null,estado:'pendente'});
+    document.getElementById('cp-res').innerHTML='<div style="color:#22e584;font-size:14px;font-weight:700;padding:16px">✅ Candidatura enviada!</div>';
+    document.getElementById('cp-btn').style.display='none';
+    }catch(e){document.getElementById('cp-res').innerHTML='<div style="color:#ff5470">Erro: '+(e.message||'')+'</div>';}
+  };
+  throw new Error('candidatura_mode');
+})();
+
 const token = new URLSearchParams(window.location.search).get('t');
 const mN = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 const eur = v => parseFloat(v||0).toFixed(2).replace('.',',') + '€';

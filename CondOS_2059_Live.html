@@ -870,7 +870,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.08.04-1245</div>
+      <div class="sb-tag">2059 Pro · build v2026.08.04-1320</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -21604,13 +21604,21 @@ function animarValor(el, destino, opts) {
 function calcularScore(d) {
   var det = [];
   var pctDia = d.n_fracoes > 0 ? (d.n_fracoes - d.n_fracoes_divida) / d.n_fracoes : 1;
-  det.push({ nome:'Quotas em dia', pts: Math.round(30 * pctDia), max: 30 });
+  var pc = Math.round(20 * pctDia) + (d.devedores_notificados ? 5 : 0);
+  det.push({ nome:'Cobrança e notificações', pts: Math.min(25, pc), max: 25 });
   var cobF = d.fundo_teorico > 0 ? Math.min(1, d.fundo_comprovado / d.fundo_teorico) : (d.fundo_comprovado > 0 ? 1 : 0.5);
-  det.push({ nome:'Fundo comprovado', pts: Math.round(25 * cobF), max: 25 });
+  det.push({ nome:'Fundo de reserva', pts: Math.round(20 * cobF), max: 20 });
+  var pm = 0;
+  if (d.manut_total > 0) { pm += Math.round(8 * ((d.manut_total - (d.manut_vencidas||0)) / d.manut_total)); } else { pm += 4; }
+  pm += d.seguro_valido ? 5 : 0;
+  pm += d.regulamento_aprovado ? 2 : 0;
+  det.push({ nome:'Manutenções e seguros', pts: Math.min(15, pm), max: 15 });
   var pctOc = d.oc_total_12m > 0 ? d.oc_resolvidas_12m / d.oc_total_12m : 1;
-  det.push({ nome:'Avarias resolvidas', pts: Math.round(20 * pctOc), max: 20 });
-  det.push({ nome:'Assembleias e atas', pts: (d.teve_assembleia_12m ? 10 : 0) + (d.teve_ata_12m ? 5 : 0), max: 15 });
-  det.push({ nome:'Transparência', pts: (d.n_docs > 0 ? 5 : 0) + (d.prova_validada_12m ? 5 : 0), max: 10 });
+  det.push({ nome:'Ocorrências resolvidas', pts: Math.round(15 * pctOc), max: 15 });
+  var pa = (d.teve_assembleia_12m ? 6 : 0) + (d.teve_ata_12m ? 4 : 0) + (d.ata_enviada_todos ? 3 : 0) + (d.cartas_com_tracking ? 2 : 0);
+  det.push({ nome:'Assembleias e comunicação', pts: Math.min(15, pa), max: 15 });
+  var pt = (d.n_docs > 0 ? 3 : 0) + (d.prova_validada_12m ? 4 : 0) + (d.portal_ativo ? 3 : 0);
+  det.push({ nome:'Transparência e provas', pts: Math.min(10, pt), max: 10 });
   var total = det.reduce(function(s,x){ return s + x.pts; }, 0);
   return { total: total, det: det };
 }
@@ -21645,6 +21653,14 @@ async function carregarScoreAdmin() {
     var teorico = pagas * pctFundo / 100;
     var comprovado = (mR.data||[]).reduce(function(s,m){ return s + movFundoValor(m); }, 0);
     var ocs = oR.data||[];
+
+    var msgDevedores = 0;
+    try { var mdR = await sb.from('mensagens').select('id', {count:'exact', head:true}).eq('condominio_id', cid).ilike('texto', '%ATRASO%').gte('criado_em', desde); msgDevedores = mdR.count || 0; } catch(e) {}
+    var ataEnviadaTodos = false;
+    try { var aeR = await sb.from('mensagens').select('id', {count:'exact', head:true}).eq('condominio_id', cid).ilike('texto', '%ATA DA ASSEMBLEIA%').gte('criado_em', desde); ataEnviadaTodos = (aeR.count || 0) >= Math.max(1, (fracoes||[]).length * 0.5); } catch(e) {}
+    var cartasComTracking = false;
+    try { var ctR = await sb.from('mensagens').select('id', {count:'exact', head:true}).eq('condominio_id', cid).ilike('texto', '%CARTA REGISTADA ENVIADA%'); cartasComTracking = (ctR.count || 0) > 0; } catch(e) {}
+
     var d = {
       n_fracoes: (fracoes||[]).length,
       n_fracoes_divida: Object.keys(divPorFr).length,
@@ -21656,6 +21672,14 @@ async function carregarScoreAdmin() {
       n_docs: dR.count || 0,
       // 🧪 prova processada em MODO DEMONSTRAÇÃO não conta para o score — não houve verificação
       prova_validada_12m: (eR.data||[]).filter(function(x){ return !/DEMONSTRA/i.test(x.ai_resultado||''); }).length > 0,
+      devedores_notificados: msgDevedores > 0,
+      manut_total: (_manut || []).length,
+      manut_vencidas: (_manut || []).filter(function(m){ return m.proxima_data && new Date(m.proxima_data) < new Date(); }).length,
+      seguro_valido: (_seguros || []).some(function(sg){ return (sg.tipo==='multirriscos'||sg.tipo==='incendio') && sg.fim_vigencia && new Date(sg.fim_vigencia) > new Date(); }),
+      regulamento_aprovado: !!(currentCondo && currentCondo.regulamento_aprovado),
+      ata_enviada_todos: ataEnviadaTodos,
+      cartas_com_tracking: cartasComTracking,
+      portal_ativo: (fracoes||[]).some(function(f){ return f.token_acesso; }),
       devedores_notificados: msgDevedores > 0,
       manut_total: (_manut || []).length,
       manut_vencidas: (_manut || []).filter(function(m){ return m.proxima_data && new Date(m.proxima_data) < new Date(); }).length,
