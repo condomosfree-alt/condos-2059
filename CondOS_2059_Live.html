@@ -21454,7 +21454,15 @@ async function carregarScoreAdmin() {
       teve_ata_12m: (aR.data||[]).some(function(a){ return a.ata_texto && a.ata_texto.trim().length > 50; }),
       n_docs: dR.count || 0,
       // 🧪 prova processada em MODO DEMONSTRAÇÃO não conta para o score — não houve verificação
-      prova_validada_12m: (eR.data||[]).filter(function(x){ return !/DEMONSTRA/i.test(x.ai_resultado||''); }).length > 0
+      prova_validada_12m: (eR.data||[]).filter(function(x){ return !/DEMONSTRA/i.test(x.ai_resultado||''); }).length > 0,
+      devedores_notificados: msgDevedores > 0,
+      manut_total: (_manut || []).length,
+      manut_vencidas: (_manut || []).filter(function(m){ return m.proxima_data && new Date(m.proxima_data) < new Date(); }).length,
+      seguro_valido: (_seguros || []).some(function(sg){ return (sg.tipo==='multirriscos'||sg.tipo==='incendio') && sg.fim_vigencia && new Date(sg.fim_vigencia) > new Date(); }),
+      regulamento_aprovado: !!(currentCondo && currentCondo.regulamento_aprovado),
+      ata_enviada_todos: ataEnviadaTodos,
+      cartas_com_tracking: cartasComTracking,
+      portal_ativo: (fracoes||[]).some(function(f){ return f.token_acesso; })
     };
     var s = calcularScore(d);
     var cl = _scoreClasse(s.total);
