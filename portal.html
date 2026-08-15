@@ -2244,7 +2244,14 @@ async function carregarEspacosNoContas() {
     h += '</div>';
     h += '</div>';
     zona.innerHTML = h;
-  } catch(e) { zona.innerHTML = ''; }
+  } catch(e) {
+    // se a RPC não existe, mostrar que a funcionalidade está disponível mas precisa de setup
+    if (e.message && e.message.indexOf('not found') > -1) {
+      zona.innerHTML = '';  // RPC não existe — SQL não foi corrido. Esconder silenciosamente.
+    } else {
+      zona.innerHTML = '';
+    }
+  }
 }
 
 function reservarEspacoContas() {
@@ -2303,7 +2310,7 @@ async function carregarEspacosPortal() {
     });
 
     zona.innerHTML = h;
-  } catch(e) { zona.innerHTML = '<div class="empty">Erro: ' + (e.message||'') + '</div>'; }
+  } catch(e) { zona.innerHTML = '<div style="text-align:center;padding:30px;color:var(--t3);font-size:13px;line-height:1.6">Espaços comuns ainda não configurados.<br>A administração precisa de registar os espaços do prédio.</div>'; }
 }
 
 function abrirReservaPortal(espacoId, nomeEsp) {
