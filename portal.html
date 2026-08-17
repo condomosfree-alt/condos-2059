@@ -1396,7 +1396,16 @@ async function carregarFeed() {
   }
 
   if (!itens.length) { box.innerHTML = '<div class="empty">Sem notificações. Está tudo em ordem! ✨</div>'; return; }
-  itens.sort(function(a,b){ return (a.pri||9) - (b.pri||9); });
+  
+    // Card Vitrine do Bairro — aparece SEMPRE
+    itens.push({
+      pri: 6,
+      html: '<div onclick="irParaVitrine()" style="background:var(--c1);border:1px solid var(--b);border-radius:12px;padding:14px 16px;cursor:pointer">' +
+        '<div style="font-size:13px;font-weight:700;color:var(--text)">🏪 Vitrine do Bairro</div>' +
+        '<div style="font-size:11px;color:var(--t3);margin-top:4px">Ofertas e serviços do comércio local</div></div>'
+    });
+
+    itens.sort(function(a,b){ return (a.pri||9) - (b.pri||9); });
   box.innerHTML = itens.map(function(n){
     // itens com html próprio (como as quotas pendentes) passam direto
     if (n.html) return n.html;
@@ -4792,6 +4801,13 @@ function irParaEspacos() {
   var zona = document.getElementById('p-espacos');
   if (zona) { zona.style.display = 'block'; carregarEspacosPortal(); }
 }
+function irParaVitrine() {
+  document.querySelectorAll('.page, .sec').forEach(function(el) { el.style.display = 'none'; });
+  var zona = document.getElementById('p-vitrine');
+  if (zona) { zona.style.display = 'block'; carregarVitrine(); }
+  window.scrollTo(0,0);
+}
+
 
 
 // BADGE DE MENSAGENS NÃO LIDAS
@@ -4942,8 +4958,8 @@ async function _ctxIAPortal() {
 
 <!-- Chat IA do condómino -->
 <div id="p-regulamento" style="display:none;padding:16px"><div style="display:flex;align-items:center;gap:10px;margin-bottom:14px"><button onclick="location.reload()" style="background:none;border:none;color:var(--t2);font-size:18px;cursor:pointer;padding:4px">←</button><span style="font-size:14px;font-weight:700;color:var(--text)">Regulamento</span></div><div id="p-regulamento-conteudo"></div></div>
-<div id="p-espacos" style="display:none;padding:16px"><div style="display:flex;align-items:center;gap:10px;margin-bottom:14px"><button onclick="location.reload()" style="background:none;border:none;color:var(--t2);font-size:18px;cursor:pointer;padding:4px">←</button><span style="font-size:14px;font-weight:700;color:var(--text)">Espaços Comuns</span></div>
-    <div id="p-vitrine" style="display:none"><div class="sec-t" style="margin-bottom:12px">🏪 Vitrine do Bairro</div><div id="vitrine-conteudo"></div></div><div id="p-espacos-conteudo"></div></div>
+<div id="p-espacos" style="display:none;padding:16px"><div style="display:flex;align-items:center;gap:10px;margin-bottom:14px"><button onclick="irPara('inicio')" style="background:none;border:none;color:var(--t2);font-size:18px;cursor:pointer;padding:4px">←</button><span style="font-size:14px;font-weight:700;color:var(--text)">Espaços Comuns</span></div>
+    <div id="p-vitrine" style="display:none"><div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><button onclick="irPara('inicio')" style="background:none;border:1px solid var(--b);border-radius:8px;padding:6px 10px;color:var(--t2);font-size:11px;cursor:pointer">← Voltar</button><div class="sec-t" style="margin:0">🏪 Vitrine do Bairro</div></div><div id="vitrine-conteudo"></div></div><div id="p-espacos-conteudo"></div></div>
 
 <div id="ia-fab" onclick="abrirChatIA()" style="position:fixed;bottom:80px;right:16px;width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,var(--cyan),#0088cc);box-shadow:0 4px 16px rgba(0,212,255,.35);display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:200;transition:transform .15s ease;">
   <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#04121f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-8 8H7l-4 3 1.2-4.4A8 8 0 1 1 21 12z"/><path d="M8 10h.01M12 10h.01M16 10h.01"/></svg>
