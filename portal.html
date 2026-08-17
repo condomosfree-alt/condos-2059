@@ -1397,6 +1397,14 @@ async function carregarFeed() {
 
   if (!itens.length) { box.innerHTML = '<div class="empty">Sem notificações. Está tudo em ordem! ✨</div>'; return; }
   
+    // Card Espaços Comuns — aparece SEMPRE
+    itens.push({
+      pri: 5,
+      html: '<div onclick="irParaEspacos()" style="background:var(--c1);border:1px solid var(--b);border-radius:12px;padding:14px 16px;cursor:pointer">' +
+        '<div style="font-size:13px;font-weight:700;color:var(--text)">📍 Espaços comuns</div>' +
+        '<div style="font-size:11px;color:var(--t3);margin-top:4px">Reservar salão, churrasqueira e outros espaços</div></div>'
+    });
+
     // Card Vitrine do Bairro — aparece SEMPRE
     itens.push({
       pri: 6,
@@ -2347,7 +2355,7 @@ async function carregarEspacosPortal() {
     });
 
     zona.innerHTML = h;
-  } catch(e) { zona.innerHTML = '<div style="text-align:center;padding:30px;color:var(--t3);font-size:13px;line-height:1.6">Espaços comuns ainda não configurados.<br>A administração precisa de registar os espaços do prédio.</div>'; }
+  } catch(e) { zona.innerHTML = '<div style="text-align:center;padding:30px;color:var(--t3);font-size:13px;line-height:1.6">Espaços comuns ainda não disponíveis. A administração precisa de registar os espaços do prédio no sistema..<br>A administração precisa de registar os espaços do prédio.</div>'; }
 }
 
 function abrirReservaPortal(espacoId, nomeEsp) {
