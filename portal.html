@@ -1176,9 +1176,8 @@ function irPara(pg, semHistorico) {
   } catch(e){}
   try { if (!semHistorico && location.hash !== '#' + pg) history.replaceState(null, '', location.pathname + location.search + '#' + pg); } catch(e){}
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  // esconder secções extra (espaços, vitrine)
-  var _extras = ['p-espacos','p-vitrine'];
-  _extras.forEach(function(xid) { var x = document.getElementById(xid); if (x) x.style.display = 'none'; });
+  // esconder secções extra
+  ['p-espacos','p-vitrine','p-regulamento'].forEach(function(xid) { var x = document.getElementById(xid); if (x) x.style.display = 'none'; });
   document.querySelectorAll('.nav button').forEach(b => b.classList.remove('on'));
   const map = { inicio:'pg-inicio', quotas:'pg-quotas', contas:'pg-contas', docs:'pg-docs', reportar:'pg-reportar', mensagens:'pg-mensagens' };
   var _pgEl = document.getElementById(map[pg]); if (_pgEl) { _pgEl.style.display = ''; _pgEl.classList.add('active'); }
@@ -2572,7 +2571,40 @@ async function carregarVitrine() {
     var destaques = ofertas.filter(function(o) { return o.destaque; });
     var normais = ofertas.filter(function(o) { return !o.destaque; });
 
-    (destaques.concat(normais)).forEach(function(o) {
+    // === MONTRA VISUAL — a vitrine do bairro como uma loja ===
+    if (destaques.length) {
+      h += '<div style="position:relative;border-radius:14px;overflow:hidden;margin-bottom:16px;background:linear-gradient(135deg,#0a1628,#132238);border:2px solid rgba(0,212,255,.2)">';
+      // topo — letreiro da loja
+      h += '<div style="background:linear-gradient(90deg,#0d1f35,#162d4a);padding:10px 16px;border-bottom:2px solid rgba(0,212,255,.15);display:flex;align-items:center;justify-content:center;gap:8px">';
+      h += '<span style="font-size:11px;letter-spacing:.15em;font-weight:700;color:var(--cyan);text-transform:uppercase">Cond.OS</span>';
+      h += '<span style="font-size:14px;font-weight:700;color:var(--text);letter-spacing:.05em">Vitrine</span>';
+      h += '</div>';
+      // moldura da montra
+      h += '<div style="padding:14px;display:flex;gap:12px;overflow-x:auto;-webkit-overflow-scrolling:touch">';
+      destaques.forEach(function(o) {
+        var fam2 = familias[o.familia] || { icon: '🏪', nome: o.categoria || '' };
+        h += '<div style="min-width:200px;max-width:240px;flex-shrink:0;background:rgba(255,255,255,.03);border:1px solid rgba(255,179,0,.25);border-radius:10px;padding:12px;box-shadow:0 0 20px rgba(255,179,0,.05)">';
+        h += '<div style="font-size:20px;margin-bottom:6px">' + fam2.icon + '</div>';
+        h += '<div style="font-size:13px;font-weight:700;color:var(--text)">' + (o.nome||'') + '</div>';
+        h += '<div style="font-size:10px;color:var(--t3);margin-bottom:6px">' + fam2.nome + '</div>';
+        if (o.oferta_texto) h += '<div style="font-size:11px;color:var(--cyan);line-height:1.4;margin-bottom:6px">' + o.oferta_texto + '</div>';
+        if (o.telefone) h += '<div style="font-size:10px;color:var(--t3)">📞 ' + o.telefone + '</div>';
+        if (o.folheto_url) h += '<a href="' + o.folheto_url + '" target="_blank" rel="noopener" style="display:inline-block;margin-top:6px;font-size:10px;color:var(--cyan);text-decoration:none">📰 ' + (o.folheto_nome||'Folheto') + ' ↗</a>';
+        h += '</div>';
+      });
+      h += '</div>';
+      // reflexo sutil no vidro
+      h += '<div style="position:absolute;top:0;left:0;right:0;height:40%;background:linear-gradient(180deg,rgba(255,255,255,.02),transparent);pointer-events:none"></div>';
+      h += '</div>';
+    }
+
+    // separador para os restantes
+    if (normais.length) {
+      h += '<div style="font-size:11px;font-weight:700;color:var(--t2);letter-spacing:.06em;margin:16px 0 10px;padding-left:2px">COMÉRCIO LOCAL</div>';
+    }
+
+    // só os normais — os destaques já apareceram na montra
+    normais.forEach(function(o) {
       var fam = familias[o.familia] || { icon: '🏪', nome: o.categoria || 'Comércio' };
       var isDestaque = o.destaque;
 
@@ -4845,21 +4877,26 @@ window.addEventListener('hashchange', aplicarDestinoNotificacao);
 // =====================================================================
 
 function irParaRegulamento() {
-  document.querySelectorAll('.page, .sec').forEach(function(el) { el.style.display = 'none'; });
+  _esconderTudo();
   var zona = document.getElementById('p-regulamento');
   if (zona) { zona.style.display = 'block'; carregarRegulamentoPortal(); }
+  window.scrollTo(0,0);
+}
+
+
+function _esconderTudo() {
+  document.querySelectorAll('.page').forEach(function(el) { el.classList.remove('active'); el.style.display = 'none'; });
+  ['p-espacos','p-vitrine','p-regulamento'].forEach(function(id) { var el = document.getElementById(id); if (el) el.style.display = 'none'; });
 }
 
 function irParaEspacos() {
-  document.querySelectorAll('.page').forEach(function(el) { el.classList.remove('active'); el.style.display = 'none'; });
-  var vit = document.getElementById('p-vitrine'); if (vit) vit.style.display = 'none';
+  _esconderTudo();
   var zona = document.getElementById('p-espacos');
   if (zona) { zona.style.display = 'block'; carregarEspacosPortal(); }
   window.scrollTo(0,0);
 }
 function irParaVitrine() {
-  document.querySelectorAll('.page').forEach(function(el) { el.classList.remove('active'); el.style.display = 'none'; });
-  var esp = document.getElementById('p-espacos'); if (esp) esp.style.display = 'none';
+  _esconderTudo();
   var zona = document.getElementById('p-vitrine');
   if (zona) { zona.style.display = 'block'; carregarVitrine(); }
   window.scrollTo(0,0);
