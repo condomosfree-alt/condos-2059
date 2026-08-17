@@ -21804,6 +21804,9 @@ async function carregarScoreAdmin() {
     var cartasComTracking = false;
     try { var ctR = await sb.from('mensagens').select('id', {count:'exact', head:true}).eq('condominio_id', cid).ilike('texto', '%CARTA REGISTADA ENVIADA%'); cartasComTracking = (ctR.count || 0) > 0; } catch(e) {}
 
+    var relatorioMensal = false;
+    try { var rmR = await sb.from('documentos').select('id', {count:'exact', head:true}).eq('condominio_id', cid).ilike('nome', '%Relatório mensal%').gte('criado_em', desde); relatorioMensal = (rmR.count || 0) > 0; } catch(e) {}
+
     var d = {
       n_fracoes: (fracoes||[]).length,
       n_fracoes_divida: Object.keys(divPorFr).length,
