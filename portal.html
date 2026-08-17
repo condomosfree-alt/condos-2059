@@ -1176,6 +1176,9 @@ function irPara(pg, semHistorico) {
   } catch(e){}
   try { if (!semHistorico && location.hash !== '#' + pg) history.replaceState(null, '', location.pathname + location.search + '#' + pg); } catch(e){}
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  // esconder secções extra (espaços, vitrine)
+  var _extras = ['p-espacos','p-vitrine'];
+  _extras.forEach(function(xid) { var x = document.getElementById(xid); if (x) x.style.display = 'none'; });
   document.querySelectorAll('.nav button').forEach(b => b.classList.remove('on'));
   const map = { inicio:'pg-inicio', quotas:'pg-quotas', contas:'pg-contas', docs:'pg-docs', reportar:'pg-reportar', mensagens:'pg-mensagens' };
   document.getElementById(map[pg]).classList.add('active');
@@ -2354,16 +2357,45 @@ async function carregarEspacosPortal() {
 function abrirReservaPortal(espacoId, nomeEsp) {
   var h = '<div style="padding:4px">';
   h += '<div style="font-size:13px;color:var(--t2);margin-bottom:12px;line-height:1.6">Escolhe a data e o horário. A administração aprova o pedido.</div>';
-  h += '<label style="font-size:11px;color:var(--t2);display:block;margin-bottom:10px">Data<br><input type="date" id="re-data" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--c2);border:1px solid var(--b);border-radius:8px;padding:10px;color:var(--t1);font-family:inherit;font-size:14px"></label>';
+  h += '<label style="font-size:11px;color:var(--t2);display:block;margin-bottom:10px">Data<br><input type="date" id="re-data" onchange="verificarDisponibilidade(\'' + espacoId + '\')" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--s2,#111b2a);border:1px solid var(--b1,#1e2d3d);border-radius:8px;padding:10px;color:var(--text);font-family:inherit;font-size:14px" min="' + new Date().toISOString().split('T')[0] + '"></label>';
+  h += '<div id="re-disponibilidade" style="margin-bottom:10px"></div>';
   h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">';
-  h += '<label style="font-size:11px;color:var(--t2)">Das<br><input type="time" id="re-hi" value="18:00" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--c2);border:1px solid var(--b);border-radius:8px;padding:10px;color:var(--t1);font-family:inherit"></label>';
-  h += '<label style="font-size:11px;color:var(--t2)">Às<br><input type="time" id="re-hf" value="22:00" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--c2);border:1px solid var(--b);border-radius:8px;padding:10px;color:var(--t1);font-family:inherit"></label>';
+  h += '<label style="font-size:11px;color:var(--t2)">Das<br><input type="time" id="re-hi" value="18:00" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--s2,#111b2a);border:1px solid var(--b1,#1e2d3d);border-radius:8px;padding:10px;color:var(--text);font-family:inherit"></label>';
+  h += '<label style="font-size:11px;color:var(--t2)">Às<br><input type="time" id="re-hf" value="22:00" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--s2,#111b2a);border:1px solid var(--b1,#1e2d3d);border-radius:8px;padding:10px;color:var(--text);font-family:inherit"></label>';
   h += '</div>';
-  h += '<label style="font-size:11px;color:var(--t2)">Notas (opcional)<br><input type="text" id="re-notas" placeholder="Ex: festa de aniversário, ~20 pessoas" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--c2);border:1px solid var(--b);border-radius:8px;padding:10px;color:var(--t1);font-family:inherit"></label>';
+  h += '<label style="font-size:11px;color:var(--t2)">Notas (opcional)<br><input type="text" id="re-notas" placeholder="Ex: festa de aniversário, ~20 pessoas" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--s2,#111b2a);border:1px solid var(--b1,#1e2d3d);border-radius:8px;padding:10px;color:var(--text);font-family:inherit"></label>';
   h += '<button class="pf-btn go" style="margin-top:14px" onclick="enviarReservaPortal(\'' + espacoId + '\')">Pedir reserva</button>';
   h += '<div id="re-erro" style="margin-top:10px"></div>';
   h += '</div>';
   _ausModal('Reservar ' + nomeEsp, h);
+}
+
+
+async function verificarDisponibilidade(espacoId) {
+  var data = (document.getElementById('re-data')||{}).value;
+  var zona = document.getElementById('re-disponibilidade');
+  if (!data || !zona) return;
+  zona.innerHTML = '<div style="font-size:11px;color:var(--t3)">A verificar...</div>';
+  try {
+    var r = await sb.rpc('portal_disponibilidade', { p_token: token, p_espaco: espacoId, p_data: data });
+    var reservas = r.data || [];
+    if (!reservas.length) {
+      zona.innerHTML = '<div style="font-size:11px;color:var(--green)">✓ Dia livre — sem reservas</div>';
+    } else {
+      var h = '<div style="font-size:11px;font-weight:600;color:var(--amber);margin-bottom:4px">Horários já reservados neste dia:</div>';
+      reservas.forEach(function(r2) {
+        var hi = (r2.hora_inicio||'').substring(0,5);
+        var hf = (r2.hora_fim||'').substring(0,5);
+        h += '<div style="display:flex;align-items:center;gap:8px;padding:3px 0;font-size:11px;color:var(--t2)">';
+        h += '<span style="background:rgba(255,84,112,.1);border:1px solid rgba(255,84,112,.25);border-radius:6px;padding:2px 8px;font-family:var(--mono,monospace);font-size:10px;color:var(--red)">' + hi + '–' + hf + '</span>';
+        h += '<span style="color:var(--t3)">Fração ' + (r2.fracao||'?') + '</span>';
+        h += '</div>';
+      });
+      zona.innerHTML = h;
+    }
+  } catch(e) {
+    zona.innerHTML = '<div style="font-size:11px;color:var(--t3)">Não foi possível verificar a disponibilidade.</div>';
+  }
 }
 
 async function enviarReservaPortal(espacoId) {
@@ -4814,13 +4846,15 @@ function irParaRegulamento() {
 }
 
 function irParaEspacos() {
-  document.querySelectorAll('.page, .sec').forEach(function(el) { el.style.display = 'none'; });
+  document.querySelectorAll('.page').forEach(function(el) { el.classList.remove('active'); });
+  var vit = document.getElementById('p-vitrine'); if (vit) vit.style.display = 'none';
   var zona = document.getElementById('p-espacos');
   if (zona) { zona.style.display = 'block'; carregarEspacosPortal(); }
   window.scrollTo(0,0);
 }
 function irParaVitrine() {
-  document.querySelectorAll('.page, .sec').forEach(function(el) { el.style.display = 'none'; });
+  document.querySelectorAll('.page').forEach(function(el) { el.classList.remove('active'); });
+  var esp = document.getElementById('p-espacos'); if (esp) esp.style.display = 'none';
   var zona = document.getElementById('p-vitrine');
   if (zona) { zona.style.display = 'block'; carregarVitrine(); }
   window.scrollTo(0,0);
