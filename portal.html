@@ -2359,6 +2359,7 @@ function abrirReservaPortal(espacoId, nomeEsp) {
   h += '<div style="font-size:13px;color:var(--t2);margin-bottom:12px;line-height:1.6">Escolhe a data e o horário. A administração aprova o pedido.</div>';
   h += '<label style="font-size:11px;color:var(--t2);display:block;margin-bottom:10px">Data<br><input type="date" id="re-data" onchange="verificarDisponibilidade(\'' + espacoId + '\')" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--s2,#111b2a);border:1px solid var(--b1,#1e2d3d);border-radius:8px;padding:10px;color:var(--text);font-family:inherit;font-size:14px" min="' + new Date().toISOString().split('T')[0] + '"></label>';
   h += '<div id="re-disponibilidade" style="margin-bottom:10px"></div>';
+  h += '<label style="display:flex;align-items:center;gap:8px;margin-bottom:10px;cursor:pointer"><input type="checkbox" id="re-dia-inteiro" onchange="var hi=document.getElementById(\'re-hi\'),hf=document.getElementById(\'re-hf\');if(this.checked){hi.value=\'00:00\';hf.value=\'23:59\';hi.disabled=true;hf.disabled=true}else{hi.disabled=false;hf.disabled=false}"><span style="font-size:12px;color:var(--text)">Dia inteiro</span></label>';
   h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">';
   h += '<label style="font-size:11px;color:var(--t2)">Das<br><input type="time" id="re-hi" value="18:00" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--s2,#111b2a);border:1px solid var(--b1,#1e2d3d);border-radius:8px;padding:10px;color:var(--text);font-family:inherit"></label>';
   h += '<label style="font-size:11px;color:var(--t2)">Às<br><input type="time" id="re-hf" value="22:00" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--s2,#111b2a);border:1px solid var(--b1,#1e2d3d);border-radius:8px;padding:10px;color:var(--text);font-family:inherit"></label>';
@@ -2405,6 +2406,10 @@ async function enviarReservaPortal(espacoId) {
   var notas = ((document.getElementById('re-notas')||{}).value||'').trim();
   if (!data) { toast('Escolhe uma data', 'warn'); return; }
   if (!hi || !hf) { toast('Escolhe o horário', 'warn'); return; }
+  // dia inteiro: 00:00-00:00 ou checkbox
+  var diaInteiro = document.getElementById('re-dia-inteiro');
+  if ((diaInteiro && diaInteiro.checked) || (hi === hf)) { hi = '00:00'; hf = '23:59'; }
+  if (hi >= hf && hf !== '00:00') { toast('A hora de fim tem de ser depois da hora de início', 'warn'); return; }
 
   try {
     var r = await sb.rpc('portal_reservar_espaco', {
