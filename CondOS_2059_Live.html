@@ -870,7 +870,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.08.04-1420</div>
+      <div class="sb-tag">2059 Pro · build v2026.08.04-1425</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -6553,21 +6553,21 @@ function verCalendarioEspaco(espacoId) {
 
 async function novoEspaco() {
   var h = '<div style="padding:4px">';
-  h += '<label style="font-size:11px;color:var(--t2);display:block;margin-bottom:10px">Nome<br><input type="text" id="ne-nome" placeholder="Ex: Salão de Festas" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--c2);border:1px solid var(--b);border-radius:8px;padding:10px;color:var(--t1);font-family:inherit;font-size:14px"></label>';
+  h += '<label style="font-size:11px;color:var(--t2);display:block;margin-bottom:10px">Nome<br><input type="text" id="ne-nome" placeholder="Ex: Salão de Festas" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--s2,#111b2a);border:1px solid var(--b1,#1e2d3d);border-radius:8px;padding:10px;color:var(--text,#e0e8ef);font-family:inherit;font-size:14px"></label>';
   h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">';
-  h += '<label style="font-size:11px;color:var(--t2)">Tipo<br><select id="ne-tipo" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--c2);border:1px solid var(--b);border-radius:8px;padding:10px;color:var(--t1);font-family:inherit"><option value="sala">Sala / Salão</option><option value="piscina">Piscina</option><option value="churrasqueira">Churrasqueira</option><option value="terraço">Terraço</option><option value="ginásio">Ginásio</option><option value="jardim">Jardim</option><option value="outro">Outro</option></select></label>';
-  h += '<label style="font-size:11px;color:var(--t2)">Capacidade<br><input type="number" id="ne-cap" placeholder="30" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--c2);border:1px solid var(--b);border-radius:8px;padding:10px;color:var(--t1);font-family:inherit"></label>';
+  h += '<label style="font-size:11px;color:var(--t2)">Tipo<br><select id="ne-tipo" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--s2,#111b2a);border:1px solid var(--b1,#1e2d3d);border-radius:8px;padding:10px;color:var(--text,#e0e8ef);font-family:inherit"><option value="sala">Sala / Salão</option><option value="piscina">Piscina</option><option value="churrasqueira">Churrasqueira</option><option value="terraço">Terraço</option><option value="ginásio">Ginásio</option><option value="jardim">Jardim</option><option value="outro">Outro</option></select></label>';
+  h += '<label style="font-size:11px;color:var(--t2)">Capacidade<br><input type="number" id="ne-cap" placeholder="30" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--s2,#111b2a);border:1px solid var(--b1,#1e2d3d);border-radius:8px;padding:10px;color:var(--text,#e0e8ef);font-family:inherit"></label>';
   h += '</div>';
   h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px">';
-  h += '<label style="font-size:11px;color:var(--t2)">Horário início<br><input type="time" id="ne-hi" value="09:00" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--c2);border:1px solid var(--b);border-radius:8px;padding:10px;color:var(--t1);font-family:inherit"></label>';
-  h += '<label style="font-size:11px;color:var(--t2)">Horário fim<br><input type="time" id="ne-hf" value="23:00" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--c2);border:1px solid var(--b);border-radius:8px;padding:10px;color:var(--t1);font-family:inherit"></label>';
-  h += '<label style="font-size:11px;color:var(--t2)">Máx horas<br><input type="number" id="ne-maxh" value="6" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--c2);border:1px solid var(--b);border-radius:8px;padding:10px;color:var(--t1);font-family:inherit"></label>';
+  h += '<label style="font-size:11px;color:var(--t2)">Horário início<br><input type="time" id="ne-hi" value="09:00" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--s2,#111b2a);border:1px solid var(--b1,#1e2d3d);border-radius:8px;padding:10px;color:var(--text,#e0e8ef);font-family:inherit"></label>';
+  h += '<label style="font-size:11px;color:var(--t2)">Horário fim<br><input type="time" id="ne-hf" value="23:00" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--s2,#111b2a);border:1px solid var(--b1,#1e2d3d);border-radius:8px;padding:10px;color:var(--text,#e0e8ef);font-family:inherit"></label>';
+  h += '<label style="font-size:11px;color:var(--t2)">Máx horas<br><input type="number" id="ne-maxh" value="6" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--s2,#111b2a);border:1px solid var(--b1,#1e2d3d);border-radius:8px;padding:10px;color:var(--text,#e0e8ef);font-family:inherit"></label>';
   h += '</div>';
   h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">';
-  h += '<label style="font-size:11px;color:var(--t2)">Taxa de reserva (€)<br><input type="number" id="ne-taxa" value="0" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--c2);border:1px solid var(--b);border-radius:8px;padding:10px;color:var(--t1);font-family:inherit"></label>';
-  h += '<label style="font-size:11px;color:var(--t2)">Caução (€)<br><input type="number" id="ne-caucao" value="0" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--c2);border:1px solid var(--b);border-radius:8px;padding:10px;color:var(--t1);font-family:inherit"></label>';
+  h += '<label style="font-size:11px;color:var(--t2)">Taxa de reserva (€)<br><input type="number" id="ne-taxa" value="0" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--s2,#111b2a);border:1px solid var(--b1,#1e2d3d);border-radius:8px;padding:10px;color:var(--text,#e0e8ef);font-family:inherit"></label>';
+  h += '<label style="font-size:11px;color:var(--t2)">Caução (€)<br><input type="number" id="ne-caucao" value="0" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--s2,#111b2a);border:1px solid var(--b1,#1e2d3d);border-radius:8px;padding:10px;color:var(--text,#e0e8ef);font-family:inherit"></label>';
   h += '</div>';
-  h += '<label style="font-size:11px;color:var(--t2)">Descrição / Regras<br><textarea id="ne-desc" rows="3" placeholder="Ex: Inclui cozinha. Limpeza obrigatória após uso." style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--c2);border:1px solid var(--b);border-radius:8px;padding:10px;color:var(--t1);font-family:inherit;resize:vertical"></textarea></label>';
+  h += '<label style="font-size:11px;color:var(--t2)">Descrição / Regras<br><textarea id="ne-desc" rows="3" placeholder="Ex: Inclui cozinha. Limpeza obrigatória após uso." style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--s2,#111b2a);border:1px solid var(--b1,#1e2d3d);border-radius:8px;padding:10px;color:var(--text,#e0e8ef);font-family:inherit;resize:vertical"></textarea></label>';
   h += '<button class="btn-primary" style="width:100%;margin-top:14px;font-size:13px;padding:12px" onclick="criarEspaco()">Criar espaço</button>';
   h += '</div>';
   abrirModalGenerico('Novo espaço comum', h);
