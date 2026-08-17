@@ -870,7 +870,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.08.04-1400</div>
+      <div class="sb-tag">2059 Pro · build v2026.08.04-1420</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -1945,7 +1945,8 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
 
       <div class="page" id="page-parceiros">
         <div class="sec-hdr"><span class="sec-t">Parceiros</span>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;"><button class="btn-ghost" style="font-size:11px;padding:6px 12px" onclick="convidarParceiro()">📤 Convidar</button><button class="tb-btn" onclick="importarParceiroOutroPredio()" style="font-size:11.5px;">🏢 De outro prédio</button><button class="btn-primary" onclick="openModal('mo-parceiro')"><i class="ti ti-plus"></i>Adicionar</button></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;" id="parc-btns-servico"><button class="btn-ghost" style="font-size:11px;padding:6px 12px" onclick="convidarParceiro()">📤 Convidar parceiro</button><button class="tb-btn" onclick="importarParceiroOutroPredio()" style="font-size:11.5px;">🏢 De outro prédio</button><button class="btn-primary" onclick="openModal('mo-parceiro');var vc=document.getElementById('pc-vitrine-campos');if(vc)vc.style.display=_parceirosTab==='vitrine'?'block':'none'"><i class="ti ti-plus"></i>Adicionar</button></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;display:none" id="parc-btns-vitrine"><button class="btn-ghost" style="font-size:11px;padding:6px 12px;color:#94d82d;border-color:rgba(148,216,45,.35)" onclick="convidarVitrine()">🏪 Convidar comércio local</button><button class="btn-primary" onclick="openModal('mo-parceiro');var vc=document.getElementById('pc-vitrine-campos');if(vc)vc.style.display=_parceirosTab==='vitrine'?'block':'none'"><i class="ti ti-plus"></i>Adicionar</button></div>
         </div>
         <div style="display:flex;gap:0;border-bottom:1px solid var(--b1);margin-bottom:12px">
           <button class="parc-tab" data-tab="servico" onclick="setTabParceiros('servico')" style="flex:1;background:none;border:none;padding:10px;font-size:12px;font-weight:600;cursor:pointer;color:var(--cyan);border-bottom:2px solid var(--cyan);font-family:inherit">🔧 Serviço</button>
@@ -4817,10 +4818,17 @@ function setTabParceiros(tab) {
     b.style.borderBottom = b.dataset.tab === tab ? '2px solid var(--cyan)' : '2px solid transparent';
     b.style.color = b.dataset.tab === tab ? 'var(--cyan)' : 'var(--t3)';
   });
-  loadParceiros();
-  // mostrar/esconder ofertas-admin
+  // mostrar/esconder botões e painéis por tab
+  var bs = document.getElementById('parc-btns-servico');
+  var bv = document.getElementById('parc-btns-vitrine');
+  if (bs) bs.style.display = tab === 'servico' ? 'flex' : 'none';
+  if (bv) bv.style.display = tab === 'vitrine' ? 'flex' : 'none';
   var oa = document.getElementById('ofertas-admin');
   if (oa) oa.style.display = tab === 'vitrine' ? 'block' : 'none';
+  var va = document.getElementById('vitrine-alcance');
+  if (va) va.style.display = tab === 'vitrine' ? 'block' : 'none';
+  if (tab === 'vitrine') { try { carregarAlcanceVitrine(); } catch(e) {} }
+  loadParceiros();
 }
 
 // Estatísticas de alcance para mostrar às empresas
@@ -4854,6 +4862,14 @@ async function carregarAlcanceVitrine() {
 }
 
 // Convite adaptado ao tab activo
+
+function convidarVitrine() {
+  var old = _parceirosTab;
+  _parceirosTab = 'vitrine';
+  convidarParceiro();
+  _parceirosTab = old;
+}
+
 async function convidarParceiro() {
   if (!currentCondo) return;
 
@@ -5159,46 +5175,6 @@ function gerarQRParceiro(url) {
 }
 
 // Mostrar modal de convite com QR, link e PDF
-async function convidarParceiro() {
-  if (!currentCondo) return;
-
-  // gerar um token único para o link de candidatura
-  var tokenConvite = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).substring(2);
-
-  // gravar o token no condomínio (para validar a candidatura)
-  await sb.from('condominios').update({
-    parceiro_convite_token: tokenConvite
-  }).eq('id', currentCondo.id);
-
-  var baseUrl = window.location.origin + window.location.pathname.replace('CondOS_2059_Live.html', 'portal.html');
-  var url = baseUrl + '?candidatura=' + tokenConvite;
-  var qrUrl = gerarQRParceiro(url);
-
-  var h = '<div style="padding:4px;text-align:center">';
-  h += '<div style="font-size:12px;color:var(--t2);line-height:1.6;margin-bottom:16px;text-align:left">Partilha este QR ou link com qualquer empresa ou profissional que queira ser parceiro do condomínio. Ao aceder, preenche o formulário de candidatura e tu decides se aceitas.</div>';
-
-  // QR
-  h += '<div style="background:white;border-radius:14px;padding:16px;display:inline-block;margin-bottom:14px">';
-  h += '<img src="' + qrUrl + '" alt="QR Candidatura" style="width:180px;height:180px;display:block">';
-  h += '</div>';
-
-  // link
-  h += '<div style="background:var(--c2);border:1px solid var(--b);border-radius:10px;padding:10px;margin-bottom:14px;display:flex;align-items:center;gap:8px">';
-  h += '<input type="text" value="' + url + '" readonly style="flex:1;background:none;border:none;color:var(--text);font-family:var(--mono);font-size:11px;outline:none" id="link-parceiro-conv">';
-  h += '<button class="btn-ghost" style="width:auto;font-size:10px;padding:5px 10px" onclick="copiarLinkParceiro(document.getElementById(\'link-parceiro-conv\').value)">Copiar</button>';
-  h += '</div>';
-
-  // botões
-  h += '<div style="display:flex;gap:8px">';
-  h += '<button class="btn-primary" style="flex:1;font-size:12px;padding:10px" onclick="gerarPDFConviteParceiro(\'' + url + '\')">📄 PDF para imprimir</button>';
-  h += '<button class="btn-ghost" style="flex:1;font-size:12px;padding:10px" onclick="partilharConviteParceiro(\'' + url + '\')">📤 Partilhar</button>';
-  h += '</div>';
-
-  h += '<div style="font-size:10px;color:var(--t3);margin-top:10px">O link é válido até seres alterado. Podes gerar um novo a qualquer momento.</div>';
-  h += '</div>';
-
-  abrirModalGenerico('Convidar parceiro', h);
-}
 
 // Partilhar via Web Share API (mobile)
 function partilharConviteParceiro(url) {
@@ -15962,7 +15938,7 @@ var _parceiroAtual = null;
 async function saveParceiro() {
   const nome = document.getElementById('pc-nome').value.trim();
   if (!nome) { toast('Nome obrigatório','err'); return; }
-  const { error } = await sb.from('parceiros').insert({condominio_id:currentCondo.id,nome,categoria:document.getElementById('pc-esp').value,telefone:document.getElementById('pc-tel').value,email:document.getElementById('pc-email').value,nif:(document.getElementById('pc-nif')?document.getElementById('pc-nif').value.trim():'')||null,notas:(document.getElementById('pc-notas')?document.getElementById('pc-notas').value.trim():'')||null});
+  const { error } = await sb.from('parceiros').insert({condominio_id:currentCondo.id,nome,categoria:document.getElementById('pc-esp').value,telefone:document.getElementById('pc-tel').value,email:document.getElementById('pc-email').value,nif:(document.getElementById('pc-nif')?document.getElementById('pc-nif').value.trim():'')||null,notas:(document.getElementById('pc-notas')?document.getElementById('pc-notas').value.trim():'')||null,tipo:_parceirosTab||'servico',familia:(document.getElementById('pc-familia')||{}).value||null,oferta_texto:(document.getElementById('pc-oferta')||{}).value||null,imagem_url:(document.getElementById('pc-imagem')||{}).value||null,folheto_url:(document.getElementById('pc-folheto')||{}).value||null,folheto_nome:(document.getElementById('pc-folheto-nome')||{}).value||null,destaque:!!(document.getElementById('pc-destaque')||{}).checked});
   if (error) { toast('Erro: '+error.message,'err'); return; }
   closeModal('mo-parceiro'); toast('Parceiro adicionado!','ok');
   document.getElementById('pc-nome').value='';

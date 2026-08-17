@@ -2564,6 +2564,22 @@ async function carregarVitrine() {
         h += '</div>';
       }
 
+      // imagem de capa (logo, foto da loja, capa do folheto)
+      if (o.imagem_url) {
+        h += '<div style="margin-bottom:10px;border-radius:8px;overflow:hidden;border:1px solid var(--b1)">';
+        h += '<img src="' + o.imagem_url + '" alt="' + (o.nome||'') + '" style="width:100%;height:140px;object-fit:cover;display:block" onerror="this.parentElement.style.display=\'none\'">';
+        h += '</div>';
+      }
+
+      // folheto PDF
+      if (o.folheto_url) {
+        h += '<a href="' + o.folheto_url + '" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:10px;background:rgba(0,212,255,.06);border:1px solid rgba(0,212,255,.15);border-radius:8px;padding:10px 14px;margin-bottom:8px;text-decoration:none;cursor:pointer">';
+        h += '<span style="font-size:24px">📰</span>';
+        h += '<div style="flex:1"><div style="font-size:12px;font-weight:600;color:var(--cyan)">' + (o.folheto_nome || 'Folheto') + '</div>';
+        h += '<div style="font-size:10px;color:var(--t3)">Toca para abrir o folheto</div></div>';
+        h += '<span style="font-size:14px;color:var(--cyan)">↗</span></a>';
+      }
+
       // contacto + link
       h += '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">';
       if (o.telefone) h += '<a href="tel:' + o.telefone + '" style="font-size:11px;color:var(--t2);text-decoration:none">📞 ' + o.telefone + '</a>';
