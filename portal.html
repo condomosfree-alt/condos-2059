@@ -2575,29 +2575,52 @@ async function carregarVitrine() {
     var destaques = ofertas.filter(function(o) { return o.destaque; });
     var normais = ofertas.filter(function(o) { return !o.destaque; });
 
-    // === MONTRA — parceiros em destaque ===
+    // === MONTRA SVG — vitrine do bairro ===
+    h += '<div style="position:relative;margin-bottom:16px">';
+    // SVG da fachada da loja
+    h += '<svg viewBox="0 0 380 180" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block">';
+    // fachada
+    h += '<rect x="0" y="0" width="380" height="180" rx="8" fill="#0d1a2e"/>';
+    // cornija superior
+    h += '<rect x="0" y="0" width="380" height="28" rx="8" fill="#132d4a"/>';
+    h += '<rect x="0" y="20" width="380" height="8" fill="#132d4a"/>';
+    // letreiro COND.OS VITRINE
+    h += '<text x="190" y="18" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="9" font-weight="700" letter-spacing="3" fill="#00d4ff">COND.OS</text>';
+    h += '<text x="190" y="18" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="9" font-weight="700" letter-spacing="3" fill="#00d4ff" opacity=".3" dy="-.5" dx=".5">COND.OS</text>';
+    // janela principal (vidro)
+    h += '<rect x="12" y="32" width="260" height="135" rx="4" fill="#081220" stroke="#1a3a5c" stroke-width="1.5"/>';
+    // reflexo no vidro
+    h += '<rect x="12" y="32" width="260" height="50" rx="4" fill="url(#reflexo)" opacity=".15"/>';
+    h += '<defs><linearGradient id="reflexo" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="white"/><stop offset="1" stop-color="white" stop-opacity="0"/></linearGradient></defs>';
+    // divisória vertical da janela
+    h += '<line x1="142" y1="32" x2="142" y2="167" stroke="#1a3a5c" stroke-width="1.5"/>';
+    // moldura da janela (topo)
+    h += '<rect x="12" y="29" width="260" height="4" fill="#1e4060" rx="1"/>';
+    // porta (lado direito)
+    h += '<rect x="285" y="45" width="82" height="122" rx="4" fill="#0a1525" stroke="#1a3a5c" stroke-width="1.5"/>';
+    // maçaneta
+    h += '<circle cx="356" cy="110" r="3" fill="#00d4ff" opacity=".6"/>';
+    // letreiro VIP na porta
+    h += '<text x="326" y="90" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="8" font-weight="700" letter-spacing="2" fill="#ffb300" opacity=".7">VIP</text>';
+    // piso
+    h += '<rect x="0" y="170" width="380" height="10" rx="0" fill="#0a1320"/>';
+    h += '</svg>';
+    // conteúdo DENTRO da janela (posição absoluta sobre o SVG)
+    h += '<div style="position:absolute;top:22%;left:4%;width:67%;height:72%;overflow-x:auto;overflow-y:hidden;display:flex;gap:8px;padding:8px;align-items:flex-start;-webkit-overflow-scrolling:touch">';
     if (destaques.length) {
-      h += '<div style="position:relative;border-radius:14px;overflow:hidden;margin-bottom:16px;background:linear-gradient(135deg,#0a1628,#132238);border:2px solid rgba(0,212,255,.2)">';
-      h += '<div style="background:linear-gradient(90deg,#0d1f35,#162d4a);padding:10px 16px;border-bottom:2px solid rgba(0,212,255,.15);display:flex;align-items:center;justify-content:center;gap:8px">';
-      h += '<span style="font-size:11px;letter-spacing:.15em;font-weight:700;color:var(--cyan);text-transform:uppercase">Cond.OS</span>';
-      h += '<span style="font-size:14px;font-weight:700;color:var(--text);letter-spacing:.05em">Vitrine</span>';
-      h += '</div>';
-      h += '<div style="padding:14px;display:flex;gap:12px;overflow-x:auto;-webkit-overflow-scrolling:touch">';
       destaques.forEach(function(o) {
         var fam = familias[o.familia] || { icon: '🏪', nome: o.categoria || '' };
-        h += '<div style="min-width:200px;max-width:240px;flex-shrink:0;background:rgba(255,255,255,.03);border:1px solid rgba(255,179,0,.25);border-radius:10px;padding:12px">';
-        h += '<div style="font-size:20px;margin-bottom:6px">' + fam.icon + '</div>';
-        h += '<div style="font-size:13px;font-weight:700;color:var(--text)">' + (o.nome || '') + '</div>';
-        h += '<div style="font-size:10px;color:var(--t3);margin-bottom:6px">' + fam.nome + '</div>';
-        if (o.oferta_texto) h += '<div style="font-size:11px;color:var(--cyan);line-height:1.4;margin-bottom:6px">' + o.oferta_texto + '</div>';
-        if (o.telefone) h += '<div style="font-size:10px;color:var(--t3)">📞 ' + o.telefone + '</div>';
-        if (o.folheto_url) h += '<a href="' + o.folheto_url + '" target="_blank" rel="noopener" style="display:inline-block;margin-top:6px;font-size:10px;color:var(--cyan);text-decoration:none">📰 ' + (o.folheto_nome || 'Folheto') + ' ↗</a>';
+        h += '<div style="min-width:120px;max-width:140px;flex-shrink:0;background:rgba(0,20,40,.85);border:1px solid rgba(255,179,0,.2);border-radius:8px;padding:8px;backdrop-filter:blur(4px)">';
+        h += '<div style="font-size:16px;margin-bottom:3px">' + fam.icon + '</div>';
+        h += '<div style="font-size:11px;font-weight:700;color:#e0e8ef;line-height:1.3">' + (o.nome||'') + '</div>';
+        if (o.oferta_texto) h += '<div style="font-size:9px;color:#00d4ff;margin-top:3px;line-height:1.3">' + o.oferta_texto.substring(0,60) + '</div>';
         h += '</div>';
       });
-      h += '</div>';
-      h += '<div style="position:absolute;top:0;left:0;right:0;height:40%;background:linear-gradient(180deg,rgba(255,255,255,.02),transparent);pointer-events:none"></div>';
-      h += '</div>';
+    } else {
+      h += '<div style="display:flex;align-items:center;justify-content:center;width:100%;color:rgba(255,255,255,.2);font-size:11px;font-style:italic">Espaço disponível</div>';
     }
+    h += '</div>';
+    h += '</div>';
 
     // === COMÉRCIO LOCAL — parceiros normais ===
     if (normais.length) {
