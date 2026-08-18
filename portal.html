@@ -985,9 +985,9 @@
     </div>
   </div>
 
-  <div id="modal-ass" style="display:none;position:fixed;inset:0;z-index:50;background:rgba(4,8,16,.7);backdrop-filter:blur(3px);align-items:flex-end;justify-content:center;">
-    <div style="width:100%;max-width:480px;background:var(--card);border:1px solid var(--b2);border-radius:20px 20px 0 0;padding:22px 18px calc(22px + env(safe-area-inset-bottom));animation:fade .2s ease;">
-      <div class="modal-body"></div>
+  <div id="modal-ass" style="display:none;position:fixed;inset:0;z-index:70;background:rgba(4,8,16,.7);backdrop-filter:blur(3px);align-items:center;justify-content:center;cursor:pointer;" onclick="if(event.target===this)this.style.display='none'">
+    <div style="width:100%;max-width:480px;background:var(--card);border:1px solid var(--b2);border-radius:20px;padding:22px 18px calc(22px + env(safe-area-inset-bottom));animation:fade .2s ease;">
+      <div <button onclick="document.getElementById('modal-ass').style.display='none'" style="position:absolute;top:12px;right:14px;background:none;border:none;color:var(--t2);font-size:22px;cursor:pointer;z-index:1;font-family:inherit">×</button>class="modal-body"></div>
     </div>
   </div>
 </div>
