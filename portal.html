@@ -43,7 +43,7 @@
     background-attachment:fixed; }
   #app { max-width:480px; margin:0 auto; min-height:100vh; display:none; padding-bottom:calc(var(--nav-h) + 20px); }
 
-  .topbar { position:sticky; top:0; z-index:20; background:linear-gradient(180deg,#0d1a30,#0a1524); border-bottom:1px solid var(--b); padding:16px 18px 14px; }
+  .topbar { position:sticky; top:0; z-index:55; background:linear-gradient(180deg,#0d1a30,#0a1524); border-bottom:1px solid var(--b); padding:16px 18px 14px; }
   .topbar .brand { font-family:'Courier New',monospace; font-weight:700; letter-spacing:3px; font-size:12px; color:var(--cyan); display:flex; align-items:center; gap:7px; margin-bottom:12px; }
   .topbar .brand .dot { width:7px; height:7px; border-radius:50%; background:var(--cyan); box-shadow:0 0 8px var(--cyan); }
   .fr-row { display:flex; align-items:center; gap:12px; }
@@ -160,7 +160,7 @@
   .mtile-badge { position:absolute; top:14px; right:14px; min-width:20px; height:20px; line-height:20px; text-align:center; background:var(--red); color:#fff; font-size:11px; font-weight:800; border-radius:10px; padding:0 6px; box-shadow:0 0 10px rgba(255,84,112,.5); }
   .mtile-badge.amber { background:var(--amber); color:#1a1206; box-shadow:0 0 10px rgba(255,179,0,.4); }
 
-  .nav { position:fixed; bottom:0; left:50%; transform:translateX(-50%); width:100%; max-width:480px; height:var(--nav-h); background:rgba(13,26,48,.96); backdrop-filter:blur(12px); border-top:1px solid var(--b); display:flex; z-index:30; }
+  .nav { position:fixed; bottom:0; left:50%; transform:translateX(-50%); width:100%; max-width:480px; height:var(--nav-h); background:rgba(13,26,48,.96); backdrop-filter:blur(12px); border-top:1px solid var(--b); display:flex; z-index:60; }
   .nav button { flex:1; background:none; border:none; color:var(--t3); font-size:9.5px; font-weight:600; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; cursor:pointer; padding-top:4px; position:relative; }
   .nav button .ni { font-size:19px; line-height:1; }
   .nav button.on { color:var(--cyan); }
@@ -665,7 +665,13 @@
 
 
     .page, .sec { padding-bottom: 80px !important; }
-    </style>
+    
+    #p-espacos, #p-vitrine, #p-regulamento {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      z-index: 50; overflow-y: auto; background: var(--bg, #0b111a);
+      -webkit-overflow-scrolling: touch;
+    }
+</style>
 </head>
 <body>
 
@@ -940,7 +946,7 @@
     <button id="nav-mensagens" onclick="irPara('mensagens')"><span class="ni"><svg class="ni-o" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 11.6a8 8 0 0 1-8 8H7.2l-3.8 2.8 1.14-4.2a8 8 0 1 1 16.06-6.6z"/><path d="M8.6 10.6h7M8.6 14h4.4"/></svg><svg class="ni-f" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12.6 2.8a9 9 0 0 0-7.7 13.68L3.5 21.4a.62.62 0 0 0 .9.72l4.36-2.5a9 9 0 1 0 3.84-16.82z"/><path d="M8.6 10.4h7M8.6 13.8h4.4" stroke="#080d14" stroke-width="1.5" fill="none"/></svg></span>Mensagens</button>
   </div>
 
-  <div id="chat-barra" style="display:none;gap:8px;position:fixed;bottom:calc(var(--nav-h) + 8px);left:50%;transform:translateX(-50%);width:100%;max-width:480px;padding:0 16px;z-index:25;">
+  <div id="chat-barra" style="display:none;gap:8px;position:fixed;bottom:calc(var(--nav-h) + 8px);left:50%;transform:translateX(-50%);width:100%;max-width:480px;padding:0 16px;z-index:55;">
     <input id="chat-input" placeholder="Escreve uma mensagem…" style="flex:1;box-shadow:0 4px 16px rgba(0,0,0,.4);" onkeydown="if(event.key==='Enter')enviarMensagem()">
     <button onclick="enviarMensagem()" style="background:linear-gradient(135deg,var(--cyan),var(--cyan2));border:none;border-radius:10px;color:#04121f;font-weight:800;padding:0 18px;font-size:16px;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.4);">➤</button>
   </div>
@@ -5022,15 +5028,15 @@ async function _ctxIAPortal() {
 </script>
 
 <!-- Chat IA do condómino -->
-<div id="p-regulamento" style="display:none;padding:16px"><div style="display:flex;align-items:center;gap:10px;margin-bottom:14px"><button onclick="location.reload()" style="background:none;border:none;color:var(--t2);font-size:18px;cursor:pointer;padding:4px">←</button><span style="font-size:14px;font-weight:700;color:var(--text)">Regulamento</span></div><div id="p-regulamento-conteudo"></div></div>
-<div id="p-espacos" style="display:none;padding:16px">
+<div id="p-regulamento" style="display:none;padding:16px 16px 90px"><div style="display:flex;align-items:center;gap:10px;margin-bottom:14px"><button onclick="location.reload()" style="background:none;border:none;color:var(--t2);font-size:18px;cursor:pointer;padding:4px">←</button><span style="font-size:14px;font-weight:700;color:var(--text)">Regulamento</span></div><div id="p-regulamento-conteudo"></div></div>
+<div id="p-espacos" style="display:none;padding:16px 16px 90px">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
         <button onclick="irPara('inicio')" style="background:none;border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:6px 10px;color:var(--t2);font-size:11px;cursor:pointer;font-family:inherit">← Voltar</button>
         <span style="font-size:14px;font-weight:700;color:var(--text)">📍 Espaços Comuns</span>
       </div>
       <div id="p-espacos-conteudo"></div>
     </div>
-    <div id="p-vitrine" style="display:none;padding:16px">
+    <div id="p-vitrine" style="display:none;padding:16px 16px 90px">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
         <button onclick="irPara('inicio')" style="background:none;border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:6px 10px;color:var(--t2);font-size:11px;cursor:pointer;font-family:inherit">← Voltar</button>
         <span style="font-size:14px;font-weight:700;color:var(--text)">🏪 Vitrine do Bairro</span>
