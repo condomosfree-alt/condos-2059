@@ -1391,6 +1391,7 @@ async function carregarFeed() {
   const bm = document.getElementById('badge-msg');
   if (!rm.error && rm.data > 0) {
     if (bm) { bm.textContent = rm.data; bm.style.display = 'block'; }
+    try { notificacaoLocal('📬 ' + rm.data + ' mensagem(ns) nova(s)', 'Abra o portal para ler as comunicações da administração.'); } catch(e) {}
     itens.unshift({ ic:'💬', cor:'rgba(0,212,255,.14)', t:rm.data+' nova(s) mensagem(ns) da administração', s:'Toca para ler e responder', quando:'', onclick:"irPara('mensagens')" });
   } else if (bm) {
     bm.style.display = 'none';   // tudo lido → badge desaparece
@@ -3770,6 +3771,7 @@ async function initNotificacoes() {
     console.error('sw:', e);
     atualizarBotaoNotif(false);
   }
+  btn.onclick = function() { toggleNotificacoes(); };
 }
 
 function atualizarBotaoNotif(ativo) {
@@ -3792,6 +3794,64 @@ function atualizarBotaoNotif(ativo) {
 
 
 
+
+
+// Toggle notificações push
+async function toggleNotificacoes() {
+  if (!pushSuportado()) return;
+  try {
+    var reg = await navigator.serviceWorker.ready;
+    var sub = await reg.pushManager.getSubscription();
+    
+    if (sub) {
+      // já subscrito — desativar
+      await sub.unsubscribe();
+      atualizarBotaoNotif(false);
+      toastP('Notificações desativadas', 'ok');
+    } else {
+      // pedir permissão e subscrever
+      var perm = await Notification.requestPermission();
+      if (perm !== 'granted') {
+        toastP('Precisas de permitir notificações no browser', 'warn');
+        return;
+      }
+      var novoSub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC)
+      });
+      atualizarBotaoNotif(true);
+      toastP('🔔 Notificações ativadas!', 'ok');
+      
+      // guardar a subscrição no Supabase para o admin poder enviar push
+      try {
+        await sb.from('push_subscriptions').upsert({
+          endpoint: novoSub.endpoint,
+          keys: JSON.stringify(novoSub.toJSON().keys),
+          token_acesso: token,
+          criado_em: new Date().toISOString()
+        }, { onConflict: 'endpoint' });
+      } catch(e) { console.error('guardar sub:', e); }
+    }
+  } catch(e) {
+    console.error('toggle notif:', e);
+    toastP('Erro ao configurar notificações', 'err');
+  }
+}
+
+// Notificação local (quando o portal está aberto e há mensagens novas)
+function notificacaoLocal(titulo, corpo) {
+  if (Notification.permission === 'granted') {
+    try {
+      new Notification(titulo, {
+        body: corpo,
+        icon: 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏢</text></svg>',
+        badge: 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏢</text></svg>',
+        tag: 'condos-' + Date.now(),
+        vibrate: [200, 100, 200]
+      });
+    } catch(e) { /* mobile pode não suportar new Notification */ }
+  }
+}
 
 // ⚖️ CADEIA DE PROVA — exigir, acompanhar e validar
 var _exigencias = [];
