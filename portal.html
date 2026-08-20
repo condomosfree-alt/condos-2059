@@ -3796,6 +3796,92 @@ function atualizarBotaoNotif(ativo) {
 
 
 
+
+// =====================================================================
+//  NOTIFICAÇÕES AUTOMÁTICAS — polling + som + vibrar
+// =====================================================================
+var _ultimasMsgsCount = -1;
+var _notifSom = null;
+
+// Som de notificação (ding curto gerado por AudioContext)
+function tocarSomNotificacao() {
+  try {
+    var ctx = new (window.AudioContext || window.webkitAudioContext)();
+    var osc = ctx.createOscillator();
+    var gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.value = 880;
+    osc.type = 'sine';
+    gain.gain.value = 0.3;
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.5);
+    // segundo tom (ding-dong)
+    setTimeout(function() {
+      var osc2 = ctx.createOscillator();
+      var gain2 = ctx.createGain();
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.frequency.value = 1100;
+      osc2.type = 'sine';
+      gain2.gain.value = 0.2;
+      gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+      osc2.start(ctx.currentTime);
+      osc2.stop(ctx.currentTime + 0.4);
+    }, 150);
+  } catch(e) {}
+}
+
+// Verificar mensagens novas a cada 60 segundos
+function iniciarPollingNotificacoes() {
+  if (!token) return;
+  
+  // verificar de 60 em 60 segundos
+  setInterval(async function() {
+    try {
+      var r = await sb.rpc('portal_mensagens_nao_lidas', { p_token: token });
+      var count = (typeof r.data === 'number') ? r.data : 0;
+      
+      if (_ultimasMsgsCount === -1) {
+        // primeira verificação — guardar sem notificar
+        _ultimasMsgsCount = count;
+        return;
+      }
+      
+      if (count > _ultimasMsgsCount) {
+        var novas = count - _ultimasMsgsCount;
+        
+        // VIBRAR
+        if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 300]);
+        
+        // SOM
+        tocarSomNotificacao();
+        
+        // NOTIFICAÇÃO DO BROWSER
+        if (Notification.permission === 'granted') {
+          try {
+            new Notification('🏢 Cond.OS', {
+              body: novas + ' nova(s) mensagem(ns) da administração',
+              tag: 'condos-msg-' + Date.now(),
+              vibrate: [200, 100, 200],
+              requireInteraction: true
+            });
+          } catch(e) {}
+        }
+        
+        // BADGE NO TÍTULO
+        document.title = '(' + count + ') Cond.OS Portal';
+        
+        _ultimasMsgsCount = count;
+      } else if (count === 0) {
+        document.title = 'Cond.OS Portal';
+        _ultimasMsgsCount = 0;
+      }
+    } catch(e) {}
+  }, 60000);
+}
+
 // Toggle notificações push
 async function toggleNotificacoes() {
   if (!pushSuportado()) return;
@@ -4898,6 +4984,7 @@ carregarHistoria();
 carregarOfertas();
 carregarPorConfirmar();
 initNotificacoes();
+  iniciarPollingNotificacoes();
 try {
   var _tb = document.querySelector('.topbar'); if (_tb) _tb.style.display = 'none';
   montarHeroi();
