@@ -798,7 +798,8 @@
 
       <div class="painel-sec">
         <div class="painel-tit">Atividade</div>
-        <div id="h-feed"><div class="sk-linha"><span class="sk sk-ic"></span><div style="flex:1;"><div class="sk sk-t"></div><div class="sk sk-s" style="margin-top:6px;"></div></div></div><div class="sk-linha" style="border:none;"><span class="sk sk-ic"></span><div style="flex:1;"><div class="sk sk-t" style="width:96px;"></div><div class="sk sk-s" style="margin-top:6px;"></div></div></div></div>
+        <div id="pulso-predio" style="margin-bottom:16px"></div>
+      <div id="h-feed"><div class="sk-linha"><span class="sk sk-ic"></span><div style="flex:1;"><div class="sk sk-t"></div><div class="sk sk-s" style="margin-top:6px;"></div></div></div><div class="sk-linha" style="border:none;"><span class="sk sk-ic"></span><div style="flex:1;"><div class="sk sk-t" style="width:96px;"></div><div class="sk sk-s" style="margin-top:6px;"></div></div></div></div>
       </div>
 
       <a id="h-link-ficha" href="#" class="bt bt-g" style="display:flex;width:100%;text-decoration:none;margin-bottom:22px;">Preencher a minha ficha</a>
@@ -1273,6 +1274,7 @@ async function iniciar() {
 
 // ===== FEED de notificações do Início + badges dos quadrados =====
 async function carregarFeed() {
+  try { pintarPulso(); } catch(e) {}
   const box = document.getElementById('h-feed');
   const itens = [];
 
@@ -4623,6 +4625,70 @@ function classeScore(t) {
 }
 
 window._scoreDados = null;
+
+// =====================================================================
+//  PULSO DO PRÉDIO — o coração visual do portal
+// =====================================================================
+async function pintarPulso() {
+  var zona = document.getElementById('pulso-predio');
+  if (!zona) return;
+
+  try {
+    var r = await sb.rpc('portal_score', { p_token: token });
+    var d = r.data;
+    if (!d || !d.length) { zona.innerHTML = ''; return; }
+    d = d[0] || d;
+    var score = calcularScore(d);
+    var total = score.total;
+
+    // cores por nível
+    var cor, corFundo, classe, emoji;
+    if (total >= 75) { cor = '#22e584'; corFundo = 'rgba(34,229,132,.08)'; classe = 'Saudável'; emoji = '💚'; }
+    else if (total >= 50) { cor = '#ffb300'; corFundo = 'rgba(255,179,0,.08)'; classe = 'Atenção'; emoji = '🟡'; }
+    else { cor = '#ff5470'; corFundo = 'rgba(255,84,112,.08)'; classe = 'Crítico'; emoji = '🔴'; }
+
+    // anel SVG
+    var raio = 44;
+    var circ = 2 * Math.PI * raio;
+    var prog = circ * (1 - total / 100);
+
+    var h = '<div style="background:' + corFundo + ';border:1px solid ' + cor + '22;border-radius:16px;padding:20px;text-align:center">';
+
+    // anel
+    h += '<div style="display:inline-block;position:relative;width:110px;height:110px;margin-bottom:12px">';
+    h += '<svg viewBox="0 0 100 100" style="width:110px;height:110px;transform:rotate(-90deg)">';
+    h += '<circle cx="50" cy="50" r="' + raio + '" fill="none" stroke="rgba(255,255,255,.06)" stroke-width="6"/>';
+    h += '<circle cx="50" cy="50" r="' + raio + '" fill="none" stroke="' + cor + '" stroke-width="6" stroke-linecap="round" stroke-dasharray="' + circ.toFixed(1) + '" stroke-dashoffset="' + prog.toFixed(1) + '" style="transition:stroke-dashoffset 1.5s ease"/>';
+    h += '</svg>';
+    h += '<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center">';
+    h += '<div style="font-size:28px;font-weight:900;color:' + cor + ';line-height:1">' + total + '</div>';
+    h += '<div style="font-size:10px;color:var(--t3);margin-top:2px">/100</div>';
+    h += '</div>';
+    h += '</div>';
+
+    // classe
+    h += '<div style="font-size:14px;font-weight:700;color:' + cor + ';margin-bottom:6px">' + emoji + ' ' + classe + '</div>';
+
+    // frase inteligente baseada nos dados
+    var frase = '';
+    var pctDia = d.n_fracoes > 0 ? Math.round((d.n_fracoes - (d.n_fracoes_divida||0)) / d.n_fracoes * 100) : 100;
+    if (total >= 85) frase = 'O prédio está em excelente forma. Quotas a ' + pctDia + '% e tudo em dia.';
+    else if (total >= 75) frase = 'Boa gestão. ' + (pctDia < 100 ? 'Há ' + (d.n_fracoes_divida||0) + ' fração(ões) com quotas em atraso.' : 'Todas as quotas em dia.');
+    else if (total >= 50) frase = 'Há pontos a melhorar. ' + (pctDia < 80 ? 'A cobrança está a ' + pctDia + '% — é preciso acompanhar.' : 'Verifica os detalhes na saúde do prédio.');
+    else frase = 'O prédio precisa de atenção urgente. Toca para ver o que falta.';
+
+    h += '<div style="font-size:12px;color:var(--t2);line-height:1.5;max-width:280px;margin:0 auto">' + frase + '</div>';
+
+    // botão ver detalhe
+    h += '<button onclick="abrirScoreDetalhe()" style="margin-top:12px;background:none;border:1px solid ' + cor + '33;border-radius:10px;padding:8px 20px;color:' + cor + ';font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">Ver detalhe</button>';
+
+    h += '</div>';
+    zona.innerHTML = h;
+  } catch(e) {
+    zona.innerHTML = '';
+  }
+}
+
 async function carregarScore() {
   try {
     const r = await sb.rpc('portal_score', { p_token: token });
