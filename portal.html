@@ -3625,6 +3625,8 @@ async function carregarMensagens() {
   if (res.error) { cont.innerHTML = '<div class="empty">Não foi possível carregar as mensagens.</div>'; return; }
   const msgs = res.data || [];
   const bm = document.getElementById('badge-msg'); if (bm) bm.style.display = 'none';
+  // marcar todas como lidas no Supabase
+  try { await sb.rpc('portal_marcar_lidas', { p_token: token }); } catch(e) {}
   if (!msgs.length) {
     cont.innerHTML = '<div class="empty">Ainda não há mensagens.<br>Escreve à administração — ela responde por aqui.</div>';
     return;
