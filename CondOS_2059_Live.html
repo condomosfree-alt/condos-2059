@@ -870,7 +870,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.08.04-1515</div>
+      <div class="sb-tag">2059 Pro · build v2026.08.04-1530</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -5298,6 +5298,168 @@ async function gerarRelatorioTribunal(fracaoId) {
 // =====================================================================
 
 // ===== 1. REGISTAR LOGIN DO ADMIN =====
+// =====================================================================
+//  GAMIFICAÇÃO INVISÍVEL DO ADMINISTRADOR
+// =====================================================================
+//  Cada acção ganha pontos. Pontos decaem semanalmente.
+//  O score de transparência reflecte a actividade.
+//  O admin não sabe que está a ser pontuado — só vê o score.
+// =====================================================================
+
+var _adminAccoes = {};
+
+// Registar acção do admin (chamado silenciosamente em cada secção)
+async function registarAccaoAdmin(accao) {
+  if (!currentCondo) return;
+  var hoje = new Date().toISOString().split('T')[0];
+  var chave = accao + '_' + hoje;
+  if (_adminAccoes[chave]) return; // já registou hoje
+  _adminAccoes[chave] = true;
+
+  try {
+    // guardar no Supabase
+    await sb.from('admin_actividade_log').upsert({
+      condominio_id: currentCondo.id,
+      accao: accao,
+      data: hoje,
+      timestamp: new Date().toISOString()
+    }, { onConflict: 'condominio_id,accao,data' });
+  } catch(e) { /* tabela pode não existir ainda */ }
+}
+
+// Calcular score de actividade baseado em acções recentes (últimos 7 dias)
+async function calcularScoreActividadeDetalhado() {
+  if (!currentCondo) return 0;
+
+  var desde = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0];
+  try {
+    var r = await sb.from('admin_actividade_log').select('accao,data')
+      .eq('condominio_id', currentCondo.id)
+      .gte('data', desde);
+    var acoes = r.data || [];
+
+    // ACÇÕES E PESOS (total possível: 100)
+    var pesos = {
+      login: 15,              // entrou no sistema
+      ver_dashboard: 5,       // viu o dashboard
+      ver_quotas: 10,         // foi às quotas
+      ver_contas: 10,         // viu as contas/movimentos
+      ver_ocorrencias: 10,    // verificou ocorrências
+      ver_manutencoes: 5,     // foi às manutenções
+      registar_pagamento: 15, // registou um pagamento
+      enviar_mensagem: 5,     // comunicou com condómino
+      carregar_documento: 10, // carregou documento
+      ver_parceiros: 5,       // foi aos parceiros
+      gerar_relatorio: 10     // gerou relatório
+    };
+
+    // contar acções únicas na última semana
+    var acoesUnicas = {};
+    acoes.forEach(function(a) {
+      if (!acoesUnicas[a.accao]) acoesUnicas[a.accao] = 0;
+      acoesUnicas[a.accao]++;
+    });
+
+    var pontos = 0;
+    Object.keys(pesos).forEach(function(accao) {
+      if (acoesUnicas[accao]) pontos += pesos[accao];
+    });
+
+    // bonus: dias diferentes em que entrou (máx 7)
+    var diasUnicos = new Set(acoes.map(function(a) { return a.data; })).size;
+    // entrar 1 dia = OK, 3+ dias = bom, 5+ = excelente
+    var bonusDias = Math.min(diasUnicos * 3, 15);
+
+    return Math.min(100, pontos + bonusDias);
+  } catch(e) {
+    // tabela não existe — fallback para o login simples
+    return calcularScoreActividade();
+  }
+}
+
+// Injetar tracking silencioso nas navegações do sistema
+function injetarTrackingAdmin() {
+  // override do nav() para registar visitas a cada página
+  var _navOriginal = window.nav;
+  if (typeof _navOriginal === 'function') {
+    window.nav = function(pagina) {
+      _navOriginal(pagina);
+      // registar acção por página
+      var mapa = {
+        'quotas': 'ver_quotas',
+        'movimentos': 'ver_contas',
+        'ocorrencias': 'ver_ocorrencias',
+        'manutencoes': 'ver_manutencoes',
+        'parceiros': 'ver_parceiros',
+        'documentos': 'carregar_documento',
+        'assembleias': 'ver_assembleias'
+      };
+      if (mapa[pagina]) registarAccaoAdmin(mapa[pagina]);
+    };
+  }
+
+  // registar login + dashboard ao carregar
+  registarAccaoAdmin('login');
+  registarAccaoAdmin('ver_dashboard');
+}
+
+// Verificar tarefas pendentes — aviso no dashboard
+async function verificarTarefasPendentes() {
+  if (!currentCondo) return;
+  var avisos = [];
+
+  // quotas por registar pagamento
+  try {
+    var qR = await sb.from('quotas').select('id', { count: 'exact', head: true })
+      .eq('condominio_id', currentCondo.id).eq('estado', 'pendente');
+    if ((qR.count || 0) > 0) avisos.push({ icon: '💳', texto: qR.count + ' quota(s) por confirmar pagamento', accao: "nav('quotas')" });
+  } catch(e) {}
+
+  // ocorrências abertas
+  try {
+    var oR = await sb.from('ocorrencias').select('id', { count: 'exact', head: true })
+      .eq('condominio_id', currentCondo.id).eq('estado', 'aberta');
+    if ((oR.count || 0) > 0) avisos.push({ icon: '🔧', texto: oR.count + ' ocorrência(s) por resolver', accao: "nav('ocorrencias')" });
+  } catch(e) {}
+
+  // mensagens por responder
+  try {
+    var mR = await sb.from('mensagens').select('id', { count: 'exact', head: true })
+      .eq('condominio_id', currentCondo.id).eq('lida_admin', false);
+    if ((mR.count || 0) > 0) avisos.push({ icon: '💬', texto: mR.count + ' mensagem(ns) por responder', accao: "nav('mensagens')" });
+  } catch(e) {}
+
+  // candidaturas pendentes (vitrine)
+  try {
+    var cR = await sb.from('parceiros').select('id', { count: 'exact', head: true })
+      .eq('condominio_id', currentCondo.id).eq('estado', 'pendente');
+    if ((cR.count || 0) > 0) avisos.push({ icon: '🏪', texto: cR.count + ' candidatura(s) por aprovar', accao: "nav('parceiros')" });
+  } catch(e) {}
+
+  if (!avisos.length) return;
+
+  var zona = document.getElementById('tarefas-pendentes');
+  if (!zona) {
+    zona = document.createElement('div');
+    zona.id = 'tarefas-pendentes';
+    var dash = document.getElementById('motor-cobranca-aviso') || document.getElementById('ciclo-quotas');
+    if (dash && dash.parentNode) dash.parentNode.insertBefore(zona, dash);
+    else return;
+  }
+
+  var h = '<div style="background:rgba(0,212,255,.06);border:1px solid rgba(0,212,255,.15);border-radius:12px;padding:14px 16px;margin-bottom:14px">';
+  h += '<div style="font-size:12px;font-weight:700;color:var(--cyan);margin-bottom:8px">📋 Tarefas pendentes</div>';
+  avisos.forEach(function(a) {
+    h += '<div onclick="' + a.accao + '" style="display:flex;align-items:center;gap:10px;padding:6px 0;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.04)">';
+    h += '<span style="font-size:16px">' + a.icon + '</span>';
+    h += '<span style="font-size:12px;color:var(--t2);flex:1">' + a.texto + '</span>';
+    h += '<span style="font-size:11px;color:var(--cyan)">→</span>';
+    h += '</div>';
+  });
+  h += '</div>';
+  zona.innerHTML = h;
+}
+
 async function registarLoginAdmin() {
   if (!currentCondo) return;
   await sb.from('condominios').update({
@@ -7930,7 +8092,7 @@ async function verificarAvisosGerais() {
   try { verificarCicloQuotas(); } catch(e) {}
   try { carregarManutencoes().then(function(){ pintarAvisoManutencoes(); }); } catch(e) {}
   try { carregarSeguros().then(function(){ pintarAvisoSeguros(); }); } catch(e) {}
-  try { registarLoginAdmin(); } catch(e) {}
+  try { registarLoginAdmin(); injetarTrackingAdmin(); verificarTarefasPendentes(); } catch(e) {}
   try { pintarResumoMensal(); } catch(e) {}
   try { motorCobrancaAutomatico(); } catch(e) { console.error("motor cobranca:", e); }
   try { verificarDividaComJuros(); } catch(e) { console.error("divida acumulada:", e); }
