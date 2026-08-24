@@ -870,7 +870,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.08.04-1530</div>
+      <div class="sb-tag">2059 Pro · build v2026.08.04-1600</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -5404,6 +5404,381 @@ function injetarTrackingAdmin() {
 }
 
 // Verificar tarefas pendentes — aviso no dashboard
+// =====================================================================
+//  AUTOMATISMOS CRÍTICOS
+// =====================================================================
+
+// ===== 1. ASSEMBLEIA ANUAL OBRIGATÓRIA (Art. 1431.º CC) =====
+async function verificarAssembleiaAnual() {
+  if (!currentCondo) return;
+  var hoje = new Date();
+  var ano = hoje.getFullYear();
+  var mes = hoje.getMonth() + 1;
+
+  // verificar se já houve assembleia ordinária este ano
+  var assR = await sb.from('assembleias').select('id,data_assembleia,tipo,estado')
+    .eq('condominio_id', currentCondo.id)
+    .gte('data_assembleia', ano + '-01-01')
+    .lte('data_assembleia', ano + '-12-31')
+    .eq('tipo', 'ordinaria');
+  var assembleias = assR.data || [];
+  var jaRealizada = assembleias.some(function(a) { return a.estado === 'realizada'; });
+  var jaAgendada = assembleias.some(function(a) { return a.estado === 'agendada' || a.estado === 'convocada'; });
+
+  if (jaRealizada) return; // cumprido
+
+  var zona = document.getElementById('assembleia-anual-aviso');
+  if (!zona) {
+    zona = document.createElement('div'); zona.id = 'assembleia-anual-aviso';
+    var dash = document.getElementById('tarefas-pendentes') || document.getElementById('motor-cobranca-aviso');
+    if (dash && dash.parentNode) dash.parentNode.insertBefore(zona, dash);
+    else return;
+  }
+
+  var h = '';
+
+  // JANEIRO/FEVEREIRO — propor agendamento
+  if (mes <= 2 && !jaAgendada) {
+    h = '<div style="background:rgba(0,212,255,.06);border:1px solid rgba(0,212,255,.2);border-radius:12px;padding:14px 16px;margin-bottom:14px">';
+    h += '<div style="font-size:12px;font-weight:700;color:var(--cyan);margin-bottom:6px">📅 Assembleia anual de ' + ano + '</div>';
+    h += '<div style="font-size:11px;color:var(--t2);line-height:1.55;margin-bottom:10px">A lei obriga a realizar assembleia ordinária até 31 de março (Art. 1431.º CC). Ainda não está agendada.</div>';
+    h += '<button class="btn-primary" style="font-size:12px;padding:8px 14px" onclick="nav(\'assembleias\')">Agendar agora</button>';
+    h += '</div>';
+  }
+  // MARÇO — urgente
+  else if (mes === 3 && !jaRealizada) {
+    var diasRestantes = 31 - hoje.getDate();
+    h = '<div style="background:rgba(255,179,0,.08);border:1px solid rgba(255,179,0,.3);border-radius:12px;padding:14px 16px;margin-bottom:14px">';
+    h += '<div style="font-size:12px;font-weight:700;color:var(--amber);margin-bottom:6px">⚠️ Faltam ' + diasRestantes + ' dias para o prazo legal</div>';
+    h += '<div style="font-size:11px;color:var(--t2);line-height:1.55;margin-bottom:10px">A assembleia ordinária de ' + ano + ' tem de ser realizada até 31 de março (Art. 1431.º CC).</div>';
+    h += '<button class="btn-primary" style="font-size:12px;padding:8px 14px" onclick="nav(\'assembleias\')">' + (jaAgendada ? 'Ver assembleia' : 'Agendar urgente') + '</button>';
+    h += '</div>';
+  }
+  // ABRIL+ — prazo ultrapassado, alertar TODOS
+  else if (mes >= 4 && !jaRealizada) {
+    h = '<div style="background:rgba(255,84,112,.08);border:1px solid rgba(255,84,112,.3);border-radius:12px;padding:14px 16px;margin-bottom:14px">';
+    h += '<div style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:6px">🔴 Prazo legal ultrapassado</div>';
+    h += '<div style="font-size:11px;color:var(--t2);line-height:1.55;margin-bottom:10px">A assembleia ordinária de ' + ano + ' devia ter sido realizada até 31 de março. Qualquer condómino pode convocá-la (Art. 1431.º n.º 2 CC).</div>';
+    h += '<button class="btn-primary" style="font-size:12px;padding:8px 14px" onclick="nav(\'assembleias\')">Agendar já</button>';
+    h += '</div>';
+
+    // alertar os condóminos uma vez
+    var jaAlertou = await sb.from('mensagens').select('id', {count:'exact', head:true})
+      .eq('condominio_id', currentCondo.id)
+      .ilike('texto', '%ASSEMBLEIA ANUAL EM FALTA — ' + ano + '%');
+    if ((jaAlertou.count || 0) === 0 && fracoes) {
+      for (var i = 0; i < fracoes.length; i++) {
+        await sb.from('mensagens').insert({
+          condominio_id: currentCondo.id, fracao_id: fracoes[i].id, autor: 'sistema',
+          lida_admin: true, lida_condomino: false,
+          texto: '🔴 ASSEMBLEIA ANUAL EM FALTA — ' + ano + '\n\n' +
+            'A assembleia ordinária de ' + ano + ' devia ter sido realizada até 31 de março.\n\n' +
+            'A lei permite que qualquer condómino a convoque se a administração não o fizer (Art. 1431.º n.º 2 do Código Civil).\n\n' +
+            '[Alerta automático do sistema]'
+        });
+      }
+    }
+  }
+
+  zona.innerHTML = h;
+}
+
+// ===== 2. MANUTENÇÕES PERIÓDICAS OBRIGATÓRIAS =====
+async function verificarManutencoesObrigatorias() {
+  if (!currentCondo) return;
+  var hoje = new Date();
+
+  var mR = await sb.from('manutencoes').select('id,equipamento,tipo,periodicidade_meses,ultima_data,proxima_data')
+    .eq('condominio_id', currentCondo.id);
+  var manuts = mR.data || [];
+  if (!manuts.length) return;
+
+  var vencidas = [], proximas = [];
+  manuts.forEach(function(m) {
+    if (!m.proxima_data) return;
+    var dias = Math.round((new Date(m.proxima_data) - hoje) / 86400000);
+    if (dias < 0) vencidas.push({ m: m, dias: Math.abs(dias) });
+    else if (dias <= 30) proximas.push({ m: m, dias: dias });
+  });
+
+  if (!vencidas.length && !proximas.length) return;
+
+  var zona = document.getElementById('manutencoes-aviso');
+  if (!zona) {
+    zona = document.createElement('div'); zona.id = 'manutencoes-aviso';
+    var dash = document.getElementById('tarefas-pendentes') || document.getElementById('motor-cobranca-aviso');
+    if (dash && dash.parentNode) dash.parentNode.insertBefore(zona, dash);
+    else return;
+  }
+
+  var cor = vencidas.length ? 'rgba(255,84,112,' : 'rgba(255,179,0,';
+  var corTexto = vencidas.length ? 'var(--red)' : 'var(--amber)';
+  var h = '<div style="background:' + cor + '.06);border:1px solid ' + cor + '.25);border-radius:12px;padding:14px 16px;margin-bottom:14px">';
+  h += '<div style="font-size:12px;font-weight:700;color:' + corTexto + ';margin-bottom:8px">🔧 Manutenções</div>';
+
+  vencidas.forEach(function(v) {
+    h += '<div style="font-size:11px;color:var(--t2);padding:4px 0;border-bottom:1px solid rgba(255,255,255,.04)">';
+    h += '<strong style="color:var(--red)">' + (v.m.equipamento || v.m.tipo || 'Manutenção') + '</strong> — vencida há ' + v.dias + ' dias';
+    h += '</div>';
+  });
+  proximas.forEach(function(pr) {
+    h += '<div style="font-size:11px;color:var(--t2);padding:4px 0;border-bottom:1px solid rgba(255,255,255,.04)">';
+    h += (pr.m.equipamento || pr.m.tipo || 'Manutenção') + ' — em ' + pr.dias + ' dias';
+    h += '</div>';
+  });
+
+  h += '<button class="btn-ghost" style="width:auto;font-size:11px;padding:6px 12px;margin-top:8px" onclick="nav(\'manutencoes\')">Ver manutenções</button>';
+  h += '</div>';
+  zona.innerHTML = h;
+}
+
+// ===== 3. DETECÇÃO DE ANOMALIAS NAS DESPESAS =====
+async function detectarAnomaliasDespesas() {
+  if (!currentCondo) return;
+  var hoje = new Date();
+  var ano = hoje.getFullYear();
+
+  // buscar despesas do ano
+  var dR = await sb.from('movimentos').select('valor,categoria,descricao,data_movimento')
+    .eq('condominio_id', currentCondo.id).eq('tipo', 'despesa')
+    .gte('data_movimento', ano + '-01-01').order('data_movimento', { ascending: false });
+  var despesas = dR.data || [];
+  if (despesas.length < 5) return; // dados insuficientes
+
+  // calcular média por categoria
+  var porCat = {};
+  despesas.forEach(function(d) {
+    var cat = d.categoria || 'Outras';
+    if (!porCat[cat]) porCat[cat] = [];
+    porCat[cat].push(parseFloat(d.valor || 0));
+  });
+
+  var anomalias = [];
+  // verificar as despesas dos últimos 30 dias
+  var limite = new Date(Date.now() - 30 * 86400000);
+  despesas.filter(function(d) { return new Date(d.data_movimento) >= limite; }).forEach(function(d) {
+    var cat = d.categoria || 'Outras';
+    var valores = porCat[cat] || [];
+    if (valores.length < 3) return; // poucos dados
+    var media = valores.reduce(function(s,v) { return s+v; }, 0) / valores.length;
+    var valor = parseFloat(d.valor || 0);
+    if (valor > media * 2.5 && valor > 100) {
+      anomalias.push({ despesa: d, media: media, ratio: Math.round(valor/media*10)/10 });
+    }
+  });
+
+  if (!anomalias.length) return;
+
+  var zona = document.getElementById('anomalias-aviso');
+  if (!zona) {
+    zona = document.createElement('div'); zona.id = 'anomalias-aviso';
+    var dash = document.getElementById('tarefas-pendentes') || document.getElementById('motor-cobranca-aviso');
+    if (dash && dash.parentNode) dash.parentNode.insertBefore(zona, dash);
+    else return;
+  }
+
+  var h = '<div style="background:rgba(255,179,0,.06);border:1px solid rgba(255,179,0,.25);border-radius:12px;padding:14px 16px;margin-bottom:14px">';
+  h += '<div style="font-size:12px;font-weight:700;color:var(--amber);margin-bottom:8px">📊 Despesas acima da média</div>';
+  anomalias.forEach(function(a) {
+    h += '<div style="font-size:11px;color:var(--t2);padding:5px 0;border-bottom:1px solid rgba(255,255,255,.04);line-height:1.5">';
+    h += '<strong style="color:var(--text)">' + (a.despesa.descricao || a.despesa.categoria || '—') + '</strong><br>';
+    h += eur(parseFloat(a.despesa.valor)) + ' — ' + a.ratio + 'x acima da média da categoria (' + eur(a.media) + ')';
+    h += '</div>';
+  });
+  h += '<div style="font-size:10px;color:var(--t3);margin-top:6px">Verifica se estes valores estão correctos. Podem ser erros de digitação ou despesas extraordinárias a justificar aos condóminos.</div>';
+  h += '</div>';
+  zona.innerHTML = h;
+}
+
+// ===== 4. VERIFICAR FUNDO DE RESERVA (10% obrigatório) =====
+
+// =====================================================================
+//  FUNDO DE RESERVA — hierarquia legal correcta
+// =====================================================================
+//  1º  O que foi APROVADO EM ATA (prevalece sempre)
+//  2º  Se não há ata este ano → usa o do ano anterior
+//  3º  Se nunca foi aprovado → mínimo legal 10% (Art. 4.º DL 268/94)
+// =====================================================================
+
+// Obter a percentagem do fundo com a hierarquia legal
+async function obterPercentagemFundo() {
+  if (!currentCondo) return { pct: 10, origem: 'legal', ano: null };
+  var ano = new Date().getFullYear();
+
+  // 1) Procurar deliberação na ata deste ano
+  try {
+    var ataR = await sb.from('assembleias')
+      .select('data_assembleia,ata_texto,deliberacoes')
+      .eq('condominio_id', currentCondo.id)
+      .eq('estado', 'realizada')
+      .gte('data_assembleia', ano + '-01-01')
+      .order('data_assembleia', { ascending: false }).limit(3);
+
+    for (var i = 0; i < (ataR.data||[]).length; i++) {
+      var a = ataR.data[i];
+      var texto = (a.ata_texto || '') + ' ' + (a.deliberacoes || '');
+      // procurar padrões: "fundo de reserva de 15%", "fundo: 12%", "reserva 10%"
+      var m = texto.match(/fundo[^.]{0,40}?(\d{1,2}(?:[.,]\d)?)\s*%/i);
+      if (m) {
+        return { pct: parseFloat(m[1].replace(',','.')), origem: 'ata', ano: ano, data: a.data_assembleia };
+      }
+    }
+  } catch(e) {}
+
+  // 2) Procurar em anos anteriores (a deliberação mantém-se até nova)
+  try {
+    var ataAnt = await sb.from('assembleias')
+      .select('data_assembleia,ata_texto,deliberacoes')
+      .eq('condominio_id', currentCondo.id)
+      .eq('estado', 'realizada')
+      .lt('data_assembleia', ano + '-01-01')
+      .order('data_assembleia', { ascending: false }).limit(5);
+
+    for (var j = 0; j < (ataAnt.data||[]).length; j++) {
+      var a2 = ataAnt.data[j];
+      var texto2 = (a2.ata_texto || '') + ' ' + (a2.deliberacoes || '');
+      var m2 = texto2.match(/fundo[^.]{0,40}?(\d{1,2}(?:[.,]\d)?)\s*%/i);
+      if (m2) {
+        var anoAta = new Date(a2.data_assembleia).getFullYear();
+        return { pct: parseFloat(m2[1].replace(',','.')), origem: 'ata_anterior', ano: anoAta, data: a2.data_assembleia };
+      }
+    }
+  } catch(e) {}
+
+  // 3) Campo manual do condomínio (se o admin definiu)
+  var manual = parseFloat(currentCondo.fundo_percentagem || currentCondo.fcr_pct);
+  if (!isNaN(manual) && manual > 0) {
+    return { pct: manual, origem: 'manual', ano: null };
+  }
+
+  // 4) MÍNIMO LEGAL
+  return { pct: 10, origem: 'legal', ano: null };
+}
+
+// Verificação completa do fundo com a hierarquia
+async function verificarFundoLegal() {
+  if (!currentCondo) return;
+  var ano = new Date().getFullYear();
+
+  var info = await obterPercentagemFundo();
+
+  // quotas emitidas este ano
+  var qR = await sb.from('quotas').select('valor_emitido')
+    .eq('condominio_id', currentCondo.id).eq('ano', ano);
+  var totalQuotas = (qR.data||[]).reduce(function(s,q) { return s + parseFloat(q.valor_emitido||0); }, 0);
+  if (totalQuotas < 100) return;
+
+  var fundoDevido = totalQuotas * (info.pct / 100);
+  var fundoActual = parseFloat(currentCondo.fundo_saldo_provado || currentCondo.fundo_teorico || 0);
+  var falta = fundoDevido - fundoActual;
+
+  var zona = document.getElementById('fundo-legal-aviso');
+  if (!zona) {
+    zona = document.createElement('div'); zona.id = 'fundo-legal-aviso';
+    var dash = document.getElementById('tarefas-pendentes') || document.getElementById('motor-cobranca-aviso');
+    if (dash && dash.parentNode) dash.parentNode.insertBefore(zona, dash);
+    else return;
+  }
+
+  // se está cumprido, mostrar confirmação discreta (verde)
+  if (falta <= 0) {
+    var h2 = '<div style="background:rgba(34,229,132,.05);border:1px solid rgba(34,229,132,.15);border-radius:12px;padding:12px 16px;margin-bottom:14px">';
+    h2 += '<div style="font-size:11.5px;color:var(--green)">🏦 Fundo de reserva a ' + info.pct + '% — cumprido (' + eur(fundoActual) + ')</div>';
+    h2 += '<div style="font-size:10px;color:var(--t3);margin-top:3px">' + descreverOrigemFundo(info) + '</div>';
+    h2 += '</div>';
+    zona.innerHTML = h2;
+    return;
+  }
+
+  // não cumprido — alerta
+  var cor = info.origem === 'legal' ? 'rgba(255,84,112,' : 'rgba(255,179,0,';
+  var corTexto = info.origem === 'legal' ? 'var(--red)' : 'var(--amber)';
+
+  var h = '<div style="background:' + cor + '.06);border:1px solid ' + cor + '.25);border-radius:12px;padding:14px 16px;margin-bottom:14px">';
+  h += '<div style="font-size:12px;font-weight:700;color:' + corTexto + ';margin-bottom:6px">🏦 Fundo de reserva abaixo do devido</div>';
+  h += '<div style="font-size:11px;color:var(--t2);line-height:1.6">';
+  h += descreverOrigemFundo(info) + '<br><br>';
+  h += 'Quotas do ano: ' + eur(totalQuotas) + '<br>';
+  h += 'Fundo devido (' + info.pct + '%): ' + eur(fundoDevido) + '<br>';
+  h += 'Fundo actual: ' + eur(fundoActual) + '<br>';
+  h += '<strong style="color:' + corTexto + '">Em falta: ' + eur(falta) + '</strong>';
+  h += '</div>';
+
+  // se a origem é legal (sem ata), sugerir levar a assembleia
+  if (info.origem === 'legal') {
+    h += '<div style="font-size:10.5px;color:var(--t3);margin-top:8px;line-height:1.5">Não há deliberação em ata sobre a percentagem do fundo. Está a ser aplicado o mínimo legal de 10% (Art. 4.º DL 268/94). Considera levar este ponto à próxima assembleia.</div>';
+  }
+
+  h += '</div>';
+  zona.innerHTML = h;
+}
+
+function descreverOrigemFundo(info) {
+  if (info.origem === 'ata') return '✓ Aprovado em assembleia de ' + new Date(info.data).toLocaleDateString('pt-PT');
+  if (info.origem === 'ata_anterior') return '✓ Aprovado em assembleia de ' + new Date(info.data).toLocaleDateString('pt-PT') + ' (mantém-se até nova deliberação)';
+  if (info.origem === 'manual') return 'Definido manualmente na configuração do condomínio';
+  return '⚠️ Sem deliberação em ata — a aplicar o mínimo legal (Art. 4.º DL 268/94)';
+}
+
+// ===== SUGESTÃO DE FUNDO PARA O PRÓXIMO ANO (Novembro) =====
+async function sugerirFundoProximoAno() {
+  if (!currentCondo) return;
+  var hoje = new Date();
+  if (hoje.getMonth() + 1 < 10) return; // só a partir de Outubro
+  var ano = hoje.getFullYear();
+  var proximoAno = ano + 1;
+
+  // verificar se já foi deliberado para o próximo ano
+  var info = await obterPercentagemFundo();
+  if (info.origem === 'ata' && info.ano === ano) {
+    // já há deliberação este ano — pode ser para o próximo
+  }
+
+  // calcular desgaste real: manutenções + obras dos últimos 3 anos
+  var desde = (ano - 3) + '-01-01';
+  var mR = await sb.from('movimentos').select('valor,categoria')
+    .eq('condominio_id', currentCondo.id).eq('tipo', 'despesa')
+    .gte('data_movimento', desde);
+  var despesas = mR.data || [];
+
+  var categoriasEstruturais = ['manutenção','manutencao','obras','reparação','reparacao','elevador','telhado','fachada','canalização','canalizacao','eléctrica','eletrica'];
+  var gastoEstrutural = despesas.filter(function(d) {
+    var cat = (d.categoria||'').toLowerCase();
+    return categoriasEstruturais.some(function(c) { return cat.indexOf(c) > -1; });
+  }).reduce(function(s,d) { return s + parseFloat(d.valor||0); }, 0);
+
+  var mediaAnual = gastoEstrutural / 3;
+
+  // quotas anuais
+  var qR = await sb.from('quotas').select('valor_emitido')
+    .eq('condominio_id', currentCondo.id).eq('ano', ano);
+  var totalQuotas = (qR.data||[]).reduce(function(s,q) { return s + parseFloat(q.valor_emitido||0); }, 0);
+  if (totalQuotas < 100) return;
+
+  // percentagem sugerida = média de gasto estrutural / quotas, mínimo 10%
+  var pctSugerida = Math.max(10, Math.ceil(mediaAnual / totalQuotas * 100));
+  if (pctSugerida === info.pct) return; // já está adequado
+
+  var zona = document.getElementById('sugestao-fundo');
+  if (!zona) {
+    zona = document.createElement('div'); zona.id = 'sugestao-fundo';
+    var dash = document.getElementById('fundo-legal-aviso') || document.getElementById('tarefas-pendentes');
+    if (dash && dash.parentNode) dash.parentNode.insertBefore(zona, dash.nextSibling);
+    else return;
+  }
+
+  var h = '<div style="background:rgba(0,212,255,.06);border:1px solid rgba(0,212,255,.2);border-radius:12px;padding:14px 16px;margin-bottom:14px">';
+  h += '<div style="font-size:12px;font-weight:700;color:var(--cyan);margin-bottom:6px">💡 Sugestão de fundo para ' + proximoAno + '</div>';
+  h += '<div style="font-size:11px;color:var(--t2);line-height:1.6">';
+  h += 'Nos últimos 3 anos, o prédio gastou em média <strong>' + eur(mediaAnual) + '/ano</strong> em manutenções e obras estruturais.<br><br>';
+  h += 'Fundo actual: <strong>' + info.pct + '%</strong> (' + eur(totalQuotas * info.pct/100) + '/ano)<br>';
+  h += 'Sugerido: <strong style="color:var(--cyan)">' + pctSugerida + '%</strong> (' + eur(totalQuotas * pctSugerida/100) + '/ano)<br><br>';
+  h += '<span style="color:var(--t3);font-size:10.5px">Leva este ponto à assembleia. A percentagem tem de ser aprovada em ata para ser aplicada.</span>';
+  h += '</div>';
+  h += '</div>';
+  zona.innerHTML = h;
+}
+
 async function verificarTarefasPendentes() {
   if (!currentCondo) return;
   var avisos = [];
@@ -8093,6 +8468,11 @@ async function verificarAvisosGerais() {
   try { carregarManutencoes().then(function(){ pintarAvisoManutencoes(); }); } catch(e) {}
   try { carregarSeguros().then(function(){ pintarAvisoSeguros(); }); } catch(e) {}
   try { registarLoginAdmin(); injetarTrackingAdmin(); verificarTarefasPendentes(); } catch(e) {}
+  try { verificarAssembleiaAnual(); } catch(e) { console.error('ass anual:', e); }
+  try { verificarManutencoesObrigatorias(); } catch(e) { console.error('manut:', e); }
+  try { detectarAnomaliasDespesas(); } catch(e) { console.error('anomalias:', e); }
+  try { verificarFundoLegal(); } catch(e) { console.error('fundo legal:', e); }
+  try { sugerirFundoProximoAno(); } catch(e) { console.error('sugestao fundo:', e); }
   try { pintarResumoMensal(); } catch(e) {}
   try { motorCobrancaAutomatico(); } catch(e) { console.error("motor cobranca:", e); }
   try { verificarDividaComJuros(); } catch(e) { console.error("divida acumulada:", e); }
