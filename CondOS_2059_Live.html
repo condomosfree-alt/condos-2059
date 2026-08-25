@@ -5606,26 +5606,7 @@ async function calcularScoreActividadeDetalhado() {
 
 // Injetar tracking silencioso nas navegações do sistema
 function injetarTrackingAdmin() {
-  // override do nav() para registar visitas a cada página
-  var _navOriginal = window.nav;
-  if (typeof _navOriginal === 'function') {
-    window.nav = function(pagina) {
-      _navOriginal(pagina);
-      // registar acção por página
-      var mapa = {
-        'quotas': 'ver_quotas',
-        'movimentos': 'ver_contas',
-        'ocorrencias': 'ver_ocorrencias',
-        'manutencoes': 'ver_manutencoes',
-        'parceiros': 'ver_parceiros',
-        'documentos': 'carregar_documento',
-        'assembleias': 'ver_assembleias'
-      };
-      if (mapa[pagina]) registarAccaoAdmin(mapa[pagina]);
-    };
-  }
-
-  // registar login + dashboard ao carregar
+  // registar login + dashboard ao carregar (sem tocar no nav)
   registarAccaoAdmin('login');
   registarAccaoAdmin('ver_dashboard');
 }
@@ -27981,6 +27962,11 @@ function nav(p) {
     }
   } catch(e){}
   injetarBarraDinheiro(p);
+  // tracking admin (sem override)
+  try {
+    var _mapTrack = {quotas:'ver_quotas',movimentos:'ver_contas',ocorrencias:'ver_ocorrencias',manutencoes:'ver_manutencoes',parceiros:'ver_parceiros',documentos:'carregar_documento',assembleias:'ver_assembleias'};
+    if (_mapTrack[p]) registarAccaoAdmin(_mapTrack[p]);
+  } catch(e) {}
   // Badges e avisos recalculam ao navegar — o que já foi tratado deixa de aparecer
   try { updateBadges(); atualizarBadgeMensagens(); } catch(e){}
   if (p==='ocorrencias' || p==='mensagens' || p==='quotas') { try { verificarAvisosGerais(); } catch(e){} }
