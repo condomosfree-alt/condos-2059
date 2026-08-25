@@ -520,6 +520,20 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
     .auth-logo::before{animation:none;opacity:.6;}
   }
 
+
+    .ni::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 50%;
+      width: 0; height: 2px;
+      background: var(--cyan);
+      border-radius: 2px;
+      transition: width .25s ease, left .25s ease;
+    }
+    .ni.active::after {
+      width: 60%; left: 20%;
+    }
+    .ni { position: relative; }
 </style>
 
 <script>
@@ -870,7 +884,7 @@ table.tbl thead th.ord-desc::after { content:' ▼'; font-size:8px; color:var(--
   <div class="sb">
     <div class="sb-top">
       <div class="sb-brand">COND.OS</div>
-      <div class="sb-tag">2059 Pro · build v2026.08.04-1620</div>
+      <div class="sb-tag">2059 Pro · build v2026.08.04-1625</div>
     </div>
     <div class="sb-cond">
       <div class="sb-cond-label">Condomínio activo</div>
@@ -3946,6 +3960,15 @@ async function checkSession() {
     currentUser = data.session.user;
     await afterLogin();
   }
+  // manter sessão viva em refreshes e renovações de token
+  sb.auth.onAuthStateChange(function(event, session) {
+    if (event === 'SIGNED_IN' && session && session.user) {
+      currentUser = session.user;
+    } else if (event === 'SIGNED_OUT') {
+      location.reload();
+    }
+  });
+
 }
 
 // ===== LOAD ALL CONDO DATA =====
@@ -9232,6 +9255,15 @@ function renderPainelNotificacoes(avisos) {
   });
   painel.innerHTML = html;
 }
+
+// fechar sino ao clicar fora
+document.addEventListener('click', function(e) {
+  var p = document.getElementById('sino-painel');
+  if (!p || p.style.display !== 'block') return;
+  var btn = document.querySelector('button[onclick="toggleSino()"]');
+  if (p.contains(e.target) || (btn && btn.contains(e.target))) return;
+  p.style.display = 'none';
+});
 
 function toggleSino(forcar) {
   var p = document.getElementById('sino-painel');
@@ -27944,6 +27976,7 @@ function fecharMenuMovel() {
 
 function nav(p) {
   fecharMenuMovel();
+  try { toggleSino(true); } catch(e) {}
   try { if (location.hash !== '#'+p) history.replaceState(null, '', '#'+p); } catch(e){}
   document.querySelectorAll('.page').forEach(el=>el.classList.remove('active'));
   document.querySelectorAll('.ni').forEach(el=>el.classList.remove('active'));
